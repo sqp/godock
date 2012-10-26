@@ -1,0 +1,4 @@
+{{define "ShowVersionsDialog"}}{{range $_, $d := .}}Branch  {{.Branch}}  ::  {{with .NewServer}}New commits = {{$d.Delta}}. Last version is {{$d.RevDist}}.{{end}}{{if .Zero}}Up to date. Last version is {{$d.RevDist}}{{end}}{{with .NewLocal}}You have {{.}} uncomitted patchs.{{end}}
+{{with .Log}}
+{{.}}{{end}}
+{{end}}{{end}}
