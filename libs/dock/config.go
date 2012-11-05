@@ -11,6 +11,8 @@ type Config struct {
 	Errors []error
 }
 
+// Config parser with reflection to fill fields.
+//
 func NewConfig(filename string) (*Config, error) {
 	c, e := config.ReadDefault(filename)
 	if e != nil {

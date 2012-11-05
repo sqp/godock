@@ -1,5 +1,5 @@
 /*
-Simple colored info and errors logger. Errors will be displayed only if they are
+Package log is a simple colored info and errors logger. Errors will be displayed only if they are
 valid, so you can send all your errors without having to bother if they are
 filled or not. You just have to use it with all errors you want to be displayed,
 and drop the others.
@@ -56,9 +56,16 @@ func Bracket(str string) string {
 
 // Logger
 
+var std = log.New(os.Stdout, "", log.Ldate|log.Ltime)
+var debug bool
+
 func SetPrefix(pre string) {
 	std.SetPrefix(Yellow("[" + pre + "] "))
 	log.SetPrefix(Yellow("[" + pre + "] "))
+}
+
+func SetDebug(flag bool) {
+	debug = flag
 }
 
 // Displays normal informations on the standard output, with the first param in green.
@@ -68,7 +75,7 @@ func Info(msg string, more ...interface{}) {
 }
 
 // Displays normal colored informations on the standard output, To be used for
-// temporary developer comments, so they could be easily tracked.
+// temporary developer tests, so they could be easily tracked.
 //
 func DEV(msg string, more ...interface{}) {
 	render(FgGreen, msg, more...)
@@ -81,7 +88,9 @@ func DEV(msg string, more ...interface{}) {
 // implemented (file, special parser...).
 //
 func Debug(msg string, more ...interface{}) {
-	render(FgMagenta, msg, more...)
+	if debug {
+		render(FgMagenta, msg, more...)
+	}
 }
 
 func render(color, msg string, more ...interface{}) {
@@ -91,8 +100,6 @@ func render(color, msg string, more ...interface{}) {
 	list = append(list, more...)
 	std.Println(list)
 }
-
-var std = log.New(os.Stdout, "", log.Ldate|log.Ltime)
 
 // Errors testing and reporting.
 //

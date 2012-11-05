@@ -1,23 +1,3 @@
-/*
-GoGmail is simple mail applet for the Cairo-Dock project.
-
-Problems:
-* Playing sound: whether using play, aplay or paplay, i got strange results. The first
-call can't be heard, and others only if called shortly after, but at low level.
-If I call it twice in a row really fast, the 2nd if played with full volume. This
-behaviour is the same if launched from a console, and I seem to use very different
-applications for all these calls:
-
--rwxr-xr-x 1 root root 60688 avril  4  2012 /usr/bin/aplay
-lrwxrwxrwx 1 root root     5 juin   1 01:42 /usr/bin/paplay -> pacat
-lrwxrwxrwx 1 root root     3 déc.  27  2011 /usr/bin/play -> sox
-
-
-TODO:
-* split display to new config page with mail themes selection.
-* use template for mails dialog.
-*/
-
 package main
 
 import (
@@ -44,7 +24,7 @@ import (
 //
 func main() {
 	app := NewAppletGmail()
-	dock.StartApplet(app, app.poller)
+	dock.StartApplet(app.CDApplet, app, app.poller)
 }
 
 //------------------------------------------------------------------[ APPLET ]--
@@ -68,7 +48,7 @@ type AppletGmail struct {
 //
 func NewAppletGmail() *AppletGmail {
 	app := &AppletGmail{
-		CDApplet: dock.NewApplet(), // Icon controler and interface to cairo-dock.
+		CDApplet: dock.Applet(), // Icon controler and interface to cairo-dock.
 	}
 
 	// Prepare mailbox with the display callback that will receive update info.
@@ -104,6 +84,7 @@ func (app *AppletGmail) Init(loadConf bool) {
 	if loadConf {
 		app.getConfig()
 	}
+	log.SetDebug(app.conf.Debug)
 
 	// Reset data to be sure our display will be refreshed.
 	app.data.Clear()
@@ -146,23 +127,21 @@ func (app *AppletGmail) Init(loadConf bool) {
 	app.poller.SetInterval(app.conf.UpdateDelay)
 }
 
+// Reset all settings and restart timer.
+//
+func (app *AppletGmail) Reload(confChanged bool) {
+	log.Debug("Reload module")
+	app.Init(confChanged)
+	app.action(ActionCheckMail) // CheckMail recheck and reset the timer.
+}
+
+// End: Nothing to do ? Need to check DBus API.
+
 //------------------------------------------------------------------[ EVENTS ]--
 
 // Define applet events callbacks.
 //
 func (app *AppletGmail) DefineEvents() {
-
-	// Reset all settings and restart timer.
-	//
-	app.Events.Reload = func(confChanged bool) {
-		log.Debug("Reload module")
-		app.Init(confChanged)
-		app.action(ActionCheckMail) // CheckMail recheck and reset the timer.
-	}
-
-	// Nothing to do ? Need to check DBus API.
-	//
-	//~ app.Events.End = func() {}
 
 	// Left click: launch configured action for current user mode.
 	//
@@ -268,16 +247,16 @@ func (app *AppletGmail) mailPopup(nb int, new bool) {
 	}
 	text += feed.Title + "\n\n"
 
-if app.conf.DialogType == dialogNotify { // Temp test. libnotify seem to have a maximum size for messages.
-	nb = 5
-}
+	if app.conf.DialogType == dialogNotify { // Temp test. libnotify seem to have a maximum size for messages.
+		nb = 5
+	}
 
 	for i, mail := range feed.Mail {
 		if i < nb {
 			text += mail.AuthorName + "  ::  " + mail.Title + "\n"
 		}
 	}
-app.PopUp("Gmail", text)
+	app.PopUp("Gmail", text)
 
 	//~ app.ShowDialog(text, int32(app.conf.DialogTimer))
 }

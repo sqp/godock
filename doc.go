@@ -1,5 +1,5 @@
-
-/* Package godock is a library to build Cairo-Dock applets with the DBus connector.
+/*
+Package godock is a library to build Cairo-Dock applets with the DBus connector.
 
 This API just started to exist, so it will evolve, but not that much. You can
 already consider starting an applet using it. All the base actions and callbacks
@@ -27,50 +27,37 @@ This last link is mainly the python documentation, but could be considered as
 almost valid for Go. It will be imported when the API will get a more stable look.
 
 Some of the actions on the main icon:
-	demo.SetQuickInfo("OK")
-	demo.SetLabel("label changed")
-	demo.ShowDialog("dialog string\n with time in second", 8)
-	demo.BindShortkey("<Control><Shift>Z", "<Alt>K")
-	demo.SetIcon("/usr/share/icons/gnome/32x32/actions/gtk-media-pause.png")
-	demo.SetEmblem("/usr/share/icons/gnome/32x32/actions/gtk-go-down.png", dock.EmblemTopRight)
-	demo.ControlAppli("devhelp")
+	app.SetQuickInfo("OK")
+	app.SetLabel("label changed")
+	app.ShowDialog("dialog string\n with time in second", 8)
+	app.BindShortkey("<Control><Shift>Y", "<Alt>K")
+	app.SetIcon("/usr/share/icons/gnome/32x32/actions/gtk-media-pause.png")
+	app.SetEmblem("/usr/share/icons/gnome/32x32/actions/gtk-go-down.png", dock.EmblemTopRight)
+
+	app.AskText("Enter your name", "<my name>")
+	app.AskValue("How many?", 0, 42)
+	app.AskQuestion("Why?")
+
+	app.ControlAppli("devhelp")
+	app.ShowAppli(show bool) error
+
+	app.DemandsAttention(start bool, animation string) error
+	app.PopulateMenu(items... string) error // only in event BuildMenu
+	app.Get(property string) ([]interface{}, error) 
+	app.GetAll() (*DockProperties, error)
 
 You can add SubIcons:
-	demo.AddSubIcon([]string{
+	app.AddSubIcon([]string{
 		"icon 1", "firefox-3.0", "id1",
 		"icon 2", "chromium-browser", "id2",
 		"icon 3", "geany", "id3",
 	})
-	demo.RemoveSubIcon("id1")
+	app.RemoveSubIcon("id1")
 
 Some of the actions to play with SubIcons:
-	demo.Icons["id3"].SetQuickInfo("woot")
-	demo.Icons["id2"].SetLabel("label changed")
-	demo.Icons["id3"].Animate("fire", 3)
-
-
-demo.AskText("Enter your name", "<my name>")
-demo.AskValue("needed value", 0, 42)
-demo.AskQuestion("why?")
-
-
-
-*CDApplet.ShowAppli(show bool) error
-*CDApplet.DemandsAttention(start bool, animation string) error
-*CDApplet.PopulateMenu(items... string) error
-*CDApplet.Get(property string) ([]interface{}, error) 
-*CDApplet.GetAll() (*DockProperties, error)
-
-*CDApplet.AskText(message, initialText string) error 
-*CDApplet.AskValue(message string, initialValue, maxValue float64) error 
-*CDApplet.AskQuestion(message string) error 
-
-
-
-	demo.AskText("Enter your name", "<my name>")
-	demo.AskValue("How many?", 0, 42)
-	demo.AskQuestion("Why?")
-
+	app.Icons["id3"].SetQuickInfo("woot")
+	app.Icons["id2"].SetLabel("label changed")
+	app.Icons["id3"].Animate("fire", 3)
 
 Still to do;
 	* Handle the config file somehow.

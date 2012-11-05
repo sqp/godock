@@ -3,6 +3,7 @@
 	Provided as external file so it can be removed, here it a simple libnotify integration.
 	Will move to the Go dock API or the Cairo-Dock core, depending on fabounet.
 */
+
 package main
 
 import (

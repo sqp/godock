@@ -3,32 +3,34 @@ Package cdype defines main types and constants for Cairo-Dock applets.
 */
 package cdtype
 
-// Events you can connect with cairo-dock applet. Use with something like:
+// Events you can connect with the cairo-dock applet. Use with something like:
 //    app.Events.OnClick = func () {app.onClick()}
 //    app.Events.OnDropData = func (data string) {app.openWebpage(data)}
 //
 type Events struct {
-	OnClick        func() // state int
-	OnMiddleClick  func()
-	OnBuildMenu    func()
-	OnMenuSelect   func(itemid int32)
-	OnScroll       func(scrollUp bool)
-	OnDropData     func(data string)
-	OnAnswer       func(data interface{})
-	OnAnswerDialog func(button int32, data interface{})
-	OnShortkey     func(key string)
-	OnChangeFocus  func(active bool)
+	OnClick        func()                               `event:"on_click"` // state int
+	OnMiddleClick  func()                               `event:"on_middle_click"`
+	OnBuildMenu    func()                               `event:"on_build_menu"`
+	OnMenuSelect   func(itemid int32)                   `event:"on_menu_select"`
+	OnScroll       func(scrollUp bool)                  `event:"on_scroll"`
+	OnDropData     func(data string)                    `event:"on_drop_data"`
+	OnAnswer       func(data interface{})               `event:"on_answer"`
+	OnAnswerDialog func(button int32, data interface{}) `event:"on_answer_dialog"`
+	OnShortkey     func(key string)                     `event:"on_shortkey"`
+	OnChangeFocus  func(active bool)                    `event:"on_change_focus"`
 
-	// TODO: to use
-	OnSubClick       func(icon string, state int)
-	OnSubMiddleClick func(icon string)
-	OnSubBuildMenu   func(icon string)
-	OnSubMenuSelect  func(icon string, numEntry int)
-	OnSubScroll      func(icon string, scrollUp bool)
-	OnSubDropData    func(icon string, data string)
+	Reload func(bool) `event:"on_reload_module"` // Automatically bind by StartApplet
+	End    func()     `event:"on_stop_module"`
+}
 
-	Reload func(bool)
-	End    func()
+// TODO: to repair
+type SubEvents struct {
+	OnSubClick       func(icon string, state int)     `event:"on_click_sub_icon"`
+	OnSubMiddleClick func(icon string)                `event:"on_middle_click_sub_icon"`
+	OnSubBuildMenu   func(icon string)                `event:"on_build_menu_sub_icon"`
+	OnSubMenuSelect  func(icon string, numEntry int)  `event:"on_menu_select_sub_icon"`
+	OnSubScroll      func(icon string, scrollUp bool) `event:"on_scroll_sub_icon"`
+	OnSubDropData    func(icon string, data string)   `event:"on_drop_data_sub_icon"`
 }
 
 // Defaults settings can be set in one call with something like:
