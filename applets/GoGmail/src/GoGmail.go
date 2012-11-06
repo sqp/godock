@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -93,6 +94,9 @@ func (app *AppletGmail) Init(loadConf bool) {
 	// Fill config empty settings.
 	if app.conf.MonitorName == "" {
 		app.conf.MonitorName = app.conf.DefaultMonitorName
+	}
+	if app.conf.AlertSoundFile == "" {
+		app.conf.AlertSoundFile = app.conf.DefaultAlertSoundFile
 	}
 	if app.conf.UpdateDelay == 0 {
 		app.conf.UpdateDelay = defaultUpdateDelay
@@ -323,7 +327,11 @@ func (app *AppletGmail) sendAlert(delta int) {
 	}
 	if app.conf.AlertSoundEnabled {
 		sound := app.conf.AlertSoundFile
-		if sound[0] != []byte("/")[0] && sound[0] != []byte("~")[0] { // Check for relative path.
+		if len(sound) == 0 {
+			log.Info("No sound file configured")
+			return
+		}
+		if !filepath.IsAbs(sound) && sound[0] != []byte("~")[0] { // Check for relative path.
 			sound = app.FileLocation(sound)
 		}
 
