@@ -38,14 +38,14 @@ type RendererMail interface {
 // be parsed if you want to use them.
 //
 type Email struct {
-	Title   string `xml:"title"`
-	Summary string `xml:"summary"`
-	//~ <link rel="alternate" href="http://mail.google.com/mail?account_id=###&extsrc=atom" type="text/html"/>
-	Modified string `xml:"modified"`
-	Issued   string `xml:"issued"`
-	//~ <id>tag:gmail.google.com,204:14257</id>
+	Title       string `xml:"title"`
+	Summary     string `xml:"summary"`
+	Modified    string `xml:"modified"`
+	Issued      string `xml:"issued"`
 	AuthorName  string `xml:"author>name"`
 	AuthorEmail string `xml:"author>email"`
+	//~ <link rel="alternate" href="http://mail.google.com/mail?account_id=###&extsrc=atom" type="text/html"/>
+	//~ <id>tag:gmail.google.com,204:14257</id>
 }
 
 // Gmail inbox data. Some fields are disabled only because they are unused. They
@@ -58,6 +58,11 @@ type Feed struct {
 	//~ Link  string   `xml:"href,attr"`
 	//~ Modified string   `xml:"modified"`
 	Mail []*Email `xml:"entry"`
+
+	// Display fields.
+	New      int
+	Plural   bool
+	MailsNew []*Email
 
 	// Mail polling data.
 	login      string           // Login informations.
@@ -106,10 +111,6 @@ func (feed *Feed) SaveLogin(login string) {
 	ioutil.WriteFile(feed.file, []byte(coded), 0600)
 	feed.loadLogin()
 }
-
-//~ func (feed *Feed) Restart() {
-//~ if feed.IsValid() {
-//~ }
 
 func (feed *Feed) IsValid() bool {
 	return feed.login != ""

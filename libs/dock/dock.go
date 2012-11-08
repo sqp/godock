@@ -8,9 +8,14 @@ package dock
 
 import (
 	"github.com/sqp/godock/libs/cdtype"
+	// "github.com/sqp/godock/libs/dbus-new" // Connection to cairo-dock.
 	"github.com/sqp/godock/libs/dbus" // Connection to cairo-dock.
 	"github.com/sqp/godock/libs/log"  // Display info in terminal.
 	"github.com/sqp/godock/libs/poller"
+	"text/template"
+
+	"bytes"
+	"fmt"
 	"os"
 	"path"
 )
@@ -59,11 +64,11 @@ func StartApplet(cda *CDApplet, app AppletInstance, poller ...*poller.Poller) {
 		<-close // Just wait for End event signal.
 
 	} else { // With only one poller currently managed.
-		var restart chan bool
-		restart = poller[0].GetRestart()
 
-		for { // Start main loop and wait for events until the End signal is received from the dock.
-			//~ var tick *time.Ticker
+		restart := poller[0].GetRestart() // Restart chan for user events.
+
+		for { // Start main loop and handle events until the End signal is received from the dock.
+
 			// Start a timer if needed. The poller will do the first check right now.
 			tick := poller[0].Start()
 
@@ -95,8 +100,8 @@ type CDApplet struct {
 	RootDataDir   string // 
 	//~ _cMenuIconId string
 
-	Actions                     Actions // Actions handler. Where events callbacks must be declared.
-	onActionStart, onActionStop func()  // Before and after actions calls. Used to set display.
+	Templates map[string]*template.Template
+	Actions   Actions // Actions handler. Where events callbacks must be declared.
 
 	*dbus.CdDbus // Dbus connector.
 }
@@ -115,17 +120,14 @@ func Applet() *CDApplet {
 		//~ ShareDataDir:  localdir,
 		ShareDataDir: path.Join(args[4], AppletsDir, name),
 		CdDbus:       dbus.New(args[2]),
+
+		Templates: make(map[string]*template.Template),
 	}
 
 	log.SetPrefix(name)
 
 	//~ cda._cMenuIconId = "";
 	return cda
-}
-
-func (cda *CDApplet) FileLocation(filename ...string) string {
-	args := append([]string{cda.ShareDataDir}, filename...)
-	return path.Join(args...)
 }
 
 // Set defaults icon settings in one call. Empty fields will be reset, so this
@@ -141,6 +143,44 @@ func (cda *CDApplet) SetDefaults(def cdtype.Defaults) {
 	cda.SetLabel(def.Label)
 	cda.BindShortkey(def.Shortkeys...)
 	cda.ControlAppli(def.MonitorName)
+
+	cda.LoadTemplate(def.Templates...)
+}
+
+// Load template files. If error, it will just be be logged, so you must check 
+// that the template is valid. Map entry will still be created, just check it
+// isn't nil. *CDapplet.ExecuteTemplate does it for you.
+//
+// Templates must be in a subdir called templates in applet dir. If you really
+// need a way to change this, ask for a new method.
+//
+func (cda *CDApplet) LoadTemplate(names ...string) {
+	for _, name := range names {
+		fileloc := cda.FileLocation("templates", name+".tmpl")
+		template, e := template.ParseFiles(fileloc)
+		log.Err(e, "Template")
+		cda.Templates[name] = template
+
+	}
+}
+
+// Execute a pre-loaded template with given data.
+//
+func (cda *CDApplet) ExecuteTemplate(name string, data interface{}) (string, error) {
+	if cda.Templates[name] == nil {
+		return "", fmt.Errorf("Missing template %s", name)
+	}
+
+	buff := bytes.NewBuffer([]byte(""))
+	log.Err(cda.Templates[name].ExecuteTemplate(buff, name, data), "FormatDialog")
+	return buff.String(), nil
+}
+
+// Get full path to a file in applet data dir.
+//
+func (cda *CDApplet) FileLocation(filename ...string) string {
+	args := append([]string{cda.ShareDataDir}, filename...)
+	return path.Join(args...)
 }
 
 // HaveMonitor gives informations about the state of the monitored application.
@@ -151,6 +191,13 @@ func (cda *CDApplet) SetDefaults(def cdtype.Defaults) {
 //  * HaveFocus: true if the monitored application is the one with the focus.
 //
 func (cda *CDApplet) HaveMonitor() (haveApp bool, haveFocus bool) {
+	// Xid, _ := cda.Get("Xid")
+	// HasFocus, _ := cda.Get("has_focus")
+	// if id, ok := Xid.(int32); ok {
+	// 	haveApp = id > 0
+	// }
+	// return haveApp, HasFocus.(bool)
+
 	d, e := cda.GetAll()
 	log.Err(e, "Got Monitor")
 	return d.Xid > 0, d.HasFocus

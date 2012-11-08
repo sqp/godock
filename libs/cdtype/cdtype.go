@@ -45,6 +45,7 @@ type Defaults struct {
 	QuickInfo   string
 	Shortkeys   []string
 	MonitorName string
+	Templates   []string
 	//~ MonitorClass string
 }
 
@@ -88,7 +89,7 @@ const (
 type MenuItemType int32
 
 const (
-	MenuEntry MenuItemType = 0
+	MenuEntry MenuItemType = iota
 	MenuSubMenu
 	MenuSeparator
 	MenuCheckBox

@@ -70,4 +70,4 @@ Still to do;
 
 Copyright (C) 2012 SQP  <sqp@glx-dock.org>
 */
-package documentation
+package godock

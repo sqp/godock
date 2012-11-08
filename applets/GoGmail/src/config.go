@@ -24,15 +24,6 @@ const (
 	EmblemLarge = "large emblem"
 )
 
-// List of actions defined in this applet.
-//
-const (
-	ActionNone       = "none"
-	ActionOpenClient = "Open mail client"
-	ActionCheckMail  = "Check now"
-	ActionShowMails  = "Show mail dialog"
-)
-
 //~ self.svgpath = self.path+'emblem.svg' # SVG emblem file
 
 //------------------------------------------------------------------[ CONFIG ]--
@@ -84,7 +75,7 @@ type MailActions struct {
 	// Still hidden.
 	Debug          bool
 	PollingEnabled bool
-	FeedGmail      string // Url of the Atom feed source.
+	// FeedGmail      string // Url of the Atom feed source. Unused yet. See const
 	//~ DebugLevel int // unused
 
 	// Defaults are currently added to the last tab of config. This could evolve,
@@ -96,53 +87,31 @@ type MailActions struct {
 	DefaultAlertSoundFile string // 
 }
 
-//-----------------------------------------------------------------[ ACTIONS ]--
+//----------------------------------------------------------[ ACTIONS & MENU ]--
 
-/*  UNUSED YET
-
-
-ActionOpenClient = "Open mail client"
-	ActionCheckMail  = "Check now"
+// List of actions defined in this applet. Order must match defineActions
+// declaration order.
+//
+const (
+	ActionNone = iota
+	ActionOpenClient
+	ActionCheckMail
 	ActionShowMails
+	ActionRegister
+)
 
-// Define applet actions.
+// Actions available in full menu.
 //
-func (app *AppletGmail) defineActions() {
-	app.AddAction(
-		&dock.Action{
-			Id:       ActionNone,
-			Icontype: 2,
-		},
-		&dock.Action{
-			Id:   ActionOpenClient,
-			Name: "Open mail client",
-			Icon: "gtk-open",
-			//~ Icontype:
-			Call: func() { app.actionOpenClient() },
-		},
-		&dock.Action{
-			Id:       ActionCheckMail,
-			Name:     "Check now",
-			Icon:     "gtk-refresh",
-			Call:     func() { app.action(ActionCheckMail) },
-			Threaded: true,
-		},
-		&dock.Action{
-			Id:       ActionShowMails,
-			Name:     "Show mail dialog",
-			Icon:     "gtk-media-forward",
-			Call:     func() { app.action(ActionShowMails) },
-			Threaded: true,
-		},
-	)
+var menuFull []int = []int{
+	ActionOpenClient,
+	ActionCheckMail,
+	ActionShowMails,
+	ActionNone,
+	ActionRegister,
 }
 
-
-//--------------------------------------------------------------------[ MENU ]--
-
-// Actions available in menu.
+// Actions available in register menu. Displayed when account isn't set.
 //
-var menu []int = []int{
+var menuRegister []int = []int{
+	ActionRegister,
 }
-
-*/

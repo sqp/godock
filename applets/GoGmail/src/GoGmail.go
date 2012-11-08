@@ -15,9 +15,7 @@ import (
 	"time"
 )
 
-// Only one menu can be opened, and we want to be sure we end up on the good
-// action in case a few settings might have changed (ex: monitor closed)
-//~ var menuOpened int // unused
+// TODO: add config field for template InternalDialog 
 
 //---------------------------------------------------------------[ MAIN CALL ]--
 
@@ -41,6 +39,10 @@ type AppletGmail struct {
 	poller *poller.Poller
 	conf   *mailConf
 
+	// Only one menu can be opened, and we want to be sure we end up on the good
+	// action in case a few settings might have changed (ex: monitor closed)
+	menuOpened []int
+
 	// Local variables.
 	err error // Buffer last error to prevent displaying it twice.
 }
@@ -51,6 +53,7 @@ func NewAppletGmail() *AppletGmail {
 	app := &AppletGmail{
 		CDApplet: dock.Applet(), // Icon controler and interface to cairo-dock.
 	}
+	app.defineActions()
 
 	// Prepare mailbox with the display callback that will receive update info.
 	onResult := func(i int, e error) { app.updateDisplay(i, e) }
@@ -68,6 +71,8 @@ func NewAppletGmail() *AppletGmail {
 }
 
 // Config loading.
+//
+// TODO: Continue to evolve to a full reflect loading.
 //
 func (app *AppletGmail) getConfig() {
 	app.conf = &mailConf{}
@@ -106,6 +111,7 @@ func (app *AppletGmail) Init(loadConf bool) {
 	def := cdtype.Defaults{
 		Shortkeys: []string{app.conf.ShortkeyOpen, app.conf.ShortkeyCheck},
 		Label:     "Mail unchecked",
+		Templates: []string{"InternalDialog"},
 	}
 	if app.conf.Icon != "" && app.conf.Renderer != EmblemSmall && app.conf.Renderer != EmblemLarge { // User selected icon.
 		def.Icon = app.conf.Icon
@@ -136,7 +142,7 @@ func (app *AppletGmail) Init(loadConf bool) {
 func (app *AppletGmail) Reload(confChanged bool) {
 	log.Debug("Reload module")
 	app.Init(confChanged)
-	app.action(ActionCheckMail) // CheckMail recheck and reset the timer.
+	app.Actions.Launch(ActionCheckMail) // CheckMail recheck and reset the timer.
 }
 
 // End: Nothing to do ? Need to check DBus API.
@@ -147,81 +153,110 @@ func (app *AppletGmail) Reload(confChanged bool) {
 //
 func (app *AppletGmail) DefineEvents() {
 
-	// Left click: launch configured action for current user mode.
+	// Left click: try to launch configured action.
 	//
 	app.Events.OnClick = func() {
-		app.action(app.conf.ActionClickLeft)
+		app.testAction(app.Actions.Id(app.conf.ActionClickLeft))
 	}
 
-	// Middle click: launch configured action for current user mode.
+	// Middle click: try to launch configured action.
 	//
 	app.Events.OnMiddleClick = func() {
-		app.action(app.conf.ActionClickMiddle)
+		app.testAction(app.Actions.Id(app.conf.ActionClickMiddle))
 	}
 
 	// Right click menu. Provide actions list or registration request.
 	//
 	app.Events.OnBuildMenu = func() {
-		menu := []string{""} // First entry is a separator.
-		if app.data.IsValid() {
-			menu = append(menu, ActionOpenClient, ActionCheckMail, ActionShowMails, "", "Change account")
-		} else { // No running loop =  no registration. User will do as expected !
-			menu = append(menu, "Set account")
+		haveApp, _ := app.HaveMonitor()
+		switch {
+		case !app.data.IsValid(): // No running loop =  no registration. User will do as expected !
+			app.menuOpened = menuRegister
+
+		case haveApp: // Monitored application opened.
+			app.menuOpened = menuFull[1:] // Drop "Open client" option, already provided by the dock.
+
+		default:
+			app.menuOpened = menuFull
 		}
-		app.PopulateMenu(menu...)
+
+		app.BuildMenu(app.menuOpened)
 	}
 
 	// Menu entry selected. Launch the expected action.
 	//
 	app.Events.OnMenuSelect = func(numEntry int32) {
-		switch numEntry {
-		case 1:
-			app.action(ActionOpenClient)
-		case 2:
-			app.action(ActionCheckMail)
-		case 3:
-			app.action(ActionShowMails)
-		case 5:
-			app.askLogin()
-		}
+		app.Actions.Launch(app.menuOpened[numEntry])
 	}
 
 	// User is providing his login informations, save to disk.
 	//
 	app.Events.OnAnswerDialog = func(button int32, data interface{}) {
 		app.data.SaveLogin(data.(string))
-		app.action(ActionCheckMail) // CheckMail will launch a check and reset the timer.
+		app.Actions.Launch(ActionCheckMail) // CheckMail will launch a check and reset the timer.
 	}
 
+	// Launch action configured for given shortkey.
+	//
 	app.Events.OnShortkey = func(key string) {
 		if key == app.conf.ShortkeyOpen {
-			//~ app.Launch(app.conf.ShortkeyOneAction)
-			app.action(ActionOpenClient)
+			app.testAction(ActionOpenClient)
 		}
 		if key == app.conf.ShortkeyCheck {
-			app.action(ActionCheckMail)
+			app.testAction(ActionCheckMail)
 		}
 	}
 }
 
 //-----------------------------------------------------------------[ ACTIONS ]--
 
-func (app *AppletGmail) action(action string) {
-	// No running loop = no registration. User must comply !
-	if !app.data.IsValid() {
-		app.askLogin()
-		return
-	}
+// Define applet actions. Order must match actions const declaration order.
+//
+func (app *AppletGmail) defineActions() {
+	app.Actions.Add(
+		&dock.Action{
+			Id: ActionNone,
+			// Icontype: 2,
+			Menu: cdtype.MenuSeparator,
+		},
+		&dock.Action{
+			Id:   ActionOpenClient,
+			Name: "Open mail client",
+			Icon: "gtk-open",
+			Call: func() { app.actionOpenClient() },
+		},
+		&dock.Action{
+			Id:       ActionCheckMail,
+			Name:     "Check now",
+			Icon:     "gtk-refresh",
+			Call:     func() { app.actionCheckMail() },
+			Threaded: true,
+		},
+		&dock.Action{
+			Id:       ActionShowMails,
+			Name:     "Show mail dialog",
+			Icon:     "gtk-media-forward",
+			Call:     func() { app.actionShowMails() },
+			Threaded: true,
+		},
+		&dock.Action{
+			Id:       ActionRegister,
+			Name:     "Set account",
+			Icon:     "gtk-media-forward",
+			Call:     func() { app.actionRegister() },
+			Threaded: true,
+		},
+	)
+}
 
-	switch action {
-	case ActionOpenClient:
-		app.actionOpenClient()
-	case ActionShowMails:
-		app.mailPopup(app.conf.DialogNbMailActionShow, false)
-	case ActionCheckMail:
-		// Send the refresh event to the poller. It will reset our timer and 
-		// restart the loop.  that will launch a check.
-		app.poller.Restart() // Send us to app.data.Check()
+// Test login infos before launching an action. Redirect to the the registration
+// if failed.
+//
+func (app *AppletGmail) testAction(id int) {
+	if app.data.IsValid() {
+		app.Actions.Launch(id)
+	} else {
+		app.Actions.Launch(ActionRegister) // No running loop = no registration. User must comply !
 	}
 }
 
@@ -233,39 +268,31 @@ func (app *AppletGmail) actionOpenClient() {
 	switch {
 	case app.conf.MonitorEnabled && haveMonitor: // Application monitored
 		app.ShowAppli(!hasFocus)
+
 	case strings.HasPrefix(strings.ToLower(app.conf.MonitorName), "http"): // URL
 		exec.Command("xdg-open", app.conf.MonitorName).Start()
+
 	default: // Application
 		exec.Command(app.conf.MonitorName).Start()
 	}
 }
 
-// Show dialog with information for the given number of mails. Can display an
-// additional comment about mails being new if the second param is set to true.
+// Send the refresh event to the poller. It will reset our timer and 
+// restart the loop.  that will launch a check.
 //
-func (app *AppletGmail) mailPopup(nb int, new bool) {
-	feed := app.data.Data().(*Feed)
-	text := ""
-	if new {
-		text += strconv.Itoa(nb) + " new mails for  ::  "
-	}
-	text += feed.Title + "\n\n"
-
-	if app.conf.DialogType == dialogNotify { // Temp test. libnotify seem to have a maximum size for messages.
-		nb = 5
-	}
-
-	for i, mail := range feed.Mail {
-		if i < nb {
-			text += mail.AuthorName + "  ::  " + mail.Title + "\n"
-		}
-	}
-	app.PopUp("Gmail", text)
-
-	//~ app.ShowDialog(text, int32(app.conf.DialogTimer))
+func (app *AppletGmail) actionCheckMail() {
+	app.poller.Restart() // Should trigger a app.data.Check()
 }
 
-func (app *AppletGmail) askLogin() {
+// Show dialog with informations on last mails.
+//
+func (app *AppletGmail) actionShowMails() {
+	app.mailPopup(app.conf.DialogNbMailActionShow, false)
+}
+
+// Request login informations from user. Popup an AskText dialog.
+//
+func (app *AppletGmail) actionRegister() {
 	text := ""
 	if !app.data.IsValid() {
 		text = "No account configured.\n\n"
@@ -317,8 +344,6 @@ func (app *AppletGmail) updateDisplay(delta int, e error) {
 //
 func (app *AppletGmail) sendAlert(delta int) {
 	if app.conf.AlertDialogEnabled {
-		//~ app.mailPopup(math.Min(delta, app.conf.AlertDialogMaxNbMail), true)
-
 		// TODO: need use  min 
 		app.mailPopup(app.conf.AlertDialogMaxNbMail, true)
 	}
@@ -335,11 +360,33 @@ func (app *AppletGmail) sendAlert(delta int) {
 			sound = app.FileLocation(sound)
 		}
 
-		//~ exec.Command("paplay", sound).Start()
-		if e := exec.Command("paplay", sound).Start(); e != nil {
-			//~ exec.Command("aplay", sound).Start()
-		}
+		log.Err(exec.Command("paplay", sound).Start(), "Play sound")
+		// if e := exec.Command("paplay", sound).Start(); e != nil {
+		//~ exec.Command("aplay", sound).Start()
+		// }
 	}
+}
+
+// Show dialog with information for the given number of mails. Can display an
+// additional comment about mails being new if the second param is set to true.
+//
+func (app *AppletGmail) mailPopup(nb int, new bool) {
+	feed := app.data.Data().(*Feed)
+
+	// Prepare data for template formater.
+	feed.New = nb
+	feed.Plural = feed.New > 1
+	max := min(feed.New, len(feed.Mail))
+	feed.MailsNew = make([]*Email, max)
+	for i := 0; i < max; i++ {
+		feed.MailsNew[i] = feed.Mail[i]
+	}
+
+	text, e := app.ExecuteTemplate("InternalDialog", feed)
+	if !log.Err(e, "Template") {
+		app.PopUp("Gmail", text)
+	}
+	return
 }
 
 //---------------------------------------------------------------[ RENDERERS ]--
@@ -460,4 +507,13 @@ func (app *AppletGmail) PopUp(title, msg string) {
 		}
 		log.Err(e, "libnotify")
 	}
+}
+
+//------------------------------------------------------------------[ COMMON ]--
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
