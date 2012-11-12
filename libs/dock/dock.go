@@ -147,6 +147,10 @@ func (cda *CDApplet) SetDefaults(def cdtype.Defaults) {
 	cda.LoadTemplate(def.Templates...)
 }
 
+func (cda *CDApplet) LoadConfig(v interface{}, fieldKey GetFieldKey) error {
+	return LoadConfig(cda.ConfFile, v, fieldKey)
+}
+
 // Load template files. If error, it will just be be logged, so you must check 
 // that the template is valid. Map entry will still be created, just check it
 // isn't nil. *CDapplet.ExecuteTemplate does it for you.
