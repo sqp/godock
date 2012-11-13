@@ -31,10 +31,9 @@ const (
 // Global struct conf.
 //
 type mailConf struct {
-	MailIcon `tab:"Icon"`
-	MailConfig
-	MailActions
-	//~ gconfig
+	MailIcon    `group:"Icon"`
+	MailConfig  `group:"Configuration"`
+	MailActions `group:"Actions"`
 }
 
 // Tab Icon.

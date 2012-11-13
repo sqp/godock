@@ -2,10 +2,6 @@ package main
 
 import (
 	"errors"
-	"github.com/sqp/godock/libs/cdtype"
-	"github.com/sqp/godock/libs/dock"   // Connection to cairo-dock.
-	"github.com/sqp/godock/libs/log"    // Display info in terminal.
-	"github.com/sqp/godock/libs/poller" // Polling timing handler.
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -13,6 +9,11 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/sqp/godock/libs/cdtype"
+	"github.com/sqp/godock/libs/dock"   // Connection to cairo-dock.
+	"github.com/sqp/godock/libs/log"    // Display info in terminal.
+	"github.com/sqp/godock/libs/poller" // Polling timing handler.
 )
 
 // TODO: add config field for template InternalDialog 
@@ -70,25 +71,12 @@ func NewAppletGmail() *AppletGmail {
 	return app
 }
 
-// Config loading.
-//
-// TODO: Continue to evolve to a full reflect loading.
-//
-func (app *AppletGmail) getConfig() {
-	app.conf = &mailConf{}
-
-	loaded, e := dock.NewConfig(app.ConfFile)
-	log.Fatal(e, "Load config")
-	loaded.Parse("Icon", MailIcon{}, &app.conf.MailIcon)
-	loaded.Parse("Configuration", MailConfig{}, &app.conf.MailConfig)
-	loaded.Parse("Actions", MailActions{}, &app.conf.MailActions)
-}
-
 // Load user configuration if needed and initialise applet.
 //
 func (app *AppletGmail) Init(loadConf bool) {
-	if loadConf {
-		app.getConfig()
+	if loadConf { // Try to load config. Exit if not found.
+		app.conf = &mailConf{}
+		log.Fatal(app.LoadConfig(&app.conf, dock.GetKey), "config")
 	}
 	log.SetDebug(app.conf.Debug)
 

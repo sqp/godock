@@ -100,18 +100,9 @@ func (feed *Feed) Clear() {
 	feed.Total = 0
 }
 
-// Save login informations in the same format as the Gmail applet.
+// IsValid return true is the user provided informations. Only tells if login
+// and password were submitted, not if they are valid.
 //
-func (feed *Feed) SaveLogin(login string) {
-	if login == "" {
-		return
-	}
-	str := []byte(strings.Replace(login, ":", "\n", 1))
-	coded := base64.StdEncoding.EncodeToString(str)
-	ioutil.WriteFile(feed.file, []byte(coded), 0600)
-	feed.loadLogin()
-}
-
 func (feed *Feed) IsValid() bool {
 	return feed.login != ""
 }
@@ -149,6 +140,8 @@ func (feed *Feed) get() error {
 	if e2 != nil {
 		return e2
 	}
+	defer response.Body.Close()
+
 	body, e3 := ioutil.ReadAll(response.Body)
 	if e3 != nil {
 		return e3
@@ -170,4 +163,16 @@ func (feed *Feed) loadLogin() {
 			feed.login = base64.StdEncoding.EncodeToString([]byte(split[0] + ":" + split[1]))
 		}
 	}
+}
+
+// Save login informations in the same format as the Gmail applet.
+//
+func (feed *Feed) SaveLogin(login string) {
+	if login == "" {
+		return
+	}
+	str := []byte(strings.Replace(login, ":", "\n", 1))
+	coded := base64.StdEncoding.EncodeToString(str)
+	ioutil.WriteFile(feed.file, []byte(coded), 0600)
+	feed.loadLogin()
 }

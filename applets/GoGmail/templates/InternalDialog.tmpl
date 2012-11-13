@@ -1,0 +1,7 @@
+{{define "InternalDialog"}}{{if .New}}{{.New}} new mail{{if .Plural}}s{{end}} for {{.Title}}
+
+{{range .MailsNew}}{{template "SingleMail" .}}{{end}}{{end}}{{end}}
+
+
+{{define "SingleMail"}}{{.AuthorName}} :  {{.Title}}
+{{end}}
