@@ -7,17 +7,16 @@ See libs/dbus for direct actions on the applet icons.
 package dock
 
 import (
-	"github.com/sqp/godock/libs/cdtype"
-	// "github.com/sqp/godock/libs/dbus-new" // Connection to cairo-dock.
-	"github.com/sqp/godock/libs/dbus" // Connection to cairo-dock.
-	"github.com/sqp/godock/libs/log"  // Display info in terminal.
-	"github.com/sqp/godock/libs/poller"
-	"text/template"
-
 	"bytes"
 	"fmt"
 	"os"
 	"path"
+	"text/template"
+
+	"github.com/sqp/godock/libs/cdtype"
+	"github.com/sqp/godock/libs/dbus-new" // Connection to cairo-dock.
+	"github.com/sqp/godock/libs/log"      // Display info in terminal.
+	"github.com/sqp/godock/libs/poller"
 )
 
 //------------------------------------------------------------[ START APPLET ]--
@@ -109,7 +108,6 @@ type CDApplet struct {
 // Create a new applet manager with arguments received from command line.
 //
 func Applet() *CDApplet {
-	//~ localdir, _ := os.Getwd()
 	args := os.Args
 	name := args[0][2:] // Strip ./ in the beginning.
 	cda := &CDApplet{
@@ -117,9 +115,8 @@ func Applet() *CDApplet {
 		ConfFile:      args[3],
 		RootDataDir:   args[4],
 		ParentAppName: args[5],
-		//~ ShareDataDir:  localdir,
-		ShareDataDir: path.Join(args[4], AppletsDir, name),
-		CdDbus:       dbus.New(args[2]),
+		ShareDataDir:  path.Join(args[4], AppletsDir, name),
+		CdDbus:        dbus.New(args[2]),
 
 		Templates: make(map[string]*template.Template),
 	}
@@ -164,7 +161,6 @@ func (cda *CDApplet) LoadTemplate(names ...string) {
 		template, e := template.ParseFiles(fileloc)
 		log.Err(e, "Template")
 		cda.Templates[name] = template
-
 	}
 }
 
@@ -191,18 +187,24 @@ func (cda *CDApplet) FileLocation(filename ...string) string {
 // Those are usefull is this option is enabled. A monitored application, if 
 // opened, is supposed to have its visibility state toggled by the user event.
 // 
-//  * haveApp: true if the monitored application is opened. (Xid > 0)
-//  * HaveFocus: true if the monitored application is the one with the focus.
+//  haveApp: true if the monitored application is opened. (Xid > 0)
+//  HaveFocus: true if the monitored application is the one with the focus.
 //
 func (cda *CDApplet) HaveMonitor() (haveApp bool, haveFocus bool) {
-	// Xid, _ := cda.Get("Xid")
-	// HasFocus, _ := cda.Get("has_focus")
-	// if id, ok := Xid.(int32); ok {
-	// 	haveApp = id > 0
-	// }
-	// return haveApp, HasFocus.(bool)
+	Xid, e := cda.Get("Xid")
+	log.Err(e, "Xid")
 
-	d, e := cda.GetAll()
-	log.Err(e, "Got Monitor")
-	return d.Xid > 0, d.HasFocus
+	log.Info("xid", Xid)
+
+	if id, ok := Xid.(int64); ok {
+		haveApp = id > 0
+	}
+	HasFocus, _ := cda.Get("has_focus")
+	return haveApp, HasFocus.(bool)
+
+	// d, e := 
+	// cda.GetAll()
+	// log.Info("all", d, e)
+	// log.Err(e, "Got Monitor")
+	// return d.Xid > 0, d.HasFocus
 }

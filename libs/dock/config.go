@@ -24,6 +24,12 @@ func NewConfig(filename string) (*Config, error) {
 	return &Config{Config: *c}, nil
 }
 
+// Load config file and fills config a data struct.
+//
+//   First argument must be a the pointer to the data struct.
+//   Second argument is the func to choose what key to load for each field.
+//     Default methods provided: GetKey, GetTag, GetBoth.
+//
 func LoadConfig(filename string, v interface{}, fieldKey GetFieldKey) error {
 	conf, e := NewConfig(filename)
 	if e != nil {
