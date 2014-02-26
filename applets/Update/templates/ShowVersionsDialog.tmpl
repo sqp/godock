@@ -1,4 +1,4 @@
-{{define "ShowVersionsDialog"}}{{range $_, $d := .}}Branch  {{.Branch}}  ::  {{with .NewServer}}New commits = {{$d.Delta}}. Last version is {{$d.RevDist}}.{{end}}{{if .Zero}}Up to date. Last version is {{$d.RevDist}}{{end}}{{with .NewLocal}}You have {{.}} uncomitted patchs.{{end}}
+{{define "ShowVersionsDialog"}}{{range .}}<b>{{.Branch}}</b>: Version {{if .Zero}}Version {{.RevDist}}. Up to date.{{end}}{{if .Delta}}{{.RevLocal}} / {{.RevDist}}. <span fgcolor='red'>{{.Delta}} new</span>.{{end}}{{with .NewLocal}}You have {{.}} unmerged patch(s).{{end}}
 {{with .Log}}
-{{.}}{{end}}
+<span size='x-small'><tt>{{.}}</tt></span>{{end}}
 {{end}}{{end}}
