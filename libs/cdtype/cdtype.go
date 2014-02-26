@@ -3,34 +3,47 @@ Package cdype defines main types and constants for Cairo-Dock applets.
 */
 package cdtype
 
-// Events you can connect with the cairo-dock applet. Use with something like:
+// Events you can connect with the cairo-dock applet. They are better set in the
+// mandatory DefineEvents call of your applet.
+//
+// Use with something like:
 //    app.Events.OnClick = func () {app.onClick()}
 //    app.Events.OnDropData = func (data string) {app.openWebpage(data)}
 //
+// Reload event is optional. Here is the default call if you want to override it.
+//
+// 	app.Events.Reload = func(confChanged bool) {
+// 		log.Debug("Reload module")
+// 		app.Init(confChanged)
+// 		app.poller.Restart() // send our restart event.
+// 	}
+//
 type Events struct {
-	OnClick        func()                               `event:"on_click"` // state int
-	OnMiddleClick  func()                               `event:"on_middle_click"`
-	OnBuildMenu    func()                               `event:"on_build_menu"`
-	OnMenuSelect   func(itemid int32)                   `event:"on_menu_select"`
-	OnScroll       func(scrollUp bool)                  `event:"on_scroll"`
-	OnDropData     func(data string)                    `event:"on_drop_data"`
-	OnAnswer       func(data interface{})               `event:"on_answer"`
-	OnAnswerDialog func(button int32, data interface{}) `event:"on_answer_dialog"`
-	OnShortkey     func(key string)                     `event:"on_shortkey"`
-	OnChangeFocus  func(active bool)                    `event:"on_change_focus"`
+	OnClick        func()
+	OnMiddleClick  func()
+	OnBuildMenu    func()
+	OnMenuSelect   func(itemid int32)
+	OnScroll       func(scrollUp bool)
+	OnDropData     func(data string)
+	OnAnswer       func(data interface{})
+	OnAnswerDialog func(button int32, data interface{})
+	OnShortkey     func(key string)
+	OnChangeFocus  func(active bool)
 
-	Reload func(bool) `event:"on_reload_module"` // Automatically bind by StartApplet
-	End    func()     `event:"on_stop_module"`
+	Reload func(bool)
+	End    func()
 }
 
-// TODO: to repair
+// SubEvents work the same as main event with an additional argument for the id
+// of the clicked icon.
+//
 type SubEvents struct {
-	OnSubClick       func(icon string, state int)     `event:"on_click_sub_icon"`
-	OnSubMiddleClick func(icon string)                `event:"on_middle_click_sub_icon"`
-	OnSubBuildMenu   func(icon string)                `event:"on_build_menu_sub_icon"`
-	OnSubMenuSelect  func(icon string, numEntry int)  `event:"on_menu_select_sub_icon"`
-	OnSubScroll      func(icon string, scrollUp bool) `event:"on_scroll_sub_icon"`
-	OnSubDropData    func(icon string, data string)   `event:"on_drop_data_sub_icon"`
+	OnSubClick       func(state int32, icon string)
+	OnSubMiddleClick func(icon string)
+	OnSubBuildMenu   func(icon string)
+	OnSubMenuSelect  func(numEntry int32, icon string)
+	OnSubScroll      func(scrollUp bool, icon string)
+	OnSubDropData    func(data string, icon string)
 }
 
 // Defaults settings can be set in one call with something like:
@@ -40,13 +53,32 @@ type SubEvents struct {
 //    })
 //
 type Defaults struct {
-	Icon        string
-	Label       string
-	QuickInfo   string
-	Shortkeys   []string
-	MonitorName string
-	Templates   []string
+	Icon      string
+	Label     string
+	QuickInfo string
+	Shortkeys []string
+
+	// MonitorEnabled bool   // Steal icon from the taskbar.
+	// MonitorName    string // Name for the application monitoring.
+	// Monitor        Command
 	//~ MonitorClass string
+
+	PollerInterval int
+	Commands       Commands
+
+	Templates []string
+	Debug     bool // Enable debug flood.
+}
+
+type DockProperties struct {
+	Xid         uint64
+	X           int32
+	Y           int32
+	Orientation uint32
+	Container   uint32
+	Width       int32
+	Height      int32
+	HasFocus    bool
 }
 
 type ScreenPosition int32
@@ -63,6 +95,14 @@ type ContainerType int32
 const (
 	ContainerDock ContainerType = iota
 	ContainerDesklet
+)
+
+type InfoPosition int32
+
+const (
+	InfoNone    = iota // don't display anything.
+	InfoOnIcon         // display info on the icon (as quick-info).
+	InfoOnLabel        // display on the label of the icon.
 )
 
 type EmblemPosition int32
@@ -107,13 +147,51 @@ const (
 	DialogKeyEscape = -2
 )
 
-type DockProperties struct {
-	Xid         uint64
-	X           int32
-	Y           int32
-	Orientation uint32
-	Container   uint32
-	Width       int32
-	Height      int32
-	HasFocus    bool
+// Small interface to the Dock icon for simple renderers like data pollers.
+//
+type RenderSimple interface {
+	AddDataRenderer(string, int32, string) error
+	FileLocation(...string) string
+	RenderValues(...float64) error
+	SetIcon(string) error
+	SetLabel(string) error
+	SetQuickInfo(string) error
+}
+
+type Commands map[string]*Command
+
+func (commands Commands) FindMonitor() string {
+	for _, cmd := range commands {
+		if cmd.Monitored {
+			if cmd.Class != "" { // Class provided, use it.
+				return cmd.Class
+			}
+			return cmd.Name // Else use program name.
+		}
+	}
+	return "none" // None found, reset it.
+}
+
+type Command struct {
+	Name      string
+	UseOpen   bool
+	Monitored bool
+	Class     string
+}
+
+func NewCommand(monitored bool, name string, class ...string) *Command {
+	cmd := &Command{
+		Monitored: monitored,
+		Name:      name,
+	}
+	if len(class) > 0 {
+		cmd.Class = class[0]
+	}
+	return cmd
+}
+
+func NewCommandStd(action int, name string, class ...string) *Command {
+	cmd := NewCommand(action == 3, name, class...)
+	cmd.UseOpen = (action == 1)
+	return cmd
 }

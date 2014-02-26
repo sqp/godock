@@ -26,33 +26,34 @@ import (
 	"time"
 )
 
-//------------------------------------------------------------------------------
-// Poller
-//------------------------------------------------------------------------------
+//------------------------------------------------------------------[ POLLER ]--
 
 type Poller struct {
-	// Callbacks.
-	callCheck func() // Action to execute on tick.
+	// Callbacks in this order.
 	started   func() // Action to execute before data polling.
-	finished  func() // Action to execute before data polling.
+	callCheck func() // Action data polling.
+	finished  func() // Action to execute after data polling.
 
 	// Ticker settings.
-	delay   time.Duration // Ticker time.
-	active  bool
-	ticker  *time.Ticker
+	delay   int  // Interval between checks in second.
+	enabled bool // true if the poller should be active.
+	active  bool // true if the poller is really active.
+
+	// ticker  *time.Ticker
 	restart chan bool // restart channel to forward user requests.
 }
 
 func New(callCheck func()) *Poller {
 	poller := &Poller{
 		callCheck: callCheck,
-		ticker:    new(time.Ticker),
-		restart:   make(chan bool),
+		enabled:   true,
+		// ticker:    new(time.Ticker),
+		restart: make(chan bool),
 	}
 	return poller
 }
 
-//----------------------------------------------------------------[ OLD ]--
+//---------------------------------------------------------------------[ OLD ]--
 
 // Check if polling is active.
 //
@@ -74,43 +75,76 @@ func (poller *Poller) SetPostCheck(onFinished func()) {
 	poller.finished = onFinished
 }
 
-// Set polling interval time, in minutes.
+// Set polling interval time, in seconds. You can add a default value as second
+// argument to be sure you will have a positive value (> 0).
 //
-func (poller *Poller) SetInterval(delay int) {
-	poller.delay = time.Duration(delay)
+func (poller *Poller) SetInterval(delay ...int) int {
+	for _, d := range delay {
+		if d > 0 {
+			poller.delay = d
+			return d
+		}
+	}
+	poller.delay = 3600 * 24 // Failed to provide a valid value. Set check interval to a day.
+	return poller.delay
 }
 
 // Get the restart channel. You will need to lock it in a select loop to have a real
 // polling routine.
 //
-func (poller *Poller) GetRestart() chan bool {
+func (poller *Poller) ChanRestart() chan bool {
 	return poller.restart
 }
 
 //------------------------------------------------------------------[ ACTION ]--
 
-// Start a new ticker and directly launch first check routine. 
+// Start a new ticker and directly launch first check routine.
 //
-func (poller *Poller) Start() *time.Ticker {
-	go poller.checkRoutine() // Always check.
+// func (poller *Poller) Start() *time.Ticker {
+// 	poller.checkRoutine() // Always check.
 
-	poller.active = true
-	if poller.delay > 0 {
-		poller.ticker = time.NewTicker(poller.delay * time.Minute)
+// 	log.DEV("end checkroutine")
+
+// 	poller.active = true
+// 	if poller.delay > 0 {
+// 		// poller.ticker = time.NewTicker(poller.delay * time.Minute)
+// 		poller.ticker = time.NewTicker(time.Duration(poller.delay) * time.Second)
+
+// 	}
+// 	return poller.ticker
+// }
+
+func (poller *Poller) ChanEndTimer() <-chan time.Time {
+	if poller.enabled && poller.delay > 0 {
+		poller.active = true
+		return time.After(time.Duration(poller.delay) * time.Second)
 	}
-	return poller.ticker
+	return nil
 }
 
 // Restart polling ticker. This will send an event on the restart channel.
 //
 func (poller *Poller) Restart() {
-	poller.ticker.Stop()
-	poller.restart <- true // send our restart event.
+	if poller.enabled {
+		// poller.Stop()
+		poller.restart <- true // send our restart event.
+		// poller.enabled = true
+		// poller.active = true
+	}
+}
+
+// Stop the polling ticker.
+//
+func (poller *Poller) Stop() {
+	if poller.active {
+		poller.enabled = false
+		poller.active = false
+	}
 }
 
 // Check action. Launch PreCheck, OnCheck and PostCheck callbacks.
 //
-func (poller *Poller) checkRoutine() {
+func (poller *Poller) Action() {
 	if poller.started != nil { // Pre check call.
 		poller.started()
 	}

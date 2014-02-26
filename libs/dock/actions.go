@@ -5,6 +5,8 @@ import "github.com/sqp/godock/libs/cdtype"
 type Actions struct {
 	list                        []*Action
 	onActionStart, onActionStop func() // Before and after main actions calls. Used to set display for threaded tasks.
+	Max                         int
+	Current                     int
 }
 
 func (actions *Actions) Add(acts ...*Action) {
@@ -33,6 +35,11 @@ func (actions *Actions) Id(name string) int {
 // Execute desired action by id.
 //
 func (actions *Actions) Launch(id int) {
+	if actions.list[id].Call == nil || (actions.Max > 0 && actions.Current >= actions.Max) {
+		return
+	}
+
+	actions.Current++
 	if actions.onActionStart != nil && actions.list[id].Threaded {
 		actions.onActionStart()
 	}
@@ -42,6 +49,7 @@ func (actions *Actions) Launch(id int) {
 	if actions.onActionStart != nil && actions.list[id].Threaded {
 		actions.onActionStop()
 	}
+	actions.Current--
 }
 
 // Execute desired action by name.

@@ -12,9 +12,9 @@ and drop the others.
 	term.Warn(errors.New("field not found"), "Parse data")
 
 Output:
-	[test] 2012/10/28 14:28:54 [my topic in green my other 2 or 3 informations.]
-	[test] 2012/10/28 14:28:54 [Params number and type don't matter]
-	[test] 2012/10/28 14:28:54 Warning Parse data : field not found
+	[test] 14:28:54 [my topic in green] my other 2 or 3 informations.
+	[test] 14:28:54 [Params] number and type don't matter
+	[test] 14:28:54 Warning Parse data : field not found
 
 
 
@@ -39,17 +39,31 @@ import (
 	"os"
 )
 
-// Message helpers 
-func Colored(msg, color string) string { return color + msg + Reset }
-
+// Message helpers
 func Yellow(msg string) string  { return FgYellow + msg + Reset }
 func Magenta(msg string) string { return FgMagenta + msg + Reset }
 func Green(msg string) string   { return FgGreen + msg + Reset }
 func Red(msg string) string     { return FgRed + msg + Reset }
 
-func Bracket(str string) string {
-	if str != "" {
-		return "(" + str + ")"
+func Colored(msg, color string) string {
+	if msg != "" {
+		return color + msg + Reset
+	}
+	return ""
+}
+
+func Parenthesis(msg string) string {
+	if msg != "" {
+		return "(" + msg + ")"
+	}
+	return ""
+}
+
+func Bracket(msg string) string { return addAround("[", msg, "]") }
+
+func addAround(before, msg, after string) string {
+	if msg != "" {
+		return before + msg + after
 	}
 	return ""
 }
@@ -62,6 +76,7 @@ var debug bool
 func SetPrefix(pre string) {
 	std.SetPrefix(Yellow("[" + pre + "] "))
 	log.SetPrefix(Yellow("[" + pre + "] "))
+	log.SetFlags(log.Ltime)
 }
 
 func SetDebug(flag bool) {
@@ -71,34 +86,33 @@ func SetDebug(flag bool) {
 // Displays normal informations on the standard output, with the first param in green.
 //
 func Info(msg string, more ...interface{}) {
-	render(FgGreen, msg, more...)
+	Render(FgGreen, msg, more...)
 }
 
 // Displays normal colored informations on the standard output, To be used for
 // temporary developer tests, so they could be easily tracked.
 //
 func DEV(msg string, more ...interface{}) {
-	render(FgGreen, msg, more...)
+	Render(Bright, msg, more...)
 }
 
-// To be used every time a usefull step is reached in your module activity. It 
+// To be used every time a usefull step is reached in your module activity. It
 // will display the flood to the user only when the debug flag is enabled.
-// 
+//
 // Currently only flood the console, but other reporting methods could be
 // implemented (file, special parser...).
 //
 func Debug(msg string, more ...interface{}) {
 	if debug {
-		render(FgMagenta, msg, more...)
+		Render(FgMagenta, msg, more...)
 	}
 }
 
-func render(color, msg string, more ...interface{}) {
-	var first string = color + msg + Reset
-	var list []interface{}
-	list = append(list, first)
-	list = append(list, more...)
-	std.Println(list)
+func Render(color, msg string, more ...interface{}) {
+	// var list []interface{}
+	// list = append(list, Bracket(color + msg + Reset))
+	list := append([]interface{}{Bracket(Colored(msg, color))}, more...)
+	log.Println(list...)
 }
 
 // Errors testing and reporting.
@@ -134,14 +148,18 @@ func Fatal(e error, msg string) {
 	}
 }
 
+func DETAIL(i interface{}) {
+	log.Printf("%##v\n", i)
+}
+
 //~ func Show(msg string) {
 //~ log.Println(FgGreen + msg + Reset)
 //~ }
 
 //~ func Warning(msg string, more... interface{}) {
-//~ render(FgYellow, msg, more...)
+//~ Render(FgYellow, msg, more...)
 //~ }
-//~ 
+//~
 //~ func Error(msg string, more... interface{}) {
-//~ render(FgRed, msg, more...)
+//~ Render(FgRed, msg, more...)
 //~ }

@@ -23,35 +23,39 @@ Could also help applet developers:
 Cairo-Dock Wiki:
 	* DBus methods: http://www.glx-dock.org/ww_page.php?p=Control_your_dock_with_DBus&lang=en
 	* DBus for applets: http://www.glx-dock.org/ww_page.php?p=Documentation&lang=en
-This last link is mainly the python documentation, but could be considered as 
+This last link is mainly the python documentation, but could be considered as
 almost valid for Go. It will be imported when the API will get a more stable look.
 
 Some of the actions on the main icon:
 	app.SetQuickInfo("OK")
 	app.SetLabel("label changed")
-	app.ShowDialog("dialog string\n with time in second", 8)
-	app.BindShortkey("<Control><Shift>Y", "<Alt>K")
 	app.SetIcon("/usr/share/icons/gnome/32x32/actions/gtk-media-pause.png")
-	app.SetEmblem("/usr/share/icons/gnome/32x32/actions/gtk-go-down.png", dock.EmblemTopRight)
+	app.SetEmblem("/usr/share/icons/gnome/32x32/actions/gtk-go-down.png", cdtype.EmblemTopRight)
+	app.Animate("fire", 10)
+	app.DemandsAttention(true, "default")
+	app.ShowDialog("dialog string\n with time in second", 8)
+
+	app.BindShortkey("<Control><Shift>Y", "<Alt>K")
+	app.AddDataRenderer("gauge", 2, "Turbo-night-fuel")
+	app.RenderValues(0.2, 0.7})
 
 	app.AskText("Enter your name", "<my name>")
 	app.AskValue("How many?", 0, 42)
 	app.AskQuestion("Why?")
 
 	app.ControlAppli("devhelp")
-	app.ShowAppli(show bool) error
+	app.ShowAppli(true)
 
-	app.DemandsAttention(start bool, animation string) error
 	app.PopulateMenu(items... string) error // only in event BuildMenu
-	app.Get(property string) ([]interface{}, error) 
+	app.Get(property string) ([]interface{}, error)
 	app.GetAll() (*DockProperties, error)
 
 You can add SubIcons:
-	app.AddSubIcon([]string{
+	app.AddSubIcon(
 		"icon 1", "firefox-3.0", "id1",
 		"icon 2", "chromium-browser", "id2",
 		"icon 3", "geany", "id3",
-	})
+	)
 	app.RemoveSubIcon("id1")
 
 Some of the actions to play with SubIcons:
@@ -60,14 +64,9 @@ Some of the actions to play with SubIcons:
 	app.Icons["id3"].Animate("fire", 3)
 
 Still to do;
-	* Handle the config file somehow.
-	* Actions without effect:
-		AddDataRenderer("gauge", 2, "Turbo-night-fuel")
-		RenderValues([]float64{12, 32})
-		PopupDialog
-	* Need test: Get(string)
+	* DBus Actions missing: PopupDialog, AddMenuItems
 
 
-Copyright (C) 2012 SQP  <sqp@glx-dock.org>
+Copyright (C) 2012-2014 SQP  <sqp@glx-dock.org>
 */
 package godock
