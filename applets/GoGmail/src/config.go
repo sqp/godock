@@ -3,9 +3,11 @@ package main
 // Constants it's better not to have in conf.
 //
 const (
-	defaultUpdateDelay = 5
-	loginLocation      = "../../.Gmail_subscription"
-	feedGmail          = "https://mail.google.com/mail/feed/atom/"
+	defaultUpdateDelay = 15 * 60 // 15 min.
+
+	loginLocation  = "../../.Gmail_subscription"
+	feedGmail      = "https://mail.google.com/mail/feed/atom/"
+	DialogTemplate = "InternalDialog"
 )
 
 // Dialog types.
@@ -24,6 +26,12 @@ const (
 	EmblemLarge = "large emblem"
 )
 
+const (
+	MailClientLocation = iota
+	MailClientProgram
+	MailClientMonitor
+)
+
 //~ self.svgpath = self.path+'emblem.svg' # SVG emblem file
 
 //------------------------------------------------------------------[ CONFIG ]--
@@ -31,45 +39,40 @@ const (
 // Global struct conf.
 //
 type mailConf struct {
-	MailIcon    `group:"Icon"`
-	MailConfig  `group:"Configuration"`
-	MailActions `group:"Actions"`
+	groupIcon    `group:"Icon"`
+	groupConfig  `group:"Configuration"`
+	groupActions `group:"Actions"`
 }
 
-// Tab Icon.
-//
-type MailIcon struct {
-	Icon string
+type groupIcon struct {
+	Icon string `conf:"icon"`
 }
 
-// Tab Configuration.
-//
-type MailConfig struct {
-	UpdateDelay            int
-	Renderer               string
-	DialogType             string
-	DialogTimer            int
-	DialogNbMailActionShow int
+type groupConfig struct {
+	UpdateDelay  int
+	Renderer     string
+	DialogTimer  int
+	DialogNbMail int
 
-	MonitorName    string
-	MonitorEnabled bool
-}
-
-// Tab Actions.
-//
-type MailActions struct {
-	AlertDialogEnabled   bool
-	AlertDialogMaxNbMail int
+	AlertDialogEnabled bool
+	// AlertDialogMaxNbMail int
 
 	AlertAnimName     string
 	AlertAnimDuration int
 	AlertSoundEnabled bool
 	AlertSoundFile    string
+}
 
+type groupActions struct {
 	ActionClickLeft   string
 	ActionClickMiddle string
-	ShortkeyOpen      string
-	ShortkeyCheck     string
+
+	ShortkeyOpen  string
+	ShortkeyCheck string
+
+	MailClientAction int
+	MailClientName   string
+	MailClientClass  string
 
 	// Still hidden.
 	Debug          bool
@@ -83,7 +86,7 @@ type MailActions struct {
 	// of what is used (const & var). And in the conf file, we have all possibly
 	// tweakable or fixable values.
 	DefaultMonitorName    string // Default application or webpage to open.
-	DefaultAlertSoundFile string // 
+	DefaultAlertSoundFile string //
 }
 
 //----------------------------------------------------------[ ACTIONS & MENU ]--

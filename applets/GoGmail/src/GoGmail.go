@@ -1,7 +1,10 @@
 package main
 
 import (
-	"errors"
+	"github.com/sqp/godock/libs/cdtype"
+	"github.com/sqp/godock/libs/dock" // Connection to cairo-dock.
+	"github.com/sqp/godock/libs/log"  // Display info in terminal.
+
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -9,35 +12,25 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/sqp/godock/libs/cdtype"
-	"github.com/sqp/godock/libs/dock"   // Connection to cairo-dock.
-	"github.com/sqp/godock/libs/log"    // Display info in terminal.
-	"github.com/sqp/godock/libs/poller" // Polling timing handler.
 )
-
-// TODO: add config field for template InternalDialog 
-
-//---------------------------------------------------------------[ MAIN CALL ]--
 
 // Program launched. Create and activate applet.
 //
 func main() {
-	app := NewAppletGmail()
-	dock.StartApplet(app.CDApplet, app, app.poller)
+	dock.StartApplet(NewApplet())
 }
 
+//
 //------------------------------------------------------------------[ APPLET ]--
 
 // Applet data and controlers.
 //
-type AppletGmail struct {
+type Applet struct {
 	*dock.CDApplet
 
 	// Main interfaces.
 	render RendererMail
 	data   Mailbox
-	poller *poller.Poller
 	conf   *mailConf
 
 	// Only one menu can be opened, and we want to be sure we end up on the good
@@ -45,69 +38,69 @@ type AppletGmail struct {
 	menuOpened []int
 
 	// Local variables.
-	err error // Buffer last error to prevent displaying it twice.
+	err error // Buffer for last error to prevent displaying it twice.
 }
 
 // Create a new applet instance.
 //
-func NewAppletGmail() *AppletGmail {
-	app := &AppletGmail{
+func NewApplet() *Applet {
+	app := &Applet{
 		CDApplet: dock.Applet(), // Icon controler and interface to cairo-dock.
 	}
 	app.defineActions()
 
 	// Prepare mailbox with the display callback that will receive update info.
-	onResult := func(i int, e error) { app.updateDisplay(i, e) }
+	onResult := func(i int, first bool, e error) { app.updateDisplay(i, first, e) }
 	app.data = NewFeed(app.FileLocation(loginLocation), onResult)
 
 	// The poller will check for new mails on a timer.
-	app.poller = poller.New(func() { app.data.Check() })
+	poller := app.AddPoller(func() { app.data.Check() })
 
 	// Set updates callbacks pre and post check: Displays a small emblem during
 	// the polling, and clears it after.
-	app.poller.SetPreCheck(func() { app.SetEmblem(app.FileLocation("img", "go-down.svg"), cdtype.EmblemTopLeft) })
-	app.poller.SetPostCheck(func() { app.SetEmblem("none", cdtype.EmblemTopLeft) })
+	poller.SetPreCheck(func() { app.SetEmblem(app.FileLocation("img", "go-down.svg"), cdtype.EmblemTopLeft) })
+	poller.SetPostCheck(func() { app.SetEmblem("none", cdtype.EmblemTopLeft) })
 
 	return app
 }
 
 // Load user configuration if needed and initialise applet.
 //
-func (app *AppletGmail) Init(loadConf bool) {
+func (app *Applet) Init(loadConf bool) {
 	if loadConf { // Try to load config. Exit if not found.
 		app.conf = &mailConf{}
-		log.Fatal(app.LoadConfig(&app.conf, dock.GetKey), "config")
+		log.Fatal(app.LoadConfig(&app.conf), "config")
 	}
-	log.SetDebug(app.conf.Debug)
 
 	// Reset data to be sure our display will be refreshed.
 	app.data.Clear()
 	app.err = nil
 
-	// Fill config empty settings.
-	if app.conf.MonitorName == "" {
-		app.conf.MonitorName = app.conf.DefaultMonitorName
+	// Define the mail client action.
+	if app.conf.MailClientName == "" { //  Set default to webpage if not provided.
+		app.conf.MailClientAction = MailClientLocation
+		app.conf.MailClientName = app.conf.DefaultMonitorName
 	}
+
+	// Fill config empty settings.
 	if app.conf.AlertSoundFile == "" {
 		app.conf.AlertSoundFile = app.conf.DefaultAlertSoundFile
 	}
-	if app.conf.UpdateDelay == 0 {
-		app.conf.UpdateDelay = defaultUpdateDelay
+	var icon string
+	if app.conf.Icon != "" && app.conf.Renderer != EmblemSmall && app.conf.Renderer != EmblemLarge { // User selected icon.
+		icon = app.conf.Icon
 	}
 
 	// Set defaults to dock icon: display and controls.
-	def := cdtype.Defaults{
-		Shortkeys: []string{app.conf.ShortkeyOpen, app.conf.ShortkeyCheck},
-		Label:     "Mail unchecked",
-		Templates: []string{"InternalDialog"},
-	}
-	if app.conf.Icon != "" && app.conf.Renderer != EmblemSmall && app.conf.Renderer != EmblemLarge { // User selected icon.
-		def.Icon = app.conf.Icon
-	}
-	if app.conf.MonitorEnabled {
-		def.MonitorName = app.conf.MonitorName
-	}
-	app.SetDefaults(def)
+	app.SetDefaults(cdtype.Defaults{
+		Shortkeys:      []string{app.conf.ShortkeyOpen, app.conf.ShortkeyCheck},
+		Label:          "Mail unchecked",
+		Icon:           icon,
+		Templates:      []string{DialogTemplate},
+		PollerInterval: dock.PollerInterval(app.conf.UpdateDelay*60, defaultUpdateDelay),
+		Commands: cdtype.Commands{
+			"mailClient": cdtype.NewCommandStd(app.conf.MailClientAction+1, app.conf.MailClientName, app.conf.MailClientClass)}, // Add 1 to action as we don't provide the none option.
+		Debug: app.conf.Debug})
 
 	// Create the renderer.
 	switch app.conf.Renderer {
@@ -121,25 +114,19 @@ func (app *AppletGmail) Init(loadConf bool) {
 		app.render = NewRenderedNone()
 	}
 
-	// Configure the mail polling loop.
-	app.poller.SetInterval(app.conf.UpdateDelay)
+	// // Check libnotify library.
+	// if app.conf.DialogType == dialogNotify && popUp == nil {
+	// 	log.Info("Can't use Desktop Notifications dialogs. Applet compiled without library support")
+	// 	app.conf.DialogType = dialogInternal
+	// }
 }
 
-// Reset all settings and restart timer.
 //
-func (app *AppletGmail) Reload(confChanged bool) {
-	log.Debug("Reload module")
-	app.Init(confChanged)
-	app.Actions.Launch(ActionCheckMail) // CheckMail recheck and reset the timer.
-}
-
-// End: Nothing to do ? Need to check DBus API.
-
 //------------------------------------------------------------------[ EVENTS ]--
 
 // Define applet events callbacks.
 //
-func (app *AppletGmail) DefineEvents() {
+func (app *Applet) DefineEvents() {
 
 	// Left click: try to launch configured action.
 	//
@@ -196,11 +183,12 @@ func (app *AppletGmail) DefineEvents() {
 	}
 }
 
+//
 //-----------------------------------------------------------------[ ACTIONS ]--
 
 // Define applet actions. Order must match actions const declaration order.
 //
-func (app *AppletGmail) defineActions() {
+func (app *Applet) defineActions() {
 	app.Actions.Add(
 		&dock.Action{
 			Id: ActionNone,
@@ -240,7 +228,7 @@ func (app *AppletGmail) defineActions() {
 // Test login infos before launching an action. Redirect to the the registration
 // if failed.
 //
-func (app *AppletGmail) testAction(id int) {
+func (app *Applet) testAction(id int) {
 	if app.data.IsValid() {
 		app.Actions.Launch(id)
 	} else {
@@ -251,36 +239,26 @@ func (app *AppletGmail) testAction(id int) {
 // Open defined mail application or webpage. Manage application visibility if
 // the user activated the application monitoring option.
 //
-func (app *AppletGmail) actionOpenClient() {
-	haveMonitor, hasFocus := app.HaveMonitor()
-	switch {
-	case app.conf.MonitorEnabled && haveMonitor: // Application monitored
-		app.ShowAppli(!hasFocus)
-
-	case strings.HasPrefix(strings.ToLower(app.conf.MonitorName), "http"): // URL
-		exec.Command("xdg-open", app.conf.MonitorName).Start()
-
-	default: // Application
-		exec.Command(app.conf.MonitorName).Start()
-	}
+func (app *Applet) actionOpenClient() {
+	app.LaunchCommand("mailClient")
 }
 
-// Send the refresh event to the poller. It will reset our timer and 
+// Send the refresh event to the poller. It will reset our timer and
 // restart the loop.  that will launch a check.
 //
-func (app *AppletGmail) actionCheckMail() {
-	app.poller.Restart() // Should trigger a app.data.Check()
+func (app *Applet) actionCheckMail() {
+	app.Poller().Restart() // Should trigger a app.data.Check()
 }
 
 // Show dialog with informations on last mails.
 //
-func (app *AppletGmail) actionShowMails() {
-	app.mailPopup(app.conf.DialogNbMailActionShow, false)
+func (app *Applet) actionShowMails() {
+	app.mailPopup(app.conf.DialogNbMail, "ListMailsManual")
 }
 
 // Request login informations from user. Popup an AskText dialog.
 //
-func (app *AppletGmail) actionRegister() {
+func (app *Applet) actionRegister() {
 	text := ""
 	if !app.data.IsValid() {
 		text = "No account configured.\n\n"
@@ -288,6 +266,7 @@ func (app *AppletGmail) actionRegister() {
 	app.AskText(text+"Please enter your login in the format username:password", "")
 }
 
+//
 //-----------------------------------------------------------[ MAIL HANDLING ]--
 
 // Update display callback. Receives mail check result with new messages count
@@ -296,7 +275,7 @@ func (app *AppletGmail) actionRegister() {
 // Update checked time and, if needed, send info or error to renderer and user
 // alerts.
 //
-func (app *AppletGmail) updateDisplay(delta int, e error) {
+func (app *Applet) updateDisplay(delta int, first bool, e error) {
 	eventTime := time.Now().String()[11:19]
 	label := "Checked: " + eventTime
 	switch {
@@ -305,16 +284,20 @@ func (app *AppletGmail) updateDisplay(delta int, e error) {
 		log.Err(e, "Check mail")
 		if app.err == nil || e.Error() != app.err.Error() { // Error buffer, dont warn twice the same information.
 			app.render.Error(e)
-			app.PopUp("Mail check error", e.Error())
+			app.ShowDialog("Mail check error"+e.Error(), int32(app.conf.DialogTimer))
+			// app.PopUp("Mail check error", e.Error())
 			app.err = e
 		}
+
+	case first:
+		log.Debug("  * First check", delta)
 
 	case delta > 0:
 		log.Debug("  * Count changed", delta)
 		app.sendAlert(delta)
 
 	case delta == 0:
-		log.Debug("", " * no change")
+		log.Debug("  * ", "no change")
 	}
 
 	switch {
@@ -330,10 +313,9 @@ func (app *AppletGmail) updateDisplay(delta int, e error) {
 
 // Mail count changed. Check if we need to warn the user.
 //
-func (app *AppletGmail) sendAlert(delta int) {
+func (app *Applet) sendAlert(delta int) {
 	if app.conf.AlertDialogEnabled {
-		// TODO: need use  min 
-		app.mailPopup(app.conf.AlertDialogMaxNbMail, true)
+		app.mailPopup(min(delta, app.conf.DialogNbMail), "ListMailsNew")
 	}
 	if app.conf.AlertAnimName != "" {
 		app.Animate(app.conf.AlertAnimName, int32(app.conf.AlertAnimDuration))
@@ -358,7 +340,7 @@ func (app *AppletGmail) sendAlert(delta int) {
 // Show dialog with information for the given number of mails. Can display an
 // additional comment about mails being new if the second param is set to true.
 //
-func (app *AppletGmail) mailPopup(nb int, new bool) {
+func (app *Applet) mailPopup(nb int, template string) {
 	feed := app.data.Data().(*Feed)
 
 	// Prepare data for template formater.
@@ -370,16 +352,43 @@ func (app *AppletGmail) mailPopup(nb int, new bool) {
 		feed.MailsNew[i] = feed.Mail[i]
 	}
 
-	text, e := app.ExecuteTemplate("InternalDialog", feed)
-	if !log.Err(e, "Template") {
-		app.PopUp("Gmail", text)
+	// if app.conf.DialogType == dialogInternal {
+	text, e := app.ExecuteTemplate(DialogTemplate, template, feed)
+	if !log.Err(e, "Template ListMailsNew") {
+		// Remove a last EOL if any (from a template range).
+		if text[len(text)-1] == '\n' {
+			text = text[:len(text)-1]
+		}
+
+		dialog := map[string]interface{}{
+			"message":     text,
+			"use-markup":  true,
+			"time-length": int32(app.conf.DialogTimer),
+		}
+		log.Err(app.PopupDialog(dialog, nil), "popup")
+		// app.ShowDialog(text, int32(app.conf.DialogTimer))
 	}
+	// } else {
+	// 	if nb == 1 {
+	// 		log.Err(popUp(feed.Mail[0].AuthorName, feed.Mail[0].Title, app.FileLocation("icon"), app.conf.DialogTimer*1000), "libnotify")
+	// 	} else {
+	// 		title, eTit := app.ExecuteTemplate(DialogTemplate, "TitleCount", feed)
+	// 		log.Err(eTit, "Template TitleCount")
+	// 		text, eTxt := app.ExecuteTemplate(DialogTemplate, "ListMails", feed)
+	// 		log.Err(eTxt, "Template ListMails")
+	// 		log.Err(popUp(title, text, app.FileLocation("icon"), app.conf.DialogTimer*1000), "Libnotify")
+	// 	}
+	// }
+
+	// app.PopUp("Gmail", text)
+
 	return
 }
 
+//
 //---------------------------------------------------------------[ RENDERERS ]--
 
-// RenderedNone is a stub. Used for the none choice and as a fallback for SVG 
+// RenderedNone is a stub. Used for the none choice and as a fallback for SVG
 // renderer if it failed to load its data.
 //
 type RenderedNone struct{}
@@ -393,14 +402,14 @@ func (rs *RenderedNone) Error(e error) {}
 // RenderedQuick displays mail count on the icon QuickInfo.
 //
 type RenderedQuick struct {
-	*dock.CDApplet // base applet should be enough, we only need FileLocation and SetIcon.
-	pathDefault    string
+	cdtype.RenderSimple // Controler to the Cairo-Dock icon.
+	pathDefault         string
 }
 
-func NewRenderedQuick(app *dock.CDApplet) *RenderedQuick {
+func NewRenderedQuick(app cdtype.RenderSimple) *RenderedQuick {
 	return &RenderedQuick{
-		CDApplet:    app,
-		pathDefault: app.FileLocation("img", "gmail-icon.svg"),
+		RenderSimple: app,
+		pathDefault:  app.FileLocation("img", "gmail-icon.svg"),
 	}
 }
 
@@ -421,14 +430,14 @@ func (rs *RenderedQuick) Error(e error) {
 // RenderedNone will be returned, so a valid renderer will always be provided.
 //
 type RenderedSVG struct {
-	*dock.CDApplet // base applet should be enough, we only need FileLocation and SetIcon.
-	pathDefault    string
-	pathTemp       string
-	pathError      string
-	iconSource     string
+	cdtype.RenderSimple // Controler to the Cairo-Dock icon.
+	pathDefault         string
+	pathTemp            string
+	pathError           string
+	iconSource          string
 }
 
-func NewRenderedSVG(app *dock.CDApplet, typ string) RendererMail {
+func NewRenderedSVG(app cdtype.RenderSimple, typ string) RendererMail {
 	size := strings.Split(string(typ), " ")[0]
 
 	source, err := ioutil.ReadFile(app.FileLocation("img", size+".svg"))
@@ -437,13 +446,12 @@ func NewRenderedSVG(app *dock.CDApplet, typ string) RendererMail {
 	}
 
 	rs := &RenderedSVG{
-		CDApplet:    app,
-		pathDefault: app.FileLocation("img", "gmail-icon.svg"),
-		pathTemp:    app.FileLocation("img", "temp.svg"),
-		pathError:   app.FileLocation("img", "gmail-error-"+size+".svg"),
-		iconSource:  string(source),
+		RenderSimple: app,
+		pathDefault:  app.FileLocation("img", "gmail-icon.svg"),
+		pathTemp:     app.FileLocation("img", "temp.svg"),
+		pathError:    app.FileLocation("img", "gmail-error-"+size+".svg"),
+		iconSource:   string(source),
 	}
-
 	return rs
 }
 
@@ -465,38 +473,39 @@ func (rs *RenderedSVG) Error(e error) {
 	rs.SetIcon(rs.pathError)
 }
 
+//
 //---------------------------------------------------------------[ LIBNOTIFY ]--
 
-// libnotify call is currently stored as a global so libnotify.go can be
-// removed if needed. Need to see the doc about optional dependencies building
-// for better handling.
+// DISABLED FOR NOW
+
+// #L+[Internal dialog;Desktop notifications] Dialog type
+// DialogType=Desktop notifications
+
+// // libnotify call is currently stored as a global so libnotify.go can be
+// // removed if needed. Need to see the doc about optional dependencies building
+// // for better handling.
+// //
+// var popUp func(title, msg, icon string, duration int) error // store  if enabled.
+
+// // Open a popup on the configured notification systme. Valid options are internal
+// // or libnotify.
+// //
+// func (app *Applet) PopUp(title, msg string) {
+// 	if app.conf.DialogType == dialogInternal {
+// 		app.ShowDialog(msg, int32(app.conf.DialogTimer))
+// 	} else {
+// 		var e error
+// 		if popUp == nil {
+// 			e = errors.New("Applet was compiled with library support disabled")
+// 		} else {
+// 			e = popUp(title, msg, app.FileLocation("icon"), app.conf.DialogTimer*1000)
+// 			//~ DEBUG("notify", e==nil, e)
+// 		}
+// 		log.Err(e, "libnotify")
+// 	}
+// }
+
 //
-var popUp func(title, msg, icon string, duration int) error // store  if enabled.
-
-// Call libnotify popup if enabled.
-//
-func (app *AppletGmail) popUpNotify(title, msg, icon string, duration int) {
-
-}
-
-// Open a popup on the configured notification systme. Valid options are internal
-// or libnotify.
-//
-func (app *AppletGmail) PopUp(title, msg string) {
-	if app.conf.DialogType == dialogInternal {
-		app.ShowDialog(msg, int32(app.conf.DialogTimer))
-	} else {
-		var e error
-		if popUp == nil {
-			e = errors.New("Applet was compiled with library support disabled")
-		} else {
-			e = popUp(title, msg, app.FileLocation("icon"), app.conf.DialogTimer*1000)
-			//~ DEBUG("notify", e==nil, e)
-		}
-		log.Err(e, "libnotify")
-	}
-}
-
 //------------------------------------------------------------------[ COMMON ]--
 
 func min(a, b int) int {

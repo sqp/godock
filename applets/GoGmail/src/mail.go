@@ -65,13 +65,13 @@ type Feed struct {
 	MailsNew []*Email
 
 	// Mail polling data.
-	login      string           // Login informations.
-	file       string           // Login file location.
-	restart    chan bool        // restart channel to forward user requests.
-	callResult func(int, error) // Action to execute to send polling results.
+	login      string                 // Login informations.
+	file       string                 // Login file location.
+	restart    chan bool              // restart channel to forward user requests.
+	callResult func(int, bool, error) // Action to execute to send polling results.
 }
 
-func NewFeed(filename string, onResult func(int, error)) *Feed {
+func NewFeed(filename string, onResult func(int, bool, error)) *Feed {
 	feed := &Feed{
 		file:       filename,
 		callResult: onResult,
@@ -113,14 +113,15 @@ func (feed *Feed) IsValid() bool {
 func (feed *Feed) Check() {
 	log.Debug("Check mails")
 	if !feed.IsValid() {
-		feed.callResult(0, errors.New("No account informations provided."))
+		feed.callResult(0, false, errors.New("No account informations provided."))
 		return
 	}
 
 	count := feed.Count() // save current count.
 	feed.Clear()          // reset list.
 	e := feed.get()       // Get new data.
-	feed.callResult(feed.Count()-count, e)
+
+	feed.callResult(feed.Count()-count, count == 0, e)
 }
 
 // Get mails from server.
