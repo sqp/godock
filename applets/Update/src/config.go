@@ -1,4 +1,4 @@
-/* Update is an applet for Cairo-Dock to check for its new versions and do update.
+/* Update is an applet for Cairo-Dock to check for its new versions and do updates.
 
 Copyright : (C) 2012 by SQP
 E-mail : sqp@glx-dock.org
@@ -12,9 +12,9 @@ This program is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 GNU General Public License for more details.
-http://www.gnu.org/licenses/licenses.html#GPL */
-
-package main
+http://www.gnu.org/licenses/licenses.html#GPL
+*/
+package src
 
 import (
 	"github.com/sqp/godock/libs/cdtype"
@@ -106,9 +106,8 @@ type groupActions struct {
 	// Debug                 int // debug level. Still unused.
 }
 
-//------------------------------------------------------------------------------
-// ACTIONS DEFINITION.
-//------------------------------------------------------------------------------
+//
+//------------------------------------------------------[ ACTIONS DEFINITION ]--
 
 // List of actions defined in this applet.
 // Actions order in this list must match the order in defineActions.
@@ -130,9 +129,8 @@ const (
 	// ActionUpdateAll
 )
 
-//------------------------------------------------------------------------------
-// USER MENUS.
-//------------------------------------------------------------------------------
+//
+//--------------------------------------------------------------[ USER MENUS ]--
 
 // Actions available in tester menu.
 //

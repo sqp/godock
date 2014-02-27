@@ -7,7 +7,7 @@ You can also use autodetect with some partitions names to be listed first.
 Partitions names are designed by their mount point like / or /home.
 Use the df command to know your partitions list.
 */
-package main
+package src
 
 import (
 	"github.com/cloudfoundry/gosigar" // Partitions and usage informations.
@@ -18,30 +18,19 @@ import (
 	"github.com/sqp/godock/libs/ternary" // Ternary operators.
 )
 
-// Program launched. Create and activate applet.
-//
-func main() {
-	dock.StartApplet(NewApplet())
-}
-
-//
-//------------------------------------------------------------------[ APPLET ]--
-
-// Applet data and controlers.
+// Applet DiskUsage data and controlers.
 //
 type Applet struct {
 	*dock.CDApplet
-	// poller *poller.Poller
 	disks *diskFree
 	conf  *appletConf
 }
 
-// Create a new applet instance.
+// Create a new DiskUsage applet instance.
 //
 func NewApplet() *Applet {
-	app := &Applet{
-		CDApplet: dock.Applet(), // Icon controler and interface to cairo-dock.
-	}
+	app := &Applet{CDApplet: dock.Applet()} // Icon controler and interface to cairo-dock.
+
 	app.disks = newDiskFree(app)
 	app.AddPoller(func() { app.disks.GetData(); app.disks.Display() })
 
@@ -53,7 +42,7 @@ func NewApplet() *Applet {
 func (app *Applet) Init(loadConf bool) {
 	if loadConf { // Try to load config. Exit if not found.
 		app.conf = &appletConf{}
-		log.Fatal(app.LoadConfig(&app.conf, dock.GetBoth), "config")
+		log.Fatal(app.LoadConfig(&app.conf), "config")
 	}
 
 	// Set defaults to dock icon: display and controls.

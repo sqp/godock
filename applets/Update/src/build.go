@@ -12,13 +12,15 @@ This program is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 GNU General Public License for more details.
-http://www.gnu.org/licenses/licenses.html#GPL */
-
-package main
+http://www.gnu.org/licenses/licenses.html#GPL
+*/
+package src
 
 import (
+	"github.com/sqp/godock/libs/dbus"
+	"github.com/sqp/godock/libs/log"
+
 	"bufio"
-	// "errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -28,19 +30,10 @@ import (
 	"strings"
 	"text/template"
 	"time"
-
-	"github.com/sqp/godock/libs/dbus"
-	"github.com/sqp/godock/libs/log"
-
-	// Applet still under work.
-	// "github.com/kr/pretty"
 )
 
-// func grr(i interface{}) { pretty.Printf("%# v\n", i) } // libs unused are errors in go. Force using lib to prevent build fail when lib is activated.
-
-//------------------------------------------------------------------------------
-// BUILDERS CONFIG.
-//------------------------------------------------------------------------------
+//
+//----------------------------------------------------------[ BUILDERS CONFIG ]--
 
 type BuildType int
 
@@ -197,9 +190,8 @@ func (build *BuildCompiled) Build() error {
 	return execShow("make")
 }
 
-//------------------------------------------------------------------------------
-// SOURCES BUILDER.
-//------------------------------------------------------------------------------
+//
+//----------------------------------------------------------[ SOURCES BUILDER ]--
 
 func (app *AppletUpdate) getBuildTargets() []string {
 	s := app.conf.BuildTargets
@@ -285,9 +277,8 @@ func (app *AppletUpdate) showTarget() {
 	app.SetLabel("Target: " + app.target.Label())
 }
 
-//------------------------------------------------------------------------------
-// BUILD FROM C SOURCES.
-//------------------------------------------------------------------------------
+//
+//----------------------------------------------------[ BUILD FROM C SOURCES ]--
 
 func buildCmake(dir string, call func(float64)) error {
 
@@ -392,9 +383,8 @@ func (app *AppletUpdate) restartTarget() {
 	}
 }
 
-//------------------------------------------------------------------------------
-// VERSION POLLING.
-//------------------------------------------------------------------------------
+//
+//---------------------------------------------------------[ VERSION POLLING ]--
 
 // Just handles the version checking and result display method.
 //
@@ -427,9 +417,8 @@ func (ver *Versions) Check() {
 	ver.callResult(nb, e)
 }
 
-//------------------------------------------------------------------------------
-// SOURCES BRANCH MANAGEMENT.
-//------------------------------------------------------------------------------
+//
+//-----------------------------------------------[ SOURCES BRANCH MANAGEMENT ]--
 
 type Branch struct {
 	Branch  string // Branch name.

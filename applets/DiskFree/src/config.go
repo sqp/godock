@@ -1,4 +1,4 @@
-package main
+package src
 
 const (
 	defaultUpdateDelay = 60 // every minute.

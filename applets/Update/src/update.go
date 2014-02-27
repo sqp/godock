@@ -1,37 +1,25 @@
 /* Update is an applet for Cairo-Dock to check for its new versions and do update.
 
-Install go and get go environment: you need a valid $GOPATH var and directory.
-
-Download, build and install to your Cairo-Dock external applets dir:
-  go get github.com/sqp/godock/applets/Update  # download applet and dependencies.
-
-  cd $GOPATH/src/github.com/sqp/godock/applets/Update
-  make build  # compile the applet.
-  make link   # link the applet to your external applet directory.
-
-
-
-TODO: Version checking:
-  get a better bzr result than simple revno if the user is on a different branch
-   with an other stack of patches. (need to get the split version to know the real number of missing patches)
-
-
-
-Icons used:: some icons from the Oxygen pack:
-  http://www.iconarchive.com/show/oxygen-icons-by-oxygen-icons.org.1.html
-
-
-Copyright : (C) 2012-2014 by SQP
+Copyright : (C) 2012 by SQP
 E-mail : sqp@glx-dock.org
 
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 3
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU General Public License for more details.
+http://www.gnu.org/licenses/licenses.html#GPL
 */
-package main
+package src
 
 import (
 	"github.com/sqp/godock/libs/cdtype"
 	"github.com/sqp/godock/libs/dock" // Connection to cairo-dock.
 	"github.com/sqp/godock/libs/log"  // Display info in terminal.
-	// "github.com/sqp/godock/libs/poller" // Polling timing handler.
 
 	"os"
 	"os/exec"
@@ -40,14 +28,6 @@ import (
 	"strings"
 	"time"
 )
-
-//---------------------------------------------------------------[ MAIN CALL ]--
-
-// Program launched. Create and activate applet.
-//
-func main() {
-	dock.StartApplet(NewApplet())
-}
 
 //------------------------------------------------------------------[ APPLET ]--
 
