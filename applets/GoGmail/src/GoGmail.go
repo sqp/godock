@@ -1,4 +1,4 @@
-package main
+package src
 
 import (
 	"github.com/sqp/godock/libs/cdtype"
@@ -13,12 +13,6 @@ import (
 	"strings"
 	"time"
 )
-
-// Program launched. Create and activate applet.
-//
-func main() {
-	dock.StartApplet(NewApplet())
-}
 
 //
 //------------------------------------------------------------------[ APPLET ]--
@@ -45,7 +39,7 @@ type Applet struct {
 //
 func NewApplet() *Applet {
 	app := &Applet{
-		CDApplet: dock.Applet(), // Icon controler and interface to cairo-dock.
+		CDApplet: dock.NewCDApplet(), // Icon controler and interface to cairo-dock.
 	}
 	app.defineActions()
 

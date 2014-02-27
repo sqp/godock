@@ -48,7 +48,7 @@ type AppletUpdate struct {
 //
 func NewApplet() *AppletUpdate {
 	app := &AppletUpdate{
-		CDApplet: dock.Applet(),
+		CDApplet: dock.NewCDApplet(),
 	}
 	app.defineActions()
 

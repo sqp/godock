@@ -143,7 +143,7 @@ type CDApplet struct {
 
 // Create a new applet manager with arguments received from command line.
 //
-func Applet() *CDApplet {
+func NewCDApplet() *CDApplet {
 	args := os.Args
 	name := args[0][2:] // Strip ./ in the beginning.
 	cda := &CDApplet{

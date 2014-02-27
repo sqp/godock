@@ -1,4 +1,4 @@
-package main
+package src
 
 // Constants it's better not to have in conf.
 //

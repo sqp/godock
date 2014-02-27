@@ -1,6 +1,6 @@
 /* Disk activity monitoring applet for the Cairo-Dock project.
  */
-package main
+package src
 
 import (
 	"github.com/sqp/godock/libs/cdtype"
@@ -16,12 +16,6 @@ import (
 	"strconv"
 	"strings"
 )
-
-// Program launched. Create and activate applet.
-//
-func main() {
-	dock.StartApplet(NewApplet())
-}
 
 //
 //------------------------------------------------------------------[ APPLET ]--
@@ -39,7 +33,7 @@ type Applet struct {
 //
 func NewApplet() *Applet {
 	app := &Applet{
-		CDApplet: dock.Applet(), // Icon controler and interface to cairo-dock.
+		CDApplet: dock.NewCDApplet(), // Icon controler and interface to cairo-dock.
 	}
 	app.disks = NewDiskSpeed(app)
 	app.AddPoller(func() { app.disks.GetData(); app.disks.Display() })
@@ -51,8 +45,8 @@ func NewApplet() *Applet {
 //
 func (app *Applet) Init(loadConf bool) {
 	if loadConf { // Try to load config. Exit if not found.
-		app.conf = &mailConf{}
-		log.Fatal(app.LoadConfig(&app.conf, dock.GetBoth), "config")
+		app.conf = &appletConf{}
+		log.Fatal(app.LoadConfig(&app.conf), "config")
 	}
 
 	// Settings for poller and diskSpeed (force renderer reset in case of reload).

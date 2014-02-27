@@ -1,4 +1,4 @@
-package main
+package src
 
 import (
 	"github.com/sqp/godock/libs/log" // Display info in terminal.

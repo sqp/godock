@@ -29,7 +29,7 @@ type Applet struct {
 // Create a new DiskUsage applet instance.
 //
 func NewApplet() *Applet {
-	app := &Applet{CDApplet: dock.Applet()} // Icon controler and interface to cairo-dock.
+	app := &Applet{CDApplet: dock.NewCDApplet()} // Icon controler and interface to cairo-dock.
 
 	app.disks = newDiskFree(app)
 	app.AddPoller(func() { app.disks.GetData(); app.disks.Display() })

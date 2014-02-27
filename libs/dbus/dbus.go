@@ -121,19 +121,19 @@ func (cda *CdDbus) OnSignal(v *dbus.Signal) {
 
 //------------------------------------------------------------[ TEST ]--
 
-func (cda *CdDbus) pullEaves(c chan *dbus.Message) {
-	for msg := range c {
-		switch msg.Type {
-		case dbus.TypeSignal:
-			log.Info("signal")
-			cda.OnSignal(msg.ToSignal())
+// func (cda *CdDbus) pullEaves(c chan *dbus.Message) {
+// 	for msg := range c {
+// 		switch msg.Type {
+// 		case dbus.TypeSignal:
+// 			log.Info("signal")
+// 			cda.OnSignal(msg.ToSignal())
 
-		case dbus.TypeMethodCall:
-			log.Info("method")
-			go cda.eavesDropCall(msg)
-		}
-	}
-}
+// 		case dbus.TypeMethodCall:
+// 			log.Info("method")
+// 			go cda.eavesDropCall(msg)
+// 		}
+// 	}
+// }
 
 func (cda *CdDbus) EavesDrop(match string, call func(*dbus.Message)) {
 	cda.eavesDropMatch = match
