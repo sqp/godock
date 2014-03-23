@@ -46,30 +46,6 @@ type SubEvents struct {
 	OnSubDropData    func(data string, icon string)
 }
 
-// Defaults settings can be set in one call with something like:
-//    app.SetDefaults(dock.Defaults{
-//        Label:      "No data",
-//        QuickInfo:  "?",
-//    })
-//
-type Defaults struct {
-	Icon      string
-	Label     string
-	QuickInfo string
-	Shortkeys []string
-
-	// MonitorEnabled bool   // Steal icon from the taskbar.
-	// MonitorName    string // Name for the application monitoring.
-	// Monitor        Command
-	//~ MonitorClass string
-
-	PollerInterval int
-	Commands       Commands
-
-	Templates []string
-	Debug     bool // Enable debug flood.
-}
-
 type DockProperties struct {
 	Xid         uint64
 	X           int32
@@ -146,52 +122,3 @@ const (
 	DialogKeyEnter  = -1
 	DialogKeyEscape = -2
 )
-
-// Small interface to the Dock icon for simple renderers like data pollers.
-//
-type RenderSimple interface {
-	AddDataRenderer(string, int32, string) error
-	FileLocation(...string) string
-	RenderValues(...float64) error
-	SetIcon(string) error
-	SetLabel(string) error
-	SetQuickInfo(string) error
-}
-
-type Commands map[string]*Command
-
-func (commands Commands) FindMonitor() string {
-	for _, cmd := range commands {
-		if cmd.Monitored {
-			if cmd.Class != "" { // Class provided, use it.
-				return cmd.Class
-			}
-			return cmd.Name // Else use program name.
-		}
-	}
-	return "none" // None found, reset it.
-}
-
-type Command struct {
-	Name      string
-	UseOpen   bool
-	Monitored bool
-	Class     string
-}
-
-func NewCommand(monitored bool, name string, class ...string) *Command {
-	cmd := &Command{
-		Monitored: monitored,
-		Name:      name,
-	}
-	if len(class) > 0 {
-		cmd.Class = class[0]
-	}
-	return cmd
-}
-
-func NewCommandStd(action int, name string, class ...string) *Command {
-	cmd := NewCommand(action == 3, name, class...)
-	cmd.UseOpen = (action == 1)
-	return cmd
-}

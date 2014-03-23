@@ -1,6 +1,50 @@
 /*
-Package dbus is the godock cairo-dock connector using DBus. Its goal is to connect the
-main Cairo-Dock Golang API, godock/libs/dock, to its parent.
+Package dbus is the godock cairo-dock connector using DBus.
+
+Its goal is to connect the main Cairo-Dock Golang API, godock/libs/dock, to its parent.
+
+Examples of actions on the main icon:
+	app.SetQuickInfo("OK")
+	app.SetLabel("label changed")
+	app.SetIcon("/usr/share/icons/gnome/32x32/actions/gtk-media-pause.png")
+	app.SetEmblem("/usr/share/icons/gnome/32x32/actions/gtk-go-down.png", cdtype.EmblemTopRight)
+	app.Animate("fire", 10)
+	app.DemandsAttention(true, "default")
+	app.ShowDialog("dialog string\n with time in second", 8)
+
+	app.BindShortkey("<Control><Shift>Y", "<Alt>K")
+	app.AddDataRenderer("gauge", 2, "Turbo-night-fuel")
+	app.RenderValues(0.2, 0.7})
+
+	app.AskText("Enter your name", "<my name>")
+	app.AskValue("How many?", 0, 42)
+	app.AskQuestion("Why?")
+
+	app.ControlAppli("devhelp")
+	app.ShowAppli(true)
+
+	app.PopulateMenu(items... string) error // only in event BuildMenu
+	app.Get(property string) ([]interface{}, error)
+	app.GetAll() (*DockProperties, error)
+
+You can add SubIcons:
+	app.AddSubIcon(
+		"icon 1", "firefox-3.0", "id1",
+		"icon 2", "chromium-browser", "id2",
+		"icon 3", "geany", "id3",
+	)
+	app.RemoveSubIcon("id1")
+
+Some of the actions to play with SubIcons:
+	app.Icons["id3"].SetQuickInfo("woot")
+	app.Icons["id2"].SetLabel("label changed")
+	app.Icons["id3"].Animate("fire", 3)
+
+Still to do;
+	* Icon Actions missing: PopupDialog, AddMenuItems
+	* Subicon actions need test: DemandsAttention, SetLabel
+	* SubIcons events
+
 */
 package dbus
 
@@ -22,13 +66,13 @@ const (
 	DbusInterfaceSubapplet = "org.cairodock.CairoDock.subapplet"
 )
 
-type CdDbus struct {
+type CDDbus struct {
 	Icons     map[string]*SubIcon
 	Close     chan bool // will receive true when the applet is closed.
 	Events    cdtype.Events
 	SubEvents cdtype.SubEvents
 
-	BusPath dbus.ObjectPath
+	busPath dbus.ObjectPath
 
 	eavesDropMatch string              // Special key to filter events from other Dbus provider.
 	eavesDropCall  func(*dbus.Message) // Callback when a message is matched.
@@ -39,89 +83,101 @@ type CdDbus struct {
 	dbusSub  *dbus.Object
 }
 
-func New(path string) *CdDbus {
-	return &CdDbus{
+func New(path string) *CDDbus {
+	return &CDDbus{
 		Icons: make(map[string]*SubIcon),
-		Close: make(chan bool),
+		// Close: make(chan bool, 1),
 
-		BusPath: dbus.ObjectPath(path),
+		busPath: dbus.ObjectPath(path),
 	}
+
 }
 
 //------------------------------------------------------------[ DBUS CONNECT ]--
 
-func (cda *CdDbus) GetCloseChan() chan bool {
-	return cda.Close
+// func (cda *CDDbus) GetCloseChan() <-chan bool {
+// 	return cda.Close
+// }
+
+func StarterShit() (*dbus.Conn, <-chan *dbus.Signal, error) {
+	conn, err := dbus.SessionBus()
+	if err != nil {
+		log.Info("DBus Connect", err)
+		return nil, nil, err
+	}
+
+	c := make(chan *dbus.Signal, 10)
+	conn.Signal(c)
+	return conn, c, nil
 }
 
 // Connect the applet manager to the Cairo-Dock core. Saves interfaces to the
 // icon and subicon DBus interfaces and connects events callbacks.
 //
-func (cda *CdDbus) ConnectToBus() (<-chan *dbus.Signal, error) {
+func (cda *CDDbus) ConnectToBus() (<-chan *dbus.Signal, error) {
 	conn, err := dbus.SessionBus()
 	if err != nil {
 		log.Info("DBus Connect", err)
 		return nil, err
 	}
 
+	c := make(chan *dbus.Signal, 10)
+	conn.Signal(c)
+	return c, cda.ConnectEvents(conn)
+}
+
+func (cda *CDDbus) ConnectEvents(conn *dbus.Conn) error {
 	// if e = cda.dbus.Authenticate(); e != nil {
 	// 	log.Info("Failed Connection.Authenticate:", e.Error())
 	// 	return e
 	// }
 
-	// cda.dbusDock = conn.Object(DbusObject, DbusPathDock)
-	cda.dbusIcon = conn.Object(DbusObject, cda.BusPath)
-	cda.dbusSub = conn.Object(DbusObject, cda.BusPath+"/sub_icons")
+	cda.dbusIcon = conn.Object(DbusObject, cda.busPath)
+	cda.dbusSub = conn.Object(DbusObject, cda.busPath+"/sub_icons")
 	if cda.dbusIcon == nil || cda.dbusSub == nil {
-		return nil, errors.New("No DBus interface")
+		return errors.New("No DBus interface")
 	}
 
 	// Listen to all events emitted for the icon.
 	e := conn.BusObject().Call("org.freedesktop.DBus.AddMatch", 0,
-		"type='signal',path='"+string(cda.BusPath)+"',interface='"+DbusInterfaceApplet+"',sender='"+DbusObject+"'").Err
+		"type='signal',path='"+string(cda.busPath)+"',interface='"+DbusInterfaceApplet+"',sender='"+DbusObject+"'").Err
 	log.Err(e, "Connect to Icon DBus events")
 
 	e = conn.BusObject().Call("org.freedesktop.DBus.AddMatch", 0,
-		"type='signal',path='"+string(cda.BusPath)+"/sub_icons',interface='"+DbusInterfaceSubapplet+"',sender='"+DbusObject+"'").Err
+		"type='signal',path='"+string(cda.busPath)+"/sub_icons',interface='"+DbusInterfaceSubapplet+"',sender='"+DbusObject+"'").Err
 	log.Err(e, "Connect to Subicons DBus events")
 
-	c := make(chan *dbus.Signal, 10)
-	conn.Signal(c)
-	// go cda.pull(c)
-	return c, e
-
-	// if cda.eavesDropMatch != "" { // Nothing to EavesDrop, just get our signals.
-	// 	if e := conn.BusObject().Call("org.freedesktop.DBus.AddMatch", 0, cda.eavesDropMatch).Err; !log.Err(e, "DBus AddMatch") {
-	// 		c := make(chan *dbus.Message, 10)
-	// 		conn.Eavesdrop(c)
-	// 		go cda.pullEaves(c)
-	// 	}
-	// }
-	// return nil
+	return e
 }
 
-// func (cda *CdDbus) pull(c chan *dbus.Signal) {
-// 	for v := range c {
-// 		cda.OnSignal(v)
-// 	}
-// }
-
-func (cda *CdDbus) OnSignal(v *dbus.Signal) {
+func (cda *CDDbus) OnSignal(v *dbus.Signal) (exit bool) {
 	// log.DEV("received", v)
 	switch {
+	case v == nil:
+
 	case v.Name[len(DbusInterfaceApplet)] == '.':
 		// log.DEV("Received", v.Name[len(DbusInterfaceApplet)+1:], v.Body)
-		cda.receivedMainEvent(v.Name[len(DbusInterfaceApplet)+1:], v.Body)
+		return cda.receivedMainEvent(v.Name[len(DbusInterfaceApplet)+1:], v.Body)
 
 	case v.Name[len(DbusInterfaceSubapplet)] == '.':
 		// log.DEV("SUBICON", v.Name[len(DbusInterfaceSubapplet)+1:], v.Body)
 		cda.receivedSubEvent(v.Name[len(DbusInterfaceSubapplet)+1:], v.Body)
 	}
+	return false
 }
 
 //------------------------------------------------------------[ TEST ]--
 
-// func (cda *CdDbus) pullEaves(c chan *dbus.Message) {
+// if cda.eavesDropMatch != "" { // Nothing to EavesDrop, just get our signals.
+// 	if e := conn.BusObject().Call("org.freedesktop.DBus.AddMatch", 0, cda.eavesDropMatch).Err; !log.Err(e, "DBus AddMatch") {
+// 		c := make(chan *dbus.Message, 10)
+// 		conn.Eavesdrop(c)
+// 		go cda.pullEaves(c)
+// 	}
+// }
+// return nil
+
+// func (cda *CDDbus) pullEaves(c chan *dbus.Message) {
 // 	for msg := range c {
 // 		switch msg.Type {
 // 		case dbus.TypeSignal:
@@ -135,14 +191,14 @@ func (cda *CdDbus) OnSignal(v *dbus.Signal) {
 // 	}
 // }
 
-func (cda *CdDbus) EavesDrop(match string, call func(*dbus.Message)) {
+func (cda *CDDbus) EavesDrop(match string, call func(*dbus.Message)) {
 	cda.eavesDropMatch = match
 	cda.eavesDropCall = call
 }
 
 // Call DBus method without returned values.
 //
-func (cda *CdDbus) launch(iface *dbus.Object, action string, args ...interface{}) error {
+func (cda *CDDbus) launch(iface *dbus.Object, action string, args ...interface{}) error {
 	return iface.Call(action, 0, args...).Err
 }
 
@@ -155,12 +211,12 @@ func launch(iface *dbus.Object, action string, args ...interface{}) error {
 
 // Sets the quickinfo text displayed on our icon.
 //
-func (cda *CdDbus) SetQuickInfo(info string) error {
+func (cda *CDDbus) SetQuickInfo(info string) error {
 	return cda.launch(cda.dbusIcon, DbusInterfaceApplet+".SetQuickInfo", info)
 }
 
 // Sets the text label of our icon.
-func (cda *CdDbus) SetLabel(label string) error {
+func (cda *CDDbus) SetLabel(label string) error {
 	return cda.launch(cda.dbusIcon, DbusInterfaceApplet+".SetLabel", label)
 }
 
@@ -170,7 +226,7 @@ func (cda *CdDbus) SetLabel(label string) error {
 //   app.SetIcon("gtk-go-up")
 //   app.SetIcon("/path/to/image")
 //
-func (cda *CdDbus) SetIcon(icon string) error {
+func (cda *CDDbus) SetIcon(icon string) error {
 	return cda.launch(cda.dbusIcon, DbusInterfaceApplet+".SetIcon", icon)
 }
 
@@ -180,19 +236,19 @@ func (cda *CdDbus) SetIcon(icon string) error {
 //
 //   app.SetEmblem("./emblem-charged.png", cdtype.EmblemBottomLeft)
 //
-func (cda *CdDbus) SetEmblem(icon string, position cdtype.EmblemPosition) error {
+func (cda *CDDbus) SetEmblem(icon string, position cdtype.EmblemPosition) error {
 	return cda.launch(cda.dbusIcon, DbusInterfaceApplet+".SetEmblem", icon, int32(position))
 }
 
-func (cda *CdDbus) Animate(animation string, rounds int32) error {
+func (cda *CDDbus) Animate(animation string, rounds int32) error {
 	return cda.launch(cda.dbusIcon, DbusInterfaceApplet+".Animate", animation, rounds)
 }
 
-func (cda *CdDbus) ShowDialog(message string, duration int32) error {
+func (cda *CDDbus) ShowDialog(message string, duration int32) error {
 	return cda.dbusIcon.Go(DbusInterfaceApplet+".ShowDialog", 0, nil, message, duration).Err
 }
 
-func (cda *CdDbus) DemandsAttention(start bool, animation string) error {
+func (cda *CDDbus) DemandsAttention(start bool, animation string) error {
 	return cda.launch(cda.dbusIcon, DbusInterfaceApplet+".DemandsAttention", start, animation)
 }
 
@@ -233,20 +289,20 @@ func (cda *CdDbus) DemandsAttention(start bool, animation string) error {
 //        case editable=true:   string with the default text for the user entry of the widget (default=empty).
 //        case editable=false:  int with the selected line number (default=0).
 //
-func (cda *CdDbus) PopupDialog(dialog map[string]interface{}, widget map[string]interface{}) error {
+func (cda *CDDbus) PopupDialog(dialog map[string]interface{}, widget map[string]interface{}) error {
 	return cda.launch(cda.dbusIcon, DbusInterfaceApplet+".PopupDialog", toMapVariant(dialog), toMapVariant(widget))
 }
 
 // Renderer types: gauge, graph, progressbar
 // Themes for renderer Graph: "Line", "Plain", "Bar", "Circle", "Plain Circle"
 //
-func (cda *CdDbus) AddDataRenderer(typ string, nbval int32, theme string) error {
+func (cda *CDDbus) AddDataRenderer(typ string, nbval int32, theme string) error {
 	return cda.launch(cda.dbusIcon, DbusInterfaceApplet+".AddDataRenderer", typ, nbval, theme)
 }
 
 //
 //
-func (cda *CdDbus) RenderValues(values ...float64) error {
+func (cda *CDDbus) RenderValues(values ...float64) error {
 	return cda.dbusIcon.Call("RenderValues", dbus.FlagNoAutoStart, values).Err
 	// return cda.launch(cda.dbusIcon, DbusInterfaceApplet+".RenderValues", values)
 }
@@ -262,7 +318,7 @@ func (cda *CdDbus) RenderValues(values ...float64) error {
 // "close"               to close the window (Note: some programs will just hide the window and stay in the systray)
 // "kill"                to kill the X window
 //
-func (cda *CdDbus) ActOnAppli(action string) error {
+func (cda *CDDbus) ActOnAppli(action string) error {
 	return cda.launch(cda.dbusIcon, DbusInterfaceApplet+".ActOnAppli", action)
 }
 
@@ -271,64 +327,33 @@ func (cda *CdDbus) ActOnAppli(action string) error {
 // want to control. Use "none" if you want to reset application control.
 // Controling an application enables the OnFocusChange callback.
 //
-func (cda *CdDbus) ControlAppli(applicationClass string) error {
+func (cda *CDDbus) ControlAppli(applicationClass string) error {
 	return cda.launch(cda.dbusIcon, DbusInterfaceApplet+".ControlAppli", applicationClass)
 }
 
 // Set the visible state of the application controlled by the icon.
 //
-func (cda *CdDbus) ShowAppli(show bool) error {
+func (cda *CDDbus) ShowAppli(show bool) error {
 	return cda.launch(cda.dbusIcon, DbusInterfaceApplet+".ShowAppli", interface{}(show))
 }
 
 // aa{sv}
 
-//~ func (cda *CdDbus) AddMenuItems(items... []map[string]interface{}) error {
-func (cda *CdDbus) AddMenuItems() error {
-	// menuitem := []map[string]interface{}{
-	// 	// {
-	// 	{"widget-type": cdtype.MenuEntry, //int32(0),
-	// 		"label": "this is an entry of the main menu",
-	// 		"icon":  "gtk-add",
-	// 		// "menu":    int32(0),
-	// 		// "id":      int32(1),
-	// 		// "tooltip": "this is the tooltip that will appear when you hover this entry",
-	// 	},
-	// 	// },
-	// }
-
-	// menuitem := []map[string]interface{}{
-	// 	"label": {
-	// 		{"widget-type", 0},
-	// 		{"label", "this is an entry of the main menu"},
-	// 		{"icon", "gtk-add"},
-	// 		{"menu", 0},
-	// 		{"id", 1},
-	// 		{"tooltip", "this is the tooltip that will appear when you hover this entry"},
-	// 	},
-	// }
-
-	// var data []map[string]dbus.Variant
-	// for _, interf := range menuitem {
-	// 	// for _, interf2 := range interf {
-	// 	data = append(data, toMapVariant(interf))
-	// 	// data = append(data, append([]map[string]dbus.Variant{}, toMapVariant(interf)))
-	// 	// }
-	// }
-
-	data := []map[string]dbus.Variant{
-		{
-		// "widget-type": dbus.MakeVariant(int32(0)),
-		// // "widget-type": dbus.MakeVariant(int32(cdtype.MenuEntry)),
-		// "label": dbus.MakeVariant("entry"),
-		// // "icon":  dbus.MakeVariant("gtk-add"),
-		// // "menu":    int32(0),
-		// "menu": dbus.MakeVariant(int32(0)),
-
-		// "id": dbus.MakeVariant(int32(1)),
-		// // "id":      int32(1),
-		// // "tooltip": "this is the tooltip that will appear when you hover this entry",
+//~ func (cda *CDDbus) AddMenuItems(items... []map[string]interface{}) error {
+func (cda *CDDbus) AddMenuItems() error {
+	menuitem := []map[string]interface{}{
+		{"widget-type": cdtype.MenuEntry, //int32(0),
+			"label": "entry",
+			// "icon":  "gtk-add",
+			"menu": int32(0),
+			"id":   int32(1),
+			// "tooltip": "this is the tooltip that will appear when you hover this entry",
 		},
+	}
+
+	var data []map[string]dbus.Variant
+	for _, interf := range menuitem {
+		data = append(data, toMapVariant(interf))
 	}
 
 	// icon := map[string]dbus.Variant{
@@ -342,13 +367,13 @@ func (cda *CdDbus) AddMenuItems() error {
 	// }
 
 	log.DETAIL(data)
-	// return cda.launch(cda.dbusIcon, DbusInterfaceApplet+"AddMenuItems", []interface{}{menuitem})
-	go log.Err(cda.dbusIcon.Call(DbusInterfaceApplet+".AddMenuItems", dbus.FlagNoReplyExpected, data).Err, "additems")
-	log.Info("grr")
+	// log.Err(cda.launch(cda.dbusIcon, DbusInterfaceApplet+".AddMenuItems", data), "")
+	// log.Err(cda.dbusIcon.Call(DbusInterfaceApplet+".AddMenuItems", 0, data).Err, "additems")
+	log.Info("Disabled, prevent a crash")
 	return nil
 }
 
-func (cda *CdDbus) PopulateMenu(items ...string) error {
+func (cda *CDDbus) PopulateMenu(items ...string) error {
 	return cda.launch(cda.dbusIcon, DbusInterfaceApplet+".PopulateMenu", items)
 }
 
@@ -356,19 +381,19 @@ func (cda *CdDbus) PopulateMenu(items ...string) error {
 // will be sent to the dock so you can use this method to directly add them from
 // config.
 //
-func (cda *CdDbus) BindShortkey(shortkeys ...string) error {
+func (cda *CDDbus) BindShortkey(shortkeys ...string) error {
 	return cda.launch(cda.dbusIcon, DbusInterfaceApplet+".BindShortkey", shortkeys)
 }
 
-func (cda *CdDbus) AskText(message, initialText string) error {
+func (cda *CDDbus) AskText(message, initialText string) error {
 	return cda.dbusIcon.Call("AskText", 0, message, initialText).Err
 }
 
-func (cda *CdDbus) AskValue(message string, initialValue, maxValue float64) error {
+func (cda *CDDbus) AskValue(message string, initialValue, maxValue float64) error {
 	return cda.dbusIcon.Call("AskValue", 0, message, initialValue, maxValue).Err
 }
 
-func (cda *CdDbus) AskQuestion(message string) error {
+func (cda *CDDbus) AskQuestion(message string) error {
 	return cda.dbusIcon.Call("AskQuestion", 0, message).Err
 }
 
@@ -382,7 +407,7 @@ func (cda *CdDbus) AskQuestion(message string) error {
 //   Xid          uint64   ID of the application's window which is controlled by the applet, or 0 if none (this parameter can only be non nul if you used the method ControlAppli beforehand).
 //   has_focus    bool     Whether the application's window which is controlled by the applet is the current active window (it has the focus) or not. E.g.:
 //
-func (cda *CdDbus) Get(property string) (interface{}, error) {
+func (cda *CDDbus) Get(property string) (interface{}, error) {
 	var v dbus.Variant
 	e := cda.dbusIcon.Call("Get", 0, property).Store(&v)
 	return v.Value(), e
@@ -390,7 +415,7 @@ func (cda *CdDbus) Get(property string) (interface{}, error) {
 
 // Get Module Icon Properties.
 //
-func (cda *CdDbus) GetAll() *cdtype.DockProperties {
+func (cda *CDDbus) GetAll() *cdtype.DockProperties {
 	vars := make(map[string]dbus.Variant)
 	if log.Err(cda.dbusIcon.Call("GetAll", 0).Store(&vars), "dbus GetAll") {
 		return nil
@@ -432,7 +457,7 @@ type SubIcon struct {
 
 // Add subicons by pack of 3 string : label, icon, id.
 //
-func (cda *CdDbus) AddSubIcon(fields ...string) error {
+func (cda *CDDbus) AddSubIcon(fields ...string) error {
 	for i := 0; i < len(fields)/3; i++ {
 		id := fields[3*i+2]
 		cda.Icons[id] = &SubIcon{cda.dbusSub, id}
@@ -440,7 +465,7 @@ func (cda *CdDbus) AddSubIcon(fields ...string) error {
 	return cda.launch(cda.dbusSub, DbusInterfaceSubapplet+".AddSubIcons", fields)
 }
 
-func (cda *CdDbus) RemoveSubIcon(id string) error {
+func (cda *CDDbus) RemoveSubIcon(id string) error {
 	if _, ok := cda.Icons[id]; ok {
 		e := cda.launch(cda.dbusSub, DbusInterfaceSubapplet+".RemoveSubIcon", id)
 		if e == nil {
@@ -484,14 +509,17 @@ func (cdi *SubIcon) DemandsAttention(start bool, animation string) error {
 
 // Event receiver, dispatch it to the configured callback.
 //
-func (cda *CdDbus) receivedMainEvent(event string, data []interface{}) {
+func (cda *CDDbus) receivedMainEvent(event string, data []interface{}) (exit bool) {
 	switch event {
 	case "on_stop_module":
 		log.Debug("Received from dock", event)
 		if cda.Events.End != nil {
 			cda.Events.End()
 		}
-		cda.Close <- true // Send closing signal.
+		// cda.Close <- true // Send closing signal.
+		// log.DEV("Close sent")
+		return true
+
 	case "on_reload_module":
 		if cda.Events.Reload != nil {
 			go cda.Events.Reload(data[0].(bool))
@@ -539,9 +567,10 @@ func (cda *CdDbus) receivedMainEvent(event string, data []interface{}) {
 	default:
 		log.Info(event, data)
 	}
+	return false
 }
 
-func (cda *CdDbus) receivedSubEvent(event string, data []interface{}) {
+func (cda *CDDbus) receivedSubEvent(event string, data []interface{}) {
 	switch event {
 	case "on_click_sub_icon":
 		if cda.SubEvents.OnSubClick != nil {
@@ -617,7 +646,7 @@ func toMapVariant(input map[string]interface{}) map[string]dbus.Variant {
 
 // Connect an event to the dock if a callback is defined.
 //
-func (cda *CdDbus) connectEvent(elem reflect.Value, structField reflect.StructField) {
+func (cda *CDDbus) connectEvent(elem reflect.Value, structField reflect.StructField) {
 	conn, _ := dbus.SessionBus()
 
 	tag := structField.Tag.Get("event")                          // Field must have the event tag.
@@ -627,14 +656,14 @@ func (cda *CdDbus) connectEvent(elem reflect.Value, structField reflect.StructFi
 		// 		Type:      dbus.TypeSignal,
 		// 		Interface: DbusInterfaceApplet,
 		// 		Member:    tag,
-		// 		Path:      cda.BusPath,
+		// 		Path:      cda.busPath,
 
 		var ret interface{}
 		e := conn.BusObject().Call(
 			"org.freedesktop.DBus.AddMatch",
 			0,
 			// "type='signal',sender='org.freedesktop.DBus'").Store()
-			"type='signal',path='"+string(cda.BusPath)+"',interface='"+DbusInterfaceApplet+"',sender='"+DbusObject+"'").Store()
+			"type='signal',path='"+string(cda.busPath)+"',interface='"+DbusInterfaceApplet+"',sender='"+DbusObject+"'").Store()
 		log.DEV("omar", ret, e)
 	}
 
@@ -644,14 +673,14 @@ func (cda *CdDbus) connectEvent(elem reflect.Value, structField reflect.StructFi
 */
 
 /*
-func (cda *CdDbus) GetIconProperties() interface{} {
+func (cda *CDDbus) GetIconProperties() interface{} {
 	base := cda.dbus.Object("org.cairodock.CairoDock", "/org/cairodock/CairoDock").Interface("org.cairodock.CairoDock")
 	//~ return cda.call(base, "GetIconProperties", "container=_MainDock_")
 	return cda.call(base, "GetIconProperties", interface{}("class=chromium-browser"))
 	//~ return cda.call(base, "GetIconProperties")
 }
 
-func (cda *CdDbus) GetContainerProperties() []interface{} {
+func (cda *CDDbus) GetContainerProperties() []interface{} {
 	//~ props := &DockProperties{}
 
 	base := cda.dbus.Object("org.cairodock.CairoDock", "/org/cairodock/CairoDock").Interface("org.cairodock.CairoDock")

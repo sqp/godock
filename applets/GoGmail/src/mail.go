@@ -22,6 +22,7 @@ type Mailbox interface {
 	Count() (nbInbox int)
 	Clear()
 	Data() interface{}
+	LoadLogin(filepath string)
 	SaveLogin(login string)
 }
 
@@ -71,13 +72,8 @@ type Feed struct {
 	callResult func(int, bool, error) // Action to execute to send polling results.
 }
 
-func NewFeed(filename string, onResult func(int, bool, error)) *Feed {
-	feed := &Feed{
-		file:       filename,
-		callResult: onResult,
-	}
-	feed.loadLogin()
-	return feed
+func NewFeed(onResult func(int, bool, error)) *Feed {
+	return &Feed{callResult: onResult}
 }
 
 // Get number of unread mails.
@@ -93,7 +89,7 @@ func (feed *Feed) Data() interface{} {
 	return feed
 }
 
-// Rsset mail list.
+// Reset mail list.
 //
 func (feed *Feed) Clear() {
 	feed.Mail = nil
@@ -155,7 +151,8 @@ func (feed *Feed) get() error {
 	return nil
 }
 
-func (feed *Feed) loadLogin() {
+func (feed *Feed) LoadLogin(filename string) {
+	feed.file = filename
 	b, err := ioutil.ReadFile(feed.file)
 	if err == nil {
 		t, e2 := base64.StdEncoding.DecodeString(string(b))
@@ -175,5 +172,5 @@ func (feed *Feed) SaveLogin(login string) {
 	str := []byte(strings.Replace(login, ":", "\n", 1))
 	coded := base64.StdEncoding.EncodeToString(str)
 	ioutil.WriteFile(feed.file, []byte(coded), 0600)
-	feed.loadLogin()
+	feed.LoadLogin(feed.file)
 }

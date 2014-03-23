@@ -37,29 +37,30 @@ package log
 import (
 	"log"
 	"os"
+
+	"fmt"
+	"path"
+	"runtime"
+	"time"
 )
 
-// Message helpers
-func Yellow(msg string) string  { return FgYellow + msg + Reset }
-func Magenta(msg string) string { return FgMagenta + msg + Reset }
-func Green(msg string) string   { return FgGreen + msg + Reset }
-func Red(msg string) string     { return FgRed + msg + Reset }
+//
+//-----------------------------------------------------------[ TEXT WRAPPERS ]--
 
-func Colored(msg, color string) string {
+func Yellow(msg string) string  { return Colored(msg, FgYellow) }  // Yellow formatting of text.
+func Magenta(msg string) string { return Colored(msg, FgMagenta) } // Magenta formatting of text.
+func Green(msg string) string   { return Colored(msg, FgGreen) }   // Green formatting of text.
+func Red(msg string) string     { return Colored(msg, FgRed) }     // Red formatting of text.
+
+func Colored(msg, color string) string { // Colored formatting of text.
 	if msg != "" {
 		return color + msg + Reset
 	}
 	return ""
 }
 
-func Parenthesis(msg string) string {
-	if msg != "" {
-		return "(" + msg + ")"
-	}
-	return ""
-}
-
-func Bracket(msg string) string { return addAround("[", msg, "]") }
+func Parenthesis(msg string) string { return addAround("(", msg, ")") } // Parenthesis added around text.
+func Bracket(msg string) string     { return addAround("[", msg, "]") } // Brackets added around text.
 
 func addAround(before, msg, after string) string {
 	if msg != "" {
@@ -68,32 +69,31 @@ func addAround(before, msg, after string) string {
 	return ""
 }
 
-// Logger
+//
+//-----------------------------------------------------------------[ LOGGING ]--
 
-var std = log.New(os.Stdout, "", log.Ldate|log.Ltime)
+var std = log.New(os.Stdout, "", log.Ltime) // log.Ldate
 var debug bool
 
+// SetPrefix set the prefix of the logger display.
+//
 func SetPrefix(pre string) {
 	std.SetPrefix(Yellow("[" + pre + "] "))
 	log.SetPrefix(Yellow("[" + pre + "] "))
 	log.SetFlags(log.Ltime)
 }
 
+// SetDebug set the debug flag. If true all messages sent to the Debug function
+// will be displayed.
+//
 func SetDebug(flag bool) {
 	debug = flag
 }
 
-// Displays normal informations on the standard output, with the first param in green.
+// Info displays normal informations on the standard output, with the first param in green.
 //
 func Info(msg string, more ...interface{}) {
 	Render(FgGreen, msg, more...)
-}
-
-// Displays normal colored informations on the standard output, To be used for
-// temporary developer tests, so they could be easily tracked.
-//
-func DEV(msg string, more ...interface{}) {
-	Render(Bright, msg, more...)
 }
 
 // To be used every time a usefull step is reached in your module activity. It
@@ -108,23 +108,60 @@ func Debug(msg string, more ...interface{}) {
 	}
 }
 
+// Render displays the msg argument in the given color. The colored message is
+// passed with others to classic println.
+//
 func Render(color, msg string, more ...interface{}) {
-	// var list []interface{}
-	// list = append(list, Bracket(color + msg + Reset))
-	list := append([]interface{}{Bracket(Colored(msg, color))}, more...)
-	log.Println(list...)
+	// println(, list...)
+	list := append([]interface{}{time.Now().Format("15:04:05"), Yellow(caller()), Bracket(Colored(msg, color))}, more...)
+	fmt.Println(list...)
+	// log.Println(list...)
 }
 
-// Errors testing and reporting.
+func caller() string {
+	// var m runtime.MemStats
+	// runtime.ReadMemStats(&m)
+	// Info("mem", m.Alloc)
+
+	_, file, _, _ := runtime.Caller(3) // (pc uintptr, file string, line int, ok bool)
+	// Info("package", path.Base(path.Dir(file)))
+	return path.Base(path.Dir(file))
+}
+
+//
+//---------------------------------------------------------[ DEVELOPPER INFO ]--
+
+// Dev displays normal colored informations on the standard output, To be used
+// for temporary developer tests, so they could be easily tracked.
+//
+func DEV(msg string, more ...interface{}) {
+	Render(Bright, msg, more...)
+}
+
+// DETAIL prints the detailled content of a variable.
+// This is a convenience function for the developper, but not meant for
+// production code. Its name is in full caps so it can be better seen and found.
+//
+func DETAIL(i interface{}) {
+	log.Printf("%##v\n", i)
+}
+
+//
+//---------------------------------------------------------[ ERROR REPORTING ]--
+
+// Warn test and log the error as Warning type. Return true if an error was found.
 //
 func Warn(e error, msg string) (fail bool) {
 	return l(e, Yellow("Warning"), msg)
 }
 
+// Err test and log the error as Error type. Return true if an error was found.
+//
 func Err(e error, msg string) (fail bool) {
 	return l(e, Red("Error"), msg)
 }
 
+// GetErr test and logs the error, and return it for later use.
 func GetErr(e error, msg string) error {
 	if e != nil {
 		std.Println(Red("Error"), msg, ":", e)
@@ -140,26 +177,10 @@ func l(e error, level, msg string) (fail bool) {
 	return fail
 }
 
-// Test error: log and quit.
+// Fatal will log the error and exit the program if an error was found.
 //
 func Fatal(e error, msg string) {
 	if Err(e, msg) {
 		os.Exit(2)
 	}
 }
-
-func DETAIL(i interface{}) {
-	log.Printf("%##v\n", i)
-}
-
-//~ func Show(msg string) {
-//~ log.Println(FgGreen + msg + Reset)
-//~ }
-
-//~ func Warning(msg string, more... interface{}) {
-//~ Render(FgYellow, msg, more...)
-//~ }
-//~
-//~ func Error(msg string, more... interface{}) {
-//~ Render(FgRed, msg, more...)
-//~ }

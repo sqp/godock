@@ -17,7 +17,6 @@ http://www.gnu.org/licenses/licenses.html#GPL
 package src
 
 import (
-	"github.com/sqp/godock/libs/cdtype"
 	"github.com/sqp/godock/libs/dock" // Connection to cairo-dock.
 	"github.com/sqp/godock/libs/log"  // Display info in terminal.
 
@@ -75,20 +74,16 @@ func NewApplet() *AppletUpdate {
 // Initialise applet with user configuration.
 //
 func (app *AppletUpdate) Init(loadConf bool) {
-
-	if loadConf { // Try to load config. Exit if not found.
-		app.conf = &updateConf{}
-		log.Fatal(app.LoadConfig(&app.conf), "config")
-	}
+	app.LoadConfig(loadConf, &app.conf) // Load config will crash if fail. Expected.
 
 	// Icon default settings.
-	app.SetDefaults(cdtype.Defaults{
+	app.SetDefaults(dock.Defaults{
 		Icon:           app.conf.Icon,
 		Shortkeys:      []string{app.conf.ShortkeyOneKey, app.conf.ShortkeyTwoKey},
 		Templates:      []string{app.conf.VersionDialogTemplate},
 		PollerInterval: dock.PollerInterval(app.conf.VersionPollingTimer*60, defaultVersionPollingTimer*60),
-		Commands: cdtype.Commands{
-			"showDiff": cdtype.NewCommand(app.conf.DiffMonitored, app.conf.DiffCommand)},
+		Commands: dock.Commands{
+			"showDiff": dock.NewCommand(app.conf.DiffMonitored, app.conf.DiffCommand)},
 		Debug: app.conf.Debug})
 
 	// Branches for versions checking.

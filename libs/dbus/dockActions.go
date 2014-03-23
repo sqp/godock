@@ -284,35 +284,33 @@ func ListIcons() (list []*CDIcon) {
 // }
 
 func InfoApplet(name string) *packages.AppletPackage {
-	list := ListModules(name)
+	list := ListApplets(name)
 	if app, ok := list[name]; ok {
 		return app
 	}
 	return nil
 }
 
-// Optional name to query.
+// Optional name to query. Only one can be provided.
 //
-func ListModules(name ...string) map[string]*packages.AppletPackage {
+func ListApplets(name ...string) map[string]*packages.AppletPackage {
 	list := make(map[string]*packages.AppletPackage)
 	query := "type=Module"
 	if len(name) > 0 {
 		query += " & name=" + name[0]
 	}
 	for _, props := range DockProperties(query) {
-		// log.Info("----------------")
 		pack := &packages.AppletPackage{}
 
 		for k, v := range props {
-			// log.Info(k)
 			switch k {
+			case "type": // == "Module"
+
 			case "name":
 				pack.DisplayedName = v.Value().(string)
 
 			case "title":
 				pack.Title = v.Value().(string)
-
-			case "type": // == "Module"
 
 			case "author":
 				pack.Author = v.Value().(string)
@@ -340,17 +338,17 @@ func ListModules(name ...string) map[string]*packages.AppletPackage {
 				pack.Preview = v.Value().(string)
 
 			case "module-type":
-				// log.Info(k, v.Value().(uint32))
-				// pack.DisplayedName = v.Value().(string)
+				pack.ModuleType = int(v.Value().(uint32))
 
 			default:
-				log.Info(k, v)
+				log.Info("ListApplets unmatched", k, v)
 			}
 		}
 		if pack.DisplayedName != "" {
 			list[pack.DisplayedName] = pack
+			// log.Info("----------------")
+			// log.DETAIL(pack)
 		}
-		// log.DETAIL(props)
 	}
 	return list
 }

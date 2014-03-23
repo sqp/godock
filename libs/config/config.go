@@ -1,16 +1,14 @@
+// Package config is an automatic configuration loader for cairo-dock.
 package config
 
 import (
 	"github.com/robfig/config" // Config parser.
 
-	// "github.com/sqp/godock/libs/log" // Display info in terminal.
-
+	"bufio"
 	"errors"
+	"io"
 	"reflect"
 	"strings"
-
-	"bufio"
-	"io"
 )
 
 // Config file unmarshall. Parsing errors will be stacked in the Errors field.
@@ -20,7 +18,7 @@ type Config struct {
 	Errors []error
 }
 
-// Config parser with reflection to fill fields.
+// NewFromFile creates a new Config parser with reflection to fill fields.
 //
 func NewFromFile(filename string) (*Config, error) {
 	c, e := config.ReadDefault(filename)
@@ -30,7 +28,7 @@ func NewFromFile(filename string) (*Config, error) {
 	return &Config{Config: *c}, nil
 }
 
-// Config parser with reflection to fill fields.
+// NewFromReader creates a new Config parser with reflection to fill fields.
 //
 func NewFromReader(reader io.Reader) (*Config, error) {
 	c := &Config{Config: *config.NewDefault()}
@@ -41,7 +39,7 @@ func NewFromReader(reader io.Reader) (*Config, error) {
 	return c, nil
 }
 
-// Load config file and fills config a data struct.
+// Load config file and fills a config data struct.
 //
 //   First argument must be a the pointer to the data struct.
 //   Second argument is the func to choose what key to load for each field.
@@ -60,19 +58,20 @@ func Load(filename string, v interface{}, fieldKey GetFieldKey) error {
 //
 type GetFieldKey func(reflect.StructField) string
 
-// Use field name as config source.
+// GetKey is a GetFieldKey test that matches by the field name.
 //
 func GetKey(struc reflect.StructField) string {
 	return struc.Name
 }
 
-// Use field tag as config source.
+// GetTag is a test GetFieldKey that matches by the struct tag is defined.
 //
 func GetTag(struc reflect.StructField) string {
 	return struc.Tag.Get("conf")
 }
 
-// If a tag is defined use it as config source, otherwise, use the field name.
+// GetBoth is a GetFieldKey test that matches by the struct tag is defined,
+// otherwise, use the field name.
 //
 func GetBoth(struc reflect.StructField) string {
 	if tag := struc.Tag.Get("conf"); tag != "" {
@@ -81,34 +80,42 @@ func GetBoth(struc reflect.StructField) string {
 	return struc.Name // Else, use name.
 }
 
-// Fill a struct of struct with data from config. First level is config group,
-// matched by the key group. Second level is data fields, matched by the supplied
-// GetFieldKey func.
+// Unmarshall fills a struct of struct with data from config.
+// The First level is config group, matched by the key group.
+// Second level is data fields, matched by the supplied GetFieldKey func.
 //
 func (c *Config) Unmarshall(v interface{}, fieldKey GetFieldKey) error {
-	val := reflect.ValueOf(v)
-	if val.Kind() != reflect.Ptr {
-		return errors.New("non-pointer passed to Unmarshal")
+	typ := reflect.Indirect(reflect.ValueOf(v)).Type().Elem() // Get the type of the struct behind the pointer.
+	val := reflect.ValueOf(v).Elem()                          // ReflectValue of the config struct.
+
+	val.Set(reflect.New(typ)) // Create a new empty struct.
+
+	for i := 0; i < typ.NumField(); i++ { // Parsing all fields in grre.
+		// log.Info("field", i, typ.Field(i).Name, typ.Field(i).Tag.Get("group"))
+		if group := typ.Field(i).Tag.Get("group"); group != "" {
+			c.UnmarshalGroup(val.Elem().Field(i), group, fieldKey)
+		}
 	}
 
 	// Get instance behind pointer. Not sure why I have to use 2x Elem()
 	// maybe once to get inside the pointer and once inside the struct.
+	// val = val.Elem().Elem()
 
-	val = val.Elem().Elem()
-
-	// Parse struct to fill each group according to its tag.
-	typ := val.Type()
-	for i := 0; i < typ.NumField(); i++ { // Parsing all fields in type.
-		if group := typ.Field(i).Tag.Get("group"); group != "" {
-			// log.Debug(typ.Field(i).Name, typ.Field(i).Tag.Get("group"))
-			c.UnmarshalGroup(val.Field(i), group, fieldKey)
-		}
-	}
+	// // Parse struct to fill each group according to its tag.
+	// typ := val.Type()
+	// log.Info("kind", typ.Kind())
+	// for i := 0; i < typ.NumField(); i++ { // Parsing all fields in type.
+	// 	log.Info("field", i, typ.Field(i).Name, typ.Field(i).Tag.Get("group"))
+	// 	if group := typ.Field(i).Tag.Get("group"); group != "" {
+	// 		// log.Debug(typ.Field(i).Name, typ.Field(i).Tag.Get("group"))
+	// 		c.UnmarshalGroup(val.Field(i), group, fieldKey)
+	// 	}
+	// }
 	return nil
 }
 
-// Parse config to fill the conf param with values from the file in a specific
-// group.
+// UnmarshalGroup parse config to fill the conf param with values from the given
+// group in the file.
 //
 // The group param must match a group in the file with the format [MYGROUP]
 //
@@ -175,6 +182,7 @@ func (c *Config) logError(e error) {
 // Need to get access to the read function of our config library.
 // this is just a copy with public access.
 
+// Read config from a Reader.
 func (c *Config) Read(buf *bufio.Reader) (err error) {
 	var section, option string
 
@@ -240,55 +248,3 @@ func stripComments(l string) string {
 }
 
 //
-//
-//
-//
-//
-//
-// OLD. Will DEPRECATE SOON !
-//
-// func (c *Config) Parse(group string, empty, conf interface{}) {
-// 	//~ typ := reflect.TypeOf(conf)
-// 	//~ term.Info("typ", typ) //, reflect.TypeOf(v).Kind())
-
-// 	typ := reflect.TypeOf(empty)
-
-// 	n := typ.NumField()
-// 	elem := reflect.ValueOf(conf).Elem()
-
-// 	for i := 0; i < n; i++ { // Parsing all fields in type.
-// 		//~ field := typ.Field(i)
-// 		field := elem.Field(i).Interface()
-// 		//~ term.Info("XML Import Field mismatch", field.Name, elem.Field(i).Kind()) //, reflect.TypeOf(v).Kind())
-// 		current := typ.Field(i)
-// 		switch field.(type) {
-// 		case bool:
-// 			val, e := c.Bool(group, current.Name)
-// 			c.logError(e)
-// 			elem.Field(i).SetBool(val)
-
-// 		case int:
-// 			val, e := c.Int(group, current.Name)
-// 			c.logError(e)
-// 			elem.Field(i).SetInt(int64(val))
-
-// 		case string:
-// 			val, e := c.String(group, current.Name)
-// 			c.logError(e)
-// 			elem.Field(i).SetString(val)
-
-// 		default:
-// 			c.logError(errors.New("unknown field: " + current.Name))
-// 		}
-
-// 	}
-
-// 	//~ if v, ok := parseMap[field.Name]; ok { // Got matching row in map
-// 	//~ if elem.Field(i).Kind() == reflect.TypeOf(v).Kind() { // Types are compatible.
-// 	//~ elem.Field(i).Set(reflect.ValueOf(v))
-// 	//~ } else {
-// 	//~ warn("XML Import Field mismatch", field.Name, elem.Field(i).Kind(), reflect.TypeOf(v).Kind())
-// 	//~ }
-// 	//~ }
-
-// }

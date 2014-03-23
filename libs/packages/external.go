@@ -18,13 +18,13 @@ import (
 	"time"
 )
 
-import "github.com/kr/pretty"
+// import "github.com/kr/pretty"
 
-func DEBUG(args ...interface{}) {
-	for _, arg := range args {
-		pretty.Printf("%# v\n", arg)
-	}
-}
+// func DEBUG(args ...interface{}) {
+// 	for _, arg := range args {
+// 		pretty.Printf("%# v\n", arg)
+// 	}
+// }
 
 const (
 	DistantUrl  = "http://download.tuxfamily.org/glxdock/themes/third-party/"
@@ -236,6 +236,7 @@ type AppletPackage struct {
 	Preview         string
 	IsMultiInstance bool
 	Instances       []string
+	ModuleType      int
 }
 
 // Try to get package info from extra applets in user home dir.
@@ -465,176 +466,16 @@ func DirLaunchers() (dir string, e error) {
 	return "", errors.New("Can't get HOME directory")
 }
 
-// Get package informations of an external applet. You must provide applet name
-// as it exist in the dir.
+// Get Cairo-Dock main config file location.
 //
-// func getConfig(applet string) (pack *AppletPackage, e error) {
-
-// 	conf, e = ReadPackageFile(filename)
-// 	if e == nil {
-// 		conf.Parse("Register", pack, AppletPackage{})
-// 		return pack, nil
-// 	}
-// 	return pack, e
-// }
+func MainConf() (filepat string, e error) {
+	if home := os.Getenv("HOME"); home != "" {
+		return filepath.Join(home, ".config", "cairo-dock", "current_theme", "cairo-dock.conf"), nil
+	}
+	return "", errors.New("Can't get HOME directory")
+}
 
 /*
-//-----------------------------------------------------------[ NEW CONFIG PARSER ]--
-
-
-
-//~ type LocalConf conf.ConfigFile
-
-//~ func ReadConfigFile(filename string) *LocalConf {
-//~ if c, e := conf.ReadConfigFile(filename); e == nil {
-//~ return &LocalConf{*c}
-//~ }
-//~ }
-
-type Config struct {
-	config.Config
-	Errors   []error
-	filename string
-}
-
-func NewConfig(c *config.Config) *Config {
-	return &Config{Config: *c}
-}
-
-// Load a Config directly from file.
-//
-func ReadFile(filename string) (*Config, error) {
-	c, e := config.ReadDefault(filename)
-	if e != nil {
-		return nil, e
-	}
-	return NewConfig(c), nil
-}
-
-// Parse config to fill the conf param with values from the file in a specific
-// group.
-//
-// The group param must match a group in the file with the format [MYGROUP]
-//
-func (c *Config) Parse(group string, conf, empty interface{}) {
-	typ := reflect.TypeOf(empty)
-	elem := reflect.ValueOf(conf).Elem()
-	// typ := reflect.TypeOf(reflect.Zero(reflect.TypeOf(conf))) // Reflect on a zero value of current type to have the struct.
-
-	for i := 0; i < typ.NumField(); i++ { // Parsing all fields in type.
-		c.getField(group, elem.Field(i), typ.Field(i))
-	}
-}
-
-// Fill a single reflected field if it has the conf tag.
-//
-func (c *Config) getField(group string, elem reflect.Value, structField reflect.StructField) {
-	var key string
-	if tag := structField.Tag.Get("conf"); tag != "" { // Field tag has the conf setting, use it.
-		key = tag
-	} else {
-		return
-		// key = structField.Name // Else use name.
-	}
-
-	var e error
-	switch elem.Interface().(type) {
-
-	case bool:
-		var val bool
-		val, e = c.Bool(group, key)
-		elem.SetBool(val)
-
-	case int:
-		var val int
-		val, e = c.Int(group, key)
-		elem.SetInt(int64(val))
-
-	case string:
-		var val string
-		val, e = c.String(group, key)
-		elem.SetString(val)
-
-	case float64:
-		var val float64
-		val, e = c.Float(group, key)
-		elem.SetFloat(val)
-
-	default:
-		log.Debug("Parse conf: wrong type:", elem.Kind())
-	}
-	if e != nil {
-		// log.Debug("Parse conf: error:", e)
-	}
-
-}
-
-//~ import "fmt"
-//~ func drainUntil(until time.Time, c chan *fsnotify.FileEvent) {
-//~ expire := time.After(until)
-//~ for {
-//~ select {
-//~ case <-c:
-//~ case <-expire
-//~ return
-//~ }
-//~ }
-//~ }
-
-func (c *Config) Read(buf *bufio.Reader) (err error) {
-	var section, option string
-
-	for {
-		l, err := buf.ReadString('\n') // parse line-by-line
-		if err == io.EOF {
-			break
-		} else if err != nil {
-			return err
-		}
-
-		l = strings.TrimSpace(l)
-
-		// Switch written for readability (not performance)
-		switch {
-		// Empty line and comments
-		case len(l) == 0, l[0] == '#', l[0] == ';':
-			continue
-
-		// New section
-		case l[0] == '[' && l[len(l)-1] == ']':
-			option = "" // reset multi-line value
-			section = strings.TrimSpace(l[1 : len(l)-1])
-			c.AddSection(section)
-
-		// No new section and no section defined so
-		//case section == "":
-		//return os.NewError("no section defined")
-
-		// Other alternatives
-		default:
-			i := strings.IndexAny(l, "=:")
-
-			switch {
-			// Option and value
-			case i > 0:
-				i := strings.IndexAny(l, "=:")
-				option = strings.TrimSpace(l[0:i])
-				value := strings.TrimSpace(stripComments(l[i+1:]))
-				c.AddOption(section, option, value)
-			// Continuation of multi-line value
-			case section != "" && option != "":
-				prev, _ := c.RawString(section, option)
-				value := strings.TrimSpace(stripComments(l))
-				c.AddOption(section, option, prev+"\n"+value)
-
-			default:
-				return errors.New("could not parse line: " + l)
-			}
-		}
-	}
-	return nil
-}
-
 func stripComments(l string) string {
 	// Comments are preceded by space or TAB
 	for _, c := range []string{" ;", "\t;", " #", "\t#"} {

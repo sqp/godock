@@ -3,17 +3,8 @@ package src
 const (
 	defaultUpdateDelay = 3
 
-	BlockSize       = 512
-	KernelDiskStats = "/proc/diskstats"
+	BlockSize = 512
 )
-
-var DockGraphType = []string{"Line", "Plain", "Bar", "Circle", "Plain Circle"}
-
-// typedef enum _CDDisksDisplayType {
-// 	CD_DISKS_GAUGE=0,
-// 	CD_DISKS_GRAPH,
-// 	CD_DISKS_NB_TYPES
-// 	} CDDisksDispl
 
 //------------------------------------------------------------------[ CONFIG ]--
 

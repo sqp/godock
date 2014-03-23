@@ -14,9 +14,6 @@ import (
 	"time"
 )
 
-//
-//------------------------------------------------------------------[ APPLET ]--
-
 // Applet data and controlers.
 //
 type Applet struct {
@@ -38,20 +35,17 @@ type Applet struct {
 // Create a new applet instance.
 //
 func NewApplet() *Applet {
-	app := &Applet{
-		CDApplet: dock.NewCDApplet(), // Icon controler and interface to cairo-dock.
-	}
+	app := &Applet{CDApplet: dock.NewCDApplet()} // Icon controler and interface to cairo-dock.
+
 	app.defineActions()
 
 	// Prepare mailbox with the display callback that will receive update info.
-	onResult := func(i int, first bool, e error) { app.updateDisplay(i, first, e) }
-	app.data = NewFeed(app.FileLocation(loginLocation), onResult)
+	app.data = NewFeed(app.updateDisplay)
 
 	// The poller will check for new mails on a timer.
-	poller := app.AddPoller(func() { app.data.Check() })
+	poller := app.AddPoller(app.data.Check)
 
-	// Set updates callbacks pre and post check: Displays a small emblem during
-	// the polling, and clears it after.
+	// Display a small emblem during the polling, and clear it after.
 	poller.SetPreCheck(func() { app.SetEmblem(app.FileLocation("img", "go-down.svg"), cdtype.EmblemTopLeft) })
 	poller.SetPostCheck(func() { app.SetEmblem("none", cdtype.EmblemTopLeft) })
 
@@ -61,13 +55,11 @@ func NewApplet() *Applet {
 // Load user configuration if needed and initialise applet.
 //
 func (app *Applet) Init(loadConf bool) {
-	if loadConf { // Try to load config. Exit if not found.
-		app.conf = &mailConf{}
-		log.Fatal(app.LoadConfig(&app.conf), "config")
-	}
+	app.LoadConfig(loadConf, &app.conf) // Load config will crash if fail. Expected.
 
 	// Reset data to be sure our display will be refreshed.
 	app.data.Clear()
+	app.data.LoadLogin(app.FileLocation(loginLocation))
 	app.err = nil
 
 	// Define the mail client action.
@@ -86,14 +78,14 @@ func (app *Applet) Init(loadConf bool) {
 	}
 
 	// Set defaults to dock icon: display and controls.
-	app.SetDefaults(cdtype.Defaults{
+	app.SetDefaults(dock.Defaults{
 		Shortkeys:      []string{app.conf.ShortkeyOpen, app.conf.ShortkeyCheck},
 		Label:          "Mail unchecked",
 		Icon:           icon,
 		Templates:      []string{DialogTemplate},
 		PollerInterval: dock.PollerInterval(app.conf.UpdateDelay*60, defaultUpdateDelay),
-		Commands: cdtype.Commands{
-			"mailClient": cdtype.NewCommandStd(app.conf.MailClientAction+1, app.conf.MailClientName, app.conf.MailClientClass)}, // Add 1 to action as we don't provide the none option.
+		Commands: dock.Commands{
+			"mailClient": dock.NewCommandStd(app.conf.MailClientAction+1, app.conf.MailClientName, app.conf.MailClientClass)}, // Add 1 to action as we don't provide the none option.
 		Debug: app.conf.Debug})
 
 	// Create the renderer.
@@ -396,11 +388,11 @@ func (rs *RenderedNone) Error(e error) {}
 // RenderedQuick displays mail count on the icon QuickInfo.
 //
 type RenderedQuick struct {
-	cdtype.RenderSimple // Controler to the Cairo-Dock icon.
-	pathDefault         string
+	dock.RenderSimple // Controler to the Cairo-Dock icon.
+	pathDefault       string
 }
 
-func NewRenderedQuick(app cdtype.RenderSimple) *RenderedQuick {
+func NewRenderedQuick(app dock.RenderSimple) *RenderedQuick {
 	return &RenderedQuick{
 		RenderSimple: app,
 		pathDefault:  app.FileLocation("img", "gmail-icon.svg"),
@@ -424,14 +416,14 @@ func (rs *RenderedQuick) Error(e error) {
 // RenderedNone will be returned, so a valid renderer will always be provided.
 //
 type RenderedSVG struct {
-	cdtype.RenderSimple // Controler to the Cairo-Dock icon.
-	pathDefault         string
-	pathTemp            string
-	pathError           string
-	iconSource          string
+	dock.RenderSimple // Controler to the Cairo-Dock icon.
+	pathDefault       string
+	pathTemp          string
+	pathError         string
+	iconSource        string
 }
 
-func NewRenderedSVG(app cdtype.RenderSimple, typ string) RendererMail {
+func NewRenderedSVG(app dock.RenderSimple, typ string) RendererMail {
 	size := strings.Split(string(typ), " ")[0]
 
 	source, err := ioutil.ReadFile(app.FileLocation("img", size+".svg"))

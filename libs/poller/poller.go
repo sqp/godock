@@ -1,9 +1,8 @@
-/*
-Poller is a dedicated task with a ticker that handles regular polling actions.
+/* Package poller is a dedicated task that handles regular polling actions.
 It does not start a loop, just handles the ticker and restart channels. You
 will have to get those with Start and GetRestart and use them in a loop. This
 job is generaly done by the dock.StartApplet action, so you better use it or
-hack/extend it to your needs.
+copy and extend it to your needs.
 
 Display and user information related to the result of the check must be made
 using some return callback at the end of the check task.
@@ -22,12 +21,12 @@ and evolution of our applets:
 */
 package poller
 
-import (
-	"time"
-)
+import "time"
 
 //------------------------------------------------------------------[ POLLER ]--
 
+// Poller is a dedicated task that handles regular polling actions.
+//
 type Poller struct {
 	// Callbacks in this order.
 	started   func() // Action to execute before data polling.
@@ -39,16 +38,17 @@ type Poller struct {
 	enabled bool // true if the poller should be active.
 	active  bool // true if the poller is really active.
 
-	// ticker  *time.Ticker
-	restart chan bool // restart channel to forward user requests.
+	name    string      // name to send at restart
+	restart chan string // restart channel to forward user requests.
 }
 
+// New creates a simple poller.
+//
 func New(callCheck func()) *Poller {
 	poller := &Poller{
 		callCheck: callCheck,
 		enabled:   true,
-		// ticker:    new(time.Ticker),
-		restart: make(chan bool),
+		// restart:   make(chan bool),
 	}
 	return poller
 }
@@ -63,20 +63,20 @@ func New(callCheck func()) *Poller {
 
 //----------------------------------------------------------------[ SETTINGS ]--
 
-// Set callback actions to launch before the polling job.
+// SetPreCheck callback actions to launch before the polling job.
 //
 func (poller *Poller) SetPreCheck(onStarted func()) {
 	poller.started = onStarted
 }
 
-// Set callback actions to launch after the polling job.
+// SetPostCheck callback actions to launch after the polling job.
 //
 func (poller *Poller) SetPostCheck(onFinished func()) {
 	poller.finished = onFinished
 }
 
-// Set polling interval time, in seconds. You can add a default value as second
-// argument to be sure you will have a positive value (> 0).
+// SetInterval sets the polling interval time, in seconds. You can add a default
+// value as a second argument to be sure you will have a valid value (> 0).
 //
 func (poller *Poller) SetInterval(delay ...int) int {
 	for _, d := range delay {
@@ -89,32 +89,30 @@ func (poller *Poller) SetInterval(delay ...int) int {
 	return poller.delay
 }
 
-// Get the restart channel. You will need to lock it in a select loop to have a real
-// polling routine.
+func (poller *Poller) GetInterval() int {
+	return poller.delay
+}
+
+// ChanRestart is the restart event channel. You will need to lock it with Wait
+// in a select loop to have a real polling routine.
 //
-func (poller *Poller) ChanRestart() chan bool {
-	return poller.restart
+// func (poller *Poller) ChanRestart() chan bool {
+// 	return poller.restart
+// }
+
+func (poller *Poller) SetChanRestart(c chan string, name string) {
+	poller.restart = c
+	poller.name = name
 }
 
 //------------------------------------------------------------------[ ACTION ]--
 
-// Start a new ticker and directly launch first check routine.
+// Wait return a channel that will be triggered after the defined poller interval.
+// You will have to call it on every loop as it not a real ticker. It's just a
+// single use chan.
 //
-// func (poller *Poller) Start() *time.Ticker {
-// 	poller.checkRoutine() // Always check.
-
-// 	log.DEV("end checkroutine")
-
-// 	poller.active = true
-// 	if poller.delay > 0 {
-// 		// poller.ticker = time.NewTicker(poller.delay * time.Minute)
-// 		poller.ticker = time.NewTicker(time.Duration(poller.delay) * time.Second)
-
-// 	}
-// 	return poller.ticker
-// }
-
-func (poller *Poller) ChanEndTimer() <-chan time.Time {
+// func (poller *Poller) Wait() <-chan bool {
+func (poller *Poller) Wait() <-chan time.Time {
 	if poller.enabled && poller.delay > 0 {
 		poller.active = true
 		return time.After(time.Duration(poller.delay) * time.Second)
@@ -127,7 +125,7 @@ func (poller *Poller) ChanEndTimer() <-chan time.Time {
 func (poller *Poller) Restart() {
 	if poller.enabled {
 		// poller.Stop()
-		poller.restart <- true // send our restart event.
+		poller.restart <- poller.name // send our restart event.
 		// poller.enabled = true
 		// poller.active = true
 	}

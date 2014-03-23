@@ -3,7 +3,7 @@
 Install go and get go environment: you need a valid $GOPATH var and directory.
 
 Download, build and install to your Cairo-Dock external applets dir:
-  go get github.com/sqp/godock/applets/Update  # download applet and dependencies.
+  go get -d github.com/sqp/godock/applets/Update  # download applet and dependencies.
 
   cd $GOPATH/src/github.com/sqp/godock/applets/Update
   make build  # compile the applet.

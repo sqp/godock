@@ -40,18 +40,15 @@ func NewApplet() *Applet {
 // Load user configuration if needed and initialise applet.
 //
 func (app *Applet) Init(loadConf bool) {
-	if loadConf { // Try to load config. Exit if not found.
-		app.conf = &appletConf{}
-		log.Fatal(app.LoadConfig(&app.conf), "config")
-	}
+	app.LoadConfig(loadConf, &app.conf) // Load config will crash if fail. Expected.
 
 	// Set defaults to dock icon: display and controls.
-	app.SetDefaults(cdtype.Defaults{
+	app.SetDefaults(dock.Defaults{
 		Label:          ternary.String(app.conf.Name != "", app.conf.Name, app.AppletName),
 		PollerInterval: dock.PollerInterval(app.conf.UpdateDelay, defaultUpdateDelay),
-		Commands: cdtype.Commands{
-			"left":   cdtype.NewCommandStd(app.conf.LeftAction, app.conf.LeftCommand, app.conf.LeftClass),
-			"middle": cdtype.NewCommandStd(app.conf.MiddleAction, app.conf.MiddleCommand)},
+		Commands: dock.Commands{
+			"left":   dock.NewCommandStd(app.conf.LeftAction, app.conf.LeftCommand, app.conf.LeftClass),
+			"middle": dock.NewCommandStd(app.conf.MiddleAction, app.conf.MiddleCommand)},
 		Debug: app.conf.Debug})
 
 	// Settings for diskFree and poller.
@@ -70,8 +67,19 @@ func (app *Applet) DefineEvents() {
 	app.Events.OnMiddleClick = app.LaunchFunc("middle")
 
 	app.Events.OnBuildMenu = func() {
-		// menu := []string{"", "ok"} // First entry is a separator.
-		// app.PopulateMenu(menu...)
+		menu := []string{}
+		if app.conf.LeftAction > 0 {
+			menu = append(menu, "Action left click")
+		}
+		if app.conf.MiddleAction > 0 {
+			menu = append(menu, "Action middle click")
+		}
+		app.PopulateMenu(menu...)
+	}
+
+	app.Events.OnMenuSelect = func(i int32) {
+		list := []string{"left", "middle"}
+		app.LaunchCommand(list[i])
 	}
 }
 
@@ -96,12 +104,12 @@ type diskFree struct {
 
 	textPosition cdtype.InfoPosition
 	gaugeName    string
-	app          cdtype.RenderSimple // Controler to the Cairo-Dock icon.
+	app          dock.RenderSimple // Controler to the Cairo-Dock icon.
 }
 
 // Create a new data poller for disk usage monitoring.
 //
-func newDiskFree(app cdtype.RenderSimple) *diskFree {
+func newDiskFree(app dock.RenderSimple) *diskFree {
 	return &diskFree{app: app}
 }
 
@@ -213,13 +221,14 @@ func (disks *diskFree) Display() {
 	var text string
 
 	// User defined partitions.
-	for name, fs := range disks.listUser {
+	// for name, fs := range disks.listUser {
+	for _, fs := range disks.listUser {
 		var value float64 = 0
 
 		if fs != nil {
 			value = float64(fs.usage.UsePercent())
 		} else {
-			log.Info("DISK NOT FOUND", name)
+			// log.Info("DISK NOT FOUND", name)
 		}
 
 		values = append(values, value/100)
@@ -253,20 +262,19 @@ func (disks *diskFree) appendText(text *string, value float64, fs *fileSystem) {
 		*text += "\n"
 	}
 
-	curText := ""
-	if value > -1 {
-		curText = sigar.FormatPercent(value)
+	if value > -1 && fs != nil {
+		*text += sigar.FormatPercent(value)
 	} else {
-		curText = "N/A"
+		*text += "N/A"
+		return
 	}
 
-	log.Debug(curText + " : " + fs.info.DirName)
+	// log.Debug(curText + " : " + fs.info.DirName)
 
 	switch disks.textPosition {
-	case cdtype.InfoOnIcon:
-		*text += curText
+	// case cdtype.InfoOnIcon:
 
 	case cdtype.InfoOnLabel:
-		*text += curText + " : " + fs.info.DirName //  fmt.Sprintf("%s : %s", curText, fs.info.DirName)
+		*text += " : " + fs.info.DirName //  fmt.Sprintf("%s : %s", curText, fs.info.DirName)
 	}
 }
