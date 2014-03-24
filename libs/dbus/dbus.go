@@ -115,11 +115,19 @@ func StarterShit() (*dbus.Conn, <-chan *dbus.Signal, error) {
 // icon and subicon DBus interfaces and connects events callbacks.
 //
 func (cda *CDDbus) ConnectToBus() (<-chan *dbus.Signal, error) {
+	// conn, err := dbus.SessionBusPrivate()
 	conn, err := dbus.SessionBus()
 	if err != nil {
-		log.Info("DBus Connect", err)
+		log.Err(err, "DBus Connect")
 		return nil, err
 	}
+
+	// if e := conn.Auth(nil); e != nil {
+	// 	log.Err(e, "Failed Connection.Authenticate")
+	// 	return nil, e
+	// }
+
+	// conn.Hello()
 
 	c := make(chan *dbus.Signal, 10)
 	conn.Signal(c)
@@ -127,10 +135,6 @@ func (cda *CDDbus) ConnectToBus() (<-chan *dbus.Signal, error) {
 }
 
 func (cda *CDDbus) ConnectEvents(conn *dbus.Conn) error {
-	// if e = cda.dbus.Authenticate(); e != nil {
-	// 	log.Info("Failed Connection.Authenticate:", e.Error())
-	// 	return e
-	// }
 
 	cda.dbusIcon = conn.Object(DbusObject, cda.busPath)
 	cda.dbusSub = conn.Object(DbusObject, cda.busPath+"/sub_icons")
@@ -151,15 +155,14 @@ func (cda *CDDbus) ConnectEvents(conn *dbus.Conn) error {
 }
 
 func (cda *CDDbus) OnSignal(v *dbus.Signal) (exit bool) {
-	// log.DEV("received", v)
 	switch {
 	case v == nil:
 
-	case v.Name[len(DbusInterfaceApplet)] == '.':
+	case len(v.Name) > len(DbusInterfaceApplet) && v.Name[len(DbusInterfaceApplet)] == '.':
 		// log.DEV("Received", v.Name[len(DbusInterfaceApplet)+1:], v.Body)
 		return cda.receivedMainEvent(v.Name[len(DbusInterfaceApplet)+1:], v.Body)
 
-	case v.Name[len(DbusInterfaceSubapplet)] == '.':
+	case len(v.Name) > len(DbusInterfaceSubapplet) && v.Name[len(DbusInterfaceSubapplet)] == '.':
 		// log.DEV("SUBICON", v.Name[len(DbusInterfaceSubapplet)+1:], v.Body)
 		cda.receivedSubEvent(v.Name[len(DbusInterfaceSubapplet)+1:], v.Body)
 	}

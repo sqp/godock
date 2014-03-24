@@ -34,7 +34,7 @@ type Applet struct {
 
 // Create a new applet instance.
 //
-func NewApplet() *Applet {
+func NewApplet() dock.AppletInstance {
 	app := &Applet{CDApplet: dock.NewCDApplet()} // Icon controler and interface to cairo-dock.
 
 	app.defineActions()

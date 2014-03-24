@@ -1,0 +1,200 @@
+// Hacked from the Go command list.go file by SQP.
+// Use of this source code is governed by a GPL v3 license. See LICENSE file.
+// Original work was Copyright 2011 The Go Authors with a BSD-style license
+
+package main
+
+import (
+	"github.com/sqp/godock/libs/log"
+	"github.com/sqp/godock/libs/packages"
+	"github.com/sqp/godock/libs/term"
+
+	"bufio"
+	"encoding/json"
+	"io"
+	"os"
+	"text/template"
+)
+
+var nl = []byte{'\n'}
+
+const version = "3.3.0"
+
+var cmdList = &Command{
+	UsageLine: "list [-d] [-l] [-f format] [-json]",
+	Short:     "list external applets",
+	Long: `
+List lists Cairo-Dock external applets with installed state.
+
+The -d flag will only match applets found on the applet market.
+
+The -l flag will only match applets found locally.
+
+The -f flag specifies an specific format for the list,
+using the syntax of applets template.  You can use it to
+format the result the way you want. For example, to have just
+the applet name: -f '{{.DisplayedName}}'.  Everything is
+possible like '{{.DisplayedName}}  by {{.Author}}'. The struct
+being passed to the template is:
+
+  type AppletPackage struct {
+	DisplayedName string      // name of the applet
+	Author        string      // author(s)
+	Description   string
+	Category      int
+	Version       string
+	ActAsLauncher bool
+
+	Type          PackageType // type of applet : installed, user, distant...
+	Path          string      // complete path of the package.
+	LastModifDate int         // date of latest changes in the package.
+	Size float64              // size in Mo
+
+	// On server only.
+	CreationDate  int         // date of creation of the package.
+  }
+
+The -json flag causes the applet package data to be printed in JSON format
+instead of using the template format.
+	`,
+}
+
+// TODO:
+// check args unused
+// add output gob
+
+func init() {
+	cmdList.Run = runList // break init cycle
+	// cmdList.Flag.Var(buildCompiler{}, "compiler", "") // ??
+}
+
+var listLocal = cmdList.Flag.Bool("l", false, "")
+var listDistant = cmdList.Flag.Bool("d", false, "")
+
+var listFmt = cmdList.Flag.String("f", "", "")
+var listJson = cmdList.Flag.Bool("json", false, "")
+
+func runList(cmd *Command, args []string) {
+
+	// Listing arguments: get data.
+	var listPackages packages.AppletPackages
+	switch {
+	case *listDistant:
+		listPackages, _ = packages.ListDistant(version)
+	case *listLocal:
+		// Get applets dir.
+		dir, eDir := packages.DirExternal()
+		if eDir != nil {
+			return
+		}
+		listPackages = packages.ListExternalUser(dir, "applet")
+	default:
+		listPackages = packages.ListDownload(version)
+	}
+
+	// Print formated list.
+	switch {
+	case *listJson:
+		printJson(listPackages)
+
+	case *listFmt != "":
+		printTemplate(listPackages)
+
+	default:
+		printConsole(listPackages)
+
+	}
+}
+
+//-----------------------------------------------------[ FORMATERS ]--
+
+// Format applet packages using simple table formater.
+//
+func printConsole(list packages.AppletPackages) {
+	lf := term.NewTableFormater([]term.ColInfo{
+		{0, false, "Inst"},
+		{0, true, "[ Applet ]"},
+		{0, true, "Category"},
+	})
+
+	for _, pack := range list {
+		line := lf.Line()
+		if pack.Type == packages.TypeUser {
+			line.Colored(0, log.FgGreen, " * ")
+		}
+		if pack.Type == packages.TypeInDev {
+			line.Colored(0, log.FgYellow, " * ")
+		}
+
+		line.Set(1, pack.DisplayedName)
+		line.Set(2, pack.FormatCategory())
+	}
+	lf.Print()
+}
+
+// Format applet packages using json encoder.
+//
+func printJson(list packages.AppletPackages) {
+	out := newCountingWriter(os.Stdout)
+	defer out.w.Flush()
+	for _, p := range list {
+		b, err := json.MarshalIndent(p, "", "\t")
+		if err != nil {
+			out.Flush()
+			fatalf("%s", err)
+		}
+		out.Write(b)
+		out.Write(nl)
+	}
+}
+
+// Format applet packages using golang template formater.
+//
+func printTemplate(list packages.AppletPackages) {
+	tmpl, err := template.New("main").Parse(*listFmt)
+	exitIfFail(err, "")
+	out := newCountingWriter(os.Stdout)
+	defer out.w.Flush()
+	for _, p := range list {
+		out.Reset()
+		if err := tmpl.Execute(out, p); err != nil {
+			out.Flush()
+			fatalf("%s", err)
+		}
+		if out.Count() > 0 {
+			out.w.WriteRune('\n')
+		}
+	}
+}
+
+//-----------------------------------------------------[ COUNTING WRITER ]--
+
+// CountingWriter counts its data, so we can avoid appending a newline
+// if there was no actual output.
+type CountingWriter struct {
+	w     *bufio.Writer
+	count int64
+}
+
+func newCountingWriter(w io.Writer) *CountingWriter {
+	return &CountingWriter{
+		w: bufio.NewWriter(w),
+	}
+}
+
+func (cw *CountingWriter) Write(p []byte) (n int, err error) {
+	cw.count += int64(len(p))
+	return cw.w.Write(p)
+}
+
+func (cw *CountingWriter) Flush() {
+	cw.w.Flush()
+}
+
+func (cw *CountingWriter) Reset() {
+	cw.count = 0
+}
+
+func (cw *CountingWriter) Count() int64 {
+	return cw.count
+}

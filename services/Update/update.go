@@ -45,10 +45,8 @@ type AppletUpdate struct {
 // download/update, compile, restart dock... Usefull for developers, testers
 // and users who want to stay up to date, or maybe on a distro without packages.
 //
-func NewApplet() *AppletUpdate {
-	app := &AppletUpdate{
-		CDApplet: dock.NewCDApplet(),
-	}
+func NewApplet() dock.AppletInstance {
+	app := &AppletUpdate{CDApplet: dock.NewCDApplet()}
 	app.defineActions()
 
 	// Action indicators: display emblem while busy..
