@@ -1,6 +1,6 @@
 /* Disk activity monitoring applet for the Cairo-Dock project.
  */
-package src
+package DiskActivity
 
 import (
 	"github.com/sqp/godock/libs/cdtype"
@@ -43,7 +43,7 @@ func NewApplet() *Applet {
 func (app *Applet) Init(loadConf bool) {
 	app.LoadConfig(loadConf, &app.conf) // Load config will crash if fail. Expected.
 
-	// Settings for poller and diskSpeed (force renderer reset in case of reload).
+	// Settings for poller and IOActivity (force renderer reset in case of reload).
 	app.conf.UpdateDelay = dock.PollerInterval(app.conf.UpdateDelay, defaultUpdateDelay)
 	app.service.Settings(uint64(app.conf.UpdateDelay), cdtype.InfoPosition(app.conf.DisplayText), app.conf.DisplayValues, app.conf.GraphType, app.conf.GaugeName, app.conf.Disks...)
 

@@ -7,7 +7,7 @@ You can also use autodetect with some partitions names to be listed first.
 Partitions names are designed by their mount point like / or /home.
 Use the df command to know your partitions list.
 */
-package src
+package DiskFree
 
 import (
 	"github.com/cloudfoundry/gosigar" // Partitions and usage informations.

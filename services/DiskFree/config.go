@@ -1,4 +1,4 @@
-package src
+package DiskFree
 
 const (
 	defaultUpdateDelay = 60 // every minute.

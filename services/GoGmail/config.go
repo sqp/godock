@@ -1,4 +1,4 @@
-package src
+package GoGmail
 
 // Constants it's better not to have in conf.
 //

@@ -1,4 +1,4 @@
-package src
+package GoGmail
 
 import (
 	"github.com/sqp/godock/libs/cdtype"

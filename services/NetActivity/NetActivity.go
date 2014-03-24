@@ -7,9 +7,12 @@ import (
 	"github.com/sqp/godock/libs/packages" // ByteSize.
 	"github.com/sqp/godock/libs/sysinfo"
 	"github.com/sqp/godock/libs/ternary" // Ternary operators.
+	// "github.com/sqp/godock/libs/uptoshare"
 
 	"fmt"
 )
+
+const EmblemAction = cdtype.EmblemBottomLeft
 
 //
 //------------------------------------------------------------------[ APPLET ]--
@@ -20,12 +23,18 @@ type Applet struct {
 	*dock.CDApplet
 	conf    *appletConf
 	service *sysinfo.IOActivity
+	// up      *uptoshare.Uploader
 }
 
 // Create a new applet instance.
 //
 func NewApplet() *Applet {
 	app := &Applet{CDApplet: dock.NewCDApplet()} // Icon controler and interface to cairo-dock.
+
+	// app.up = uptoshare.New()
+
+	// app.up.SetPreCheck(func() { app.SetEmblem(app.FileLocation("img", "go-down.svg"), EmblemAction) })
+	// app.up.SetPostCheck(func() { app.SetEmblem("none", EmblemAction) })
 
 	app.service = sysinfo.NewIOActivity(app)
 	app.service.FormatIcon = sysinfo.FormatIcon
@@ -42,7 +51,7 @@ func NewApplet() *Applet {
 func (app *Applet) Init(loadConf bool) {
 	app.LoadConfig(loadConf, &app.conf) // Load config will crash if fail. Expected.
 
-	// Settings for poller and diskSpeed (force renderer reset in case of reload).
+	// Settings for poller and IOActivity (force renderer reset in case of reload).
 	app.conf.UpdateDelay = dock.PollerInterval(app.conf.UpdateDelay, defaultUpdateDelay)
 	app.service.Settings(uint64(app.conf.UpdateDelay), cdtype.InfoPosition(app.conf.DisplayText), app.conf.DisplayValues, app.conf.GraphType, app.conf.GaugeName, app.conf.Devices...)
 
@@ -66,6 +75,7 @@ func (app *Applet) DefineEvents() {
 	// Left and middle clicks: launch configured command.
 	app.Events.OnClick = app.LaunchFunc("left")
 	app.Events.OnMiddleClick = app.LaunchFunc("middle")
+	// app.Events.OnDropData = app.up.Upload
 
 	app.Events.OnBuildMenu = func() {
 		menu := []string{}
@@ -82,6 +92,7 @@ func (app *Applet) DefineEvents() {
 		list := []string{"left", "middle"}
 		app.LaunchCommand(list[i])
 	}
+
 }
 
 //

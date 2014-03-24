@@ -1,4 +1,4 @@
-package src
+package DiskActivity
 
 const (
 	defaultUpdateDelay = 3
