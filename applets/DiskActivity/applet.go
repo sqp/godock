@@ -3,9 +3,9 @@
 Install go and get go environment: you need a valid $GOPATH var and directory.
 
 Download, build and install to your Cairo-Dock external applets dir:
-  go get -d github.com/sqp/godock/applets/DiskSpeed  # download applet and dependencies.
+  go get -d github.com/sqp/godock/applets/DiskActivity  # download applet and dependencies.
 
-  cd $GOPATH/src/github.com/sqp/godock/applets/DiskSpeed
+  cd $GOPATH/src/github.com/sqp/godock/applets/DiskActivity
   make        # compile the applet.
   make link   # link the applet to your external applet directory.
 

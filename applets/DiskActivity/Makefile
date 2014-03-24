@@ -1,4 +1,4 @@
-TARGET=DiskSpeed
+TARGET=DiskActivity
 SOURCE=github.com/sqp/godock/applets
 
 # Default is standard build for current arch.
