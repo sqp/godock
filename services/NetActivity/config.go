@@ -1,12 +1,14 @@
 package NetActivity
 
 const defaultUpdateDelay = 3
+const historyFile = "appdata/uptoshare_history.txt"
 
 //------------------------------------------------------------------[ CONFIG ]--
 
 type appletConf struct {
 	groupIcon          `group:"Icon"`
 	groupConfiguration `group:"Configuration"`
+	groupUpload        `group:"Upload"`
 	groupActions       `group:"Actions"`
 }
 
@@ -29,6 +31,20 @@ type groupConfiguration struct {
 
 	UpdateDelay int
 	Devices     []string
+}
+
+type groupUpload struct {
+	DialogEnabled   bool
+	DialogDuration  int32
+	UploadHistory   int
+	UploadRateLimit int
+
+	FileForAll    bool
+	SiteText      string
+	SiteImage     string
+	SiteVideo     string
+	SiteFile      string
+	PostAnonymous bool
 }
 
 type groupActions struct {

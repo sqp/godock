@@ -5,8 +5,6 @@ import (
 	"github.com/sqp/godock/libs/dock"     // Connection to cairo-dock.
 	"github.com/sqp/godock/libs/log"      // Display info in terminal.
 	"github.com/sqp/godock/libs/packages" // ByteSize.
-
-	// "fmt"
 )
 
 //
@@ -128,7 +126,7 @@ func (net *IOActivity) Get() {
 		if stat, ok := net.list[newv.Field]; ok {
 			stat.Set(newv.In, newv.Out, net.interval)
 		} else {
-			log.DEV("unknown", newv.Field)
+			// log.DEV("unknown", newv.Field)
 		}
 	}
 }

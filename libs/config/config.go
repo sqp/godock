@@ -137,7 +137,7 @@ func (c *Config) getField(elem reflect.Value, group, key string) {
 		val, e = c.Bool(group, key)
 		elem.SetBool(val)
 
-	case int:
+	case int, int32:
 		var val int
 		val, e = c.Int(group, key)
 		elem.SetInt(int64(val))
