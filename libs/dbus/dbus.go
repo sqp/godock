@@ -66,43 +66,37 @@ const (
 	DbusInterfaceSubapplet = "org.cairodock.CairoDock.subapplet"
 )
 
+// CDDbus is an applet connection to Cairo-Dock using Dbus.
+//
 type CDDbus struct {
-	Icons     map[string]*SubIcon
-	Close     chan bool // will receive true when the applet is closed.
-	Events    cdtype.Events
-	SubEvents cdtype.SubEvents
+	Icons     map[string]*SubIcon // SubIcons index (by ID).
+	Events    cdtype.Events       // Dock events for the icon.
+	SubEvents cdtype.SubEvents    // Dock events for subicons.
 
 	busPath dbus.ObjectPath
 
-	eavesDropMatch string              // Special key to filter events from other Dbus provider.
-	eavesDropCall  func(*dbus.Message) // Callback when a message is matched.
+	// eavesDropMatch string              // Special key to filter events from other Dbus provider.
+	// eavesDropCall  func(*dbus.Message) // Callback when a message is matched.
 
 	// private data
-	// dbusDock *dbus.Object
 	dbusIcon *dbus.Object
 	dbusSub  *dbus.Object
 }
 
+// New creates a CDDbus connection.
+//
 func New(path string) *CDDbus {
 	return &CDDbus{
-		Icons: make(map[string]*SubIcon),
-		// Close: make(chan bool, 1),
-
+		Icons:   make(map[string]*SubIcon),
 		busPath: dbus.ObjectPath(path),
 	}
-
 }
 
 //------------------------------------------------------------[ DBUS CONNECT ]--
 
-// func (cda *CDDbus) GetCloseChan() <-chan bool {
-// 	return cda.Close
-// }
-
-func StarterShit() (*dbus.Conn, <-chan *dbus.Signal, error) {
+func SessionBus() (*dbus.Conn, chan *dbus.Signal, error) {
 	conn, err := dbus.SessionBus()
-	if err != nil {
-		log.Info("DBus Connect", err)
+	if log.Err(err, "DBus Connect") {
 		return nil, nil, err
 	}
 
@@ -111,29 +105,36 @@ func StarterShit() (*dbus.Conn, <-chan *dbus.Signal, error) {
 	return conn, c, nil
 }
 
-// Connect the applet manager to the Cairo-Dock core. Saves interfaces to the
-// icon and subicon DBus interfaces and connects events callbacks.
+// Connect the applet manager to the dock and connect events callbacks.
 //
 func (cda *CDDbus) ConnectToBus() (<-chan *dbus.Signal, error) {
-	// conn, err := dbus.SessionBusPrivate()
-	conn, err := dbus.SessionBus()
-	if err != nil {
-		log.Err(err, "DBus Connect")
-		return nil, err
-	}
-
-	// if e := conn.Auth(nil); e != nil {
-	// 	log.Err(e, "Failed Connection.Authenticate")
-	// 	return nil, e
+	// // conn, err := dbus.SessionBusPrivate()
+	// conn, err := dbus.SessionBus()
+	// if err != nil {
+	// 	log.Err(err, "DBus Connect")
+	// 	return nil, err
 	// }
 
-	// conn.Hello()
+	// // if e := conn.Auth(nil); e != nil {
+	// // 	log.Err(e, "Failed Connection.Authenticate")
+	// // 	return nil, e
+	// // }
 
-	c := make(chan *dbus.Signal, 10)
-	conn.Signal(c)
+	// // conn.Hello()
+
+	// c := make(chan *dbus.Signal, 10)
+	// conn.Signal(c)
+	// return c, cda.ConnectEvents(conn)
+	conn, c, e := SessionBus()
+	if e != nil {
+		close(c)
+		return nil, e
+	}
 	return c, cda.ConnectEvents(conn)
 }
 
+// ConnectEvents registers to receive Dbus applet events.
+//
 func (cda *CDDbus) ConnectEvents(conn *dbus.Conn) error {
 
 	cda.dbusIcon = conn.Object(DbusObject, cda.busPath)
@@ -154,6 +155,8 @@ func (cda *CDDbus) ConnectEvents(conn *dbus.Conn) error {
 	return e
 }
 
+// OnSignal forward the received signal to the registered event callback.
+//
 func (cda *CDDbus) OnSignal(v *dbus.Signal) (exit bool) {
 	switch {
 	case v == nil:
@@ -194,10 +197,10 @@ func (cda *CDDbus) OnSignal(v *dbus.Signal) (exit bool) {
 // 	}
 // }
 
-func (cda *CDDbus) EavesDrop(match string, call func(*dbus.Message)) {
-	cda.eavesDropMatch = match
-	cda.eavesDropCall = call
-}
+// func (cda *CDDbus) EavesDrop(match string, call func(*dbus.Message)) {
+// 	cda.eavesDropMatch = match
+// 	cda.eavesDropCall = call
+// }
 
 // Call DBus method without returned values.
 //
@@ -212,7 +215,7 @@ func launch(iface *dbus.Object, action string, args ...interface{}) error {
 //
 //------------------------------------------------------------[ ICON ACTIONS ]--
 
-// Sets the quickinfo text displayed on our icon.
+// Sets the quickinfo text displayed on our icon (small text on the icon).
 //
 func (cda *CDDbus) SetQuickInfo(info string) error {
 	return cda.launch(cda.dbusIcon, DbusInterfaceApplet+".SetQuickInfo", info)
@@ -243,16 +246,27 @@ func (cda *CDDbus) SetEmblem(icon string, position cdtype.EmblemPosition) error 
 	return cda.launch(cda.dbusIcon, DbusInterfaceApplet+".SetEmblem", icon, int32(position))
 }
 
+// Animate animates our icon, with a given animation and for a given number of rounds
+//
 func (cda *CDDbus) Animate(animation string, rounds int32) error {
 	return cda.launch(cda.dbusIcon, DbusInterfaceApplet+".Animate", animation, rounds)
 }
 
-func (cda *CDDbus) ShowDialog(message string, duration int32) error {
-	return cda.dbusIcon.Go(DbusInterfaceApplet+".ShowDialog", 0, nil, message, duration).Err
-}
-
+// DemandsAttention is like the Animate method, but will animate the icon
+// endlessly, and the icon will be visible even if the dock is hidden. If the
+// animation is an empty string, or "default", the animation used when an
+// application demands the attention will be used.
+// The first argument is true to start animation, or false to stop it.
+//
 func (cda *CDDbus) DemandsAttention(start bool, animation string) error {
 	return cda.launch(cda.dbusIcon, DbusInterfaceApplet+".DemandsAttention", start, animation)
+}
+
+// ShowDialog pops up a simple dialog bubble on our icon.
+// The dialog can be closed by clicking on it.
+//
+func (cda *CDDbus) ShowDialog(message string, duration int32) error {
+	return cda.dbusIcon.Go(DbusInterfaceApplet+".ShowDialog", 0, nil, message, duration).Err
 }
 
 // Pops up a dialog box . The dialog can contain a message, an icon, some buttons, and a widget the user can act on.
@@ -303,11 +317,13 @@ func (cda *CDDbus) AddDataRenderer(typ string, nbval int32, theme string) error 
 	return cda.launch(cda.dbusIcon, DbusInterfaceApplet+".AddDataRenderer", typ, nbval, theme)
 }
 
-//
+// Renders some values on your icon. You must have added a data renderer before
+// with AddDataRenderer. Values are given between 0 and 1.
+// The number of values you send to the dock must match the one you defined before.
 //
 func (cda *CDDbus) RenderValues(values ...float64) error {
-	return cda.dbusIcon.Call("RenderValues", dbus.FlagNoAutoStart, values).Err
-	// return cda.launch(cda.dbusIcon, DbusInterfaceApplet+".RenderValues", values)
+	// return cda.dbusIcon.Call("RenderValues", dbus.FlagNoAutoStart, values).Err
+	return cda.launch(cda.dbusIcon, DbusInterfaceApplet+".RenderValues", values)
 }
 
 // Send an action on the application controlled by the icon (see ControlAppli)
@@ -352,6 +368,7 @@ func (cda *CDDbus) AddMenuItems() error {
 			"id":   int32(1),
 			// "tooltip": "this is the tooltip that will appear when you hover this entry",
 		},
+		// {},
 	}
 
 	var data []map[string]dbus.Variant
@@ -370,12 +387,15 @@ func (cda *CDDbus) AddMenuItems() error {
 	// }
 
 	log.DETAIL(data)
-	// log.Err(cda.launch(cda.dbusIcon, DbusInterfaceApplet+".AddMenuItems", data), "")
+	// log.Err(cda.launch(cda.dbusIcon, DbusInterfaceApplet+".AddMenuItems", data), "AddMenuItems")
 	// log.Err(cda.dbusIcon.Call(DbusInterfaceApplet+".AddMenuItems", 0, data).Err, "additems")
 	log.Info("Disabled, prevent a crash")
 	return nil
 }
 
+// PopulateMenu adds a list of entry to the default menu. An empty string will
+// add a separator. Can only be used in the OnBuildMenu callback.
+//
 func (cda *CDDbus) PopulateMenu(items ...string) error {
 	return cda.launch(cda.dbusIcon, DbusInterfaceApplet+".PopulateMenu", items)
 }
@@ -388,10 +408,16 @@ func (cda *CDDbus) BindShortkey(shortkeys ...string) error {
 	return cda.launch(cda.dbusIcon, DbusInterfaceApplet+".BindShortkey", shortkeys)
 }
 
+// AskText pops up a dialog with a text entry to ask user feedback.
+// The answer will be forwarded with the OnAnswerDialog callback.
+//
 func (cda *CDDbus) AskText(message, initialText string) error {
 	return cda.dbusIcon.Call("AskText", 0, message, initialText).Err
 }
 
+// AskText pops up a dialog with a slider to get user feedback.
+// The answer will be forwarded with the OnAnswerDialog callback.
+//
 func (cda *CDDbus) AskValue(message string, initialValue, maxValue float64) error {
 	return cda.dbusIcon.Call("AskValue", 0, message, initialValue, maxValue).Err
 }
@@ -416,7 +442,7 @@ func (cda *CDDbus) Get(property string) (interface{}, error) {
 	return v.Value(), e
 }
 
-// Get Module Icon Properties.
+// GetAll returns applet icon properties.
 //
 func (cda *CDDbus) GetAll() *cdtype.DockProperties {
 	vars := make(map[string]dbus.Variant)
@@ -458,7 +484,7 @@ type SubIcon struct {
 	id      string
 }
 
-// Add subicons by pack of 3 string : label, icon, id.
+// AddSubIcon adds subicons by pack of 3 strings : label, icon, id.
 //
 func (cda *CDDbus) AddSubIcon(fields ...string) error {
 	for i := 0; i < len(fields)/3; i++ {
@@ -468,15 +494,18 @@ func (cda *CDDbus) AddSubIcon(fields ...string) error {
 	return cda.launch(cda.dbusSub, DbusInterfaceSubapplet+".AddSubIcons", fields)
 }
 
+// RemoveSubIcon only need the ID to remove the SubIcon.
+//
 func (cda *CDDbus) RemoveSubIcon(id string) error {
-	if _, ok := cda.Icons[id]; ok {
-		e := cda.launch(cda.dbusSub, DbusInterfaceSubapplet+".RemoveSubIcon", id)
-		if e == nil {
-			delete(cda.Icons, id)
-		}
-		return e
+	if _, ok := cda.Icons[id]; !ok {
+		return errors.New("RemoveSubIcon Icon missing: " + id)
 	}
-	return errors.New("RemoveSubIcon Icon missing: " + id)
+
+	e := cda.launch(cda.dbusSub, DbusInterfaceSubapplet+".RemoveSubIcon", id)
+	if e == nil {
+		delete(cda.Icons, id)
+	}
+	return e
 }
 
 func (cdi *SubIcon) SetQuickInfo(info string) error {

@@ -1,3 +1,4 @@
+// Package uptoshare uploads files to one-click hosting sites.
 package uptoshare
 
 // #include <stdlib.h>                 // free
@@ -6,7 +7,7 @@ package uptoshare
 import "C"
 
 import (
-	curl "github.com/andelf/go-curl"
+	"github.com/andelf/go-curl" // imported as curl
 
 	"github.com/robfig/config" // Config parser.
 
@@ -128,7 +129,7 @@ func New() *Uploader {
 	return &Uploader{
 		queue: make(chan string, 10),
 
-		upFile:  FreeFr,
+		upFile:  DlFreeFr,
 		upVideo: VideoBinOrg,
 	}
 }

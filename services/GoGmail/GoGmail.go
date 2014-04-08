@@ -1,3 +1,4 @@
+// Package GoGmail is a mail checker applet for the Cairo-Dock project.
 package GoGmail
 
 import (

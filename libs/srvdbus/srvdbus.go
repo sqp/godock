@@ -49,7 +49,7 @@ type Loader struct {
 }
 
 func NewLoader(services map[string]func() dock.AppletInstance) *Loader {
-	conn, c, e := dbus.StarterShit()
+	conn, c, e := dbus.SessionBus()
 	if log.Err(e, "DBus Connect") {
 		return nil
 	}
@@ -273,7 +273,7 @@ type Client struct {
 // Get connection to active instance.
 //
 func GetServer() (*Client, error) {
-	conn, _, e := dbus.StarterShit() // TODO: get better.
+	conn, _, e := dbus.SessionBus() // TODO: get better.
 	// close(c)
 
 	if e != nil {

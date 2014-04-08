@@ -1,6 +1,5 @@
-// Cairo-Dock Control.
-//
 // Use of this source code is governed by a GPL v3 license. See LICENSE file.
+
 package main
 
 import (
@@ -129,7 +128,8 @@ func main() {
 	exit()
 }
 
-var usageTemplate = `cdc, Cairo-Dock Control, is a tool for managing a Cairo-Dock installation.
+var usageTemplate = `cdc, Cairo-Dock Control, is a tool to manage a Cairo-Dock installation.
+It can also embed and manage multiple applets if compiled with their support.
 
 Usage:
 
@@ -154,10 +154,7 @@ var helpTemplate = `{{if .Runnable}}usage: cdc {{.UsageLine}}
 {{end}}{{.Long | trim}}
 `
 
-var documentationTemplate = `// Hacked from the Go command by SQP.
-// Use of this source code is governed by a GPL v3 license. See LICENSE file.
-// Original work was Copyright 2011 The Go Authors with a BSD-style license
-
+var documentationTemplate = `
 /*
 {{range .}}{{if .Short}}{{.Short | capitalize}}
 
@@ -169,7 +166,7 @@ var documentationTemplate = `// Hacked from the Go command by SQP.
 
 
 {{end}}*/
-package documentation
+package main
 `
 
 // tmpl executes the given template text on data, writing the result to w.

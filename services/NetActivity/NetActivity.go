@@ -1,4 +1,4 @@
-// Network activity monitoring applet for the Cairo-Dock project.
+// Package NetActivity is a monitoring applet for the Cairo-Dock project.
 package NetActivity
 
 /*

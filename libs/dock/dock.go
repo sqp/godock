@@ -1,9 +1,3 @@
-/*
-Package dock is the main Cairo-Dock applet manager, currently tightly linked to
-the DBus implementation.
-
-See libs/dbus for direct actions on the applet icons.
-*/
 package dock
 
 import (

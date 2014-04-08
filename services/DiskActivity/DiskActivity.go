@@ -1,5 +1,4 @@
-/* Disk activity monitoring applet for the Cairo-Dock project.
- */
+// Package DiskActivity is a monitoring applet for the Cairo-Dock project.
 package DiskActivity
 
 import (

@@ -1,3 +1,4 @@
+// Package allapps declares applets available for the applet loader service.
 package allapps
 
 import "github.com/sqp/godock/libs/dock"

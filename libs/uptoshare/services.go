@@ -1,7 +1,7 @@
 package uptoshare
 
 import (
-	curl "github.com/andelf/go-curl"
+	"github.com/andelf/go-curl" // imported as curl
 
 	"github.com/sqp/godock/libs/log" // Display info in terminal.
 	"github.com/sqp/godock/libs/ternary"
