@@ -96,8 +96,9 @@ func Info(msg string, more ...interface{}) {
 	Render(FgGreen, msg, more...)
 }
 
-// To be used every time a usefull step is reached in your module activity. It
-// will display the flood to the user only when the debug flag is enabled.
+// Debug is to be used every time a usefull step is reached in your module
+// activity. It will display the flood to the user only when the debug flag is
+// enabled.
 //
 // Currently only flood the console, but other reporting methods could be
 // implemented (file, special parser...).
@@ -128,10 +129,81 @@ func caller() string {
 	return path.Base(path.Dir(file))
 }
 
+type Log struct {
+	name  string
+	debug bool
+}
+
+func (l *Log) SetDebug(debug bool) {
+	l.debug = debug
+}
+
+func (l *Log) SetName(name string) {
+	l.name = name
+}
+
+// Debug.
+//
+func (l *Log) Debug(msg string, more ...interface{}) {
+	if l.debug {
+		l.Render(FgMagenta, msg, more...)
+	}
+}
+
+// Info displays normal informations on the standard output, with the first param in green.
+//
+func (l *Log) Info(msg string, more ...interface{}) {
+	l.Render(FgGreen, msg, more...)
+}
+
+// Render displays the msg argument in the given color. The colored message is
+// passed with others to classic println.
+//
+func (l *Log) Render(color, msg string, more ...interface{}) {
+	list := append([]interface{}{time.Now().Format("15:04:05"), Yellow(l.name), Bracket(Colored(msg, color))}, more...)
+	fmt.Println(list...)
+}
+
+// Warn test and log the error as warning type. Return true if an error was found.
+//
+func (l *Log) Warn(e error, msg string) (fail bool) {
+	if e != nil {
+		l.NewWarn(e.Error(), msg)
+	}
+	return e != nil
+}
+
+// NewWarn log a new warning.
+//
+func (l *Log) NewWarn(e string, msg string) {
+	l.Render(FgYellow, "warning", msg, ":", e)
+}
+
+// Err test and log the error as Error type. Return true if an error was found.
+//
+func (l *Log) Err(e error, msg string) (fail bool) {
+	return GetErr(e, msg) != nil
+}
+
+// NewErr log a new error.
+//
+func (l *Log) NewErr(e string, msg string) {
+	l.Render(FgRed, "error", msg, ":", e)
+}
+
+// GetErr test and logs the error, and return it for later use.
+//
+func (l *Log) GetErr(e error, msg string) error {
+	if e != nil {
+		l.NewErr(e.Error(), msg)
+	}
+	return e
+}
+
 //
 //---------------------------------------------------------[ DEVELOPPER INFO ]--
 
-// Dev displays normal colored informations on the standard output, To be used
+// DEV displays normal colored informations on the standard output, To be used
 // for temporary developer tests, so they could be easily tracked.
 //
 func DEV(msg string, more ...interface{}) {

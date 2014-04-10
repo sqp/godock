@@ -1,12 +1,10 @@
 // Package NetActivity is a monitoring applet for the Cairo-Dock project.
-package NetActivity
-
 /*
 
 Benefit from original version:
--not using temp files.
--new image upload site: pix.toile-libre.org
--a lot of upload sites don't require external dependencies.
+  Not using temp files.
+  New image upload site: http://pix.toile-libre.org
+  A lot of upload sites don't require external dependencies.
 
 Dependencies:
 xsel or xclip for clipboard interaction.
@@ -16,30 +14,31 @@ curl command is needed for those backends:
   File:  FreeFr
 
 Compile:
-libcurl-dev  (I'm using libcurl4-gnutls-dev)
-glib-2.0
+  libcurl-dev  (I'm using libcurl4-gnutls-dev)
+  glib-2.0
 
 Not implemented (yet):
-- real icon for the applet.
-- Upload raw text with FileForAll option. I'm trying to find a way to do it
-   without the temp file option before falling back to this method.
-- More menu options, due to lack of proper AddMenuItem method.
-- Save image copy (and display)
-- Custom upload scripts
-- Url shortener (as I'm not fan of those, you better do it yourself if you want it)
+  Icon for the applet.
+  Upload raw text with FileForAll option. I'm trying to find a way to do it
+    without the temp file option before falling back to this method.
+  More menu options, due to lack of proper AddMenuItem method.
+  Save image copy (and display).
+  Custom upload scripts.
+  Url shortener (as I'm not fan of those, you better do it yourself if you want it).
 
 Unsure:
--Dropbox and Ubuntu-One: copying files to a local folder and launching a sync tool
-doesn't seem to fit in the applet description for me.
+  Dropbox and Ubuntu-One: copying files to a local folder and launching a sync tool
+    doesn't seem to fit in the applet description for me.
+    Ubuntu-one problem solved.
 
 */
+package NetActivity
 
 import (
 	"github.com/atotto/clipboard"
 
 	"github.com/sqp/godock/libs/cdtype"
-	"github.com/sqp/godock/libs/dock" // Connection to cairo-dock.
-	"github.com/sqp/godock/libs/log"
+	"github.com/sqp/godock/libs/dock"     // Connection to cairo-dock.
 	"github.com/sqp/godock/libs/packages" // ByteSize.
 	"github.com/sqp/godock/libs/sysinfo"
 	"github.com/sqp/godock/libs/ternary" // Ternary operators.
@@ -64,7 +63,7 @@ type Applet struct {
 	menuActions []func() // Menu callbacks are saved to be sure we launch the good action (history can change).
 }
 
-// Create a new applet instance.
+// NewApplet create a new applet instance.
 //
 func NewApplet() dock.AppletInstance {
 	app := &Applet{CDApplet: dock.NewCDApplet()} // Icon controler and interface to cairo-dock.
@@ -86,7 +85,7 @@ func NewApplet() dock.AppletInstance {
 	return app
 }
 
-// Load user configuration if needed and initialise applet.
+// Init load user configuration if needed and initialise applet.
 //
 func (app *Applet) Init(loadConf bool) {
 	app.LoadConfig(loadConf, &app.conf) // Load config will crash if fail. Expected.
@@ -119,7 +118,7 @@ func (app *Applet) Init(loadConf bool) {
 //
 //------------------------------------------------------------------[ EVENTS ]--
 
-// Define applet events callbacks.
+// DefineEvents set applet events callbacks.
 //
 func (app *Applet) DefineEvents() {
 	app.Events.OnClick = app.LaunchFunc("left")
@@ -166,7 +165,7 @@ func (app *Applet) clickedMenu(i int32) {
 
 func (app *Applet) addMenuPaste(link string) {
 	app.menuActions = append(app.menuActions, func() {
-		log.Info(link)
+		app.Log.Info(link)
 		clipboard.WriteAll(link)
 		// app.ShowDialog(link, 5)
 	})
@@ -191,7 +190,7 @@ func (app *Applet) onUpload(links uptoshare.Links) {
 	}
 
 	for k, v := range links { // TMP TO DEL
-		log.Info(k, v)
+		app.Log.Info(k, v)
 	}
 }
 
@@ -202,4 +201,8 @@ func (app *Applet) onUpload(links uptoshare.Links) {
 //
 func formatLabel(dev string, in, out uint64) string {
 	return fmt.Sprintf("%s: %s %s / %s %s", dev, "↓", packages.ByteSize(in), "↑", packages.ByteSize(out))
+}
+
+func (app *Applet) Upload(data string) {
+	app.up.Upload(data)
 }

@@ -10,9 +10,11 @@ import (
 //
 var DockGraphType = []string{"Line", "Plain", "Bar", "Circle", "Plain Circle"}
 
+// FormatIO is a text format method for IOActivity.
+//
 type FormatIO func(device string, in, out uint64) string
 
-// Create a new data poller for disk activity monitoring.
+// IOActivity extract delta IO stats from stacking system counters.
 //
 type IOActivity struct {
 	list     map[string]*stat
@@ -25,6 +27,8 @@ type IOActivity struct {
 	GetData     func() ([]value, error)
 }
 
+// NewIOActivity create a new data store for IO activity monitoring.
+//
 func NewIOActivity(app dock.RenderSimple) *IOActivity {
 	return &IOActivity{
 		list: make(map[string]*stat),
@@ -32,6 +36,8 @@ func NewIOActivity(app dock.RenderSimple) *IOActivity {
 	}
 }
 
+// Settings is a all in one method to configure your IOActivity.
+//
 func (na *IOActivity) Settings(interval uint64, textPosition cdtype.InfoPosition, renderer, graphType int, gaugeTheme string, names ...string) {
 	na.interval = interval
 
@@ -76,7 +82,7 @@ func (na *IOActivity) Settings(interval uint64, textPosition cdtype.InfoPosition
 //
 //-------------------------------------------------------------[ UPDATE DATA ]--
 
-// Get and display activity information for configured network interfaces.
+// Check pull and display activity information for configured interfaces.
 // Display on the Cairo-Dock icon:
 //   RenderValues: gauge or graph
 //   RenderText: quickinfo or label
@@ -108,6 +114,8 @@ func (na *IOActivity) Check() {
 	}
 }
 
+// Get new data from source.
+//
 func (net *IOActivity) Get() {
 	// if len(net.list) == 0 {
 	// 	return
@@ -134,12 +142,15 @@ func (net *IOActivity) Get() {
 //
 //-----------------------------------------------------[ TEXT INFO CALLBACKS ]--
 
-// Quick-info display callback. One line for each value. Zero are replaced by empty string.
+// FormatIcon is a Quick-info display callback. One line for each value.
+// Zero are replaced by empty string.
 //
 func FormatIcon(dev string, in, out uint64) string {
 	return FormatRate(in) + "\n" + FormatRate(out)
 }
 
+// FormatRate format value to string, or nothing if 0.
+//
 func FormatRate(size uint64) string {
 	if size > 0 {
 		return packages.ByteSize(size).String()

@@ -1,7 +1,14 @@
-/* Update is an applet for Cairo-Dock to check for its new versions and do update.
+/* Package Update is an applet for Cairo-Dock to build and update the dock and applets.
 
+Play with cairo-dock sources:
+download/update, compile, restart dock... Usefull for developers, testers and
+users who want to stay up to date, or maybe on a distro without packages.
+*/
+package Update
+
+/*
 Copyright : (C) 2012 by SQP
-E-mail : sqp@glx-dock.org
+E-mail    : sqp@glx-dock.org
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -14,7 +21,6 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 GNU General Public License for more details.
 http://www.gnu.org/licenses/licenses.html#GPL
 */
-package Update
 
 import (
 	"github.com/sqp/godock/libs/dock" // Connection to cairo-dock.
@@ -28,6 +34,8 @@ import (
 	"time"
 )
 
+var logger *log.Log
+
 //------------------------------------------------------------------[ APPLET ]--
 
 type AppletUpdate struct {
@@ -37,18 +45,17 @@ type AppletUpdate struct {
 	version *Versions   // applet data.
 	target  BuildTarget // build from sources interface.
 
-	targetId int // position of current target in BuildTargets list.
+	targetID int // position of current target in BuildTargets list.
 	err      error
 }
 
-// Create an instance of applet Update. Used to play with cairo-dock sources:
-// download/update, compile, restart dock... Usefull for developers, testers
-// and users who want to stay up to date, or maybe on a distro without packages.
+// NewApplet create an new Update applet instance.
 //
 func NewApplet() dock.AppletInstance {
 	app := &AppletUpdate{CDApplet: dock.NewCDApplet()}
 	app.defineActions()
 
+	// Disabled in favor of the new progress bar.
 	// Action indicators: display emblem while busy..
 	// onStarted := func() { app.SetEmblem(app.FileLocation("img", app.conf.BuildEmblemWork), EmblemAction) }
 	// onFinished := func() { app.SetEmblem("none", EmblemAction) }
@@ -56,20 +63,21 @@ func NewApplet() dock.AppletInstance {
 
 	// Create a cairo-dock sources version checker.
 	app.version = &Versions{
-		callResult: func(new int, e error) { app.onGotVersions(new, e) },
+		callResult: app.onGotVersions,
 		newCommits: -1,
 	}
 
 	// The poller will check for new versions on a timer.
-	poller := app.AddPoller(func() { go app.version.Check() })
+	poller := app.AddPoller(app.version.Check)
 
 	// Set "working" emblem during version check. It should be removed or changed by the check.
 	poller.SetPreCheck(func() { app.SetEmblem(app.FileLocation("img", app.conf.VersionEmblemWork), EmblemVersion) })
 
+	logger = app.Log
 	return app
 }
 
-// Initialise applet with user configuration.
+// Init load user configuration if needed and initialise applet.
 //
 func (app *AppletUpdate) Init(loadConf bool) {
 	app.LoadConfig(loadConf, &app.conf) // Load config will crash if fail. Expected.
@@ -99,7 +107,7 @@ func (app *AppletUpdate) Init(loadConf bool) {
 
 //------------------------------------------------------------------[ EVENTS ]--
 
-// Define applet events callbacks.
+// DefineEvents set applet events callbacks.
 //
 func (app *AppletUpdate) DefineEvents() {
 
@@ -107,10 +115,9 @@ func (app *AppletUpdate) DefineEvents() {
 	//
 	app.Events.OnClick = func() {
 		if app.conf.UserMode {
-			log.Info("k", app.conf.DevClickLeft, app.Actions.Id(app.conf.DevClickLeft))
-			app.Actions.Launch(app.Actions.Id(app.conf.DevClickLeft))
+			app.Actions.Launch(app.Actions.ID(app.conf.DevClickLeft))
 		} else {
-			app.Actions.Launch(app.Actions.Id(app.conf.TesterClickLeft))
+			app.Actions.Launch(app.Actions.ID(app.conf.TesterClickLeft))
 		}
 	}
 
@@ -118,9 +125,9 @@ func (app *AppletUpdate) DefineEvents() {
 	//
 	app.Events.OnMiddleClick = func() {
 		if app.conf.UserMode {
-			app.Actions.Launch(app.Actions.Id(app.conf.DevClickMiddle))
+			app.Actions.Launch(app.Actions.ID(app.conf.DevClickMiddle))
 		} else {
-			app.Actions.Launch(app.Actions.Id(app.conf.TesterClickMiddle))
+			app.Actions.Launch(app.Actions.ID(app.conf.TesterClickMiddle))
 		}
 	}
 
@@ -142,14 +149,13 @@ func (app *AppletUpdate) DefineEvents() {
 		} else {
 			app.Actions.Launch(menuTester[numEntry])
 		}
-
 	}
 
 	// Scroll event: launch configured action if in dev mode.
 	//
 	app.Events.OnScroll = func(scrollUp bool) {
 		if app.conf.UserMode && app.Actions.Current == 0 { // Wheel action only for dev and if no threaded tasks running.
-			id := app.Actions.Id(app.conf.DevMouseWheel)
+			id := app.Actions.ID(app.conf.DevMouseWheel)
 			if id == ActionCycleTarget { // Cycle depends on wheel direction.
 				if scrollUp {
 					app.cycleTarget(1)
@@ -166,18 +172,18 @@ func (app *AppletUpdate) DefineEvents() {
 	//
 	app.Events.OnShortkey = func(key string) {
 		if key == app.conf.ShortkeyOneKey {
-			app.Actions.Launch(app.Actions.Id(app.conf.ShortkeyOneAction))
+			app.Actions.Launch(app.Actions.ID(app.conf.ShortkeyOneAction))
 		}
 		if key == app.conf.ShortkeyTwoKey {
 
-			app.Actions.Launch(app.Actions.Id(app.conf.ShortkeyTwoAction))
+			app.Actions.Launch(app.Actions.ID(app.conf.ShortkeyTwoAction))
 		}
 	}
 
 	// Feature to test: rgrep of the dropped string on the source dir.
 	//
 	app.Events.OnDropData = func(data string) {
-		log.Info("Grep " + data)
+		logger.Info("Grep " + data)
 		execShow("rgrep", "--color", data, app.ShareDataDir)
 	}
 
@@ -209,50 +215,50 @@ func (app *AppletUpdate) defineActions() {
 	app.Actions.Max = 1
 	app.Actions.Add(
 		&dock.Action{
-			Id:   ActionNone,
+			ID:   ActionNone,
 			Menu: 2,
 		},
 		&dock.Action{
-			Id:   ActionShowDiff,
+			ID:   ActionShowDiff,
 			Name: "Show diff",
 			Icon: "gtk-justify-fill",
 			Call: func() { app.actionShowDiff() },
 		},
 		&dock.Action{
-			Id:       ActionShowVersions,
+			ID:       ActionShowVersions,
 			Name:     "Show versions",
 			Icon:     "gtk-network", // to change
 			Call:     func() { app.actionShowVersions(true) },
 			Threaded: true,
 		},
 		&dock.Action{
-			Id:       ActionCheckVersions,
+			ID:       ActionCheckVersions,
 			Name:     "Check versions",
 			Icon:     "gtk-network",
 			Call:     func() { app.actionCheckVersions() },
 			Threaded: true,
 		},
 		&dock.Action{
-			Id:   ActionCycleTarget,
+			ID:   ActionCycleTarget,
 			Name: "Cycle target",
 			Icon: "gtk-refresh",
 			Call: func() { app.cycleTarget(1) },
 		},
 		&dock.Action{
-			Id:   ActionToggleUserMode,
+			ID:   ActionToggleUserMode,
 			Name: "Toggle user mode",
 			Menu: 3,
 			Call: func() { app.actionToggleUserMode() },
 		},
 
 		&dock.Action{
-			Id:   ActionToggleReload,
+			ID:   ActionToggleReload,
 			Name: "Toggle reload action",
 			Menu: 3,
 			Call: func() { app.actionToggleReload() },
 		},
 		&dock.Action{
-			Id:       ActionBuildTarget,
+			ID:       ActionBuildTarget,
 			Name:     "Build target",
 			Icon:     "gtk-media-play",
 			Call:     func() { app.actionBuildTarget() },
@@ -261,35 +267,35 @@ func (app *AppletUpdate) defineActions() {
 		//~ action_add(CDCairoBzrAction.GENERATE_REPORT, action_none, "", "gtk-refresh");
 
 		// &dock.Action{
-		// 	Id:       ActionBuildAll,
+		// 	ID:       ActionBuildAll,
 		// 	Name:     "Build All",
 		// 	Icon:     "gtk-media-next",
 		// 	Call:     func() { app.actionBuildAll() },
 		// 	Threaded: true,
 		// },
 		// &dock.Action{
-		// 	Id:       ActionDownloadCore,
+		// 	ID:       ActionDownloadCore,
 		// 	Name:     "Download Core",
 		// 	Icon:     "gtk-network",
 		// 	Call:     func() { app.actionDownloadCore() },
 		// 	Threaded: true,
 		// },
 		// &dock.Action{
-		// 	Id:       ActionDownloadApplets,
+		// 	ID:       ActionDownloadApplets,
 		// 	Name:     "Download Plug-Ins",
 		// 	Icon:     "gtk-network",
 		// 	Call:     func() { app.actionDownloadApplets() },
 		// 	Threaded: true,
 		// },
 		// &dock.Action{
-		// 	Id:       ActionDownloadAll,
+		// 	ID:       ActionDownloadAll,
 		// 	Name:     "Download All",
 		// 	Icon:     "gtk-network",
 		// 	Call:     func() { app.actionDownloadAll() },
 		// 	Threaded: true,
 		// },
 		// &dock.Action{
-		// 	Id:       ActionUpdateAll,
+		// 	ID:       ActionUpdateAll,
 		// 	Name:     "Update All",
 		// 	Icon:     "gtk-network",
 		// 	Call:     func() { app.actionUpdateAll() },
@@ -310,7 +316,7 @@ func (app *AppletUpdate) actionShowDiff() {
 
 	default: // Launch application.
 		if _, e := os.Stat(app.target.SourceDir()); e != nil {
-			log.Info("Invalid source directory")
+			logger.Info("Invalid source directory")
 		} else {
 			execAsync(app.conf.DiffCommand, app.target.SourceDir())
 		}
@@ -320,14 +326,13 @@ func (app *AppletUpdate) actionShowDiff() {
 // Change target and display the new one.
 //
 func (app *AppletUpdate) cycleTarget(delta int) {
-	app.targetId += delta
-	list := app.getBuildTargets()
-	if app.targetId >= len(list) {
-		app.targetId = 0
-	}
+	app.targetID += delta
+	switch {
+	case app.targetID >= len(app.conf.BuildTargets):
+		app.targetID = 0
 
-	if app.targetId < 0 {
-		app.targetId = len(list) - 1
+	case app.targetID < 0:
+		app.targetID = len(app.conf.BuildTargets) - 1
 	}
 
 	app.setBuildTarget()
@@ -362,8 +367,8 @@ func (app *AppletUpdate) actionShowVersions(force bool) {
 	}
 	if force {
 		text, e := app.ExecuteTemplate(app.conf.VersionDialogTemplate, app.conf.VersionDialogTemplate, app.version.Sources())
-		log.Err(e, "template "+app.conf.VersionDialogTemplate)
-		// log.Info("Dialog", text)
+		logger.Err(e, "template "+app.conf.VersionDialogTemplate)
+		// logger.Info("Dialog", text)
 
 		dialog := map[string]interface{}{
 			"message":     text,
@@ -371,7 +376,7 @@ func (app *AppletUpdate) actionShowVersions(force bool) {
 			"time-length": int32(app.conf.VersionDialogTimer),
 		}
 
-		log.Err(app.PopupDialog(dialog, nil), "popup")
+		logger.Err(app.PopupDialog(dialog, nil), "popup")
 
 	}
 }
@@ -383,8 +388,8 @@ func (app *AppletUpdate) actionBuildTarget() {
 	defer app.AddDataRenderer("progressbar", 0, "")
 
 	// app.Animate("busy", 200)
-	if !log.Err(app.target.Build(), "Build") {
-		log.Info("Build", app.target.Label())
+	if !logger.Err(app.target.Build(), "Build") {
+		logger.Info("Build", app.target.Label())
 		app.restartTarget()
 	}
 }
@@ -419,53 +424,19 @@ func execShow(command string, args ...string) error {
 	cmd.Stderr = os.Stderr
 
 	e := cmd.Run()
-	//~ if e != nil {
-	//~ log.Println(e)
-	//~ }
 	return e
 }
 
 func execSync(command string, args ...string) (string, error) {
 	out, e := exec.Command(command, args...).Output()
-	//~ if logE(command, "execSync: " + e.Error()) {
-	if e != nil {
+	if logger.Err(e, "execSync: "+strings.Join(args, " ")) {
 		args = append([]string{command}, args...)
-		//~ log.Err(e, "execSync error launching : " + command + " " + args[0])
-		log.Err(e, "execSync: "+strings.Join(args, " "))
-		//~ if logE(command, e) {
-		//~ log.Debug("execSync error launching : " + command, args)
-		//~ return ""
 	}
-	//~ term.Info("exec", command, args, string(out))
 	return string(out), e
 }
 
 func execAsync(command string, args ...string) error {
-	return log.GetErr(exec.Command(command, args...).Start(), "Execute failed "+command)
-	//~ e := exec.Command(command, args...).Start()
-	//~ if e != nil {
-	//~ log.Println(term.Red("Launch failed error"), e, args)
-	//~ }
-	//~ return e
-}
-
-// Test error: log it.
-//
-func logE(action string, e error) (wasErr bool) {
-	if e != nil {
-		wasErr = true
-		log.Err(e, "Error")
-	}
-	return wasErr
-}
-
-// Test error: log and quit.
-//
-func testFatal(e error) {
-	if e != nil {
-		//~ log.Println(term.Red("Applet load error"), e)
-		os.Exit(2)
-	}
+	return logger.GetErr(exec.Command(command, args...).Start(), "execute failed "+command)
 }
 
 // Get numeric part of a string and convert it to int.
@@ -479,13 +450,4 @@ func testFatal(e error) {
 
 func trimInt(str string) (int, error) {
 	return strconv.Atoi(strings.Trim(str, "  \n"))
-}
-
-// Ternary operator for int. return (test ? a : b)
-//
-func testInt(test bool, a, b int) int {
-	if test {
-		return a
-	}
-	return b
 }

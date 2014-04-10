@@ -1,19 +1,3 @@
-/* Update is an applet for Cairo-Dock to check for its new versions and do updates.
-
-Copyright : (C) 2012 by SQP
-E-mail : sqp@glx-dock.org
-
-This program is free software; you can redistribute it and/or
-modify it under the terms of the GNU General Public License
-as published by the Free Software Foundation; either version 3
-of the License, or (at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-GNU General Public License for more details.
-http://www.gnu.org/licenses/licenses.html#GPL
-*/
 package Update
 
 import (
@@ -69,7 +53,7 @@ type groupConfiguration struct {
 	DiffCommand   string // Command to launch on Show diff action.
 	DiffMonitored bool   // true if the diff command application should be monitored (like a launcher).
 
-	BuildTargets string // list of buildable targets.
+	BuildTargets []string // list of buildable targets.
 }
 
 type groupActions struct {

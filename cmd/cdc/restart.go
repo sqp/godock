@@ -2,7 +2,6 @@ package main
 
 import (
 	"github.com/sqp/godock/libs/dbus"
-	"github.com/sqp/godock/libs/log"
 	"github.com/sqp/godock/libs/srvdbus"
 )
 
@@ -21,21 +20,19 @@ Note that only external applets will benefit from a simple applet restart if you
 }
 
 func runRestart(cmd *Command, args []string) {
-
-	switch {
-	case len(args) < 1: // Restart dock.
-		if srv, e := srvdbus.GetServer(); srv != nil && e == nil {
-			srv.RestartDock()
-		} else {
-			//go
-			log.Err(dbus.DockQuit(), "DockQuit")
-			srvdbus.StartDock()
+	if len(args) == 0 { // Restart dock.
+		if clientSend(restartDock, args) != nil { // Try to forward to an active instance.
+			logger.Err(srvdbus.RestartDock(), "restart dock") // Nobody else wants to, I'll do it myself!
 		}
-
-	default: // Restart applet(s).
-		for _, name := range args {
-			log.Err(dbus.AppletRemove(name+".conf"), "AppletRemove")
-			log.Err(dbus.AppletAdd(name), "AppletAdd")
-		}
+		return
 	}
+
+	for _, name := range args { // Restart applet(s).
+		logger.Err(dbus.AppletRemove(name+".conf"), "AppletRemove")
+		logger.Err(dbus.AppletAdd(name), "AppletAdd")
+	}
+}
+
+func restartDock(srv *srvdbus.Client, args []string) error {
+	return srv.RestartDock()
 }

@@ -69,8 +69,8 @@ func StartApplet(app AppletInstance) {
 	// Define and connect events to the dock.
 	app.SetArgs(os.Args)
 
-	app.DefineEvents()
 	app.SetEventReload(func(loadConf bool) { app.Init(loadConf) })
+	app.DefineEvents()
 	dbusEvent, e := app.ConnectToBus()
 	log.Fatal(e, "ConnectToBus") // Mandatory.
 
@@ -134,6 +134,7 @@ type CDApplet struct {
 	Actions   Actions                       // Actions handler. Where events callbacks must be declared.
 	commands  Commands                      // Programs and locations configured by the user, including application monitor.
 	poller    *poller.Poller                // Poller loop. Need to provide a way to use more than one.
+	Log       *log.Log                      // Applet logger.
 
 	*dbus.CDDbus // Dbus connector.
 }
@@ -143,6 +144,7 @@ type CDApplet struct {
 func NewCDApplet() *CDApplet {
 	cda := &CDApplet{
 		Templates: make(map[string]*template.Template),
+		Log:       &log.Log{},
 	}
 	return cda
 }
@@ -151,7 +153,8 @@ func NewCDApplet() *CDApplet {
 //
 func (cda *CDApplet) SetArgs(args []string) {
 	name := args[0][2:] // Strip ./ in the beginning.
-	log.SetPrefix(name)
+	// log.SetPrefix(name)
+	cda.Log.SetName(name)
 
 	cda.AppletName = name
 	cda.ConfFile = args[3]
@@ -161,12 +164,12 @@ func (cda *CDApplet) SetArgs(args []string) {
 	cda.CDDbus = dbus.New(args[2])
 }
 
-// Forward the init callback from applet interface to the reload event.
+// SetEventReload set the default reload event with the applet init callback.
 //
 func (cda *CDApplet) SetEventReload(appInit func(loadConf bool)) {
 	if cda.Events.Reload == nil {
 		cda.Events.Reload = func(confChanged bool) {
-			log.Debug("Reload module")
+			cda.Log.Debug("Reload module")
 			appInit(confChanged)
 			if cda.poller != nil {
 				cda.poller.Restart() // send our restart event.
@@ -218,7 +221,9 @@ func (cda *CDApplet) SetDefaults(def Defaults) {
 	}
 
 	cda.LoadTemplate(def.Templates...)
-	log.SetDebug(def.Debug)
+	// log.SetDebug(def.Debug)
+
+	cda.Log.SetDebug(def.Debug)
 }
 
 //
@@ -244,7 +249,7 @@ func (cda *CDApplet) LoadTemplate(names ...string) {
 //
 func (cda *CDApplet) ExecuteTemplate(file, name string, data interface{}) (string, error) {
 	if cda.Templates[file] == nil {
-		return "", fmt.Errorf("Missing template %s", file)
+		return "", fmt.Errorf("missing template %s", file)
 	}
 
 	buff := bytes.NewBuffer([]byte(""))
@@ -385,6 +390,10 @@ func (cda *CDApplet) LoadConfig(loadConf bool, v interface{}) {
 func (cda *CDApplet) FileLocation(filename ...string) string {
 	args := append([]string{cda.ShareDataDir}, filename...)
 	return path.Join(args...)
+}
+
+func (cda *CDApplet) SetDebug(debug bool) {
+	cda.Log.SetDebug(debug)
 }
 
 // PollerInterval sets the poller check interval.

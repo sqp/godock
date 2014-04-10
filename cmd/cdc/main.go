@@ -3,11 +3,14 @@
 package main
 
 import (
+	"github.com/sqp/godock/libs/log"
+	"github.com/sqp/godock/libs/srvdbus"
+
 	"bytes"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"strings"
 	"sync"
@@ -51,6 +54,7 @@ func (c *Command) Name() string {
 	return name
 }
 
+// Usage print the command usage.
 func (c *Command) Usage() {
 	fmt.Fprintf(os.Stderr, "usage: %s\n\n", c.UsageLine)
 	fmt.Fprintf(os.Stderr, "%s\n", strings.TrimSpace(c.Long))
@@ -67,12 +71,15 @@ func (c *Command) Runnable() bool {
 // The order here is the order in which they are printed by 'cdc help'.
 var commands = []*Command{
 	cmdBuild,
+	// cmdConfig,
+	cmdDebug,
 	cmdInstall,
 	cmdList,
 	// cmdRun,
 	// cmdTest,
 	cmdRestart,
 	cmdService,
+	cmdUpload,
 	cmdVersion,
 
 	// helpGopath,
@@ -81,6 +88,8 @@ var commands = []*Command{
 	// helpTestflag,
 	// helpTestfunc,
 }
+
+var logger = &log.Log{}
 
 var exitStatus = 0
 var exitMu sync.Mutex
@@ -96,12 +105,14 @@ func setExitStatus(n int) {
 func main() {
 	flag.Usage = usage
 	flag.Parse()
-	log.SetFlags(0)
+	// log.SetFlags(0)
 
 	args := flag.Args()
 	if len(args) < 1 {
 		usage()
 	}
+
+	logger.SetName(os.Args[0])
 
 	if args[0] == "help" {
 		help(args[1:])
@@ -226,31 +237,48 @@ func help(args []string) {
 	os.Exit(2) // failed at 'cdc help cmd'
 }
 
+//
+//-----------------------------------------------------[ DBUS CLIENT ACTIONS ]--
+
+type clientAction func(*srvdbus.Client, []string) error
+
+func clientSend(call clientAction, args []string) error {
+	srv, e := srvdbus.GetServer()
+	switch {
+	case e != nil:
+
+	case srv == nil:
+		e = errors.New("no service found")
+
+	default:
+		e = call(srv, args)
+	}
+	return e
+}
+
+func clientSendLogged(action string, call clientAction, args []string) error {
+	return logger.GetErr(clientSend(call, args), action)
+}
+
+//
 //------------------------------------------------------------------[ ERRORS ]--
 
 func usage() {
 	printUsage(os.Stderr)
-	os.Exit(2)
+	exit(2)
 }
 
 // Test for error and crash if needed.
 // //
 func exitIfFail(e error, msg string) {
-	if e != nil {
-		fatalf(msg+": %s", e)
+	if logger.Err(e, msg) {
+		exit(1)
 	}
 }
 
-func exit() {
+func exit(status ...int) {
+	if len(status) > 0 {
+		setExitStatus(status[0])
+	}
 	os.Exit(exitStatus)
-}
-
-func fatalf(format string, args ...interface{}) {
-	errorf(format, args...)
-	exit()
-}
-
-func errorf(format string, args ...interface{}) {
-	log.Printf(format, args...)
-	setExitStatus(1)
 }

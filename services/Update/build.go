@@ -1,24 +1,9 @@
-/* Update is an applet for Cairo-Dock to check for its new versions and do update.
-
-Copyright : (C) 2012 by SQP
-E-mail : sqp@glx-dock.org
-
-This program is free software; you can redistribute it and/or
-modify it under the terms of the GNU General Public License
-as published by the Free Software Foundation; either version 3
-of the License, or (at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-GNU General Public License for more details.
-http://www.gnu.org/licenses/licenses.html#GPL
-*/
 package Update
 
 import (
 	"github.com/sqp/godock/libs/dbus"
 	"github.com/sqp/godock/libs/log"
+	"github.com/sqp/godock/libs/ternary"
 
 	"bufio"
 	"fmt"
@@ -193,22 +178,14 @@ func (build *BuildCompiled) Build() error {
 //
 //----------------------------------------------------------[ SOURCES BUILDER ]--
 
-func (app *AppletUpdate) getBuildTargets() []string {
-	s := app.conf.BuildTargets
-	if s[len(s)-1] == ';' { // Drop last ; if any.
-		s = s[:len(s)-1]
-	}
-	return strings.Split(s, ";") // And return splitted list.
-}
-
 // Create the target renderer/builder.
 //
 func (app *AppletUpdate) setBuildTarget() {
 	if !app.conf.UserMode { // Tester mode.
 		app.target = &BuildNull{}
 	} else {
-		list := app.getBuildTargets()
-		target := list[app.targetId]
+		list := app.conf.BuildTargets
+		target := list[app.targetID]
 		switch app.buildType(target) {
 
 		case Core:
@@ -234,6 +211,7 @@ func (app *AppletUpdate) setBuildTarget() {
 			if mod := dbus.InfoApplet(strings.Replace(target, "-", " ", -1)); mod != nil {
 				icon = mod.Icon
 			}
+
 			app.target = &BuildInternal{
 				module: target,
 				icon:   icon,
@@ -280,7 +258,7 @@ func (app *AppletUpdate) showTarget() {
 //
 //----------------------------------------------------[ BUILD FROM C SOURCES ]--
 
-func buildCmake(dir string, call func(float64)) error {
+func buildCmake(dir string, progress func(float64)) error {
 
 	if _, e := os.Stat(dir); e != nil { // No basedir.
 		return e
@@ -294,50 +272,51 @@ func buildCmake(dir string, call func(float64)) error {
 		}
 		actionMakeClean()
 	} else { // Create build dir and launch cmake.
-		log.Info("Create build directory")
+		logger.Info("Create build directory")
 		if e = os.Mkdir(dir, os.ModePerm); e != nil {
 			return e
 		}
-		os.Chdir(dir)
-		execShow("cmake", "..", "-DCMAKE_INSTALL_PREFIX=/usr", "-Denable-disks=yes", "-Denable-impulse=yes", "-Denable-gmenu=no")
+		if e = os.Chdir(dir); e != nil {
+			return e
+		}
+		execShow("cmake", "..", "-DCMAKE_INSTALL_PREFIX=/usr", "-Denable-gmenu=no")
 	}
 
-	return actionMakeAndInstall(call)
+	return actionMakeAndInstall(progress)
 
-	//~ PARAM_PLUG_INS:="-Denable-scooby-do=yes -Denable-disks=yes -Denable-mail=no -Denable-impulse=yes"
+	//~ PARAM_PLUG_INS:="-Denable-scooby-do=yes -Denable-mail=no -Denable-impulse=yes"
 }
 
 // Make clean in build dir.
 //
 func actionMakeClean() {
 	// if !*buildKeep { // Default is to clean build dir.
-	log.Info("Clean build directory")
+	logger.Info("Clean build directory")
 	execShow("make", "clean")
 	// }
 }
 
 // Compile and install a Cairo-Dock source dir.
+// Progress is sent to the update callback provided.
 //
-func actionMakeAndInstall(call func(float64)) error {
+func actionMakeAndInstall(progress func(float64)) error {
 	jobs := runtime.NumCPU()
-
-	// execShow("make", "-j", strconv.Itoa(jobs))
 
 	cmd := exec.Command("make", "-j", strconv.Itoa(jobs))
 	stdout, _ := cmd.StdoutPipe()
 	cmd.Stderr = os.Stderr
 
 	if err := cmd.Start(); err != nil {
-		log.Err(err, "Execute make")
+		logger.Err(err, "Execute make")
 	}
 	r := bufio.NewReader(stdout)
 
 	line, err := r.ReadString('\n')
 	for err == nil {
 		if len(line) > 3 && line[0] == '[' {
-			progress, e := trimInt(line[1:4])
+			current, e := trimInt(line[1:4])
 			if e == nil {
-				call(float64(progress) / 100)
+				progress(float64(current) / 100)
 				fmt.Printf("[%3d%%] %s", progress, log.Green(line[7:]))
 			}
 		} else {
@@ -357,9 +336,8 @@ func (app *AppletUpdate) restartTarget() {
 	if !app.conf.BuildReload {
 		return
 	}
-	list := app.getBuildTargets()
-	target := list[app.targetId]
-	log.Info(target)
+	target := app.conf.BuildTargets[app.targetID]
+	logger.Info(target)
 	switch app.buildType(target) {
 	case AppletScript, AppletCompiled:
 		if target == app.AppletName { // Don't eat the chicken, or you won't have any more eggs.
@@ -369,18 +347,24 @@ func (app *AppletUpdate) restartTarget() {
 			dbus.AppletAdd(target)
 			// app.ActivateModule(target, false)
 			// app.ActivateModule(target, true)
-			// app.DockRemove("type=Module-Instance & config-file=" + target + ".conf")
-			// go app.DockAdd(map[string]interface{}{"type": "Module", "module": target})
 		}
 
 	default:
 		func() {
 			// exec.Command("killall", "cairo-dock").Start()
-			// exec.Command("cairo", "reload").Start()
-			execAsync("nohup", "cdc", "reload")
+			execAsync("cdc", "restart")
 		}()
 
 	}
+}
+
+func (branch *Branch) update(dir string, progress func(float64)) (new int, e error) {
+	if e = os.Chdir(dir); e != nil {
+		return 0, e
+	}
+	ret, e := execSync(cmdBzr, "up") // "pull", LocationLaunchpad+branch.Branch)
+	logger.Info("PULL", ret)
+	return 0, e
 }
 
 //
@@ -444,9 +428,9 @@ func NewBranch(branch, dir string) *Branch {
 // Get revisions informations.
 //
 func (branch *Branch) findNew() (new int, e error) {
-	log.Debug("Get version", branch.Branch)
+	logger.Debug("Get version", branch.Branch)
 	branch.GotData = false
-	if logE("RevNo Chdir", os.Chdir(branch.Dir)) {
+	if logger.Err(os.Chdir(branch.Dir), "findNew Chdir") {
 		return
 	}
 
@@ -467,15 +451,17 @@ func (branch *Branch) findNew() (new int, e error) {
 	lastKnown := branch.Delta
 	branch.Delta = server - current
 
-	// log.Info("versions", lastKnown, branch.Delta)
+	logger.Debug("", "local=", current, "server=", server, "delta=", branch.Delta, "new=", branch.Delta-lastKnown)
+
+	// logger.Info("versions", lastKnown, branch.Delta)
 
 	// Get log info for new commits.
 	logInfo := ""
 	if branch.Delta-lastKnown > 0 {
-		nb := testInt(branch.Delta > 5, 5, branch.Delta)
+		nb := ternary.Min(branch.Delta, 5)
 		logInfo, e = execSync(cmdBzr, "log", LocationLaunchpad+branch.Branch, "--line", "-l"+strconv.Itoa(nb))
-		log.Warn(e, "bzr log "+branch.Branch)
-		// log.Info("Cairo-Dock Commit", logInfo)
+		logger.Warn(e, "bzr log "+branch.Branch)
+		// logger.Info("Cairo-Dock Commit", logInfo)
 	}
 	branch.Log = logInfo
 
@@ -491,22 +477,6 @@ func (branch *Branch) findNew() (new int, e error) {
 	return branch.Delta, e
 }
 
-func (branch *Branch) update() (new int, e error) {
-
-	ret, e := execSync(cmdBzr, "pull", LocationLaunchpad+branch.Branch)
-	log.Info("PULL", ret)
-	return 0, e
-}
-
-// Load template file. If error, it will just be be logged, so you must check
-// that the template is valid.
-//
-// func loadTemplate(filename string) *template.Template {
-// 	template, e := template.ParseFiles(filename)
-// 	logE("Template loading", e)
-// 	return template
-// }
-
 func getRevision(args ...string) int {
 	args = append([]string{"revno"}, args...)
 	rev, e := exec.Command(cmdBzr, args...).Output()
@@ -514,16 +484,13 @@ func getRevision(args ...string) int {
 	if len(args) == 1 { // no args, adding local for error display.
 		args = append(args, "local")
 	}
-	if !log.Err(e, "Check revision: "+cmdBzr+" "+strings.Join(args, " ")) {
+	if !logger.Err(e, "Check revision: "+cmdBzr+" "+strings.Join(args, " ")) {
 		version, e := trimInt(string(rev))
-		if !log.Err(e, "Check revision: type mismatch: "+string(rev)) {
+		if !logger.Err(e, "Check revision: type mismatch: "+string(rev)) {
 			return version
 		}
 	}
 	return 0
-}
-
-func GetLog() {
 }
 
 /*
@@ -541,7 +508,7 @@ if _, e := os.Stat(app.conf.ScriptName); e != nil { // script missing ?.
 		//~ logE("Download script failed", errors.New("Check the wget log"))
 		return
 	}
-	log.Println("Saved", path.Join(app.conf.ScriptLocation, app.conf.ScriptName))
+	logger.Println("Saved", path.Join(app.conf.ScriptLocation, app.conf.ScriptName))
 		if logE("Can't chmod", execShow("chmod", "a+x", app.conf.ScriptName)) { // allow execute.
 			return
 		}

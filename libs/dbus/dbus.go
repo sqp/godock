@@ -94,6 +94,8 @@ func New(path string) *CDDbus {
 
 //------------------------------------------------------------[ DBUS CONNECT ]--
 
+// SessionBus creates a Dbus session with a listening chan.
+//
 func SessionBus() (*dbus.Conn, chan *dbus.Signal, error) {
 	conn, err := dbus.SessionBus()
 	if log.Err(err, "DBus Connect") {
@@ -105,26 +107,9 @@ func SessionBus() (*dbus.Conn, chan *dbus.Signal, error) {
 	return conn, c, nil
 }
 
-// Connect the applet manager to the dock and connect events callbacks.
+// ConnectToBus connects the applet manager to the dock and register events callbacks.
 //
 func (cda *CDDbus) ConnectToBus() (<-chan *dbus.Signal, error) {
-	// // conn, err := dbus.SessionBusPrivate()
-	// conn, err := dbus.SessionBus()
-	// if err != nil {
-	// 	log.Err(err, "DBus Connect")
-	// 	return nil, err
-	// }
-
-	// // if e := conn.Auth(nil); e != nil {
-	// // 	log.Err(e, "Failed Connection.Authenticate")
-	// // 	return nil, e
-	// // }
-
-	// // conn.Hello()
-
-	// c := make(chan *dbus.Signal, 10)
-	// conn.Signal(c)
-	// return c, cda.ConnectEvents(conn)
 	conn, c, e := SessionBus()
 	if e != nil {
 		close(c)
@@ -140,7 +125,7 @@ func (cda *CDDbus) ConnectEvents(conn *dbus.Conn) error {
 	cda.dbusIcon = conn.Object(DbusObject, cda.busPath)
 	cda.dbusSub = conn.Object(DbusObject, cda.busPath+"/sub_icons")
 	if cda.dbusIcon == nil || cda.dbusSub == nil {
-		return errors.New("No DBus interface")
+		return errors.New("no DBus interface")
 	}
 
 	// Listen to all events emitted for the icon.
@@ -215,18 +200,20 @@ func launch(iface *dbus.Object, action string, args ...interface{}) error {
 //
 //------------------------------------------------------------[ ICON ACTIONS ]--
 
-// Sets the quickinfo text displayed on our icon (small text on the icon).
+// SetQuickInfo change the quickinfo text displayed on the icon.
 //
 func (cda *CDDbus) SetQuickInfo(info string) error {
 	return cda.launch(cda.dbusIcon, DbusInterfaceApplet+".SetQuickInfo", info)
 }
 
-// Sets the text label of our icon.
+// SetLabel change the text label next to the icon.
+//
 func (cda *CDDbus) SetLabel(label string) error {
 	return cda.launch(cda.dbusIcon, DbusInterfaceApplet+".SetLabel", label)
 }
 
-// Sets the image of our icon, overwriting the previous one.
+// SetIcon set the image of the icon, overwriting the previous one.
+// A lot of image formats are supported, including SVG.
 // You can refer to the image by either its name if it's an image from a icon theme, or by a path.
 //   app.SetIcon("gimp")
 //   app.SetIcon("gtk-go-up")
@@ -236,17 +223,17 @@ func (cda *CDDbus) SetIcon(icon string) error {
 	return cda.launch(cda.dbusIcon, DbusInterfaceApplet+".SetIcon", icon)
 }
 
-// Sets an emblem on our icon. The emblem is drawn directly on the icon, so if you want to remove it, you have to use SetIcon with the original image.
-//   The image is given by its path
-//   See cdtype.EmblemPosition for valid emblem locations.
+// SetEmblem set an emblem image on the icon. To remove it, you have to use
+// SetEmblem again with an empty string.
 //
-//   app.SetEmblem("./emblem-charged.png", cdtype.EmblemBottomLeft)
+//   app.SetEmblem(app.FileLocation("img", "emblem-work.png"), cdtype.EmblemBottomLeft)
 //
 func (cda *CDDbus) SetEmblem(icon string, position cdtype.EmblemPosition) error {
 	return cda.launch(cda.dbusIcon, DbusInterfaceApplet+".SetEmblem", icon, int32(position))
 }
 
-// Animate animates our icon, with a given animation and for a given number of rounds
+// Animate animates the icon, with a given animation and for a given number of
+// rounds.
 //
 func (cda *CDDbus) Animate(animation string, rounds int32) error {
 	return cda.launch(cda.dbusIcon, DbusInterfaceApplet+".Animate", animation, rounds)
@@ -262,16 +249,18 @@ func (cda *CDDbus) DemandsAttention(start bool, animation string) error {
 	return cda.launch(cda.dbusIcon, DbusInterfaceApplet+".DemandsAttention", start, animation)
 }
 
-// ShowDialog pops up a simple dialog bubble on our icon.
+// ShowDialog pops up a simple dialog bubble on the icon.
 // The dialog can be closed by clicking on it.
 //
 func (cda *CDDbus) ShowDialog(message string, duration int32) error {
 	return cda.dbusIcon.Go(DbusInterfaceApplet+".ShowDialog", 0, nil, message, duration).Err
 }
 
-// Pops up a dialog box . The dialog can contain a message, an icon, some buttons, and a widget the user can act on.
-// Adding buttons will trigger an on_answer_dialog signal when the user press one of them.
-// "ok" and "cancel" are used as keywords for the defined by the dock.
+// PopupDialog open a dialog box . The dialog can contain a message, an icon,
+// some buttons, and a widget the user can act on.
+//
+// Adding buttons will trigger an on_answer_dialog signal when the user press
+// one of them. "ok" and "cancel" are used as keywords defined by the dock.
 //
 // Dialog attributes:
 //   message        string    dialog box text (default=empty).
@@ -310,47 +299,51 @@ func (cda *CDDbus) PopupDialog(dialog map[string]interface{}, widget map[string]
 	return cda.launch(cda.dbusIcon, DbusInterfaceApplet+".PopupDialog", toMapVariant(dialog), toMapVariant(widget))
 }
 
-// Renderer types: gauge, graph, progressbar
-// Themes for renderer Graph: "Line", "Plain", "Bar", "Circle", "Plain Circle"
+// AddDataRenderer add a graphic data renderer to the icon.
+//
+//  Renderer types: gauge, graph, progressbar.
+//  Themes for renderer Graph: "Line", "Plain", "Bar", "Circle", "Plain Circle"
 //
 func (cda *CDDbus) AddDataRenderer(typ string, nbval int32, theme string) error {
 	return cda.launch(cda.dbusIcon, DbusInterfaceApplet+".AddDataRenderer", typ, nbval, theme)
 }
 
-// Renders some values on your icon. You must have added a data renderer before
-// with AddDataRenderer. Values are given between 0 and 1.
-// The number of values you send to the dock must match the one you defined before.
+// RenderValues render new values on the icon.
+//   * You must have added a data renderer before with AddDataRenderer.
+//   * The number of values sent must match the number declared before.
+//   * Values are given between 0 and 1.
 //
 func (cda *CDDbus) RenderValues(values ...float64) error {
 	// return cda.dbusIcon.Call("RenderValues", dbus.FlagNoAutoStart, values).Err
 	return cda.launch(cda.dbusIcon, DbusInterfaceApplet+".RenderValues", values)
 }
 
-// Send an action on the application controlled by the icon (see ControlAppli)
+// ActOnAppli send an action on the application controlled by the icon (see ControlAppli).
 //
-// "minimize"            to hide the window
-// "show"                to show the window and give it focus
-// "toggle-visibility"   to show or hide
-// "maximize"            to maximize the window
-// "restore"             to restore the window
-// "toggle-size"         to maximize or restore
-// "close"               to close the window (Note: some programs will just hide the window and stay in the systray)
-// "kill"                to kill the X window
+//   "minimize"            to hide the window
+//   "show"                to show the window and give it focus
+//   "toggle-visibility"   to show or hide
+//   "maximize"            to maximize the window
+//   "restore"             to restore the window
+//   "toggle-size"         to maximize or restore
+//   "close"               to close the window (Note: some programs will just hide the window and stay in the systray)
+//   "kill"                to kill the X window
 //
 func (cda *CDDbus) ActOnAppli(action string) error {
 	return cda.launch(cda.dbusIcon, DbusInterfaceApplet+".ActOnAppli", action)
 }
 
-// Makes your applet control the window of an external application. Steals its
-// icon from the Taskbar. Use the xprop command find the class of the window you
-// want to control. Use "none" if you want to reset application control.
-// Controling an application enables the OnFocusChange callback.
+// ControlAppli allow your applet to control the window of an external
+// application and can steal its icon from the Taskbar.
+//  *Use the xprop command find the class of the window you want to control.
+//  *Use "none" if you want to reset application control.
+//  *Controling an application enables the OnFocusChange callback.
 //
 func (cda *CDDbus) ControlAppli(applicationClass string) error {
 	return cda.launch(cda.dbusIcon, DbusInterfaceApplet+".ControlAppli", applicationClass)
 }
 
-// Set the visible state of the application controlled by the icon.
+// ShowAppli set the visible state of the application controlled by the icon.
 //
 func (cda *CDDbus) ShowAppli(show bool) error {
 	return cda.launch(cda.dbusIcon, DbusInterfaceApplet+".ShowAppli", interface{}(show))
@@ -359,6 +352,9 @@ func (cda *CDDbus) ShowAppli(show bool) error {
 // aa{sv}
 
 //~ func (cda *CDDbus) AddMenuItems(items... []map[string]interface{}) error {
+
+// AddMenuItems is broken, sorry TODO.
+//
 func (cda *CDDbus) AddMenuItems() error {
 	menuitem := []map[string]interface{}{
 		{"widget-type": cdtype.MenuEntry, //int32(0),
@@ -400,9 +396,9 @@ func (cda *CDDbus) PopulateMenu(items ...string) error {
 	return cda.launch(cda.dbusIcon, DbusInterfaceApplet+".PopulateMenu", items)
 }
 
-// Bind one or more keyboard shortcuts to your applet. Only non empty shortkeys
-// will be sent to the dock so you can use this method to directly add them from
-// config.
+// BindShortkey binds one or more keyboard shortcuts to your applet. Only non
+// empty shortkeys will be sent to the dock so you can use this method to
+// directly add them from config.
 //
 func (cda *CDDbus) BindShortkey(shortkeys ...string) error {
 	return cda.launch(cda.dbusIcon, DbusInterfaceApplet+".BindShortkey", shortkeys)
@@ -415,13 +411,15 @@ func (cda *CDDbus) AskText(message, initialText string) error {
 	return cda.dbusIcon.Call("AskText", 0, message, initialText).Err
 }
 
-// AskText pops up a dialog with a slider to get user feedback.
+// AskValue pops up a dialog with a slider to get user feedback.
 // The answer will be forwarded with the OnAnswerDialog callback.
 //
 func (cda *CDDbus) AskValue(message string, initialValue, maxValue float64) error {
 	return cda.dbusIcon.Call("AskValue", 0, message, initialValue, maxValue).Err
 }
 
+// AskQuestion need more documentation TODO.
+//
 func (cda *CDDbus) AskQuestion(message string) error {
 	return cda.dbusIcon.Call("AskQuestion", 0, message).Err
 }
@@ -477,7 +475,7 @@ func (cda *CDDbus) GetAll() *cdtype.DockProperties {
 //
 //--------------------------------------------------------[ SUBICONS ACTIONS ]--
 
-// SubIcons actions.
+// SubIcons is a connection to the ubdock icon.
 //
 type SubIcon struct {
 	dbusSub *dbus.Object
@@ -508,32 +506,47 @@ func (cda *CDDbus) RemoveSubIcon(id string) error {
 	return e
 }
 
+// SetQuickInfo change the quickinfo text displayed on the subicon.
+//
 func (cdi *SubIcon) SetQuickInfo(info string) error {
 	return launch(cdi.dbusSub, DbusInterfaceSubapplet+".SetQuickInfo", info, cdi.id)
 }
 
+// SetLabel change the text label next to the subicon.
+//
 func (cdi *SubIcon) SetLabel(label string) error {
 	return launch(cdi.dbusSub, DbusInterfaceSubapplet+".SetLabel", label, cdi.id)
 }
 
+// SetIcon set the image of the subicon, overwriting the previous one. See Icon.
+//
 func (cdi *SubIcon) SetIcon(icon string) error {
 	return launch(cdi.dbusSub, DbusInterfaceSubapplet+".SetIcon", icon, cdi.id)
 }
 
+// SetEmblem set an emblem image on the subicon. See Icon.
+//
 func (cdi *SubIcon) SetEmblem(icon string, position cdtype.EmblemPosition) error {
 	return launch(cdi.dbusSub, DbusInterfaceSubapplet+".SetEmblem", icon, int32(position), cdi.id)
 }
 
+// Animate animates the subicon, with a given animation and for a given number of
+// rounds. See Icon.
+//
 func (cdi *SubIcon) Animate(animation string, rounds int32) error {
 	return launch(cdi.dbusSub, DbusInterfaceSubapplet+".Animate", animation, rounds, cdi.id)
 }
 
-func (cdi *SubIcon) ShowDialog(message string, duration int32) error {
-	return launch(cdi.dbusSub, DbusInterfaceSubapplet+".ShowDialog", message, duration, cdi.id)
-}
-
+// DemandsAttention is like the Animate method. See Icon.
+//
 func (cdi *SubIcon) DemandsAttention(start bool, animation string) error {
 	return launch(cdi.dbusSub, DbusInterfaceSubapplet+".DemandsAttention", start, animation)
+}
+
+// ShowDialog pops up a simple dialog bubble on the subicon. See Icon.
+//
+func (cdi *SubIcon) ShowDialog(message string, duration int32) error {
+	return launch(cdi.dbusSub, DbusInterfaceSubapplet+".ShowDialog", message, duration, cdi.id)
 }
 
 //
@@ -636,31 +649,15 @@ func (cda *CDDbus) receivedSubEvent(event string, data []interface{}) {
 //
 //------------------------------------------------------------------[ COMMON ]--
 
-// Recast list of args to []interface as requested by the DBus API.
+// Recast list of args to map[string]dbus.Variant as requested by the DBus API.
 //
 func toMapVariant(input map[string]interface{}) map[string]dbus.Variant {
 	vars := make(map[string]dbus.Variant)
 	for k, v := range input {
 		vars[k] = dbus.MakeVariant(v)
 	}
-	// 	size := valuesVal.Len()
-	// 	ret := make([]interface{}, size)
-	// 	for i := 0; i < size; i++ {
-	// 		ret[i] = valuesVal.Index(i).Interface()
-	// 	}
 	return vars
 }
-
-// Recast list of args to []interface as requested by the DBus API.
-//
-// func toInterface(valuesVal reflect.Value) []interface{} {
-// 	size := valuesVal.Len()
-// 	ret := make([]interface{}, size)
-// 	for i := 0; i < size; i++ {
-// 		ret[i] = valuesVal.Index(i).Interface()
-// 	}
-// 	return ret
-// }
 
 //
 //---------------------------------------------------------[ UNUSED / BUGGED ]--

@@ -27,12 +27,10 @@ const (
 )
 
 const (
-	MailClientLocation = iota
-	MailClientProgram
-	MailClientMonitor
+	MailClientLocation = iota // Open mail client as location, with xdg-open.
+	MailClientProgram         // Open mail client as command.
+	MailClientMonitor         // Open mail client as command and monitor it.
 )
-
-//~ self.svgpath = self.path+'emblem.svg' # SVG emblem file
 
 //------------------------------------------------------------------[ CONFIG ]--
 
@@ -104,7 +102,7 @@ const (
 
 // Actions available in full menu.
 //
-var menuFull []int = []int{
+var menuFull = []int{
 	ActionOpenClient,
 	ActionCheckMail,
 	ActionShowMails,
@@ -114,6 +112,6 @@ var menuFull []int = []int{
 
 // Actions available in register menu. Displayed when account isn't set.
 //
-var menuRegister []int = []int{
+var menuRegister = []int{
 	ActionRegister,
 }

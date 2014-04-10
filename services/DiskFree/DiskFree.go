@@ -1,5 +1,5 @@
-/* Package DiskFree is a monitoring applet for the Cairo-Dock project.
-
+// Package DiskFree is a monitoring applet for the Cairo-Dock project.
+/*
 Show disk usage for mounted partitions.
 Partitions can be autodetected or you can provide a list of partitions.
 You can also use autodetect with some partitions names to be listed first.
@@ -26,18 +26,19 @@ type Applet struct {
 	conf  *appletConf
 }
 
-// Create a new DiskUsage applet instance.
+// NewApplet create a new DiskUsage applet instance.
 //
 func NewApplet() dock.AppletInstance {
 	app := &Applet{CDApplet: dock.NewCDApplet()} // Icon controler and interface to cairo-dock.
 
 	app.disks = newDiskFree(app)
+	app.disks.log = app.Log
 	app.AddPoller(func() { app.disks.GetData(); app.disks.Display() })
 
 	return app
 }
 
-// Load user configuration if needed and initialise applet.
+// Init load user configuration if needed and initialise applet.
 //
 func (app *Applet) Init(loadConf bool) {
 	app.LoadConfig(loadConf, &app.conf) // Load config will crash if fail. Expected.
@@ -58,7 +59,7 @@ func (app *Applet) Init(loadConf bool) {
 //
 //------------------------------------------------------------------[ EVENTS ]--
 
-// Define applet events callbacks.
+// DefineEvents set applet events callbacks.
 //
 func (app *Applet) DefineEvents() {
 
@@ -105,6 +106,7 @@ type diskFree struct {
 	textPosition cdtype.InfoPosition
 	gaugeName    string
 	app          dock.RenderSimple // Controler to the Cairo-Dock icon.
+	log          *log.Log
 }
 
 // Create a new data poller for disk usage monitoring.
@@ -128,9 +130,8 @@ func (disks *diskFree) Settings(textPosition cdtype.InfoPosition, autoDetect boo
 	disks.nbValues = len(disks.listUser) + disks.countFound()
 
 	if disks.nbValues == 0 {
-		log.DEV("no disks ffs")
+		disks.log.NewErr("none", "disk found")
 		disks.app.SetLabel("No disks found.")
-		// TODO: need to stop the timer ?
 	}
 	disks.setRenderer()
 }
@@ -178,7 +179,7 @@ func (disks *diskFree) GetData() {
 	}
 
 	if newcount := len(disks.listUser) + len(disks.listFound); newcount != disks.nbValues {
-		log.Info("Number of partitions changed. Resizing", disks.nbValues, "=>", newcount)
+		disks.log.Debug("Number of partitions changed. Resizing", disks.nbValues, "=>", newcount)
 		disks.nbValues = newcount
 		disks.setRenderer()
 	}
@@ -192,7 +193,7 @@ func (disks *diskFree) countFound() (count int) {
 		fullList.Get()
 		for _, fs := range fullList.List {
 			if _, ok := disks.listUser[fs.DirName]; !ok && isFsValid(fs) {
-				log.Info("found extra partition", fs.DirName)
+				disks.log.Debug("found extra partition", fs.DirName)
 				count++
 			}
 		}
@@ -223,12 +224,12 @@ func (disks *diskFree) Display() {
 	// User defined partitions.
 	// for name, fs := range disks.listUser {
 	for _, fs := range disks.listUser {
-		var value float64 = 0
+		var value float64
 
 		if fs != nil {
 			value = float64(fs.usage.UsePercent())
 		} else {
-			// log.Info("DISK NOT FOUND", name)
+			// app.Log.Info("DISK NOT FOUND", name)
 		}
 
 		values = append(values, value/100)
@@ -269,7 +270,7 @@ func (disks *diskFree) appendText(text *string, value float64, fs *fileSystem) {
 		return
 	}
 
-	// log.Debug(curText + " : " + fs.info.DirName)
+	// app.Log.Debug(curText + " : " + fs.info.DirName)
 
 	switch disks.textPosition {
 	// case cdtype.InfoOnIcon:

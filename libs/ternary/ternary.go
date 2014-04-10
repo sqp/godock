@@ -1,6 +1,8 @@
-// Ternary operators!
+// package ternary operators!
 package ternary
 
+// Int is a ternary operator for int.
+//
 func Int(test bool, a, b int) int {
 	if test {
 		return a
@@ -8,6 +10,8 @@ func Int(test bool, a, b int) int {
 	return b
 }
 
+// String is a ternary operator for string.
+//
 func String(test bool, a, b string) string {
 	if test {
 		return a
@@ -15,6 +19,8 @@ func String(test bool, a, b string) string {
 	return b
 }
 
+// Min for int.
+//
 func Min(a, b int) int {
 	if a < b {
 		return a
@@ -22,6 +28,8 @@ func Min(a, b int) int {
 	return b
 }
 
+// Max for int.
+//
 func Max(a, b int) int {
 	if a > b {
 		return a

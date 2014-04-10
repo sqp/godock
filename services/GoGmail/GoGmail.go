@@ -15,6 +15,8 @@ import (
 	"time"
 )
 
+var logger *log.Log
+
 // Applet data and controlers.
 //
 type Applet struct {
@@ -33,7 +35,7 @@ type Applet struct {
 	err error // Buffer for last error to prevent displaying it twice.
 }
 
-// Create a new applet instance.
+// NewApplet create a new applet instance.
 //
 func NewApplet() dock.AppletInstance {
 	app := &Applet{CDApplet: dock.NewCDApplet()} // Icon controler and interface to cairo-dock.
@@ -50,10 +52,11 @@ func NewApplet() dock.AppletInstance {
 	poller.SetPreCheck(func() { app.SetEmblem(app.FileLocation("img", "go-down.svg"), cdtype.EmblemTopLeft) })
 	poller.SetPostCheck(func() { app.SetEmblem("none", cdtype.EmblemTopLeft) })
 
+	logger = app.Log
 	return app
 }
 
-// Load user configuration if needed and initialise applet.
+// Init load user configuration if needed and initialise applet.
 //
 func (app *Applet) Init(loadConf bool) {
 	app.LoadConfig(loadConf, &app.conf) // Load config will crash if fail. Expected.
@@ -103,7 +106,7 @@ func (app *Applet) Init(loadConf bool) {
 
 	// // Check libnotify library.
 	// if app.conf.DialogType == dialogNotify && popUp == nil {
-	// 	log.Info("Can't use Desktop Notifications dialogs. Applet compiled without library support")
+	// 	logger.Info("Can't use Desktop Notifications dialogs. Applet compiled without library support")
 	// 	app.conf.DialogType = dialogInternal
 	// }
 }
@@ -111,20 +114,20 @@ func (app *Applet) Init(loadConf bool) {
 //
 //------------------------------------------------------------------[ EVENTS ]--
 
-// Define applet events callbacks.
+// DefineEvents set applet events callbacks.
 //
 func (app *Applet) DefineEvents() {
 
 	// Left click: try to launch configured action.
 	//
 	app.Events.OnClick = func() {
-		app.testAction(app.Actions.Id(app.conf.ActionClickLeft))
+		app.testAction(app.Actions.ID(app.conf.ActionClickLeft))
 	}
 
 	// Middle click: try to launch configured action.
 	//
 	app.Events.OnMiddleClick = func() {
-		app.testAction(app.Actions.Id(app.conf.ActionClickMiddle))
+		app.testAction(app.Actions.ID(app.conf.ActionClickMiddle))
 	}
 
 	// Right click menu. Provide actions list or registration request.
@@ -178,32 +181,32 @@ func (app *Applet) DefineEvents() {
 func (app *Applet) defineActions() {
 	app.Actions.Add(
 		&dock.Action{
-			Id: ActionNone,
+			ID: ActionNone,
 			// Icontype: 2,
 			Menu: cdtype.MenuSeparator,
 		},
 		&dock.Action{
-			Id:   ActionOpenClient,
+			ID:   ActionOpenClient,
 			Name: "Open mail client",
 			Icon: "gtk-open",
 			Call: func() { app.actionOpenClient() },
 		},
 		&dock.Action{
-			Id:       ActionCheckMail,
+			ID:       ActionCheckMail,
 			Name:     "Check now",
 			Icon:     "gtk-refresh",
 			Call:     func() { app.actionCheckMail() },
 			Threaded: true,
 		},
 		&dock.Action{
-			Id:       ActionShowMails,
+			ID:       ActionShowMails,
 			Name:     "Show mail dialog",
 			Icon:     "gtk-media-forward",
 			Call:     func() { app.actionShowMails() },
 			Threaded: true,
 		},
 		&dock.Action{
-			Id:       ActionRegister,
+			ID:       ActionRegister,
 			Name:     "Set account",
 			Icon:     "gtk-media-forward",
 			Call:     func() { app.actionRegister() },
@@ -268,7 +271,7 @@ func (app *Applet) updateDisplay(delta int, first bool, e error) {
 	switch {
 	case e != nil:
 		label = "Update Error: " + eventTime + "\n" + e.Error() // Error time is refreshed.
-		log.Err(e, "Check mail")
+		logger.Err(e, "Check mail")
 		if app.err == nil || e.Error() != app.err.Error() { // Error buffer, dont warn twice the same information.
 			app.render.Error(e)
 			app.ShowDialog("Mail check error"+e.Error(), int32(app.conf.DialogTimer))
@@ -277,14 +280,14 @@ func (app *Applet) updateDisplay(delta int, first bool, e error) {
 		}
 
 	case first:
-		log.Debug("  * First check", delta)
+		app.Log.Debug("  * First check", delta)
 
 	case delta > 0:
-		log.Debug("  * Count changed", delta)
+		app.Log.Debug("  * Count changed", delta)
 		app.sendAlert(delta)
 
 	case delta == 0:
-		log.Debug("  * ", "no change")
+		app.Log.Debug("  * ", "no change")
 	}
 
 	switch {
@@ -310,14 +313,14 @@ func (app *Applet) sendAlert(delta int) {
 	if app.conf.AlertSoundEnabled {
 		sound := app.conf.AlertSoundFile
 		if len(sound) == 0 {
-			log.Info("No sound file configured")
+			logger.Info("No sound file configured")
 			return
 		}
 		if !filepath.IsAbs(sound) && sound[0] != []byte("~")[0] { // Check for relative path.
 			sound = app.FileLocation(sound)
 		}
 
-		log.Err(exec.Command("paplay", sound).Start(), "Play sound")
+		logger.Err(exec.Command("paplay", sound).Start(), "Play sound")
 		// if e := exec.Command("paplay", sound).Start(); e != nil {
 		//~ exec.Command("aplay", sound).Start()
 		// }
@@ -328,7 +331,8 @@ func (app *Applet) sendAlert(delta int) {
 // additional comment about mails being new if the second param is set to true.
 //
 func (app *Applet) mailPopup(nb int, template string) {
-	feed := app.data.Data().(*Feed)
+	// feed := app.data.Data().(*Feed)
+	feed := app.data.(*Feed)
 
 	// Prepare data for template formater.
 	feed.New = nb
@@ -341,7 +345,7 @@ func (app *Applet) mailPopup(nb int, template string) {
 
 	// if app.conf.DialogType == dialogInternal {
 	text, e := app.ExecuteTemplate(DialogTemplate, template, feed)
-	if !log.Err(e, "Template ListMailsNew") {
+	if !logger.Err(e, "Template ListMailsNew") {
 		// Remove a last EOL if any (from a template range).
 		if text[len(text)-1] == '\n' {
 			text = text[:len(text)-1]
@@ -352,18 +356,18 @@ func (app *Applet) mailPopup(nb int, template string) {
 			"use-markup":  true,
 			"time-length": int32(app.conf.DialogTimer),
 		}
-		log.Err(app.PopupDialog(dialog, nil), "popup")
+		logger.Err(app.PopupDialog(dialog, nil), "popup")
 		// app.ShowDialog(text, int32(app.conf.DialogTimer))
 	}
 	// } else {
 	// 	if nb == 1 {
-	// 		log.Err(popUp(feed.Mail[0].AuthorName, feed.Mail[0].Title, app.FileLocation("icon"), app.conf.DialogTimer*1000), "libnotify")
+	// 		logger.Err(popUp(feed.Mail[0].AuthorName, feed.Mail[0].Title, app.FileLocation("icon"), app.conf.DialogTimer*1000), "libnotify")
 	// 	} else {
 	// 		title, eTit := app.ExecuteTemplate(DialogTemplate, "TitleCount", feed)
-	// 		log.Err(eTit, "Template TitleCount")
+	// 		logger.Err(eTit, "Template TitleCount")
 	// 		text, eTxt := app.ExecuteTemplate(DialogTemplate, "ListMails", feed)
-	// 		log.Err(eTxt, "Template ListMails")
-	// 		log.Err(popUp(title, text, app.FileLocation("icon"), app.conf.DialogTimer*1000), "Libnotify")
+	// 		logger.Err(eTxt, "Template ListMails")
+	// 		logger.Err(popUp(title, text, app.FileLocation("icon"), app.conf.DialogTimer*1000), "Libnotify")
 	// 	}
 	// }
 
@@ -380,10 +384,16 @@ func (app *Applet) mailPopup(nb int, template string) {
 //
 type RenderedNone struct{}
 
+// NewRenderedNone create a new null renderer.
+//
 func NewRenderedNone() *RenderedNone {
 	return &RenderedNone{}
 }
+
+// Set counter value.
 func (rs *RenderedNone) Set(count int) {}
+
+// Error display.
 func (rs *RenderedNone) Error(e error) {}
 
 // RenderedQuick displays mail count on the icon QuickInfo.
@@ -393,6 +403,8 @@ type RenderedQuick struct {
 	pathDefault       string
 }
 
+// NewRenderedQuick create a new text renderer for quick-info.
+//
 func NewRenderedQuick(app dock.RenderSimple) *RenderedQuick {
 	return &RenderedQuick{
 		RenderSimple: app,
@@ -400,6 +412,8 @@ func NewRenderedQuick(app dock.RenderSimple) *RenderedQuick {
 	}
 }
 
+// Set counter value.
+//
 func (rs *RenderedQuick) Set(count int) {
 	info := ""
 	if count > 0 {
@@ -408,11 +422,13 @@ func (rs *RenderedQuick) Set(count int) {
 	rs.SetQuickInfo(info)
 }
 
+// Error display.
+//
 func (rs *RenderedQuick) Error(e error) {
 	rs.SetQuickInfo("N/A")
 }
 
-// RenderedQuick displays mail count on a hacked svg icon. The icon is rewritten
+// RenderedSVG displays mail count in a hacked svg icon. The icon is rewritten
 // with the new value on every change. In case of file loading problem, a new
 // RenderedNone will be returned, so a valid renderer will always be provided.
 //
@@ -424,6 +440,8 @@ type RenderedSVG struct {
 	iconSource        string
 }
 
+// NewRenderedSVG create a new SVG image renderer.
+//
 func NewRenderedSVG(app dock.RenderSimple, typ string) RendererMail {
 	size := strings.Split(string(typ), " ")[0]
 
@@ -442,6 +460,8 @@ func NewRenderedSVG(app dock.RenderSimple, typ string) RendererMail {
 	return rs
 }
 
+// Set counter value.
+//
 func (rs *RenderedSVG) Set(count int) {
 	if count == 0 { // No mail -> default icon.
 		rs.SetIcon(rs.pathDefault)
@@ -456,6 +476,8 @@ func (rs *RenderedSVG) Set(count int) {
 	}
 }
 
+// Error display.
+//
 func (rs *RenderedSVG) Error(e error) {
 	rs.SetIcon(rs.pathError)
 }
@@ -488,7 +510,7 @@ func (rs *RenderedSVG) Error(e error) {
 // 			e = popUp(title, msg, app.FileLocation("icon"), app.conf.DialogTimer*1000)
 // 			//~ DEBUG("notify", e==nil, e)
 // 		}
-// 		log.Err(e, "libnotify")
+// 		logger.Err(e, "libnotify")
 // 	}
 // }
 

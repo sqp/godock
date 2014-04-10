@@ -31,17 +31,17 @@ func dockCall(method string, args ...interface{}) error {
 
 // Add an item to the Dock.
 //
-// Launcher from desktop file:      "type":"Launcher", "config-file":"application://vlc.desktop"
-// Launcher custom:                 "type":"Launcher", "name":"Top 10", "command":"xterm -e top", "icon":"gtk-home.png"
-// Stack icon (SubDock container)   "type":"Stack-Icon", "name":"my sub-dock", "icon":"folder.png"
-// Separator                        "type":"Separator"
-// Module                           "type":"Module", "module":"clock"
-// MainDock                         "type":"Dock"
+//   Launcher from desktop file:      "type":"Launcher", "config-file":"application://vlc.desktop"
+//   Launcher custom:                 "type":"Launcher", "name":"Top 10", "command":"xterm -e top", "icon":"gtk-home.png"
+//   Stack icon (SubDock container)   "type":"Stack-Icon", "name":"my sub-dock", "icon":"folder.png"
+//   Separator                        "type":"Separator"
+//   Module                           "type":"Module", "module":"clock"
+//   MainDock                         "type":"Dock"
 //
 // Optional arguments:
-// Icon relative position                   "order":5
-// Icon location (main or subdock name)     "container":"_MainDock_"
-// Launcher application class               "class":"gjiten"
+//   Icon relative position                   "order":5
+//   Icon location (main or subdock name)     "container":"_MainDock_"
+//   Launcher application class               "class":"gjiten"
 //
 func DockAdd(args map[string]interface{}) error {
 	return dockCall("Add", toMapVariant(args))
@@ -49,10 +49,10 @@ func DockAdd(args map[string]interface{}) error {
 
 // Remove an item from the Dock.
 //
-// Launcher                                  "type=Launcher & class=vlc"
-// Second main dock (and all its content)    "type=Dock & name=_MainDock_-2"
-// Module                                    "type=Module & name=clock"
-// Instance of a module                      "type=Module-Instance & config-file=clock.conf"
+//   Launcher                                  "type=Launcher & class=vlc"
+//   Second main dock (and all its content)    "type=Dock & name=_MainDock_-2"
+//   Module                                    "type=Module & name=clock"
+//   Instance of a module                      "type=Module-Instance & config-file=clock.conf"
 //
 func DockRemove(arg string) error {
 	return dockCall("Remove", arg)
@@ -88,8 +88,8 @@ func ShowDesklet(mode int32) error {
 
 // Reload icon settings from disk.
 //
-// "type=Module & name=weather"
-// "config-file=full_path_to_config_or_desktop_file"
+//   "type=Module & name=weather"
+//   "config-file=full_path_to_config_or_desktop_file"
 //
 func IconReload(arg string) error {
 	return dockCall("Reload", arg)
@@ -98,18 +98,18 @@ func IconReload(arg string) error {
 // Get properties of different parts of the dock.
 // API may change for this function. Need to figure out the best way to return the data.
 //
-// "type=Launcher & class=firefox"
-// "type=Module"
-// "type=Desklet"
+//   "type=Launcher & class=firefox"
+//   "type=Module"
+//   "type=Desklet"
 //
-// var name, icon string
-// for _, t := range vars {
-// 	for k, v := range t {
-// 		if k == "icon" {
-// 			log.Info(mod, v)
-// 		}
-// 	}
-// }
+//   var name, icon string
+//   for _, t := range vars {
+//   	for k, v := range t {
+//   		if k == "icon" {
+//   			log.Info(mod, v)
+//   		}
+//   	}
+//   }
 func DockProperties(arg string) (vars []map[string]dbus.Variant) {
 	log.Err(busDock().Call("GetProperties", 0, arg).Store(&vars), "dbus GetProperties")
 	return
@@ -117,16 +117,20 @@ func DockProperties(arg string) (vars []map[string]dbus.Variant) {
 
 //--------------------------------------------------[ GET SPECIAL PROPERTIES ]--
 
+// AppletAdd add an applet instance referenced by its name.
+//
 func AppletAdd(name string) error {
 	return DockAdd(map[string]interface{}{"type": "Module", "module": name})
 }
 
-// Remove an applet instance referenced by its config file.
+// AppletRemove remove an applet instance referenced by its config file.
 //
 func AppletRemove(configFile string) error {
 	return DockRemove("type=Module-Instance & config-file=" + configFile)
 }
 
+// AppletInstances ask the dock details about an applet.
+//
 func AppletInstances(name string) []string {
 	query := "type=Module & name=" + strings.Replace(name, "-", " ", -1)
 	if vars := DockProperties(query); len(vars) > 0 {
@@ -162,6 +166,8 @@ const (
 	IconTypeSubDock   = "Stack-icon"
 )
 
+// CDIcon define a dock icon properties.
+//
 type CDIcon struct {
 	// DisplayedName string      // name of the package
 
@@ -194,6 +200,8 @@ func (icon *CDIcon) FormatName() (name string) {
 	return
 }
 
+// ListIcons ask the dock the list of active icons.
+//
 // TODO: add argument for advanced queries.
 // would be cool to have argument list.
 //

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"github.com/sqp/godock/libs/log"
 	"github.com/sqp/godock/libs/packages"
 
 	"strings"
@@ -37,24 +36,18 @@ func runInstall(cmd *Command, args []string) {
 		options = "v" // Tar command verbose option.
 	}
 
-	var printInfo bool
 	for _, applet := range args {
 		applet = strings.Title(applet) // Applets are using a CamelCase format. This will help lazy users
 		if pack := distant.Get(applet); pack != nil {
-			println(log.Green("Install applet"), applet)
-			e := pack.Install(version, options)
-			if e != nil {
-				println(log.Red("Error"), e.Error())
+			if !logger.Err(pack.Install(version, options), "install") {
+				logger.Info("Applet installed", applet)
 			}
-			// downloadOne(applet, options)
+			return
 		} else {
-			println(log.Red("Unknown applet:"), applet)
-			printInfo = true
+			logger.NewErr(applet, "unknown applet")
 		}
 	}
-	if printInfo {
-		println("Use cdc list to get the list of valid applets names")
-	}
+	logger.NewErr("use cdc list to get the list of valid applets names", "applet name needed")
 }
 
 // func downloadOne(applet, options string) {

@@ -22,7 +22,7 @@ type Applet struct {
 	service *sysinfo.IOActivity
 }
 
-// Create a new applet instance.
+// NewApplet create a new applet instance.
 //
 func NewApplet() dock.AppletInstance {
 	app := &Applet{CDApplet: dock.NewCDApplet()} // Icon controler and interface to cairo-dock.
@@ -37,7 +37,7 @@ func NewApplet() dock.AppletInstance {
 	return app
 }
 
-// Load user configuration if needed and initialise applet.
+// Init load user configuration if needed and initialise applet.
 //
 func (app *Applet) Init(loadConf bool) {
 	app.LoadConfig(loadConf, &app.conf) // Load config will crash if fail. Expected.
@@ -59,7 +59,7 @@ func (app *Applet) Init(loadConf bool) {
 //
 //------------------------------------------------------------------[ EVENTS ]--
 
-// Define applet events callbacks.
+// DefineEvents set applet events callbacks.
 //
 func (app *Applet) DefineEvents() {
 

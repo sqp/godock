@@ -37,8 +37,17 @@ const intro = `
 			<arg direction="in" type="s"/>
 			<arg direction="in" type="s"/>
 		</method>
+		<method name="Upload">
+			<arg direction="in" type="s"/>
+		</method>
+		<method name="Debug">
+			<arg direction="in" type="s"/>
+			<arg direction="in" type="b"/>
+		</method>
 	</interface>` + introspect.IntrospectDataString + `</node> `
 
+// Loader is a multi applet manager.
+//
 type Loader struct {
 	conn     *apiDbus.Conn // Dbus connection.
 	plopers  plopers
@@ -48,6 +57,8 @@ type Loader struct {
 	restart  chan string                           // Poller restart request channel.
 }
 
+// NewLoader creates a loader with the given list of applets services.
+//
 func NewLoader(services map[string]func() dock.AppletInstance) *Loader {
 	conn, c, e := dbus.SessionBus()
 	if log.Err(e, "DBus Connect") {
@@ -59,7 +70,7 @@ func NewLoader(services map[string]func() dock.AppletInstance) *Loader {
 		c:        c,
 		restart:  make(chan string, 1),
 		services: services,
-		plopers:  NewPlopers(),
+		plopers:  newPlopers(),
 		apps:     make(map[string]dock.AppletInstance)}
 
 	return load
@@ -92,6 +103,8 @@ func (load *Loader) StartServer() (bool, error) {
 	return true, nil
 }
 
+// StartLoop handle applets (and dock) until there's no nothing more to handle.
+//
 func (load *Loader) StartLoop() {
 	defer load.conn.ReleaseName(localPath)
 	defer log.Info("StopServer")
@@ -102,7 +115,7 @@ func (load *Loader) StartLoop() {
 	for { // Start main loop and handle events until the End signal is received from the dock.
 		if action {
 			if name != "" {
-				load.plopers.Add(name, load.apps[name].Poller().GetInterval()) // hack?
+				load.plopers.Add(name, load.apps[name].Poller().GetInterval()) // set time to max for given poller so it will be recheck. Can be considerer as a hack?
 				name = ""
 			}
 
@@ -133,6 +146,8 @@ func (load *Loader) StartLoop() {
 	}
 }
 
+// StopApplet close the applet instance.
+//
 func (load *Loader) StopApplet(name string) {
 
 	// unregister events?
@@ -144,6 +159,8 @@ func (load *Loader) StopApplet(name string) {
 
 }
 
+// Forward the Dbus signal to local manager or applet
+//
 func (load *Loader) dispatchDbusSignal(s *apiDbus.Signal) bool {
 	appname := pathToName(string(s.Path))
 	app, ok := load.apps[appname]
@@ -188,30 +205,49 @@ func (load *Loader) dispatchDbusSignal(s *apiDbus.Signal) bool {
 
 }
 
+// GetApplet return an applet instance.
+//
+func (load *Loader) GetApplet(name string) dock.AppletInstance {
+	return load.apps[name]
+}
+
 //
 //----------------------------------------------------------[ DBUS CALLBACKS ]--
 
+// RestartDock is a full restart of the dock, respawned in the same location if
+// it was managed.
+//
 func (load *Loader) RestartDock() *apiDbus.Error {
 	isrestart = true
-	StopDock()
-	StartDock()
+	log.Err(RestartDock(), "restart dock")
 	isrestart = false
 	return nil
 }
 
+// StopDock close the dock.
+//
 func (load *Loader) StopDock() *apiDbus.Error {
 	StopDock()
 	return nil
 }
 
+// ListServices displays active services.
+//
 func (load *Loader) ListServices() *apiDbus.Error {
-	log.Info("Active services", len(load.apps), "/", len(load.services))
-	for name, _ := range load.apps {
-		log.Info("  " + name)
+	println("Cairo-Dock applets services: active ", len(load.apps), "/", len(load.services))
+	for name, _ := range load.services {
+		if _, ok := load.apps[name]; ok {
+			print(log.Colored(" * ", log.FgGreen))
+		} else {
+			print("   ")
+		}
+		println(name)
 	}
 	return nil
 }
 
+// StartApplet creates a new applet instance with args from command line.
+//
 func (load *Loader) StartApplet(a, b, c, d, e, f, g string) *apiDbus.Error {
 	name := pathToName(c)
 	log.Info("StartApplet", name)
@@ -246,31 +282,78 @@ func (load *Loader) StartApplet(a, b, c, d, e, f, g string) *apiDbus.Error {
 	return nil
 }
 
+type Uploader interface {
+	Upload(string)
+}
+
+// Upload send data (raw text or file) to a one-click hosting service.
 //
-//------------------------------------------------------[ DBUS SEND COMMANDS ]--
+func (load *Loader) Upload(data string) *apiDbus.Error {
+	if uncast := load.GetApplet("NetActivity"); uncast != nil {
+		net := uncast.(Uploader)
+		net.Upload(data)
+	}
+	return nil
+}
+
+type Debuger interface {
+	SetDebug(bool)
+}
+
+// Debug change the debug state of an active applet.
+//
+func (load *Loader) Debug(applet string, state bool) *apiDbus.Error {
+	if uncast := load.GetApplet(applet); uncast != nil {
+		app := uncast.(Debuger)
+		app.SetDebug(state)
+	}
+	return nil
+}
+
+//
+//------------------------------------------------------------[ DOCK CONTROL ]--
 
 // current state.
 var withdock bool
 var isrestart bool
 
-func StartDock() {
+// StartDock launch the dock.
+//
+func StartDock() error {
 	withdock = true
 	// exec.Command("nohup", "cairo-dock").Start()
 	cmd := exec.Command("cairo-dock")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	log.Err(cmd.Start(), "Launch dock")
+	return cmd.Start()
 }
 
-func StopDock() {
-	log.Err(dbus.DockQuit(), "DockQuit")
+// StopDock close the dock.
+//
+func StopDock() error {
+	return dbus.DockQuit()
 }
 
+// RestartDock close and relaunch the dock.
+//
+func RestartDock() error {
+	if e := StopDock(); e != nil {
+		return e
+	}
+	return StartDock()
+}
+
+//
+//------------------------------------------------------[ DBUS SEND COMMANDS ]--
+
+// Client is a Dbus client to connect to the internal Dbus server.
+//
 type Client struct {
 	apiDbus.Object
 }
 
-// Get connection to active instance.
+// GetServer return a connection to the active instance of the internal Dbus
+// service if any. Return nil, nil if none found.
 //
 func GetServer() (*Client, error) {
 	conn, _, e := dbus.SessionBus() // TODO: get better.
@@ -298,16 +381,34 @@ func (cl *Client) call(method string, args ...interface{}) error {
 	return cl.Call(localPath+"."+method, 0, args...).Err
 }
 
+// ListServices send action to displays active services.
+//
 func (cl *Client) ListServices() error {
 	return cl.call("ListServices")
 }
 
+// RestartDock send action to restart the dock.
+//
 func (cl *Client) RestartDock() error {
 	return cl.call("RestartDock")
 }
 
+// StopDock send action to stop the dock.
+//
 func (cl *Client) StopDock() error {
 	return cl.call("StopDock")
+}
+
+// Upload send action upload data to the dock.
+//
+func (cl *Client) Upload(data string) error {
+	return cl.call("Upload", data)
+}
+
+// Debug send action upload data to the dock.
+//
+func (cl *Client) Debug(applet string, state bool) error {
+	return cl.call("Debug", applet, state)
 }
 
 // Send command to the active server.
@@ -328,7 +429,7 @@ func (load *Loader) Send(method string, args ...interface{}) error {
 //
 type plopers map[string]int // Active pollers.    Key = applet name.
 
-func NewPlopers() plopers {
+func newPlopers() plopers {
 	return make(plopers)
 }
 
@@ -347,10 +448,14 @@ func (pl plopers) Test(name string, interval int) bool {
 	return false
 }
 
-func (pl plopers) Add(name string, interval int) {
-	pl[name] = interval
+// Add or update a counter reference. Use max value for a check ASAP.
+//
+func (pl plopers) Add(name string, current int) {
+	pl[name] = current
 }
 
+// Remove a counter reference.
+//
 func (pl plopers) Remove(name string) {
 	if _, ok := pl[name]; ok {
 		delete(pl, name)

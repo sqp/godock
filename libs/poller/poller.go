@@ -1,4 +1,5 @@
-/* Package poller is a dedicated task that handles regular polling actions.
+// Package poller is a dedicated task that handles regular polling actions.
+/*
 It does not start a loop, just handles the ticker and restart channels. You
 will have to get those with Start and GetRestart and use them in a loop. This
 job is generaly done by the dock.StartApplet action, so you better use it or
@@ -89,6 +90,8 @@ func (poller *Poller) SetInterval(delay ...int) int {
 	return poller.delay
 }
 
+// GetInterval return the configured delay for the poller.
+//
 func (poller *Poller) GetInterval() int {
 	return poller.delay
 }
@@ -100,6 +103,8 @@ func (poller *Poller) GetInterval() int {
 // 	return poller.restart
 // }
 
+// SetChanRestart set settings for the poller restart event.
+//
 func (poller *Poller) SetChanRestart(c chan string, name string) {
 	poller.restart = c
 	poller.name = name
@@ -140,7 +145,8 @@ func (poller *Poller) Stop() {
 	}
 }
 
-// Check action. Launch PreCheck, OnCheck and PostCheck callbacks.
+// Action launch the check action. Triggers PreCheck, OnCheck and PostCheck
+// callbacks in this order.
 //
 func (poller *Poller) Action() {
 	if poller.started != nil { // Pre check call.

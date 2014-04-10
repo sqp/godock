@@ -2,51 +2,55 @@ package dock
 
 import "github.com/sqp/godock/libs/cdtype"
 
+// Actions manages applet internal actions list.
+//
 type Actions struct {
-	list                        []*Action
-	onActionStart, onActionStop func() // Before and after main actions calls. Used to set display for threaded tasks.
-	Max                         int
-	Current                     int
+	list                        []*Action // Actions defined.
+	onActionStart, onActionStop func()    // Before and after main actions calls. Used to set display for threaded tasks.
+	Max                         int       // Maximum number of concurrent actions (simultaneous).
+	Current                     int       // Current number of active actions.
 }
 
+// Add action(s) to the list.
+//
 func (actions *Actions) Add(acts ...*Action) {
 	for _, act := range acts {
 		actions.list = append(actions.list, act)
 	}
 }
 
-// Get action details.
+// Get action details by ID.
 //
-func (actions *Actions) Get(id int) *Action {
-	return actions.list[id]
+func (actions *Actions) Get(ID int) *Action {
+	return actions.list[ID]
 }
 
-// Find id for given action name.
+// ID finds the ID matching given action name.
 //
-func (actions *Actions) Id(name string) int {
+func (actions *Actions) ID(name string) int {
 	for _, act := range actions.list {
 		if act.Name == name {
-			return act.Id
+			return act.ID
 		}
 	}
 	return 0
 }
 
-// Execute desired action by id.
+// Launch desired action by ID.
 //
-func (actions *Actions) Launch(id int) {
-	if actions.list[id].Call == nil || (actions.Max > 0 && actions.Current >= actions.Max) {
+func (actions *Actions) Launch(ID int) {
+	if actions.list[ID].Call == nil || (actions.Max > 0 && actions.Current >= actions.Max) {
 		return
 	}
 
 	actions.Current++
-	if actions.onActionStart != nil && actions.list[id].Threaded {
+	if actions.onActionStart != nil && actions.list[ID].Threaded {
 		actions.onActionStart()
 	}
 
-	actions.list[id].Call()
+	actions.list[ID].Call()
 
-	if actions.onActionStart != nil && actions.list[id].Threaded {
+	if actions.onActionStart != nil && actions.list[ID].Threaded {
 		actions.onActionStop()
 	}
 	actions.Current--
@@ -57,19 +61,23 @@ func (actions *Actions) Launch(id int) {
 // func (actions *Actions) LaunchName(name string) {
 // 	for _, act := range actions.list {
 // 		if act.Name == name {
-// 			actions.Launch(act.Id)
+// 			actions.Launch(act.ID)
 // 			return
 // 		}
 // 	}
 // }
 
+// SetActionIndicators set the pre and post action callbacks.
+//
 func (actions *Actions) SetActionIndicators(onStart, onStop func()) {
 	actions.onActionStart = onStart
 	actions.onActionStop = onStop
 }
 
+// Action is an applet internal actions that can be used for callbacks or menu.
+//
 type Action struct {
-	Id   int
+	ID   int
 	Name string
 	Call func()
 	Icon string
@@ -82,12 +90,12 @@ type Action struct {
 	Threaded bool
 }
 
-// Popup the menu with the given actions list.
+// BuildMenu construct and popup the menu with the given actions list.
 //
 func (cda *CDApplet) BuildMenu(actionIds []int) {
 	var menu []string
-	for _, id := range actionIds {
-		act := cda.Actions.Get(id)
+	for _, ID := range actionIds {
+		act := cda.Actions.Get(ID)
 		switch act.Menu {
 		case cdtype.MenuEntry:
 			menu = append(menu, act.Name)

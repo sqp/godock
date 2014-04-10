@@ -3,6 +3,7 @@ package DiskActivity
 const (
 	defaultUpdateDelay = 3
 
+	// Disk block size.
 	BlockSize = 512
 )
 

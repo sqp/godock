@@ -1,7 +1,6 @@
 package GoGmail
 
 import (
-	"github.com/sqp/godock/libs/log" // Display info in terminal.
 	"io/ioutil"
 
 	"encoding/base64"
@@ -21,7 +20,6 @@ type Mailbox interface {
 	IsValid() bool
 	Count() (nbInbox int)
 	Clear()
-	Data() interface{}
 	LoadLogin(filepath string)
 	SaveLogin(login string)
 }
@@ -35,8 +33,8 @@ type RendererMail interface {
 
 //--------------------------------------------------------[ GMAIL CONNECTION ]--
 
-// Single Email data. Disabled fields are just examples of what is supposed to
-// be parsed if you want to use them.
+// Email is a single email data. Disabled fields are just examples of what is
+// supposed to be parsed if you want to use them.
 //
 type Email struct {
 	Title       string `xml:"title"`
@@ -49,8 +47,8 @@ type Email struct {
 	//~ <id>tag:gmail.google.com,204:14257</id>
 }
 
-// Gmail inbox data. Some fields are disabled only because they are unused. They
-// could be enabled simply by removing the comment in front of them.
+// Feed contains Gmail inbox data. Some fields are disabled because they are
+// unused. They could be enabled simply by uncommenting them.
 //
 type Feed struct {
 	Title   string `xml:"title"`
@@ -76,40 +74,35 @@ func NewFeed(onResult func(int, bool, error)) *Feed {
 	return &Feed{callResult: onResult}
 }
 
-// Get number of unread mails.
+// Count return the number of unread mails.
 //
 func (feed *Feed) Count() int {
 	//~ return len(feed.Mail)
 	return feed.Total
 }
 
-// Get feed original data. You will have to recast to *Feed.
-//
-func (feed *Feed) Data() interface{} {
-	return feed
-}
-
-// Reset mail list.
+// Clear reset the mail list.
 //
 func (feed *Feed) Clear() {
 	feed.Mail = nil
 	feed.Total = 0
 }
 
-// IsValid return true is the user provided informations. Only tells if login
-// and password were submitted, not if they are valid.
+// IsValid return true is user informations were provided.
+// Only tells if login and password were submitted, not if they are valid.
 //
 func (feed *Feed) IsValid() bool {
 	return feed.login != ""
 }
 
-// callback for poller mail checking. Launch the check mail action.
-// Check for new mails. Return the mails count delta (change since last check).
+// Check callback for poller mail checking. Launch the check mail action.
+// Check for new mails and launch the result callback with the mails count delta
+// (change since last check).
 //
 func (feed *Feed) Check() {
-	log.Debug("Check mails")
+	logger.Debug("Check mails")
 	if !feed.IsValid() {
-		feed.callResult(0, false, errors.New("No account informations provided."))
+		feed.callResult(0, false, errors.New("no account informations provided."))
 		return
 	}
 
@@ -123,7 +116,7 @@ func (feed *Feed) Check() {
 // Get mails from server.
 //
 func (feed *Feed) get() error {
-	log.Debug("Get mails from server")
+	logger.Debug("Get mails from server")
 
 	// Prepare request with header
 	request, e := http.NewRequest("GET", feedGmail, nil)
@@ -151,6 +144,8 @@ func (feed *Feed) get() error {
 	return nil
 }
 
+// LoadLogin get user login information from file.
+//
 func (feed *Feed) LoadLogin(filename string) {
 	feed.file = filename
 	b, err := ioutil.ReadFile(feed.file)
@@ -163,7 +158,7 @@ func (feed *Feed) LoadLogin(filename string) {
 	}
 }
 
-// Save login informations in the same format as the Gmail applet.
+// SaveLogin login informations to file with the same format as the Gmail applet.
 //
 func (feed *Feed) SaveLogin(login string) {
 	if login == "" {

@@ -54,7 +54,7 @@ func Load(filename string, v interface{}, fieldKey GetFieldKey) error {
 	return nil
 }
 
-// Method to choose which config key name to use to fill the struct field.
+// GetFieldKey is method to match config key name and struct field.
 //
 type GetFieldKey func(reflect.StructField) string
 

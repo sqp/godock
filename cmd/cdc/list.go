@@ -72,7 +72,7 @@ var listLocal = cmdList.Flag.Bool("l", false, "")
 var listDistant = cmdList.Flag.Bool("d", false, "")
 
 var listFmt = cmdList.Flag.String("f", "", "")
-var listJson = cmdList.Flag.Bool("json", false, "")
+var listJSON = cmdList.Flag.Bool("json", false, "")
 
 func runList(cmd *Command, args []string) {
 
@@ -83,8 +83,8 @@ func runList(cmd *Command, args []string) {
 		listPackages, _ = packages.ListDistant(version)
 	case *listLocal:
 		// Get applets dir.
-		dir, eDir := packages.DirExternal()
-		if eDir != nil {
+		dir, e := packages.DirExternal()
+		if e != nil {
 			return
 		}
 		listPackages = packages.ListExternalUser(dir, "applet")
@@ -94,8 +94,8 @@ func runList(cmd *Command, args []string) {
 
 	// Print formated list.
 	switch {
-	case *listJson:
-		printJson(listPackages)
+	case *listJSON:
+		printJSON(listPackages)
 
 	case *listFmt != "":
 		printTemplate(listPackages)
@@ -134,14 +134,14 @@ func printConsole(list packages.AppletPackages) {
 
 // Format applet packages using json encoder.
 //
-func printJson(list packages.AppletPackages) {
+func printJSON(list packages.AppletPackages) {
 	out := newCountingWriter(os.Stdout)
 	defer out.w.Flush()
 	for _, p := range list {
 		b, err := json.MarshalIndent(p, "", "\t")
-		if err != nil {
+		if logger.Err(err, "printJSON") {
 			out.Flush()
-			fatalf("%s", err)
+			exit(1)
 		}
 		out.Write(b)
 		out.Write(nl)
@@ -157,9 +157,9 @@ func printTemplate(list packages.AppletPackages) {
 	defer out.w.Flush()
 	for _, p := range list {
 		out.Reset()
-		if err := tmpl.Execute(out, p); err != nil {
+		if err := tmpl.Execute(out, p); logger.Err(err, "printTemplate") {
 			out.Flush()
-			fatalf("%s", err)
+			exit(1)
 		}
 		if out.Count() > 0 {
 			out.w.WriteRune('\n')
@@ -171,6 +171,7 @@ func printTemplate(list packages.AppletPackages) {
 
 // CountingWriter counts its data, so we can avoid appending a newline
 // if there was no actual output.
+//
 type CountingWriter struct {
 	w     *bufio.Writer
 	count int64
@@ -182,19 +183,27 @@ func newCountingWriter(w io.Writer) *CountingWriter {
 	}
 }
 
+// Write add text to the writer.
+//
 func (cw *CountingWriter) Write(p []byte) (n int, err error) {
 	cw.count += int64(len(p))
 	return cw.w.Write(p)
 }
 
+// Flush the writer.
+//
 func (cw *CountingWriter) Flush() {
 	cw.w.Flush()
 }
 
+// Reset the writer.
+//
 func (cw *CountingWriter) Reset() {
 	cw.count = 0
 }
 
+// Count the writer data.
+//
 func (cw *CountingWriter) Count() int64 {
 	return cw.count
 }

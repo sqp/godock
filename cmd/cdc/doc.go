@@ -9,13 +9,22 @@ Usage:
 The commands are:
 
     build       build a cairo-dock package
+    config      config open the configuration GUI
+    debug       debug change the debug state of an applet
     install     install external applet
     list        list external applets
     restart     restart the dock or one or more applet
     service     start service with the dock or an applet
+    upload      upload data to one-click hosting service
     version     print cdc version
 
 Use "cdc help [command]" for more information about a command.
+
+Additional help topics:
+
+
+Use "cdc help [topic]" for more information about that topic.
+
 
 Build a cairo-dock package
 
@@ -41,6 +50,34 @@ Options:
   -s               Sources directory. Default is current dir.
   -j               Specifies the number of jobs (commands) to run simultaneously.
                    Default = all availables processors.
+
+
+Config open the configuration GUI
+
+Usage:
+
+	cdc config  [path to applet config file]
+
+Config open the Cairo-Dock configuration GUI.
+
+The first argument can be an applet configuration file absolute location.
+.
+
+
+Debug change the debug state of an applet
+
+Usage:
+
+	cdc debug appletname [false|no|0]
+
+Debug change the debug state of an applet.
+
+The first argument must be the applet name.
+
+Options:
+  false, no, 0    Disable debug.
+  (default)       Enable debug.
+.
 
 
 Install external applet
@@ -121,16 +158,35 @@ Service handle the loading of the dock or its own packed applets.
 Options:
   dock        Start the dock. This allow to relaunch the dock with its output
               in the same location.
-  list        List active applets instances handled by the service.
-  stop        Stop the dock.
+  list        List available and active applets instances handled by the service.
+  stop        Stop the dock and cdc.
 
 The service option can also be called with options to start an applet. Those
 options are provided by the dock when starting an applet. It only work for
 applets actually packed in this program.
 
-To enable it, use a shell script in place of the applet binary to forward them:
+Without arguments, the list will be displayed.
+
+To enable the applet service for an applet, use a shell script in place of the
+applet binary to forward the call:
+
   !/bin/sh
-  cdc service $*
+  cdc service $* &
+.
+
+
+Upload data to one-click hosting service
+
+Usage:
+
+	cdc upload fileorstring
+
+Upload send data (raw text or file) to a one-click hosting service.
+
+If your data start with / or file:// the file content will be sent.
+Otherwise, the data is sent as raw text.
+
+Note that you must have an active instance of the NetActivity applet.
 .
 
 
