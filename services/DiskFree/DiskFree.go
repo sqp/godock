@@ -14,8 +14,9 @@ import (
 
 	"github.com/sqp/godock/libs/cdtype"
 	"github.com/sqp/godock/libs/dock"    // Connection to cairo-dock.
-	"github.com/sqp/godock/libs/log"     // Display info in terminal.
 	"github.com/sqp/godock/libs/ternary" // Ternary operators.
+
+	"strconv"
 )
 
 // Applet DiskUsage data and controlers.
@@ -106,7 +107,7 @@ type diskFree struct {
 	textPosition cdtype.InfoPosition
 	gaugeName    string
 	app          dock.RenderSimple // Controler to the Cairo-Dock icon.
-	log          *log.Log
+	log          cdtype.Logger
 }
 
 // Create a new data poller for disk usage monitoring.
@@ -204,12 +205,23 @@ func (disks *diskFree) countFound() (count int) {
 // Check if the filesystem isn't in the banned list.
 //
 func isFsValid(fs sigar.FileSystem) bool {
-	dropped := fs.DevName == "none" ||
+	if fs.DevName == "none" ||
 		fs.SysTypeName == "proc" || fs.SysTypeName == "sysfs" || fs.SysTypeName == "cgroup" ||
-		fs.SysTypeName == "tmpfs" || fs.SysTypeName == "devtmpfs" || fs.SysTypeName == "devpts" ||
-		(len(fs.DirName) > 5 && fs.DirName[:5] == "/run/") ||
-		(len(fs.DirName) > 6 && fs.DirName[:6] == "/proc/")
-	return !dropped
+		fs.SysTypeName == "tmpfs" || fs.SysTypeName == "devtmpfs" || fs.SysTypeName == "devpts" {
+		return false
+	}
+
+	if len(fs.DirName) > 5 {
+		switch fs.DirName[:5] {
+		case "/dev/", "/run/", "/sys/":
+			return false
+		}
+		if fs.DirName[:6] == "/proc/" {
+			return false
+		}
+	}
+
+	return true
 }
 
 //
@@ -229,7 +241,7 @@ func (disks *diskFree) Display() {
 		if fs != nil {
 			value = float64(fs.usage.UsePercent())
 		} else {
-			// app.Log.Info("DISK NOT FOUND", name)
+			// disks.log.Info("DISK NOT FOUND", name)
 		}
 
 		values = append(values, value/100)
@@ -264,13 +276,13 @@ func (disks *diskFree) appendText(text *string, value float64, fs *fileSystem) {
 	}
 
 	if value > -1 && fs != nil {
-		*text += sigar.FormatPercent(value)
+		*text += strconv.FormatFloat(value, 'f', 0, 64) + "%"
 	} else {
 		*text += "N/A"
-		return
+		// return
 	}
 
-	// app.Log.Debug(curText + " : " + fs.info.DirName)
+	// disks.log.Debug(curText + " : " + fs.info.DirName)
 
 	switch disks.textPosition {
 	// case cdtype.InfoOnIcon:
