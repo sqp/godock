@@ -2,8 +2,6 @@ package Update
 
 import (
 	"github.com/sqp/godock/libs/cdtype"
-
-	"errors"
 )
 
 const (
@@ -15,11 +13,8 @@ const (
 const defaultVersionPollingTimer = 60
 
 var (
-	LocationLaunchpad string = "https+urllib://launchpad.net/"
-	cmdSudo           string = "gksudo"
-	cmdBzr            string = "bzr"
-
-	inProgress error = errors.New("not finished")
+	LocationLaunchpad = "https+urllib://launchpad.net/"
+	CmdBzr            = "bzr" // Default command to get sources versions and upgrade.
 )
 
 //

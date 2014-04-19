@@ -2,15 +2,11 @@ package Update
 
 import (
 	"github.com/sqp/godock/libs/dbus"
-	"github.com/sqp/godock/libs/log"
+	"github.com/sqp/godock/libs/packages/build"
 	"github.com/sqp/godock/libs/ternary"
 
-	"bufio"
-	"fmt"
 	"os"
-	"os/exec"
 	"path"
-	"runtime"
 	"strconv"
 	"strings"
 	"text/template"
@@ -20,16 +16,8 @@ import (
 //
 //----------------------------------------------------------[ BUILDERS CONFIG ]--
 
-type BuildType int
-
-const (
-	Core BuildType = iota
-	Applets
-	AppletInternal
-	AppletScript
-	AppletCompiled
-)
-
+// BuildTarget defines the common builder interface.
+//
 type BuildTarget interface {
 	Label() string
 	Icon() string
@@ -37,142 +25,8 @@ type BuildTarget interface {
 	SourceDir() string
 	SetProgress(func(float64)) // Need values between 0 and 1 in the renderer.
 	Progress(float64)
-}
-
-// Progress callback handler for Builders.
-//
-type buildProgress struct {
-	f func(float64)
-}
-
-func (build *buildProgress) Progress(data float64) {
-	if build.f != nil {
-		build.f(data)
-	}
-}
-func (build *buildProgress) SetProgress(f func(float64)) {
-	build.f = f
-}
-
-// Empty Build for fallback.
-//
-type BuildNull struct {
-	buildProgress
-}
-
-func (build *BuildNull) Icon() string                { return "none" }
-func (build *BuildNull) Label() string               { return "" }
-func (build *BuildNull) SourceDir() string           { return "" }
-func (build *BuildNull) Build() error                { return inProgress }
-func (build *BuildNull) SetProgress(f func(float64)) {}
-
-//
-//
-type BuildCore struct {
-	buildProgress
-	dir string
-	app *AppletUpdate
-}
-
-func (build *BuildCore) Icon() string {
-	return "/usr/share/cairo-dock/cairo-dock.svg"
-}
-
-func (build *BuildCore) Label() string {
-	return "Core"
-}
-
-func (build BuildCore) SourceDir() string {
-	return path.Join(build.dir, "cairo-dock-core")
-}
-
-func (build *BuildCore) Build() error {
-	return buildCmake(build.SourceDir(), build.buildProgress.f)
-}
-
-// Build all Cairo-Dock plug-ins.
-//
-type BuildApplets struct {
-	buildProgress
-	dir string
-}
-
-func (build *BuildApplets) Icon() string {
-	return "/usr/share/cairo-dock/icons/icon-extensions.svg"
-}
-
-func (build *BuildApplets) Label() string {
-	return "Applets"
-}
-
-func (build BuildApplets) SourceDir() string {
-	return path.Join(build.dir, "cairo-dock-plug-ins")
-}
-
-func (build *BuildApplets) Build() error {
-	return buildCmake(build.SourceDir(), build.buildProgress.f)
-}
-
-// Internal applet = C applet provided by the plug-ins package.
-//
-type BuildInternal struct {
-	buildProgress
-	module string
-	icon   string
-	dir    string
-}
-
-func (build *BuildInternal) Icon() string {
-	return build.icon
-}
-
-func (build *BuildInternal) Label() string {
-	return build.module
-}
-
-func (build *BuildInternal) SourceDir() string {
-	return build.dir
-}
-
-func (build *BuildInternal) Build() error {
-	dir := path.Join(build.dir, "build", build.module)
-	if e := os.Chdir(dir); e != nil {
-		return e
-	}
-	return actionMakeAndInstall(build.buildProgress.f)
-}
-
-// External applet that must be compiled (golang or vala)
-//
-type BuildCompiled struct {
-	buildProgress
-	module string
-	icon   string
-	dir    string
-}
-
-func (build *BuildCompiled) Icon() string {
-	return build.icon
-}
-
-func (build *BuildCompiled) Label() string {
-	return build.module
-}
-
-func (build *BuildCompiled) SourceDir() string {
-	return build.dir
-}
-
-func (build *BuildCompiled) Build() error {
-	if e := os.Chdir(build.dir); e != nil {
-		return e
-	}
-
-	t := time.NewTicker(100 * time.Millisecond)
-	defer t.Stop()
-	go activityBar(t.C, build.buildProgress.f)
-
-	return execShow("make")
+	SetIcon(icon string)
+	SetDir(dir string)
 }
 
 //
@@ -182,151 +36,64 @@ func (build *BuildCompiled) Build() error {
 //
 func (app *AppletUpdate) setBuildTarget() {
 	if !app.conf.UserMode { // Tester mode.
-		app.target = &BuildNull{}
+		app.target = &build.BuilderNull{}
 	} else {
 		list := app.conf.BuildTargets
 		target := list[app.targetID]
-		switch app.buildType(target) {
+		switch build.GetBuildType(target) {
 
-		case Core:
-			app.target = &BuildCore{
-				dir: app.conf.SourceDir,
+		case build.Core:
+			app.target = &build.BuilderCore{}
+			app.target.SetDir(app.conf.SourceDir)
+
+		case build.Applets:
+			app.target = &build.BuilderApplets{}
+			app.target.SetDir(app.conf.SourceDir)
+
+		case build.AppletCompiled:
+			pack := dbus.InfoApplet(target)
+			if pack != nil {
+				app.target = &build.BuilderCompiled{Module: target}
+				app.target.SetIcon(pack.Icon)
+				app.target.SetDir(pack.Dir())
+
+			} else {
+				app.Log.NewErr("applet not found: "+target, "set build target")
+				app.target = &build.BuilderNull{}
+
+				// app.target = &BuildCompiled{
+				// 	module: target,
+				// 	icon:   app.FileLocation("../", target, "/icon"),
+				// 	dir:    app.FileLocation("../", target),
+				// }
 			}
 
-		case Applets:
-			app.target = &BuildApplets{
-				dir: app.conf.SourceDir,
-			}
-
-		case AppletCompiled:
-			app.target = &BuildCompiled{
-				module: target,
-				icon:   app.FileLocation("../", target, "/icon"),
-				dir:    app.FileLocation("../", target),
-			}
-
-		case AppletInternal:
+		case build.AppletInternal:
 			// Ask icon of module to the Dock as we can't guess its dir and icon name.
 			icon := app.FileLocation("img", app.conf.IconMissing)
 			if mod := dbus.InfoApplet(strings.Replace(target, "-", " ", -1)); mod != nil {
 				icon = mod.Icon
 			}
 
-			app.target = &BuildInternal{
-				module: target,
-				icon:   icon,
-				dir:    path.Join(app.conf.SourceDir, "cairo-dock-plug-ins"),
-			}
+			app.target = &build.BuilderInternal{Module: target}
+			app.target.SetIcon(icon)
+			app.target.SetDir(path.Join(app.conf.SourceDir, "cairo-dock-plug-ins"))
 
 		default: // ensure we have a valid target.
-			app.target = &BuildNull{}
+			app.target = &build.BuilderNull{}
 		}
 		app.target.SetProgress(func(f float64) { app.RenderValues(f) })
 	}
+
+	// app.Log.Info(app.conf.BuildTargets[app.targetID], app.buildType(app.conf.BuildTargets[app.targetID]))
 
 	// Delayed display of emblem. 5ms seemed to be enough but 500 should do the job.
 	go func() { time.Sleep(500 * time.Millisecond); app.showTarget() }()
 }
 
-// Try to detect applet type based on its location and content.
-// Could be improved.
-//
-func (app *AppletUpdate) buildType(name string) BuildType {
-	switch name {
-	case "core":
-		return Core
-	case "applets", "plug-ins":
-		return Applets
-	}
-
-	if _, e := os.Stat(app.FileLocation("..", name)); e == nil { // Applet is in external dir.
-		if _, e := os.Stat(app.FileLocation("..", name, "Makefile")); e == nil { // Got makefile => can build.
-			return AppletCompiled
-		}
-		// Else it's a scripted (atm the only other module not scripted is in vala and is the previous version of this module).
-		return AppletScript
-	}
-
-	return AppletInternal // Finally it must be an internal one.
-}
-
 func (app *AppletUpdate) showTarget() {
 	app.SetEmblem(app.target.Icon(), EmblemTarget)
 	app.SetLabel("Target: " + app.target.Label())
-}
-
-//
-//----------------------------------------------------[ BUILD FROM C SOURCES ]--
-
-func buildCmake(dir string, progress func(float64)) error {
-
-	if _, e := os.Stat(dir); e != nil { // No basedir.
-		return e
-	}
-
-	// Initialise build subdir. Create or clean previous compile.
-	dir += "/build"
-	if _, e := os.Stat(dir); e == nil { // Dir exists. Clean if needed.
-		if e = os.Chdir(dir); e != nil {
-			return e
-		}
-		actionMakeClean()
-	} else { // Create build dir and launch cmake.
-		logger.Info("Create build directory")
-		if e = os.Mkdir(dir, os.ModePerm); e != nil {
-			return e
-		}
-		if e = os.Chdir(dir); e != nil {
-			return e
-		}
-		execShow("cmake", "..", "-DCMAKE_INSTALL_PREFIX=/usr", "-Denable-gmenu=no")
-	}
-
-	return actionMakeAndInstall(progress)
-
-	//~ PARAM_PLUG_INS:="-Denable-scooby-do=yes -Denable-mail=no -Denable-impulse=yes"
-}
-
-// Make clean in build dir.
-//
-func actionMakeClean() {
-	// if !*buildKeep { // Default is to clean build dir.
-	logger.Info("Clean build directory")
-	execShow("make", "clean")
-	// }
-}
-
-// Compile and install a Cairo-Dock source dir.
-// Progress is sent to the update callback provided.
-//
-func actionMakeAndInstall(progress func(float64)) error {
-	jobs := runtime.NumCPU()
-
-	cmd := exec.Command("make", "-j", strconv.Itoa(jobs))
-	stdout, _ := cmd.StdoutPipe()
-	cmd.Stderr = os.Stderr
-
-	if err := cmd.Start(); err != nil {
-		logger.Err(err, "Execute make")
-	}
-	r := bufio.NewReader(stdout)
-
-	line, err := r.ReadString('\n')
-	for err == nil {
-		if len(line) > 3 && line[0] == '[' {
-			current, e := trimInt(line[1:4])
-			if e == nil {
-				progress(float64(current) / 100)
-				fmt.Printf("[%3d%%] %s", progress, log.Green(line[7:]))
-			}
-		} else {
-			fmt.Fprint(os.Stdout, line)
-		}
-
-		line, err = r.ReadString('\n')
-	}
-
-	return execShow(cmdSudo, "make", "install")
 }
 
 // Restart target if needed, with everything necessary (like the dock for an
@@ -337,11 +104,11 @@ func (app *AppletUpdate) restartTarget() {
 		return
 	}
 	target := app.conf.BuildTargets[app.targetID]
-	logger.Info(target)
-	switch app.buildType(target) {
-	case AppletScript, AppletCompiled:
+	app.Log.Info("restart", target)
+	switch build.GetBuildType(target) {
+	case build.AppletScript, build.AppletCompiled:
 		if target == app.AppletName { // Don't eat the chicken, or you won't have any more eggs.
-			exec.Command("make", "reload").Start()
+			logger.ExecAsync("make", "reload")
 		} else {
 			dbus.AppletRemove(target + ".conf")
 			dbus.AppletAdd(target)
@@ -351,26 +118,16 @@ func (app *AppletUpdate) restartTarget() {
 
 	default:
 		func() {
-			// exec.Command("killall", "cairo-dock").Start()
-			execAsync("cdc", "restart")
+			logger.ExecAsync("cdc", "restart")
 		}()
 
 	}
 }
 
-func (branch *Branch) update(dir string, progress func(float64)) (new int, e error) {
-	if e = os.Chdir(dir); e != nil {
-		return 0, e
-	}
-	ret, e := execSync(cmdBzr, "up") // "pull", LocationLaunchpad+branch.Branch)
-	logger.Info("PULL", ret)
-	return 0, e
-}
-
 //
 //---------------------------------------------------------[ VERSION POLLING ]--
 
-// Just handles the version checking and result display method.
+// Versions handles the version checking and result display method.
 //
 type Versions struct {
 	sources        []*Branch
@@ -384,11 +141,13 @@ type Versions struct {
 	callResult func(int, error) // Action to execute to send polling results.
 }
 
+// Sources lists configured branches.
+//
 func (ver *Versions) Sources() []*Branch {
 	return ver.sources
 }
 
-// callback for poller.
+// Check is the callback for poller.
 // TODO: need to better handle errors.
 //
 func (ver *Versions) Check() {
@@ -404,6 +163,8 @@ func (ver *Versions) Check() {
 //
 //-----------------------------------------------[ SOURCES BRANCH MANAGEMENT ]--
 
+// Branch defines a sources branch information.
+//
 type Branch struct {
 	Branch  string // Branch name.
 	Dir     string // Location of branch on the filesystem.
@@ -418,6 +179,8 @@ type Branch struct {
 	Zero      bool   // True if revisions are the same.
 }
 
+// NewBranch creates a source branch with name and dir.
+//
 func NewBranch(branch, dir string) *Branch {
 	return &Branch{
 		Branch: branch,
@@ -459,7 +222,7 @@ func (branch *Branch) findNew() (new int, e error) {
 	logInfo := ""
 	if branch.Delta-lastKnown > 0 {
 		nb := ternary.Min(branch.Delta, 5)
-		logInfo, e = execSync(cmdBzr, "log", LocationLaunchpad+branch.Branch, "--line", "-l"+strconv.Itoa(nb))
+		logInfo, e = logger.ExecSync(CmdBzr, "log", LocationLaunchpad+branch.Branch, "--line", "-l"+strconv.Itoa(nb))
 		logger.Warn(e, "bzr log "+branch.Branch)
 		// logger.Info("Cairo-Dock Commit", logInfo)
 	}
@@ -479,18 +242,27 @@ func (branch *Branch) findNew() (new int, e error) {
 
 func getRevision(args ...string) int {
 	args = append([]string{"revno"}, args...)
-	rev, e := exec.Command(cmdBzr, args...).Output()
+	rev, e := logger.ExecSync(CmdBzr, args...)
 
 	if len(args) == 1 { // no args, adding local for error display.
 		args = append(args, "local")
 	}
-	if !logger.Err(e, "Check revision: "+cmdBzr+" "+strings.Join(args, " ")) {
+	if !logger.Err(e, "Check revision: "+CmdBzr+" "+strings.Join(args, " ")) {
 		version, e := trimInt(string(rev))
 		if !logger.Err(e, "Check revision: type mismatch: "+string(rev)) {
 			return version
 		}
 	}
 	return 0
+}
+
+func (branch *Branch) update(dir string, progress func(float64)) (new int, e error) {
+	if e = os.Chdir(dir); e != nil {
+		return 0, e
+	}
+	ret, e := logger.ExecSync(CmdBzr, "up") // "pull", LocationLaunchpad+branch.Branch)
+	logger.Info("PULL", ret)
+	return 0, e
 }
 
 /*

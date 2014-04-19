@@ -23,18 +23,17 @@ http://www.gnu.org/licenses/licenses.html#GPL
 */
 
 import (
+	"github.com/sqp/godock/libs/cdtype"
 	"github.com/sqp/godock/libs/dock" // Connection to cairo-dock.
-	"github.com/sqp/godock/libs/log"  // Display info in terminal.
+	"github.com/sqp/godock/libs/packages/build"
 
 	"os"
-	"os/exec"
 	"path"
 	"strconv"
 	"strings"
-	"time"
 )
 
-var logger *log.Log
+var logger cdtype.Logger
 
 //------------------------------------------------------------------[ APPLET ]--
 
@@ -73,7 +72,9 @@ func NewApplet() dock.AppletInstance {
 	// Set "working" emblem during version check. It should be removed or changed by the check.
 	poller.SetPreCheck(func() { app.SetEmblem(app.FileLocation("img", app.conf.VersionEmblemWork), EmblemVersion) })
 
+	build.Log = app.Log
 	logger = app.Log
+
 	return app
 }
 
@@ -102,7 +103,7 @@ func (app *AppletUpdate) Init(loadConf bool) {
 
 	// Build globals.
 	LocationLaunchpad = app.conf.LocationLaunchpad
-	cmdSudo = app.conf.CommandSudo
+	build.CmdSudo = app.conf.CommandSudo
 }
 
 //------------------------------------------------------------------[ EVENTS ]--
@@ -183,10 +184,9 @@ func (app *AppletUpdate) DefineEvents() {
 	// Feature to test: rgrep of the dropped string on the source dir.
 	//
 	app.Events.OnDropData = func(data string) {
-		logger.Info("Grep " + data)
-		execShow("rgrep", "--color", data, app.ShareDataDir)
+		app.Log.Info("Grep " + data)
+		app.Log.ExecShow("grep", "-r", "--color", data, app.ShareDataDir)
 	}
-
 }
 
 //----------------------------------------------------------------[ CALLBACK ]--
@@ -316,9 +316,9 @@ func (app *AppletUpdate) actionShowDiff() {
 
 	default: // Launch application.
 		if _, e := os.Stat(app.target.SourceDir()); e != nil {
-			logger.Info("Invalid source directory")
+			app.Log.Info("Invalid source directory")
 		} else {
-			execAsync(app.conf.DiffCommand, app.target.SourceDir())
+			app.Log.ExecAsync(app.conf.DiffCommand, app.target.SourceDir())
 		}
 	}
 }
@@ -367,8 +367,8 @@ func (app *AppletUpdate) actionShowVersions(force bool) {
 	}
 	if force {
 		text, e := app.ExecuteTemplate(app.conf.VersionDialogTemplate, app.conf.VersionDialogTemplate, app.version.Sources())
-		logger.Err(e, "template "+app.conf.VersionDialogTemplate)
-		// logger.Info("Dialog", text)
+		app.Log.Err(e, "template "+app.conf.VersionDialogTemplate)
+		// app.Log.Info("Dialog", text)
 
 		dialog := map[string]interface{}{
 			"message":     text,
@@ -376,7 +376,7 @@ func (app *AppletUpdate) actionShowVersions(force bool) {
 			"time-length": int32(app.conf.VersionDialogTimer),
 		}
 
-		logger.Err(app.PopupDialog(dialog, nil), "popup")
+		app.Log.Err(app.PopupDialog(dialog, nil), "popup")
 
 	}
 }
@@ -388,8 +388,8 @@ func (app *AppletUpdate) actionBuildTarget() {
 	defer app.AddDataRenderer("progressbar", 0, "")
 
 	// app.Animate("busy", 200)
-	if !logger.Err(app.target.Build(), "Build") {
-		logger.Info("Build", app.target.Label())
+	if !app.Log.Err(app.target.Build(), "Build") {
+		app.Log.Info("Build", app.target.Label())
 		app.restartTarget()
 	}
 }
@@ -403,41 +403,6 @@ func (app *AppletUpdate) actionDownloadAll()     {}
 func (app *AppletUpdate) actionUpdateAll()       {}
 
 //------------------------------------------------------------------[ COMMON ]--
-
-func activityBar(c <-chan time.Time, render func(float64)) {
-	var val, step float64
-	step = 0.05
-	for _ = range c {
-		if val+step < 0 || 1 < val+step {
-			step = -step
-		}
-		val += step
-		render(val)
-	}
-}
-
-// Run command with output forwarded to console.
-//
-func execShow(command string, args ...string) error {
-	cmd := exec.Command(command, args...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	e := cmd.Run()
-	return e
-}
-
-func execSync(command string, args ...string) (string, error) {
-	out, e := exec.Command(command, args...).Output()
-	if logger.Err(e, "execSync: "+strings.Join(args, " ")) {
-		args = append([]string{command}, args...)
-	}
-	return string(out), e
-}
-
-func execAsync(command string, args ...string) error {
-	return logger.GetErr(exec.Command(command, args...).Start(), "execute failed "+command)
-}
 
 // Get numeric part of a string and convert it to int.
 //
