@@ -1,3 +1,4 @@
+// Package term is a simple table formatter with colors for console.
 package term
 
 import (
@@ -7,9 +8,8 @@ import (
 	"strconv"
 )
 
-//-----------------------------------------------------------------------
-// TableFormater
-//-----------------------------------------------------------------------
+//
+//----------------------------------------------------------[ TABLE FORMATER ]--
 
 var tableBorder = [][]string{
 	{"┌", "┬", "┐"},
@@ -23,14 +23,16 @@ const (
 	tableBorderBot = 2
 )
 
-// Format colored console display as table.
+// TableFormater format colored console display as table.
+//
 type TableFormater struct {
 	lines []*Line
 	cols  []ColInfo
 	max   map[int]int
 }
 
-// Create a formater with some columns.
+// NewTableFormater create a TableFormater with some columns.
+//
 func NewTableFormater(columns []ColInfo) *TableFormater {
 	return &TableFormater{
 		cols: columns,
@@ -38,20 +40,24 @@ func NewTableFormater(columns []ColInfo) *TableFormater {
 	}
 }
 
-// Add a separator line.
+// Separator add a separator line.
+//
 func (lf *TableFormater) Separator() {
 	line := lf.Line()
 
 	line.separator = true
 }
 
-// Create a new line to format.
+// Line create and append a new line to format.
+//
 func (lf *TableFormater) Line() *Line {
 	line := NewLine(lf.max)
 	lf.lines = append(lf.lines, line)
 	return line
 }
 
+// Print the table content in console output.
+//
 func (lf *TableFormater) Print() {
 	lf.printSeparator(tableBorderTop, true)
 
@@ -63,8 +69,11 @@ func (lf *TableFormater) Print() {
 
 		format := "│"
 		args := []interface{}{}
-		for row, _ := range lf.cols {
-			format += " %" + lf.cols[row].left() + strconv.Itoa(lf.rowSize(row)+line.colorDelta[row]) + "s │" // using size = default + delta.
+		for row := range lf.cols {
+			format += " %" +
+				lf.cols[row].left() + // negative sign if needed.
+				strconv.Itoa(lf.rowSize(row)+line.colorDelta[row]) + // size = default + delta.
+				"s │"
 			args = append(args, line.content[row])
 		}
 		fmt.Printf(format+"\n", args...)
@@ -83,8 +92,6 @@ func (lf *TableFormater) printSeparator(pos int, withTitle bool) {
 	out := tableBorder[pos][0]
 	first := true
 	for id, col := range lf.cols {
-		//~ cur := make([]byte, lf.rowSize(id) + 4)
-		//~ cur[0] = '+'
 		if first {
 			first = false
 		} else {
@@ -98,19 +105,18 @@ func (lf *TableFormater) printSeparator(pos int, withTitle bool) {
 			}
 		} else {
 			for i := 1; i < lf.rowSize(id)+3; i++ {
-				//~ cur[i] = '⎼'
 				out += "─"
 			}
 		}
-		//~ out += string(cur)
 	}
 	fmt.Println(out + tableBorder[pos][2])
 }
 
-//-----------------------------------------------------------------------
-// Column configuration
-//-----------------------------------------------------------------------
+//
+//-----------------------------------------------------------[ COLUMN CONFIG ]--
 
+// ColInfo is the configuration of a table column.
+//
 type ColInfo struct {
 	Size  int
 	Left  bool
@@ -124,10 +130,11 @@ func (info ColInfo) left() string {
 	return ""
 }
 
-//------------------------------------------------------------------------------
-// Line formating.
-//------------------------------------------------------------------------------
+//
+//-----------------------------------------------------------[ LINE FORMATER ]--
 
+// Line is a table line with .
+//
 type Line struct {
 	content    map[int]string
 	colorDelta map[int]int
@@ -135,6 +142,8 @@ type Line struct {
 	separator  bool
 }
 
+// NewLine create a new line.
+//
 func NewLine(max map[int]int) *Line {
 	return &Line{
 		content:    make(map[int]string),
@@ -143,13 +152,16 @@ func NewLine(max map[int]int) *Line {
 	}
 }
 
-// Chainable
+// Set text content for given row.
+//
 func (line *Line) Set(row int, text string) *Line {
 	line.testmax(row, len(text))
 	line.content[row] = text
 	return line
 }
 
+// Colored set colored text content for given row.
+//
 func (line Line) Colored(row int, color, text string) {
 	origsize := len(text)
 	line.testmax(row, origsize) // Size of text without formating.

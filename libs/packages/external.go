@@ -1,8 +1,10 @@
+// Package packages list and act on cairo-dock packages.
 package packages
 
 import (
 	"github.com/sqp/godock/libs/log" // Display info in terminal.
 
+	"github.com/sqp/godock/libs/cdtype"
 	"github.com/sqp/godock/libs/config"
 
 	"errors"
@@ -17,14 +19,6 @@ import (
 	"strings"
 	"time"
 )
-
-// import "github.com/kr/pretty"
-
-// func DEBUG(args ...interface{}) {
-// 	for _, arg := range args {
-// 		pretty.Printf("%# v\n", arg)
-// 	}
-// }
 
 const (
 	DistantUrl  = "http://download.tuxfamily.org/glxdock/themes/third-party/"
@@ -210,7 +204,7 @@ func ReadPackageFile(dir, applet, typ string) (*AppletPackage, error) {
 //~ gchar *cHint // hint of the package, for instance "sound" or "battery" for a gauge, "internet" or "desktop" for a third-party applet.
 //~ gint iSobriety // sobriety/simplicity of the package.
 
-// Definition of a generic package.
+// AppletPackage defines a generic cairo-dock applet package.
 //
 type AppletPackage struct {
 	DisplayedName string      // name of the package
@@ -239,7 +233,7 @@ type AppletPackage struct {
 	ModuleType      int
 }
 
-// Try to get package info from extra applets in user home dir.
+// NewAppletPackageUser try to read package info from dir for an external applet.
 //
 func NewAppletPackageUser(dir, name string, typ string) *AppletPackage {
 	fullpath := filepath.Join(dir, name)
@@ -259,12 +253,23 @@ func NewAppletPackageUser(dir, name string, typ string) *AppletPackage {
 	return nil
 }
 
-// Return true if the package is installed on disk.
+// IsInstalled return true if the package is installed on disk.
 //
 func (pack *AppletPackage) IsInstalled() bool {
 	return pack.Type == TypeUser || pack.Type == TypeUpdated || pack.Type == TypeInDev
 }
 
+// Dir gives the location of the package on disk.
+// FIXME: do not hope that the icon is in the same dir as the applet.
+// Currently based on icon location, it could really be improved.
+//
+func (pack *AppletPackage) Dir() string {
+	return filepath.Dir(pack.Icon)
+}
+
+// FormatName returns the best available package name to display.
+// (translated if possible).
+//
 func (pack *AppletPackage) FormatName() string {
 	if pack.Title != "" {
 		return pack.Title
@@ -272,6 +277,8 @@ func (pack *AppletPackage) FormatName() string {
 	return pack.DisplayedName
 }
 
+// FormatCategory returns the human readable category for the applet.
+//
 func (pack *AppletPackage) FormatCategory() string {
 	switch pack.Category {
 	case 2:
@@ -445,7 +452,7 @@ func (pack *AppletPackage) Uninstall(version string) error {
 //
 func DirExternal() (dir string, e error) {
 	if home := os.Getenv("HOME"); home != "" {
-		return filepath.Join(home, ".config", "cairo-dock", "third-party"), nil
+		return filepath.Join(home, ".config", "cairo-dock", cdtype.AppletsDirName), nil
 	}
 	return "", errors.New("Can't get HOME directory")
 }

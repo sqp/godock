@@ -52,10 +52,8 @@ import (
 	"github.com/guelfey/go.dbus"
 
 	"github.com/sqp/godock/libs/cdtype"
-	"github.com/sqp/godock/libs/log"
 
 	"errors"
-	// "reflect"
 )
 
 const (
@@ -75,12 +73,10 @@ type CDDbus struct {
 
 	busPath dbus.ObjectPath
 
-	// eavesDropMatch string              // Special key to filter events from other Dbus provider.
-	// eavesDropCall  func(*dbus.Message) // Callback when a message is matched.
-
 	// private data
 	dbusIcon *dbus.Object
 	dbusSub  *dbus.Object
+	Log      cdtype.Logger // Applet logger.
 }
 
 // New creates a CDDbus connection.
@@ -97,9 +93,10 @@ func New(path string) *CDDbus {
 // SessionBus creates a Dbus session with a listening chan.
 //
 func SessionBus() (*dbus.Conn, chan *dbus.Signal, error) {
-	conn, err := dbus.SessionBus()
-	if log.Err(err, "DBus Connect") {
-		return nil, nil, err
+	conn, e := dbus.SessionBus()
+	// if cda.Log.Err(err, "DBus Connect") {
+	if e != nil {
+		return nil, nil, e
 	}
 
 	c := make(chan *dbus.Signal, 10)
@@ -125,67 +122,40 @@ func (cda *CDDbus) ConnectEvents(conn *dbus.Conn) error {
 	cda.dbusIcon = conn.Object(DbusObject, cda.busPath)
 	cda.dbusSub = conn.Object(DbusObject, cda.busPath+"/sub_icons")
 	if cda.dbusIcon == nil || cda.dbusSub == nil {
-		return errors.New("no DBus interface")
+		return errors.New("no Dbus interface")
 	}
 
 	// Listen to all events emitted for the icon.
 	e := conn.BusObject().Call("org.freedesktop.DBus.AddMatch", 0,
 		"type='signal',path='"+string(cda.busPath)+"',interface='"+DbusInterfaceApplet+"',sender='"+DbusObject+"'").Err
-	log.Err(e, "Connect to Icon DBus events")
+	cda.Log.Err(e, "Connect to Icon DBus events")
 
 	e = conn.BusObject().Call("org.freedesktop.DBus.AddMatch", 0,
 		"type='signal',path='"+string(cda.busPath)+"/sub_icons',interface='"+DbusInterfaceSubapplet+"',sender='"+DbusObject+"'").Err
-	log.Err(e, "Connect to Subicons DBus events")
+	cda.Log.Err(e, "Connect to Subicons DBus events")
 
 	return e
 }
 
 // OnSignal forward the received signal to the registered event callback.
+// Return true if the signal was quit applet.
 //
 func (cda *CDDbus) OnSignal(v *dbus.Signal) (exit bool) {
 	switch {
 	case v == nil:
 
 	case len(v.Name) > len(DbusInterfaceApplet) && v.Name[len(DbusInterfaceApplet)] == '.':
-		// log.DEV("Received", v.Name[len(DbusInterfaceApplet)+1:], v.Body)
 		return cda.receivedMainEvent(v.Name[len(DbusInterfaceApplet)+1:], v.Body)
 
 	case len(v.Name) > len(DbusInterfaceSubapplet) && v.Name[len(DbusInterfaceSubapplet)] == '.':
-		// log.DEV("SUBICON", v.Name[len(DbusInterfaceSubapplet)+1:], v.Body)
 		cda.receivedSubEvent(v.Name[len(DbusInterfaceSubapplet)+1:], v.Body)
+		return false
 	}
+
+	cda.Log.Info("unknown signal", v)
+
 	return false
 }
-
-//------------------------------------------------------------[ TEST ]--
-
-// if cda.eavesDropMatch != "" { // Nothing to EavesDrop, just get our signals.
-// 	if e := conn.BusObject().Call("org.freedesktop.DBus.AddMatch", 0, cda.eavesDropMatch).Err; !log.Err(e, "DBus AddMatch") {
-// 		c := make(chan *dbus.Message, 10)
-// 		conn.Eavesdrop(c)
-// 		go cda.pullEaves(c)
-// 	}
-// }
-// return nil
-
-// func (cda *CDDbus) pullEaves(c chan *dbus.Message) {
-// 	for msg := range c {
-// 		switch msg.Type {
-// 		case dbus.TypeSignal:
-// 			log.Info("signal")
-// 			cda.OnSignal(msg.ToSignal())
-
-// 		case dbus.TypeMethodCall:
-// 			log.Info("method")
-// 			go cda.eavesDropCall(msg)
-// 		}
-// 	}
-// }
-
-// func (cda *CDDbus) EavesDrop(match string, call func(*dbus.Message)) {
-// 	cda.eavesDropMatch = match
-// 	cda.eavesDropCall = call
-// }
 
 // Call DBus method without returned values.
 //
@@ -195,6 +165,22 @@ func (cda *CDDbus) launch(iface *dbus.Object, action string, args ...interface{}
 
 func launch(iface *dbus.Object, action string, args ...interface{}) error {
 	return iface.Call(action, 0, args...).Err
+}
+
+// EavesDrop allow to register to Dbus events for custom parsing.
+//
+func EavesDrop(match string) (chan *dbus.Message, error) {
+	conn, e := dbus.SessionBus()
+	if e != nil {
+		return nil, e
+	}
+	e = conn.BusObject().Call("org.freedesktop.DBus.AddMatch", 0, match).Err
+	if e != nil {
+		return nil, e
+	}
+	c := make(chan *dbus.Message, 10)
+	conn.Eavesdrop(c)
+	return c, nil
 }
 
 //
@@ -382,10 +368,10 @@ func (cda *CDDbus) AddMenuItems() error {
 	// "tooltip": "this is the tooltip that will appear when you hover this entry",
 	// }
 
-	log.DETAIL(data)
-	// log.Err(cda.launch(cda.dbusIcon, DbusInterfaceApplet+".AddMenuItems", data), "AddMenuItems")
-	// log.Err(cda.dbusIcon.Call(DbusInterfaceApplet+".AddMenuItems", 0, data).Err, "additems")
-	log.Info("Disabled, prevent a crash")
+	// cda.Log.Info("struct", data)
+	// cda.Log.Err(cda.launch(cda.dbusIcon, DbusInterfaceApplet+".AddMenuItems", data), "AddMenuItems")
+	// cda.Log.Err(cda.dbusIcon.Call(DbusInterfaceApplet+".AddMenuItems", 0, data).Err, "additems")
+	cda.Log.NewErr("Disabled, prevent a crash")
 	return nil
 }
 
@@ -444,7 +430,7 @@ func (cda *CDDbus) Get(property string) (interface{}, error) {
 //
 func (cda *CDDbus) GetAll() *cdtype.DockProperties {
 	vars := make(map[string]dbus.Variant)
-	if log.Err(cda.dbusIcon.Call("GetAll", 0).Store(&vars), "dbus GetAll") {
+	if cda.Log.Err(cda.dbusIcon.Call("GetAll", 0).Store(&vars), "dbus GetAll") {
 		return nil
 	}
 
@@ -557,12 +543,10 @@ func (cdi *SubIcon) ShowDialog(message string, duration int32) error {
 func (cda *CDDbus) receivedMainEvent(event string, data []interface{}) (exit bool) {
 	switch event {
 	case "on_stop_module":
-		log.Debug("Received from dock", event)
+		cda.Log.Debug("Received from dock", event)
 		if cda.Events.End != nil {
 			cda.Events.End()
 		}
-		// cda.Close <- true // Send closing signal.
-		// log.DEV("Close sent")
 		return true
 
 	case "on_reload_module":
@@ -610,7 +594,7 @@ func (cda *CDDbus) receivedMainEvent(event string, data []interface{}) (exit boo
 			go cda.Events.OnChangeFocus(data[0].(bool))
 		}
 	default:
-		log.Info(event, data)
+		cda.Log.Info("unknown icon event", event, data)
 	}
 	return false
 }
@@ -642,7 +626,7 @@ func (cda *CDDbus) receivedSubEvent(event string, data []interface{}) {
 			go cda.SubEvents.OnSubMenuSelect(data[0].(int32), data[1].(string))
 		}
 	default:
-		log.Info(event, data)
+		cda.Log.Info("unknown subicon event", event, data)
 	}
 }
 

@@ -4,14 +4,13 @@ import (
 	apiDbus "github.com/guelfey/go.dbus"
 	"github.com/guelfey/go.dbus/introspect"
 
-	"github.com/sqp/godock/libs/dbus" // Connection to cairo-dock.
+	"github.com/sqp/godock/libs/cdtype"
+	"github.com/sqp/godock/libs/dbus"
 	"github.com/sqp/godock/libs/dock" // Connection to cairo-dock.
 	"github.com/sqp/godock/libs/log"  // Display info in terminal.
-	// "github.com/sqp/godock/libs/poller"
 
 	"errors"
-	"os"
-	"os/exec"
+	// "os/exec"
 	"strings"
 	"time"
 )
@@ -27,8 +26,10 @@ const intro = `
 		<signal name="ListServices"></signal>
 		<signal name="RestartDock"></signal>
 		<signal name="StopDock"></signal>
+		<signal name="LogWindow"></signal>
 
 		<method name="StartApplet">
+			<arg direction="in" type="s"/>
 			<arg direction="in" type="s"/>
 			<arg direction="in" type="s"/>
 			<arg direction="in" type="s"/>
@@ -46,6 +47,10 @@ const intro = `
 		</method>
 	</interface>` + introspect.IntrospectDataString + `</node> `
 
+var Log cdtype.Logger
+
+var LogWindow func()
+
 // Loader is a multi applet manager.
 //
 type Loader struct {
@@ -61,7 +66,7 @@ type Loader struct {
 //
 func NewLoader(services map[string]func() dock.AppletInstance) *Loader {
 	conn, c, e := dbus.SessionBus()
-	if log.Err(e, "DBus Connect") {
+	if Log.Err(e, "DBus Connect") {
 		return nil
 	}
 
@@ -91,14 +96,12 @@ func (load *Loader) StartServer() (bool, error) {
 		return false, nil
 	}
 
-	// Everything OK, we can register our Dbus methods, start the first applet,
-	// and start the loop to handle applets events and other.
-
+	// Everything OK, we can register our Dbus methods.
 	e = load.conn.Export(load, grr, localPath)
-	log.Err(e, "reg")
+	Log.Err(e, "register service object")
 
 	e = load.conn.Export(introspect.Introspectable(intro), grr, "org.freedesktop.DBus.Introspectable")
-	log.Err(e, "introspect")
+	Log.Err(e, "register service introspect")
 
 	return true, nil
 }
@@ -107,8 +110,8 @@ func (load *Loader) StartServer() (bool, error) {
 //
 func (load *Loader) StartLoop() {
 	defer load.conn.ReleaseName(localPath)
-	defer log.Info("StopServer")
-	log.Info("StartServer")
+	defer Log.Info("StopServer")
+	Log.Info("StartServer")
 
 	action := true
 	name := ""
@@ -155,7 +158,7 @@ func (load *Loader) StopApplet(name string) {
 	load.plopers.Remove(name)
 
 	delete(load.apps, name)
-	log.Info("StopApplet", name)
+	Log.Info("StopApplet", name)
 
 }
 
@@ -165,7 +168,7 @@ func (load *Loader) dispatchDbusSignal(s *apiDbus.Signal) bool {
 	appname := pathToName(string(s.Path))
 	app, ok := load.apps[appname]
 
-	// log.Info("received", s)
+	// Log.Info("received", s)
 
 	switch {
 
@@ -183,7 +186,7 @@ func (load *Loader) dispatchDbusSignal(s *apiDbus.Signal) bool {
 				load.StopDock()
 
 			default:
-				log.Info("unknown service request", s.Name[len(localPath)+1:], s.Body)
+				Log.Info("unknown service request", s.Name[len(localPath)+1:], s.Body)
 			}
 		}
 
@@ -198,7 +201,7 @@ func (load *Loader) dispatchDbusSignal(s *apiDbus.Signal) bool {
 		}
 
 	default:
-		log.Info("unknown", s)
+		Log.Info("unknown signal", s)
 
 	}
 	return false
@@ -219,7 +222,7 @@ func (load *Loader) GetApplet(name string) dock.AppletInstance {
 //
 func (load *Loader) RestartDock() *apiDbus.Error {
 	isrestart = true
-	log.Err(RestartDock(), "restart dock")
+	Log.Err(RestartDock(), "restart dock")
 	isrestart = false
 	return nil
 }
@@ -235,7 +238,7 @@ func (load *Loader) StopDock() *apiDbus.Error {
 //
 func (load *Loader) ListServices() *apiDbus.Error {
 	println("Cairo-Dock applets services: active ", len(load.apps), "/", len(load.services))
-	for name, _ := range load.services {
+	for name := range load.services {
 		if _, ok := load.apps[name]; ok {
 			print(log.Colored(" * ", log.FgGreen))
 		} else {
@@ -248,12 +251,12 @@ func (load *Loader) ListServices() *apiDbus.Error {
 
 // StartApplet creates a new applet instance with args from command line.
 //
-func (load *Loader) StartApplet(a, b, c, d, e, f, g string) *apiDbus.Error {
+func (load *Loader) StartApplet(a, b, c, d, e, f, g, h string) *apiDbus.Error {
 	name := pathToName(c)
-	log.Info("StartApplet", name)
+	Log.Info("StartApplet", name)
 
 	a = "./" + name
-	args := []string{a, b, c, d, e, f, g}
+	args := []string{a, b, c, d, e, f, g, h}
 
 	// Create applet instance.
 	fn, ok := load.services[name]
@@ -269,7 +272,7 @@ func (load *Loader) StartApplet(a, b, c, d, e, f, g string) *apiDbus.Error {
 	app.DefineEvents()
 	app.SetEventReload(func(loadConf bool) { app.Init(loadConf) })
 	er := app.ConnectEvents(load.conn)
-	log.Err(er, "ConnectEvents") // TODO: Big problem, need to handle better?
+	Log.Err(er, "ConnectEvents") // TODO: Big problem, need to handle better?
 
 	// Initialise applet: Load config and apply user settings.
 	app.Init(true)
@@ -282,7 +285,7 @@ func (load *Loader) StartApplet(a, b, c, d, e, f, g string) *apiDbus.Error {
 	return nil
 }
 
-type Uploader interface {
+type uploader interface {
 	Upload(string)
 }
 
@@ -290,13 +293,13 @@ type Uploader interface {
 //
 func (load *Loader) Upload(data string) *apiDbus.Error {
 	if uncast := load.GetApplet("NetActivity"); uncast != nil {
-		net := uncast.(Uploader)
+		net := uncast.(uploader)
 		net.Upload(data)
 	}
 	return nil
 }
 
-type Debuger interface {
+type debuger interface {
 	SetDebug(bool)
 }
 
@@ -304,8 +307,19 @@ type Debuger interface {
 //
 func (load *Loader) Debug(applet string, state bool) *apiDbus.Error {
 	if uncast := load.GetApplet(applet); uncast != nil {
-		app := uncast.(Debuger)
+		app := uncast.(debuger)
 		app.SetDebug(state)
+	}
+	return nil
+}
+
+// LogWindow opens the log terminal.
+//
+func (load *Loader) LogWindow() *apiDbus.Error {
+	if LogWindow != nil {
+		LogWindow()
+	} else {
+		Log.NewErr("no log service available", "open log window")
 	}
 	return nil
 }
@@ -321,12 +335,20 @@ var isrestart bool
 //
 func StartDock() error {
 	withdock = true
-	// exec.Command("nohup", "cairo-dock").Start()
-	cmd := exec.Command("cairo-dock")
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Start()
+	return Log.ExecAsync("cairo-dock") // TODO: create a dedicated logger to the dock when sender becomes used.
+	// cmd := exec.Command("cairo-dock")
+	// cmd.Stdout = log.Logs
+	// cmd.Stderr = log.Logs // TODO: need to split std and err streams.
+	// return cmd.Start()
 }
+
+// cmd := exec.Command("cairo-dock")
+// cmd.Stdout = logHistory
+// cmd.Stderr = logHistory //os.Stderr
+
+// if err := cmd.Start(); err != nil {
+// 	logger.Err(err, "start dock")
+// }
 
 // StopDock close the dock.
 //
@@ -356,18 +378,16 @@ type Client struct {
 // service if any. Return nil, nil if none found.
 //
 func GetServer() (*Client, error) {
-	conn, _, e := dbus.SessionBus() // TODO: get better.
-	// close(c)
-
-	if e != nil {
-		return nil, e
+	conn, ec := apiDbus.SessionBus()
+	if ec != nil {
+		return nil, ec
 	}
 
 	reply, e := conn.RequestName(localPath, apiDbus.NameFlagDoNotQueue)
 	if e != nil {
 		return nil, e
 	}
-	defer conn.ReleaseName(localPath)
+	conn.ReleaseName(localPath)
 
 	if reply != apiDbus.RequestNameReplyPrimaryOwner { // Found active instance, return client.
 		return &Client{*conn.Object(localPath, grr)}, nil
@@ -380,6 +400,10 @@ func GetServer() (*Client, error) {
 func (cl *Client) call(method string, args ...interface{}) error {
 	return cl.Call(localPath+"."+method, 0, args...).Err
 }
+
+// func (cl *Client) Go(method string, args ...interface{}) error {
+// 	return cl.Object.Go(localPath+"."+method, apiDbus.FlagNoReplyExpected, nil, args...).Err
+// }
 
 // ListServices send action to displays active services.
 //
@@ -411,12 +435,18 @@ func (cl *Client) Debug(applet string, state bool) error {
 	return cl.call("Debug", applet, state)
 }
 
+// LogWindow opens the log terminal.
+//
+func (cl *Client) LogWindow() error {
+	return cl.call("LogWindow")
+}
+
 // Send command to the active server.
 //
 func (load *Loader) Send(method string, args ...interface{}) error {
 	busD := load.conn.Object(localPath, grr)
 	if busD == nil {
-		return errors.New("Can't connect to active instance")
+		return errors.New("can't connect to active instance")
 	}
 
 	return busD.Call(localPath+"."+method, 0, args...).Err

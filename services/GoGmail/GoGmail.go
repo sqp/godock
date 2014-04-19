@@ -4,18 +4,17 @@ package GoGmail
 import (
 	"github.com/sqp/godock/libs/cdtype"
 	"github.com/sqp/godock/libs/dock" // Connection to cairo-dock.
-	"github.com/sqp/godock/libs/log"  // Display info in terminal.
+	"github.com/sqp/godock/libs/ternary"
 
 	"io/ioutil"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 )
 
-var logger *log.Log
+var logger cdtype.Logger
 
 // Applet data and controlers.
 //
@@ -63,7 +62,7 @@ func (app *Applet) Init(loadConf bool) {
 
 	// Reset data to be sure our display will be refreshed.
 	app.data.Clear()
-	app.data.LoadLogin(app.FileLocation(loginLocation))
+	app.data.LoadLogin(filepath.Join(app.RootDataDir, loginLocation))
 	app.err = nil
 
 	// Define the mail client action.
@@ -98,17 +97,13 @@ func (app *Applet) Init(loadConf bool) {
 		app.render = NewRenderedQuick(app.CDApplet)
 
 	case EmblemSmall, EmblemLarge:
-		app.render = NewRenderedSVG(app.CDApplet, app.conf.Renderer)
+		var e error
+		app.render, e = NewRenderedSVG(app.CDApplet, app.conf.Renderer)
+		app.Log.Err(e, "renderer svg")
 
 	default: // NoDisplay case, but using default to be sure we have a valid renderer.
 		app.render = NewRenderedNone()
 	}
-
-	// // Check libnotify library.
-	// if app.conf.DialogType == dialogNotify && popUp == nil {
-	// 	logger.Info("Can't use Desktop Notifications dialogs. Applet compiled without library support")
-	// 	app.conf.DialogType = dialogInternal
-	// }
 }
 
 //
@@ -271,7 +266,7 @@ func (app *Applet) updateDisplay(delta int, first bool, e error) {
 	switch {
 	case e != nil:
 		label = "Update Error: " + eventTime + "\n" + e.Error() // Error time is refreshed.
-		logger.Err(e, "Check mail")
+		app.Log.Err(e, "Check mail")
 		if app.err == nil || e.Error() != app.err.Error() { // Error buffer, dont warn twice the same information.
 			app.render.Error(e)
 			app.ShowDialog("Mail check error"+e.Error(), int32(app.conf.DialogTimer))
@@ -305,7 +300,7 @@ func (app *Applet) updateDisplay(delta int, first bool, e error) {
 //
 func (app *Applet) sendAlert(delta int) {
 	if app.conf.AlertDialogEnabled {
-		app.mailPopup(min(delta, app.conf.DialogNbMail), "ListMailsNew")
+		app.mailPopup(ternary.Min(delta, app.conf.DialogNbMail), "ListMailsNew")
 	}
 	if app.conf.AlertAnimName != "" {
 		app.Animate(app.conf.AlertAnimName, int32(app.conf.AlertAnimDuration))
@@ -313,14 +308,14 @@ func (app *Applet) sendAlert(delta int) {
 	if app.conf.AlertSoundEnabled {
 		sound := app.conf.AlertSoundFile
 		if len(sound) == 0 {
-			logger.Info("No sound file configured")
+			app.Log.Info("No sound file configured")
 			return
 		}
 		if !filepath.IsAbs(sound) && sound[0] != []byte("~")[0] { // Check for relative path.
 			sound = app.FileLocation(sound)
 		}
 
-		logger.Err(exec.Command("paplay", sound).Start(), "Play sound")
+		app.Log.ExecAsync("paplay", sound)
 		// if e := exec.Command("paplay", sound).Start(); e != nil {
 		//~ exec.Command("aplay", sound).Start()
 		// }
@@ -337,7 +332,7 @@ func (app *Applet) mailPopup(nb int, template string) {
 	// Prepare data for template formater.
 	feed.New = nb
 	feed.Plural = feed.New > 1
-	max := min(feed.New, len(feed.Mail))
+	max := ternary.Min(feed.New, len(feed.Mail))
 	feed.MailsNew = make([]*Email, max)
 	for i := 0; i < max; i++ {
 		feed.MailsNew[i] = feed.Mail[i]
@@ -345,29 +340,24 @@ func (app *Applet) mailPopup(nb int, template string) {
 
 	// if app.conf.DialogType == dialogInternal {
 	text, e := app.ExecuteTemplate(DialogTemplate, template, feed)
-	if !logger.Err(e, "Template ListMailsNew") {
-		// Remove a last EOL if any (from a template range).
-		if text[len(text)-1] == '\n' {
-			text = text[:len(text)-1]
-		}
-
+	if !app.Log.Err(e, "Template ListMailsNew") {
 		dialog := map[string]interface{}{
-			"message":     text,
+			"message":     strings.TrimRight(text, "\n"), // Remove last EOL if any (from template range).
 			"use-markup":  true,
 			"time-length": int32(app.conf.DialogTimer),
 		}
-		logger.Err(app.PopupDialog(dialog, nil), "popup")
+		app.Log.Err(app.PopupDialog(dialog, nil), "popup")
 		// app.ShowDialog(text, int32(app.conf.DialogTimer))
 	}
 	// } else {
 	// 	if nb == 1 {
-	// 		logger.Err(popUp(feed.Mail[0].AuthorName, feed.Mail[0].Title, app.FileLocation("icon"), app.conf.DialogTimer*1000), "libnotify")
+	// 		app.Log.Err(popUp(feed.Mail[0].AuthorName, feed.Mail[0].Title, app.FileLocation("icon"), app.conf.DialogTimer*1000), "libnotify")
 	// 	} else {
 	// 		title, eTit := app.ExecuteTemplate(DialogTemplate, "TitleCount", feed)
-	// 		logger.Err(eTit, "Template TitleCount")
+	// 		app.Log.Err(eTit, "Template TitleCount")
 	// 		text, eTxt := app.ExecuteTemplate(DialogTemplate, "ListMails", feed)
-	// 		logger.Err(eTxt, "Template ListMails")
-	// 		logger.Err(popUp(title, text, app.FileLocation("icon"), app.conf.DialogTimer*1000), "Libnotify")
+	// 		app.Log.Err(eTxt, "Template ListMails")
+	// 		app.Log.Err(popUp(title, text, app.FileLocation("icon"), app.conf.DialogTimer*1000), "Libnotify")
 	// 	}
 	// }
 
@@ -442,22 +432,32 @@ type RenderedSVG struct {
 
 // NewRenderedSVG create a new SVG image renderer.
 //
-func NewRenderedSVG(app dock.RenderSimple, typ string) RendererMail {
+func NewRenderedSVG(app dock.RenderSimple, typ string) (RendererMail, error) {
 	size := strings.Split(string(typ), " ")[0]
 
-	source, err := ioutil.ReadFile(app.FileLocation("img", size+".svg"))
-	if err != nil {
-		return NewRenderedNone()
+	source, e := ioutil.ReadFile(app.FileLocation("img", size+".svg"))
+	if e != nil {
+		return NewRenderedNone(), e
 	}
 
 	rs := &RenderedSVG{
 		RenderSimple: app,
 		pathDefault:  app.FileLocation("img", "gmail-icon.svg"),
-		pathTemp:     app.FileLocation("img", "temp.svg"),
-		pathError:    app.FileLocation("img", "gmail-error-"+size+".svg"),
-		iconSource:   string(source),
+		// pathTemp:   app.FileLocation("img", "temp.svg"),
+		pathError:  app.FileLocation("img", "gmail-error-"+size+".svg"),
+		iconSource: string(source),
 	}
-	return rs
+
+	f, et := ioutil.TempFile("", "cairo-dock-gogmail-icon-") // Need to create a new temp file
+	if et != nil {
+		return NewRenderedNone(), e
+	}
+
+	rs.pathTemp = f.Name()
+	f.Close()
+	// TODO: remove tempfile.
+
+	return rs, nil
 }
 
 // Set counter value.
@@ -480,46 +480,4 @@ func (rs *RenderedSVG) Set(count int) {
 //
 func (rs *RenderedSVG) Error(e error) {
 	rs.SetIcon(rs.pathError)
-}
-
-//
-//---------------------------------------------------------------[ LIBNOTIFY ]--
-
-// DISABLED FOR NOW
-
-// #L+[Internal dialog;Desktop notifications] Dialog type
-// DialogType=Desktop notifications
-
-// // libnotify call is currently stored as a global so libnotify.go can be
-// // removed if needed. Need to see the doc about optional dependencies building
-// // for better handling.
-// //
-// var popUp func(title, msg, icon string, duration int) error // store  if enabled.
-
-// // Open a popup on the configured notification systme. Valid options are internal
-// // or libnotify.
-// //
-// func (app *Applet) PopUp(title, msg string) {
-// 	if app.conf.DialogType == dialogInternal {
-// 		app.ShowDialog(msg, int32(app.conf.DialogTimer))
-// 	} else {
-// 		var e error
-// 		if popUp == nil {
-// 			e = errors.New("Applet was compiled with library support disabled")
-// 		} else {
-// 			e = popUp(title, msg, app.FileLocation("icon"), app.conf.DialogTimer*1000)
-// 			//~ DEBUG("notify", e==nil, e)
-// 		}
-// 		logger.Err(e, "libnotify")
-// 	}
-// }
-
-//
-//------------------------------------------------------------------[ COMMON ]--
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }

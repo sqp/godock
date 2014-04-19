@@ -1,6 +1,10 @@
 // Package cdtype defines main types and constants for Cairo-Dock applets.
 package cdtype
 
+const (
+	AppletsDirName = "third-party"
+)
+
 // Events you can connect with the cairo-dock applet. They are better set in the
 // mandatory DefineEvents call of your applet. All those events are optional but
 // it's better to find something meaningful to assign to them to improve your
@@ -79,6 +83,32 @@ type SubEvents struct {
 
 	// Action when the user drop data on the subicon.
 	OnSubDropData func(data string, icon string)
+}
+
+// Logger is the interface for reporting information.
+//
+type Logger interface {
+	SetDebug(debug bool)
+	SetName(name string)
+	SetLogOut(LogOut)
+	Debug(msg string, more ...interface{})
+	Info(msg string, more ...interface{})
+	Render(color, msg string, more ...interface{})
+	Warn(e error, msg ...string) (fail bool)
+	NewWarn(e string, msg ...string)
+	Err(e error, msg ...interface{}) (fail bool)
+	NewErr(e string, msg ...interface{})
+	GetErr(e error, msg ...interface{}) error
+	ExecShow(command string, args ...string) error
+	ExecSync(command string, args ...string) (string, error)
+	ExecAsync(command string, args ...string) error
+}
+
+type LogOut interface {
+	Raw(sender, msg string)
+	Info(sender, msg string, more ...interface{})
+	Debug(sender, msg string, more ...interface{})
+	Err(e string, sender string, msg ...interface{})
 }
 
 // DockProperties defines basic informations about a dock icon.

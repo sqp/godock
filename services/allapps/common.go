@@ -5,8 +5,9 @@ import "github.com/sqp/godock/libs/dock"
 
 // Common fields filled by declared applets.
 var apps = make(map[string]func() dock.AppletInstance)
-var onStop = make(map[string]func())
+var needgtk bool // true if an applet has some GTK dependency.
 
+// AddService is used to declare a service to the loader.
 func AddService(name string, app func() dock.AppletInstance) {
 	apps[name] = app
 }
@@ -15,12 +16,13 @@ func List() map[string]func() dock.AppletInstance {
 	return apps
 }
 
-func AddOnStop(name string, call func()) {
-	onStop[name] = call
+// AddNeedGtk is for an applet to declare its gtk dependency.
+// If used, the gtk main loop will lock the main thread to prevent later problems.
+//
+func AddGtkNeeded() {
+	needgtk = true
 }
 
-func OnStop() {
-	for _, f := range onStop {
-		f()
-	}
+func GtkNeeded() bool {
+	return needgtk
 }

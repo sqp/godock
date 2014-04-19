@@ -3,6 +3,7 @@ package dock
 import (
 	apiDbus "github.com/guelfey/go.dbus"
 
+	"github.com/sqp/godock/libs/cdtype"
 	"github.com/sqp/godock/libs/config"
 	"github.com/sqp/godock/libs/dbus" // Connection to cairo-dock.
 	"github.com/sqp/godock/libs/log"  // Display info in terminal.
@@ -11,7 +12,6 @@ import (
 	"bytes"
 	"fmt"
 	"os"
-	"os/exec"
 	"path"
 	"strings"
 	"text/template"
@@ -117,8 +117,6 @@ func StartApplet(app AppletInstance) {
 //
 //----------------------------------------------------------------[ CDAPPLET ]--
 
-const appletsDir = "third-party"
-
 // CDApplet is the base Cairo-Dock applet manager that will handle all your
 // communications with the dock and provide some methods commonly needed by
 // applets.
@@ -134,7 +132,7 @@ type CDApplet struct {
 	Actions   Actions                       // Actions handler. Where events callbacks must be declared.
 	commands  Commands                      // Programs and locations configured by the user, including application monitor.
 	poller    *poller.Poller                // Poller loop. Need to provide a way to use more than one.
-	Log       *log.Log                      // Applet logger.
+	Log       cdtype.Logger                 // Applet logger.
 
 	*dbus.CDDbus // Dbus connector.
 }
@@ -144,7 +142,7 @@ type CDApplet struct {
 func NewCDApplet() *CDApplet {
 	cda := &CDApplet{
 		Templates: make(map[string]*template.Template),
-		Log:       &log.Log{},
+		Log:       log.NewLog(log.Logs),
 	}
 	return cda
 }
@@ -160,8 +158,19 @@ func (cda *CDApplet) SetArgs(args []string) {
 	cda.ConfFile = args[3]
 	cda.RootDataDir = args[4]
 	cda.ParentAppName = args[5]
-	cda.ShareDataDir = path.Join(args[4], appletsDir, name)
+
+	// TODO: need to find a better way to set the current dir.
+	// cda.ShareDataDir = path.Join(args[4], appletsDir, name)
+	if len(args) > 7 {
+		cda.ShareDataDir = args[7] // dir forwarded from the launcher.
+	} else {
+		var e error
+		cda.ShareDataDir, e = os.Getwd() // standalone applet, using current dir.
+		cda.Log.Err(e, "get applet dir")
+	}
 	cda.CDDbus = dbus.New(args[2])
+
+	cda.CDDbus.Log = cda.Log
 }
 
 // SetEventReload set the default reload event with the applet init callback.
@@ -240,7 +249,7 @@ func (cda *CDApplet) LoadTemplate(names ...string) {
 	for _, name := range names {
 		fileloc := cda.FileLocation("templates", name+".tmpl")
 		template, e := template.ParseFiles(fileloc)
-		log.Err(e, "Template")
+		cda.Log.Err(e, "Template")
 		cda.Templates[name] = template
 	}
 }
@@ -253,7 +262,7 @@ func (cda *CDApplet) ExecuteTemplate(file, name string, data interface{}) (strin
 	}
 
 	buff := bytes.NewBuffer([]byte(""))
-	if e := cda.Templates[file].ExecuteTemplate(buff, name, data); log.Err(e, "FormatDialog") {
+	if e := cda.Templates[file].ExecuteTemplate(buff, name, data); cda.Log.Err(e, "FormatDialog") {
 		return "", e
 	}
 	return buff.String(), nil
@@ -288,7 +297,7 @@ func (cda *CDApplet) Poller() *poller.Poller {
 //
 func (cda *CDApplet) HaveMonitor() (haveApp bool, haveFocus bool) {
 	Xid, e := cda.Get("Xid")
-	log.Err(e, "Xid")
+	cda.Log.Err(e, "Xid")
 
 	if id, ok := Xid.(uint64); ok {
 		haveApp = id > 0
@@ -308,11 +317,11 @@ func (cda *CDApplet) LaunchCommand(name string) {
 				return
 			}
 		}
+		splitted := strings.Split(cmd.Name, " ")
 		if cmd.UseOpen {
-			exec.Command("xdg-open", cmd.Name).Start()
+			cda.Log.ExecAsync("xdg-open", splitted...)
 		} else {
-			cmd := strings.Split(cmd.Name, " ")
-			exec.Command(cmd[0], cmd[1:]...).Start()
+			cda.Log.ExecAsync(splitted[0], splitted[1:]...)
 		}
 	}
 }
@@ -392,6 +401,8 @@ func (cda *CDApplet) FileLocation(filename ...string) string {
 	return path.Join(args...)
 }
 
+// SetDebug set the state of the debug reporting flood.
+//
 func (cda *CDApplet) SetDebug(debug bool) {
 	cda.Log.SetDebug(debug)
 }

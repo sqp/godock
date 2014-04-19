@@ -5,7 +5,7 @@ package GoGmail
 const (
 	defaultUpdateDelay = 15 * 60 // 15 min.
 
-	loginLocation  = "../../.Gmail_subscription"
+	loginLocation  = ".Gmail_subscription"
 	feedGmail      = "https://mail.google.com/mail/feed/atom/"
 	DialogTemplate = "InternalDialog"
 )

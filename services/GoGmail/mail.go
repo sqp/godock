@@ -12,6 +12,8 @@ import (
 
 //---------------------------------------------------------[ MAIL INTERFACES ]--
 
+// Mailbox is a mail client interface.
+//
 type Mailbox interface {
 	// Timer management.
 	Check()
@@ -24,7 +26,7 @@ type Mailbox interface {
 	SaveLogin(login string)
 }
 
-// Mail rendering interface. Displays inbox mail count on the icon.
+// RendererMail is a display interface to show inbox mail count on the icon.
 //
 type RendererMail interface {
 	Set(count int) // Set new value.
@@ -70,6 +72,8 @@ type Feed struct {
 	callResult func(int, bool, error) // Action to execute to send polling results.
 }
 
+// NewFeed create a new Gmail inbox feed.
+//
 func NewFeed(onResult func(int, bool, error)) *Feed {
 	return &Feed{callResult: onResult}
 }
@@ -102,7 +106,7 @@ func (feed *Feed) IsValid() bool {
 func (feed *Feed) Check() {
 	logger.Debug("Check mails")
 	if !feed.IsValid() {
-		feed.callResult(0, false, errors.New("no account informations provided."))
+		feed.callResult(0, false, errors.New("no account informations provided"))
 		return
 	}
 

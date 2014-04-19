@@ -1,4 +1,4 @@
-// Package NetActivity is a monitoring applet for the Cairo-Dock project.
+// Package NetActivity is a monitoring and upload applet for the Cairo-Dock project.
 /*
 
 Benefit from original version:
@@ -48,6 +48,7 @@ import (
 	"path"
 )
 
+// EmblemAction is the position of the "upload in progress" emblem.
 const EmblemAction = cdtype.EmblemTopRight
 
 //
@@ -124,10 +125,16 @@ func (app *Applet) DefineEvents() {
 	app.Events.OnClick = app.LaunchFunc("left")
 	app.Events.OnMiddleClick = app.LaunchFunc("middle")
 
-	app.Events.OnDropData = app.up.Upload
+	app.Events.OnDropData = app.Upload
 
 	app.Events.OnBuildMenu = app.buildMenu
 	app.Events.OnMenuSelect = app.clickedMenu
+}
+
+// Upload data to a one-click site: file location or text.
+//
+func (app *Applet) Upload(data string) {
+	app.up.Upload(data)
 }
 
 //
@@ -201,8 +208,4 @@ func (app *Applet) onUpload(links uptoshare.Links) {
 //
 func formatLabel(dev string, in, out uint64) string {
 	return fmt.Sprintf("%s: %s %s / %s %s", dev, "↓", packages.ByteSize(in), "↑", packages.ByteSize(out))
-}
-
-func (app *Applet) Upload(data string) {
-	app.up.Upload(data)
 }

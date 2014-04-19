@@ -7,7 +7,7 @@ import (
 )
 
 var cmdInstall = &Command{
-	UsageLine: "install [-d] [-l] [-f format] [-json]",
+	UsageLine: "install [-v] appletname [appletname...]",
 	Short:     "install external applet",
 	Long: `
 Install download and install a Cairo-Dock external applets from the repository.
@@ -36,21 +36,28 @@ func runInstall(cmd *Command, args []string) {
 		options = "v" // Tar command verbose option.
 	}
 
+	failed := false
 	for _, applet := range args {
-		applet = strings.Title(applet) // Applets are using a CamelCase format. This will help lazy users
-		if pack := distant.Get(applet); pack != nil {
-			if !logger.Err(pack.Install(version, options), "install") {
-				logger.Info("Applet installed", applet)
-			}
-			return
-		} else {
-			logger.NewErr(applet, "unknown applet")
-		}
+		pack := distant.Get(strings.Title(applet)) // Applets are using a CamelCase format. This will help lazy users
+		failed = failed || !installApplet(pack, options)
 	}
-	logger.NewErr("use cdc list to get the list of valid applets names", "applet name needed")
+	if failed || len(args) == 0 {
+		logger.NewErr("use list command to get the list of valid applets names", "applet name needed")
+	}
 }
 
-// func downloadOne(applet, options string) {
-// 	pack := &packages.AppletPackage{DisplayedName: applet}
-
-// }
+// installApplet download and install an applet.
+//   pack can be provided untested.
+//   options are tar command options.
+//
+func installApplet(pack *packages.AppletPackage, options string) bool {
+	if pack == nil {
+		logger.NewErr(pack.DisplayedName, "unknown applet")
+		return false
+	}
+	if logger.Err(pack.Install(version, options), "install") {
+		return false
+	}
+	logger.Info("Applet installed", pack.DisplayedName)
+	return true
+}

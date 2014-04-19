@@ -69,30 +69,53 @@ func (c *Command) Runnable() bool {
 
 // Commands lists the available commands and help topics.
 // The order here is the order in which they are printed by 'cdc help'.
-var commands = []*Command{
-	cmdBuild,
-	// cmdConfig,
-	cmdDebug,
-	cmdInstall,
-	cmdList,
-	// cmdRun,
-	// cmdTest,
-	cmdRestart,
-	cmdService,
-	cmdUpload,
-	cmdVersion,
+func Commands() []*Command {
+	list := []*Command{
+		cmdBuild,
+		cmdConfig,
+		cmdDebug,
+		cmdInstall,
+		cmdList,
+		// cmdRun,
+		// cmdTest,
+		cmdRestart,
+		cmdService,
+		cmdUpload,
+		cmdVersion,
 
-	// helpGopath,
-	// helpPackages,
-	// helpRemote,
-	// helpTestflag,
-	// helpTestfunc,
+		// helpGopath,
+		// helpPackages,
+		// helpRemote,
+		// helpTestflag,
+		// helpTestfunc,
+	}
+
+	if list[1] == nil { // Special temp to remove optional config command (until we need more optionals).
+		list = append(list[0:1], list[2:]...)
+	}
+	return list
 }
 
-var logger = &log.Log{}
+var (
 
-var exitStatus = 0
-var exitMu sync.Mutex
+	// Global variables for optional actions.
+	cmdConfig *Command
+
+	cmdShortcuts = map[byte]string{
+		'c': "config",
+		'd': "debug",
+		'r': "restart",
+		's': "service",
+		'u': "upload",
+	}
+
+	// Global variables for internal settings.
+
+	logger = &log.Log{}
+
+	exitStatus = 0
+	exitMu     sync.Mutex
+)
 
 func setExitStatus(n int) {
 	exitMu.Lock()
@@ -112,14 +135,22 @@ func main() {
 		usage()
 	}
 
+	logger.SetLogOut(log.Logs)
 	logger.SetName(os.Args[0])
+	srvdbus.Log = logger
 
 	if args[0] == "help" {
 		help(args[1:])
 		return
 	}
 
-	for _, cmd := range commands {
+	if len(args[0]) == 1 { // Command shortcut.
+		if name, ok := cmdShortcuts[args[0][0]]; ok {
+			args[0] = name
+		}
+	}
+
+	for _, cmd := range Commands() {
 		if cmd.Name() == args[0] && cmd.Run != nil {
 			cmd.Flag.Usage = func() { cmd.Usage() }
 			if cmd.CustomFlags {
@@ -141,6 +172,7 @@ func main() {
 
 var usageTemplate = `cdc, Cairo-Dock Control, is a tool to manage a Cairo-Dock installation.
 It can also embed and manage multiple applets if compiled with their support.
+Most of the commands will require an active dock to work (with Dbus API).
 
 Usage:
 
@@ -152,13 +184,14 @@ The commands are:
 
 Use "cdc help [command]" for more information about a command.
 
-Additional help topics:
-{{range .}}{{if not .Runnable}}
-    {{.Name | printf "%-11s"}} {{.Short}}{{end}}{{end}}
-
-Use "cdc help [topic]" for more information about that topic.
-
 `
+
+// Additional help topics:
+// {{range .}}{{if not .Runnable}}
+//     {{.Name | printf "%-11s"}} {{.Short}}{{end}}{{end}}
+//
+// Use "cdc help [topic]" for more information about that topic.
+//
 
 var helpTemplate = `{{if .Runnable}}usage: cdc {{.UsageLine}}
 
@@ -199,7 +232,7 @@ func capitalize(s string) string {
 }
 
 func printUsage(w io.Writer) {
-	tmpl(w, usageTemplate, commands)
+	tmpl(w, usageTemplate, Commands())
 }
 
 // help implements the 'help' command.
@@ -221,11 +254,11 @@ func help(args []string) {
 		buf := new(bytes.Buffer)
 		printUsage(buf)
 		usage := &Command{Long: buf.String()}
-		tmpl(os.Stdout, documentationTemplate, append([]*Command{usage}, commands...))
+		tmpl(os.Stdout, documentationTemplate, append([]*Command{usage}, Commands()...))
 		return
 	}
 
-	for _, cmd := range commands {
+	for _, cmd := range Commands() {
 		if cmd.Name() == arg {
 			tmpl(os.Stdout, helpTemplate, cmd)
 			// not exit 2: succeeded at 'cdc help cmd'.
