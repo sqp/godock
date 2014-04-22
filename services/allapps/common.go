@@ -12,17 +12,20 @@ func AddService(name string, app func() dock.AppletInstance) {
 	apps[name] = app
 }
 
+// List returns the list of declared applets.
+//
 func List() map[string]func() dock.AppletInstance {
 	return apps
 }
 
-// AddNeedGtk is for an applet to declare its gtk dependency.
+// AddGtkNeeded allow an applet to declare its gtk dependency.
 // If used, the gtk main loop will lock the main thread to prevent later problems.
 //
 func AddGtkNeeded() {
 	needgtk = true
 }
 
+// GtkNeeded returns true if an applet requires gtk.
 func GtkNeeded() bool {
 	return needgtk
 }

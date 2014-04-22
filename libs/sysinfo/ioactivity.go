@@ -2,9 +2,8 @@ package sysinfo
 
 import (
 	"github.com/sqp/godock/libs/cdtype"
-	"github.com/sqp/godock/libs/dock"     // Connection to cairo-dock.
-	"github.com/sqp/godock/libs/log"      // Display info in terminal.
-	"github.com/sqp/godock/libs/packages" // ByteSize.
+	"github.com/sqp/godock/libs/cdtype/bytesize"
+	"github.com/sqp/godock/libs/dock" // Connection to cairo-dock.
 )
 
 //
@@ -17,6 +16,8 @@ type FormatIO func(device string, in, out uint64) string
 // IOActivity extract delta IO stats from stacking system counters.
 //
 type IOActivity struct {
+	Log cdtype.Logger
+
 	list     map[string]*stat
 	interval uint64
 	info     ITextInfo         // Paired values text renderer.
@@ -38,44 +39,44 @@ func NewIOActivity(app dock.RenderSimple) *IOActivity {
 
 // Settings is a all in one method to configure your IOActivity.
 //
-func (na *IOActivity) Settings(interval uint64, textPosition cdtype.InfoPosition, renderer, graphType int, gaugeTheme string, names ...string) {
-	na.interval = interval
+func (ioa *IOActivity) Settings(interval uint64, textPosition cdtype.InfoPosition, renderer, graphType int, gaugeTheme string, names ...string) {
+	ioa.interval = interval
 
-	na.list = make(map[string]*stat) // Clear list. Nothing must remain.
-	na.app.AddDataRenderer("", 0, "")
+	ioa.list = make(map[string]*stat) // Clear list. Nothing must remain.
+	ioa.app.AddDataRenderer("", 0, "")
 
 	if len(names) > 0 {
 		for _, name := range names {
-			na.list[name] = &stat{}
+			ioa.list[name] = &stat{}
 		}
 
 		switch textPosition { // Add text renderer info.
 		case cdtype.InfoOnIcon:
-			na.info = NewTextIcon(na.app)
-			na.info.SetSeparator("\n")
-			na.info.SetCallAppend(na.FormatIcon)
-			na.info.SetCallFail(func(string) string { return "N/A" }) // NEED TRANSLATE GETTEXT
+			ioa.info = NewTextIcon(ioa.app)
+			ioa.info.SetSeparator("\n")
+			ioa.info.SetCallAppend(ioa.FormatIcon)
+			ioa.info.SetCallFail(func(string) string { return "N/A" }) // NEED TRANSLATE GETTEXT
 
 		case cdtype.InfoOnLabel:
-			na.info = NewTextLabel(na.app)
-			na.info.SetSeparator("\n")
-			na.info.SetCallAppend(na.FormatLabel)
-			na.info.SetCallFail(func(dev string) string { return dev + ": " + "N/A" }) // NEED TRANSLATE GETTEXT
-			// na.info.SetCallFail(func(dev string) string { return fmt.Sprintf("%s: %s", dev, "N/A") }) // NEED TRANSLATE GETTEXT
+			ioa.info = NewTextLabel(ioa.app)
+			ioa.info.SetSeparator("\n")
+			ioa.info.SetCallAppend(ioa.FormatLabel)
+			ioa.info.SetCallFail(func(dev string) string { return dev + ": " + "N/A" }) // NEED TRANSLATE GETTEXT
+			// ioa.info.SetCallFail(func(dev string) string { return fmt.Sprintf("%s: %s", dev, "N/A") }) // NEED TRANSLATE GETTEXT
 
 		default:
-			na.info = NewTextNil()
+			ioa.info = NewTextNil()
 		}
 
 		switch renderer {
 		case 0:
-			na.app.AddDataRenderer("gauge", 2*int32(len(na.list)), gaugeTheme)
+			ioa.app.AddDataRenderer("gauge", 2*int32(len(ioa.list)), gaugeTheme)
 		case 1:
-			na.app.AddDataRenderer("graph", 2*int32(len(na.list)), DockGraphType[graphType])
+			ioa.app.AddDataRenderer("graph", 2*int32(len(ioa.list)), DockGraphType[graphType])
 		}
 	} else {
-		log.DEV("no na ffs")
-		na.app.SetLabel("No na defined.")
+		// log.DEV("no na ffs")
+		ioa.app.SetLabel("No device defined.")
 	}
 }
 
@@ -87,52 +88,52 @@ func (na *IOActivity) Settings(interval uint64, textPosition cdtype.InfoPosition
 //   RenderValues: gauge or graph
 //   RenderText: quickinfo or label
 //
-func (na *IOActivity) Check() {
-	na.Get()
+func (ioa *IOActivity) Check() {
+	ioa.Get()
 
-	if len(na.list) == 0 {
+	if len(ioa.list) == 0 {
 		return
 	}
 
-	na.info.Clear()
+	ioa.info.Clear()
 	var values []float64
 
-	for name, stat := range na.list {
+	for name, stat := range ioa.list {
 		if in, out, ok := stat.Current(); ok {
-			na.info.Append(name, stat.rateReadNow, stat.rateWriteNow)
+			ioa.info.Append(name, stat.rateReadNow, stat.rateWriteNow)
 			values = append(values, in, out)
 		} else {
-			na.info.Fail(name)
+			ioa.info.Fail(name)
 			values = append(values, 0, 0)
 		}
 	}
 
-	na.info.Display()
+	ioa.info.Display()
 
 	if len(values) > 0 {
-		na.app.RenderValues(values...)
+		ioa.app.RenderValues(values...)
 	}
 }
 
 // Get new data from source.
 //
-func (net *IOActivity) Get() {
-	// if len(net.list) == 0 {
+func (ioa *IOActivity) Get() {
+	// if len(ioa.list) == 0 {
 	// 	return
 	// }
 
-	for _, stat := range net.list { // Reset our acquisition status for every field.
+	for _, stat := range ioa.list { // Reset our acquisition status for every field.
 		stat.acquisitionOK = false
 	}
 
-	l, e := net.GetData()
-	if log.Err(e, "get data") {
+	l, e := ioa.GetData()
+	if ioa.Log.Err(e, "get data") {
 		return
 	}
 
 	for _, newv := range l {
-		if stat, ok := net.list[newv.Field]; ok {
-			stat.Set(newv.In, newv.Out, net.interval)
+		if stat, ok := ioa.list[newv.Field]; ok {
+			stat.Set(newv.In, newv.Out, ioa.interval)
 		} else {
 			// log.DEV("unknown", newv.Field)
 		}
@@ -153,13 +154,13 @@ func FormatIcon(dev string, in, out uint64) string {
 //
 func FormatRate(size uint64) string {
 	if size > 0 {
-		return packages.ByteSize(size).String()
+		return bytesize.ByteSize(size).String()
 	}
 	return ""
 }
 
 //
-//-----------------------------------------------------[ TEXT INFO RENDERERS ]--
+//--------------------------------------------------------[ TEXT INFO COMMON ]--
 
 // ITextInfo is the interface for a paired value text renderer. Used with ....
 //
@@ -174,6 +175,8 @@ type ITextInfo interface {
 	SetCallFail(call func(dev string) string)
 }
 
+// TextInfo defines the base data for a paired value text renderer.
+//
 type TextInfo struct {
 	info       string
 	sep        string
@@ -181,6 +184,8 @@ type TextInfo struct {
 	callFail   func(dev string) string
 }
 
+// Append adds new data values to the renderer.
+//
 func (ti *TextInfo) Append(dev string, in, out uint64) {
 	if ti.info != "" {
 		ti.info += ti.sep
@@ -188,6 +193,8 @@ func (ti *TextInfo) Append(dev string, in, out uint64) {
 	ti.info += ti.callAppend(dev, in, out)
 }
 
+// Fail adds a data error to the renderer.
+//
 func (ti *TextInfo) Fail(dev string) {
 	if ti.info != "" {
 		ti.info += ti.sep
@@ -195,52 +202,79 @@ func (ti *TextInfo) Fail(dev string) {
 	ti.info += ti.callFail(dev)
 }
 
+// Clear resets the internal text.
+//
 func (ti *TextInfo) Clear() {
 	ti.info = ""
 }
 
+// SetSeparator declares the text separator to add between text values.
+//
 func (ti *TextInfo) SetSeparator(sep string) {
 	ti.sep = sep
 }
 
+// SetCallAppend declares the text formatter callback for each value.
+//
 func (ti *TextInfo) SetCallAppend(call FormatIO) {
 	ti.callAppend = call
 }
 
+// SetCallFail declares the error formatter callback.
+//
 func (ti *TextInfo) SetCallFail(call func(dev string) string) {
 	ti.callFail = call
 }
 
+//
+//-----------------------------------------------------[ TEXT INFO RENDERERS ]--
+
+// TextIcon renders a paired value text on icon quickinfo.
+//
 type TextIcon struct {
 	app dock.RenderSimple // Controler to the Cairo-Dock icon.
 	TextInfo
 }
 
+// NewTextIcon creates a new paired value text renderer on icon quickinfo.
+//
 func NewTextIcon(app dock.RenderSimple) *TextIcon {
 	return &TextIcon{app: app}
 }
 
+// Display renders data on icon quickinfo.
+//
 func (ti *TextIcon) Display() {
 	ti.app.SetQuickInfo(ti.info)
 }
 
+// TextLabel renders a paired value text on icon label.
+//
 type TextLabel struct {
 	app dock.RenderSimple // Controler to the Cairo-Dock icon.
 	TextInfo
 }
 
+// NewTextLabel creates a new paired value text renderer on icon label.
+//
 func NewTextLabel(app dock.RenderSimple) *TextLabel {
 	return &TextLabel{app: app}
 }
 
+// Display renders data on icon label.
+//
 func (ti *TextLabel) Display() {
 	ti.app.SetLabel(ti.info)
 }
 
+// TextNil provides a dumb interface compatible with a paired value text renderer.
+//
 type TextNil struct {
 	TextInfo
 }
 
+// NewTextNil creates a dumb interface compatible with paired value text renderer.
+//
 func NewTextNil() *TextNil {
 	t := &TextNil{}
 	t.callAppend = func(dev string, in, out uint64) string { return "" }
@@ -248,4 +282,6 @@ func NewTextNil() *TextNil {
 	return t
 }
 
+// Display will do nothing on the nil renderer.
+//
 func (ti *TextNil) Display() {}

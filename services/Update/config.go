@@ -113,7 +113,7 @@ const (
 
 // Actions available in tester menu.
 //
-var menuTester []int = []int{
+var menuTester = []int{
 	ActionShowVersions,
 	// ActionNone,
 	// ActionUpdateAll,
@@ -126,7 +126,7 @@ var menuTester []int = []int{
 
 // Actions available in developer menu.
 //
-var menuDev []int = []int{
+var menuDev = []int{
 	ActionCycleTarget,
 	// ActionSetAppletName,
 	ActionNone,

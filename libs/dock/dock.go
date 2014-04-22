@@ -1,12 +1,12 @@
 package dock
 
 import (
-	apiDbus "github.com/guelfey/go.dbus"
+	"github.com/guelfey/go.dbus" // imported as dbus.
 
+	"github.com/sqp/godock/libs/appdbus" // Connection to cairo-dock.
 	"github.com/sqp/godock/libs/cdtype"
 	"github.com/sqp/godock/libs/config"
-	"github.com/sqp/godock/libs/dbus" // Connection to cairo-dock.
-	"github.com/sqp/godock/libs/log"  // Display info in terminal.
+	"github.com/sqp/godock/libs/log" // Display info in terminal.
 	"github.com/sqp/godock/libs/poller"
 
 	"bytes"
@@ -44,10 +44,10 @@ type AppletInstance interface {
 	SetEventReload(initFunc func(loadConf bool)) // Forward the init callback from interface to the reload event.
 
 	// Defined by CDDbus
-	ConnectToBus() (<-chan *apiDbus.Signal, error)
-	ConnectEvents(conn *apiDbus.Conn) error
+	ConnectToBus() (<-chan *dbus.Signal, error)
+	ConnectEvents(conn *dbus.Conn) error
 	SetArgs(args []string)
-	OnSignal(*apiDbus.Signal) (exit bool)
+	OnSignal(*dbus.Signal) (exit bool)
 }
 
 // StartApplet will prepare and launch a cairo-dock applet. If you have provided
@@ -134,7 +134,7 @@ type CDApplet struct {
 	poller    *poller.Poller                // Poller loop. Need to provide a way to use more than one.
 	Log       cdtype.Logger                 // Applet logger.
 
-	*dbus.CDDbus // Dbus connector.
+	*appdbus.CDDbus // Dbus connector.
 }
 
 // NewCDApplet creates a new applet manager with arguments received from command line.
@@ -168,7 +168,7 @@ func (cda *CDApplet) SetArgs(args []string) {
 		cda.ShareDataDir, e = os.Getwd() // standalone applet, using current dir.
 		cda.Log.Err(e, "get applet dir")
 	}
-	cda.CDDbus = dbus.New(args[2])
+	cda.CDDbus = appdbus.New(args[2])
 
 	cda.CDDbus.Log = cda.Log
 }

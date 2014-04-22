@@ -27,11 +27,13 @@ Then you can install the applets you need (you may have to restart your dock).
 	make link
 
 If you want to create a new applet or learn more about them, follow those links:
-	* Main Cairo-Dock Applet API, with everything to build an applet  http://godoc.org/github.com/sqp/godock/libs/dock
-	* DBus connector and methods to interact with the dock            http://godoc.org/github.com/sqp/godock/libs/dbus
-	* Common types and applet events for the dock API                 http://godoc.org/github.com/sqp/godock/libs/cdtype
-	* Applets code repository to see some real examples               http://github.com/sqp/godock/tree/master/services
-	* Applets data repository for their configuration files           http://github.com/sqp/godock/tree/master/applets
+	Main Cairo-Dock Applet API               http://godoc.org/github.com/sqp/godock/libs/dock
+	DBus methods to interact with the dock   http://godoc.org/github.com/sqp/godock/libs/appdbus
+	Common types and applet events           http://godoc.org/github.com/sqp/godock/libs/cdtype
+	Applets code repository (real examples)  http://github.com/sqp/godock/tree/master/services
+	Applets data repository (config files)   http://github.com/sqp/godock/tree/master/applets
+
+Current golang thread on cairo-dock: http://glx-dock.org/bg_topic.php?t=7638
 
 Cairo-Dock : http://glx-dock.org/
 

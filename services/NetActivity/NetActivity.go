@@ -7,11 +7,11 @@ Benefit from original version:
   A lot of upload sites don't require external dependencies.
 
 Dependencies:
-xsel or xclip for clipboard interaction.
+	xsel or xclip for clipboard interaction.
 
-curl command is needed for those backends:
-  Image: ImageShackUs, ImgurCom, UppixCom
-  File:  FreeFr
+	curl command is needed for those backends:
+	  Image: ImageShackUs, ImgurCom, UppixCom
+	  File:  FreeFr
 
 Compile:
   libcurl-dev  (I'm using libcurl4-gnutls-dev)
@@ -38,8 +38,8 @@ import (
 	"github.com/atotto/clipboard"
 
 	"github.com/sqp/godock/libs/cdtype"
-	"github.com/sqp/godock/libs/dock"     // Connection to cairo-dock.
-	"github.com/sqp/godock/libs/packages" // ByteSize.
+	"github.com/sqp/godock/libs/cdtype/bytesize"
+	"github.com/sqp/godock/libs/dock" // Connection to cairo-dock.
 	"github.com/sqp/godock/libs/sysinfo"
 	"github.com/sqp/godock/libs/ternary" // Ternary operators.
 	"github.com/sqp/godock/libs/uptoshare"
@@ -71,12 +71,14 @@ func NewApplet() dock.AppletInstance {
 
 	// Uptoshare actions
 	app.up = uptoshare.New()
+	app.up.Log = app.Log
 	app.up.SetPreCheck(func() { app.SetEmblem(app.FileLocation("icon"), EmblemAction) })
 	app.up.SetPostCheck(func() { app.SetEmblem("none", EmblemAction) })
 	app.up.SetOnResult(app.onUpload)
 
 	// Network activity actions.
 	app.service = sysinfo.NewIOActivity(app)
+	app.service.Log = app.Log
 	app.service.FormatIcon = sysinfo.FormatIcon
 	app.service.FormatLabel = formatLabel
 	app.service.GetData = sysinfo.GetNetActivity
@@ -207,5 +209,5 @@ func (app *Applet) onUpload(links uptoshare.Links) {
 // Label display callback. One line for each device. Format="eth0: ↓ 42 / ↑ 128".
 //
 func formatLabel(dev string, in, out uint64) string {
-	return fmt.Sprintf("%s: %s %s / %s %s", dev, "↓", packages.ByteSize(in), "↑", packages.ByteSize(out))
+	return fmt.Sprintf("%s: %s %s / %s %s", dev, "↓", bytesize.ByteSize(in), "↑", bytesize.ByteSize(out))
 }

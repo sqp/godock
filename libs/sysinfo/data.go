@@ -14,6 +14,7 @@ import (
 //
 //------------------------------------------------------[ DISK ACTIVITY DATA ]--
 
+// KernelDiskStats is the disk activity information source.
 const KernelDiskStats = "/proc/diskstats"
 
 const ( // Position of our data in the kernel file.
@@ -22,14 +23,14 @@ const ( // Position of our data in the kernel file.
 	diskOut  = 9
 )
 
-// Get activity information for configured disks.
+// GetDiskActivity returns  activity information for configured disks.
 //
 // Using Linux iostat : http://www.kernel.org/doc/Documentation/iostats.txt
 //
 func GetDiskActivity() ([]value, error) {
 	file, e := os.Open(KernelDiskStats)
 	if e != nil {
-		return nil, errors.New("Your kernel doesn't support diskstat. (2.5.70 or above required)")
+		return nil, errors.New("your kernel doesn't support diskstat. (2.5.70 or above required)")
 	}
 	defer file.Close()
 
@@ -41,7 +42,7 @@ func GetDiskActivity() ([]value, error) {
 		data := strings.Fields(line) // Useful data is only separated by a blank space.
 
 		if len(data) < diskOut || len(data[diskName]) == 0 {
-			return nil, errors.New("DiskActivity: failed parsing")
+			return nil, errors.New("disk activity: failed parsing")
 		}
 
 		last := data[diskName][len(data[diskName])-1]
@@ -65,6 +66,7 @@ func GetDiskActivity() ([]value, error) {
 //
 //-------------------------------------------------------[ NET ACTIVITY DATA ]--
 
+// KernelNetStats is the network activity information source.
 const KernelNetStats = "/proc/net/dev"
 
 const ( // Position of our data in the kernel file.
@@ -73,6 +75,8 @@ const ( // Position of our data in the kernel file.
 	netOut  = 9
 )
 
+// GetNetActivity returns activity information for configured network interfaces.
+//
 func GetNetActivity() ([]value, error) {
 	file, e := os.Open(KernelNetStats)
 	if e != nil {
@@ -90,7 +94,7 @@ func GetNetActivity() ([]value, error) {
 		data := strings.Fields(line) // Useful data is only separated by spaces.
 
 		if len(data) < netOut || len(data[netName]) == 0 {
-			return nil, errors.New("NetActivity: failed parsing")
+			return nil, errors.New("net activity: failed parsing")
 		}
 
 		if data[0] != "lo:" { // Drop loopback interface.

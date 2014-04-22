@@ -1,14 +1,15 @@
-// Package packages list and act on cairo-dock packages.
+// Package packages lists and act on cairo-dock packages.
 package packages
 
 import (
 	"github.com/sqp/godock/libs/log" // Display info in terminal.
 
 	"github.com/sqp/godock/libs/cdtype"
+	"github.com/sqp/godock/libs/cdtype/bytesize"
 	"github.com/sqp/godock/libs/config"
 
 	"errors"
-	"fmt"
+	// "fmt"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -242,7 +243,7 @@ func NewAppletPackageUser(dir, name string, typ string) *AppletPackage {
 		pack.DisplayedName = name
 		pack.Path = fullpath
 		pack.Type = TypeUser
-		pack.Size = float64(dirSize(fullpath)) / float64(MB)
+		pack.Size = float64(dirSize(fullpath)) / float64(bytesize.MB)
 
 		modif, e := ioutil.ReadFile(filepath.Join(fullpath, "last-modif"))
 		if !log.Err(e, "Get last-modif") {
@@ -316,7 +317,7 @@ func (pack *AppletPackage) FormatState() string {
 }
 
 func (pack *AppletPackage) FormatSize() string {
-	return ByteSize(pack.Size * float64(MB)).String()
+	return bytesize.ByteSize(pack.Size * float64(bytesize.MB)).String()
 }
 
 func (pack *AppletPackage) GetPreview(tmp string) (string, bool) {
@@ -527,60 +528,4 @@ func dirSize(location string) (size int64) {
 		}
 	}
 	return
-}
-
-//-----------------------------------------------------------[ BYTESIZE ]--
-
-type ByteSize float64
-
-const (
-	_           = iota // ignore first value by assigning to blank identifier
-	KB ByteSize = 1 << (10 * iota)
-	MB
-	GB
-	TB
-	PB
-	EB
-	ZB
-	YB
-)
-
-// Format value to an usable range (1-999) with related unit. Three digits are provided : 123 or 12.3 or 1.23.
-// No decimal under MB.
-//
-func (b ByteSize) String() string {
-	val, unit := b.unit()
-	digits := "2"
-	switch {
-	case b < MB:
-		digits = "0"
-	case val >= 100:
-		digits = "0"
-	case val >= 10:
-		digits = "1"
-	}
-
-	return fmt.Sprintf("%."+digits+"f %s", val, unit)
-}
-
-func (b ByteSize) unit() (ByteSize, string) {
-	switch {
-	case b >= YB:
-		return b / YB, "YB"
-	case b >= ZB:
-		return b / ZB, "ZB"
-	case b >= EB:
-		return b / EB, "EB"
-	case b >= PB:
-		return b / PB, "PB"
-	case b >= TB:
-		return b / TB, "TB"
-	case b >= GB:
-		return b / GB, "GB"
-	case b >= MB:
-		return b / MB, "MB"
-	case b >= KB:
-		return b / KB, "KB"
-	}
-	return b, "B"
 }

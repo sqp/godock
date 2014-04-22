@@ -46,7 +46,7 @@ Still to do;
 	* SubIcons events
 
 */
-package dbus
+package appdbus
 
 import (
 	"github.com/guelfey/go.dbus"
@@ -461,7 +461,7 @@ func (cda *CDDbus) GetAll() *cdtype.DockProperties {
 //
 //--------------------------------------------------------[ SUBICONS ACTIONS ]--
 
-// SubIcons is a connection to the ubdock icon.
+// SubIcon defines a connection to the subdock icon.
 //
 type SubIcon struct {
 	dbusSub *dbus.Object

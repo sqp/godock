@@ -239,9 +239,10 @@ applet.go
 
 
 More documentation
-	* DBus connector and methods to interact with the dock            http://godoc.org/github.com/sqp/godock/libs/dbus
-	* Common types and applet events for the dock API                 http://godoc.org/github.com/sqp/godock/libs/cdtype
-	* Simple console logging system                                   http://godoc.org/github.com/sqp/godock/libs/log
+	DBus methods to interact with the dock   http://godoc.org/github.com/sqp/godock/libs/appdbus
+	Common types and applet events           http://godoc.org/github.com/sqp/godock/libs/cdtype
+	Applets code repository (real examples)  http://github.com/sqp/godock/tree/master/services
+	Applets data repository (config files)   http://github.com/sqp/godock/tree/master/applets
 
 
 

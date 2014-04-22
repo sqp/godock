@@ -1,8 +1,8 @@
 package build
 
 import (
+	"github.com/sqp/godock/libs/appdbus"
 	"github.com/sqp/godock/libs/cdtype"
-	"github.com/sqp/godock/libs/dbus"
 	"github.com/sqp/godock/libs/log"
 	// "github.com/sqp/godock/libs/ternary"
 
@@ -53,7 +53,7 @@ func GetBuildType(name string) BuildType {
 		return Applets
 	}
 
-	pack := dbus.InfoApplet(name)
+	pack := appdbus.InfoApplet(name)
 	if pack != nil {
 		dir := pack.Dir()
 

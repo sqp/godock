@@ -1,7 +1,7 @@
 package Update
 
 import (
-	"github.com/sqp/godock/libs/dbus"
+	"github.com/sqp/godock/libs/appdbus"
 	"github.com/sqp/godock/libs/packages/build"
 	"github.com/sqp/godock/libs/ternary"
 
@@ -51,7 +51,7 @@ func (app *AppletUpdate) setBuildTarget() {
 			app.target.SetDir(app.conf.SourceDir)
 
 		case build.AppletCompiled:
-			pack := dbus.InfoApplet(target)
+			pack := appdbus.InfoApplet(target)
 			if pack != nil {
 				app.target = &build.BuilderCompiled{Module: target}
 				app.target.SetIcon(pack.Icon)
@@ -71,7 +71,7 @@ func (app *AppletUpdate) setBuildTarget() {
 		case build.AppletInternal:
 			// Ask icon of module to the Dock as we can't guess its dir and icon name.
 			icon := app.FileLocation("img", app.conf.IconMissing)
-			if mod := dbus.InfoApplet(strings.Replace(target, "-", " ", -1)); mod != nil {
+			if mod := appdbus.InfoApplet(strings.Replace(target, "-", " ", -1)); mod != nil {
 				icon = mod.Icon
 			}
 
@@ -110,8 +110,8 @@ func (app *AppletUpdate) restartTarget() {
 		if target == app.AppletName { // Don't eat the chicken, or you won't have any more eggs.
 			logger.ExecAsync("make", "reload")
 		} else {
-			dbus.AppletRemove(target + ".conf")
-			dbus.AppletAdd(target)
+			appdbus.AppletRemove(target + ".conf")
+			appdbus.AppletAdd(target)
 			// app.ActivateModule(target, false)
 			// app.ActivateModule(target, true)
 		}

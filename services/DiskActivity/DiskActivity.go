@@ -3,8 +3,8 @@ package DiskActivity
 
 import (
 	"github.com/sqp/godock/libs/cdtype"
-	"github.com/sqp/godock/libs/dock"     // Connection to cairo-dock.
-	"github.com/sqp/godock/libs/packages" // ByteSize.
+	"github.com/sqp/godock/libs/cdtype/bytesize"
+	"github.com/sqp/godock/libs/dock" // Connection to cairo-dock.
 	"github.com/sqp/godock/libs/sysinfo"
 	"github.com/sqp/godock/libs/ternary" // Ternary operators.
 
@@ -28,6 +28,7 @@ func NewApplet() dock.AppletInstance {
 	app := &Applet{CDApplet: dock.NewCDApplet()} // Icon controler and interface to cairo-dock.
 
 	app.service = sysinfo.NewIOActivity(app)
+	app.service.Log = app.Log
 	app.service.FormatIcon = formatIcon
 	app.service.FormatLabel = formatLabel
 	app.service.GetData = sysinfo.GetDiskActivity
@@ -96,5 +97,5 @@ func formatIcon(dev string, in, out uint64) string {
 // Label display callback. One line for each device. Format="eth0: ↓ 42 / ↑ 128".
 //
 func formatLabel(dev string, in, out uint64) string {
-	return fmt.Sprintf("%s: %s %s / %s %s", dev, "r", packages.ByteSize(in*BlockSize), "w", packages.ByteSize(out*BlockSize))
+	return fmt.Sprintf("%s: %s %s / %s %s", dev, "r", bytesize.ByteSize(in*BlockSize), "w", bytesize.ByteSize(out*BlockSize))
 }

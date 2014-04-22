@@ -11,7 +11,7 @@ import (
 
 	"github.com/robfig/config" // Config parser.
 
-	"github.com/sqp/godock/libs/log" // Display info in terminal.
+	"github.com/sqp/godock/libs/cdtype"
 
 	"mime"
 	"path"
@@ -77,7 +77,7 @@ var (
 	}
 
 	backendVideo = map[string]CallUpload{
-		"Codepad.org": VideoBinOrg,
+		"VideoBin.org": VideoBinOrg,
 	}
 
 	backendFile = map[string]CallUpload{
@@ -107,6 +107,9 @@ type Uploader struct {
 	PostAnonymous bool
 	FileForAll    bool
 
+	// Log provides a common logger for the uptoshare service.
+	Log cdtype.Logger
+
 	queue   chan string
 	active  bool
 	upFile  CallUpload
@@ -129,8 +132,8 @@ func New() *Uploader {
 	return &Uploader{
 		queue: make(chan string, 10),
 
-		upFile:  DlFreeFr,
-		upVideo: VideoBinOrg,
+		// upFile:  DlFreeFr,
+		// upVideo: VideoBinOrg,
 	}
 }
 
@@ -224,11 +227,11 @@ func (up *Uploader) trimHistory() {
 }
 
 //
-func (up *Uploader) loadHistory() {
+func (up *Uploader) loadHistory() error {
 	up.history = nil
 	c, e := config.Read(up.historyFile, config.DEFAULT_COMMENT, config.ALTERNATIVE_SEPARATOR, false, false)
-	if log.Err(e, "load uptoshare history") {
-		return
+	if up.Log.Err(e, "load uptoshare history") {
+		return e
 	}
 
 	for _, group := range c.Sections() {
@@ -243,6 +246,7 @@ func (up *Uploader) loadHistory() {
 			}
 		}
 	}
+	return nil
 }
 
 //
@@ -259,7 +263,7 @@ func (up *Uploader) saveHistory() {
 			conf.AddOption(group, key, link)
 		}
 	}
-	log.Err(conf.WriteFile(up.historyFile, 0644, ""), "save uptoshare history")
+	up.Log.Err(conf.WriteFile(up.historyFile, 0644, ""), "save uptoshare history")
 }
 
 //
@@ -324,7 +328,7 @@ func (up *Uploader) uploadOne(data string) Links {
 		// 	cd_debug ("we'll consider this as an archive.");
 	}
 
-	// log.Info("file", fileType, filePath)
+	// up.Log.Info("file", fileType, filePath)
 	var call func(string, string, bool, int) Links
 
 	if up.FileForAll { // Forced upload as file.
@@ -358,27 +362,27 @@ func (up *Uploader) uploadOne(data string) Links {
 
 		case FileTypeVideo:
 			call = up.upVideo
-
-		default:
-			log.Info("nothing to do with", data)
 		}
 	}
 
-	if call != nil {
-		list := call(filePath, "", up.PostAnonymous, up.LimitRate)
-		if len(list) > 0 {
-			list["file"] = filePath
-			list["type"] = strconv.Itoa(int(fileType))
-			list["date"] = time.Now().Format("20060102 15:04:05") // Time isn't used for now. Just display something readable. "YMD H:M:S"
-			return list
-		}
+	if call == nil {
+		return linkWarn("nothing to do with " + filePath)
 	}
-	return linkWarn("upload: nothing returned by the backend for " + filePath)
+
+	list := call(filePath, "", up.PostAnonymous, up.LimitRate)
+	if len(list) == 0 {
+		return linkWarn("upload: nothing returned for " + filePath)
+	}
+
+	list["file"] = filePath
+	list["type"] = strconv.Itoa(int(fileType))
+	list["date"] = time.Now().Format("20060102 15:04:05") // Time isn't used for now. Just display something readable. "YMD H:M:S"
+	return list
 }
 
 func getFileType(filePath string) FileType {
 	mimetype := mime.TypeByExtension(path.Ext(filePath))
-	// log.Info(mimetype)
+	// Log.Info(mimetype)
 	switch {
 	case strings.HasPrefix(mimetype, "video"):
 		return FileTypeVideo
@@ -389,7 +393,7 @@ func getFileType(filePath string) FileType {
 	case strings.HasPrefix(mimetype, "text"):
 		return FileTypeText
 	}
-	log.Info("no valid type", mimetype, filePath)
+	// Log.Info("no valid type", mimetype, filePath)
 	return FileTypeUnknown
 }
 
@@ -445,7 +449,19 @@ func curlExec(url string, limitRate int, fileref, filepath string, opts []string
 		args = append(args, "-F", opt)
 	}
 
-	body, e := exec.Command("curl", args...).Output()
+	return curlExecArgs(args...)
+
+	// body, e := exec.Command("curl", args...).Output()
+
+	// if len(body) == 0 {
+	// 	return "", errors.New("curl output empty")
+	// }
+
+	// return string(body), e
+}
+
+func curlExecArgs(args ...string) (string, error) {
+	body, e := exec.Command("curl", args...).CombinedOutput()
 
 	if len(body) == 0 {
 		return "", errors.New("curl output empty")
@@ -488,7 +504,7 @@ func curler(url, fileref, filepath string, opt map[string]string) *curl.CURL {
 	// })
 
 	// easy.Setopt(curl.OPT_WRITEFUNCTION, func(ptr []byte, unk interface{}) bool {
-	// 	log.Info("", string(ptr), unk)
+	// 	Log.Info("", string(ptr), unk)
 	// 	return true
 	// })
 }
@@ -522,13 +538,13 @@ func writeNull(ptr []byte, unk interface{}) bool {
 func postSimple(url string, values url.Values) (string, error) {
 	r, e := http.PostForm(url, values)
 	if e != nil {
-		// log.Info("error posting %s", e)
+		// Log.Info("error posting %s", e)
 		return "", e
 	}
 	defer r.Body.Close()
 	body, er := ioutil.ReadAll(r.Body)
 	if er != nil {
-		// log.Info("error reading %s", er)
+		// Log.Info("error reading %s", er)
 		return "", er
 	}
 

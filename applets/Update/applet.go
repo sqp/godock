@@ -1,4 +1,4 @@
-/* Update is an applet for Cairo-Dock to check for its new versions and do update.
+/* Update and build your dock from sources with this applet for the Cairo-Dock project.
 
 Install go and get go environment: you need a valid $GOPATH var and directory.
 

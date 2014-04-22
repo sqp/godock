@@ -3,8 +3,6 @@
 package main
 
 import (
-	// "github.com/conformal/gotk3/gdk"
-	// "github.com/conformal/gotk3/glib"
 	"github.com/conformal/gotk3/gtk"
 
 	"github.com/sqp/vte/vte.gtk3"
@@ -12,7 +10,6 @@ import (
 	"github.com/sqp/godock/libs/log" // Display info in terminal.
 	"github.com/sqp/godock/libs/srvdbus"
 	"github.com/sqp/godock/services/allapps"
-	// "github.com/sqp/godock/widgets/common" // Connection to cairo-dock.
 
 	"strings"
 )
@@ -67,11 +64,3 @@ func onDestroy() {
 	log.Logs.SetTerminal(nil)
 	window = nil
 }
-
-// func termClicked(a *glib.Object, b *gdk.Event) {
-// 	logger.Info("clicked")
-// }
-
-// gboolean            user_function                      (GtkWidget *widget,
-//                                                         GdkEvent  *event,
-//                                                         gpointer   user_data)

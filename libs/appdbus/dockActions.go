@@ -1,4 +1,4 @@
-package dbus
+package appdbus
 
 import (
 	"github.com/guelfey/go.dbus"
@@ -29,7 +29,7 @@ func dockCall(method string, args ...interface{}) error {
 
 //------------------------------------------------------------[ DOCK ACTIONS ]--
 
-// Add an item to the Dock.
+// DockAdd adds an item to the Dock.
 //
 //   Launcher from desktop file:      "type":"Launcher", "config-file":"application://vlc.desktop"
 //   Launcher custom:                 "type":"Launcher", "name":"Top 10", "command":"xterm -e top", "icon":"gtk-home.png"
@@ -47,7 +47,7 @@ func DockAdd(args map[string]interface{}) error {
 	return dockCall("Add", toMapVariant(args))
 }
 
-// Remove an item from the Dock.
+// DockRemove removes an item from the Dock.
 //
 //   Launcher                                  "type=Launcher & class=vlc"
 //   Second main dock (and all its content)    "type=Dock & name=_MainDock_-2"
@@ -63,30 +63,32 @@ func DockRemove(arg string) error {
 // 	// return cda.launch(base, "ActivateModule", interface{}(module), interface{}(state))
 // }
 
-// Reload the current theme of the Dock, as if you had quitted and restarted the dock.
+// DockReboot reload the current theme of the Dock, as if you had quitted and restarted the dock.
 //
 func DockReboot() error {
 	return dockCall("Reboot")
 }
 
-// Close the Dock program.
+// DockQuit closes the Dock program.
 //
 func DockQuit() error {
 	return dockCall("Quit")
 }
 
-// Set Dock visibility: 0 = HIDE, 1 = SHOW, 2 = TOGGLE.
+// DockShow sets the dock visibility: 0 = HIDE, 1 = SHOW, 2 = TOGGLE.
 // If you have several docks, it will show/hide all of them.
 //
 func DockShow(mode int32) error {
 	return dockCall("ShowDock", mode)
 }
 
+// ShowDesklet TODO: need to complete this part.
+//
 func ShowDesklet(mode int32) error {
 	return dockCall("ShowDeslet", mode)
 }
 
-// Reload icon settings from disk.
+// IconReload reloads an icon settings from disk.
 //
 //   "type=Module & name=weather"
 //   "config-file=full_path_to_config_or_desktop_file"
@@ -95,7 +97,7 @@ func IconReload(arg string) error {
 	return dockCall("Reload", arg)
 }
 
-// Get properties of different parts of the dock.
+// DockProperties gets properties of different parts of the dock.
 // API may change for this function. Need to figure out the best way to return the data.
 //
 //   "type=Launcher & class=firefox"
@@ -117,19 +119,19 @@ func DockProperties(arg string) (vars []map[string]dbus.Variant) {
 
 //--------------------------------------------------[ GET SPECIAL PROPERTIES ]--
 
-// AppletAdd add an applet instance referenced by its name.
+// AppletAdd adds an applet instance referenced by its name.
 //
 func AppletAdd(name string) error {
 	return DockAdd(map[string]interface{}{"type": "Module", "module": name})
 }
 
-// AppletRemove remove an applet instance referenced by its config file.
+// AppletRemove removes an applet instance referenced by its config file.
 //
 func AppletRemove(configFile string) error {
 	return DockRemove("type=Module-Instance & config-file=" + configFile)
 }
 
-// AppletInstances ask the dock details about an applet.
+// AppletInstances asks the dock details about an applet.
 //
 func AppletInstances(name string) []string {
 	query := "type=Module & name=" + strings.Replace(name, "-", " ", -1)
@@ -159,6 +161,7 @@ func AppletInstances(name string) []string {
 
 //--------------------------------------------------[ GET SPECIAL PROPERTIES ]--
 
+// Dock icon types.
 const (
 	IconTypeApplet    = "Applet"
 	IconTypeLauncher  = "Launcher"
@@ -166,7 +169,7 @@ const (
 	IconTypeSubDock   = "Stack-icon"
 )
 
-// CDIcon define a dock icon properties.
+// CDIcon defines a dock icon properties.
 //
 type CDIcon struct {
 	// DisplayedName string      // name of the package
@@ -187,6 +190,8 @@ type CDIcon struct {
 	Module     string
 }
 
+// FormatName return the user readable name for the applet.
+//
 func (icon *CDIcon) FormatName() (name string) {
 	switch icon.Type {
 	case IconTypeApplet:
@@ -200,7 +205,7 @@ func (icon *CDIcon) FormatName() (name string) {
 	return
 }
 
-// ListIcons ask the dock the list of active icons.
+// ListIcons asks the dock the list of active icons.
 //
 // TODO: add argument for advanced queries.
 // would be cool to have argument list.
@@ -291,6 +296,8 @@ func ListIcons() (list []*CDIcon) {
 // 	return
 // }
 
+// InfoApplet asks the dock all informations about an applet.
+//
 func InfoApplet(name string) *packages.AppletPackage {
 	list := ListApplets(name)
 	if app, ok := list[name]; ok {
@@ -299,6 +306,7 @@ func InfoApplet(name string) *packages.AppletPackage {
 	return nil
 }
 
+// ListApplets asks the dock informations about all known applets.
 // Optional name to query. Only one can be provided.
 //
 func ListApplets(name ...string) map[string]*packages.AppletPackage {

@@ -1,4 +1,4 @@
-// package ternary operators!
+// Package ternary operators!
 package ternary
 
 // Int is a ternary operator for int.

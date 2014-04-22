@@ -1,16 +1,16 @@
+// Package srvdbus provides a Dbus service (and client) for running dock applets.
 package srvdbus
 
 import (
-	apiDbus "github.com/guelfey/go.dbus"
+	"github.com/guelfey/go.dbus" // imported as dbus.
 	"github.com/guelfey/go.dbus/introspect"
 
+	"github.com/sqp/godock/libs/appdbus"
 	"github.com/sqp/godock/libs/cdtype"
-	"github.com/sqp/godock/libs/dbus"
 	"github.com/sqp/godock/libs/dock" // Connection to cairo-dock.
 	"github.com/sqp/godock/libs/log"  // Display info in terminal.
 
 	"errors"
-	// "os/exec"
 	"strings"
 	"time"
 )
@@ -47,25 +47,27 @@ const intro = `
 		</method>
 	</interface>` + introspect.IntrospectDataString + `</node> `
 
+// Log provides a common logger for the Dbus service. It must be set to use the server.
 var Log cdtype.Logger
 
+// LogWindow provides an optional call to open the log window.
 var LogWindow func()
 
 // Loader is a multi applet manager.
 //
 type Loader struct {
-	conn     *apiDbus.Conn // Dbus connection.
+	conn     *dbus.Conn // Dbus connection.
 	plopers  plopers
 	apps     map[string]dock.AppletInstance        // Active applets.    Key = applet name.
 	services map[string]func() dock.AppletInstance // Available applets. Key = applet name.
-	c        <-chan *apiDbus.Signal                // Dbus incoming signals channel.
+	c        <-chan *dbus.Signal                   // Dbus incoming signals channel.
 	restart  chan string                           // Poller restart request channel.
 }
 
 // NewLoader creates a loader with the given list of applets services.
 //
 func NewLoader(services map[string]func() dock.AppletInstance) *Loader {
-	conn, c, e := dbus.SessionBus()
+	conn, c, e := appdbus.SessionBus()
 	if Log.Err(e, "DBus Connect") {
 		return nil
 	}
@@ -87,12 +89,12 @@ func NewLoader(services map[string]func() dock.AppletInstance) *Loader {
 // no loop will be started, the function just return with the error if any.
 //
 func (load *Loader) StartServer() (bool, error) {
-	reply, e := load.conn.RequestName(localPath, apiDbus.NameFlagDoNotQueue)
+	reply, e := load.conn.RequestName(localPath, dbus.NameFlagDoNotQueue)
 	if e != nil {
 		return false, e
 	}
 
-	if reply != apiDbus.RequestNameReplyPrimaryOwner {
+	if reply != dbus.RequestNameReplyPrimaryOwner {
 		return false, nil
 	}
 
@@ -164,7 +166,7 @@ func (load *Loader) StopApplet(name string) {
 
 // Forward the Dbus signal to local manager or applet
 //
-func (load *Loader) dispatchDbusSignal(s *apiDbus.Signal) bool {
+func (load *Loader) dispatchDbusSignal(s *dbus.Signal) bool {
 	appname := pathToName(string(s.Path))
 	app, ok := load.apps[appname]
 
@@ -220,7 +222,7 @@ func (load *Loader) GetApplet(name string) dock.AppletInstance {
 // RestartDock is a full restart of the dock, respawned in the same location if
 // it was managed.
 //
-func (load *Loader) RestartDock() *apiDbus.Error {
+func (load *Loader) RestartDock() *dbus.Error {
 	isrestart = true
 	Log.Err(RestartDock(), "restart dock")
 	isrestart = false
@@ -229,14 +231,14 @@ func (load *Loader) RestartDock() *apiDbus.Error {
 
 // StopDock close the dock.
 //
-func (load *Loader) StopDock() *apiDbus.Error {
+func (load *Loader) StopDock() *dbus.Error {
 	StopDock()
 	return nil
 }
 
 // ListServices displays active services.
 //
-func (load *Loader) ListServices() *apiDbus.Error {
+func (load *Loader) ListServices() *dbus.Error {
 	println("Cairo-Dock applets services: active ", len(load.apps), "/", len(load.services))
 	for name := range load.services {
 		if _, ok := load.apps[name]; ok {
@@ -251,7 +253,7 @@ func (load *Loader) ListServices() *apiDbus.Error {
 
 // StartApplet creates a new applet instance with args from command line.
 //
-func (load *Loader) StartApplet(a, b, c, d, e, f, g, h string) *apiDbus.Error {
+func (load *Loader) StartApplet(a, b, c, d, e, f, g, h string) *dbus.Error {
 	name := pathToName(c)
 	Log.Info("StartApplet", name)
 
@@ -291,7 +293,7 @@ type uploader interface {
 
 // Upload send data (raw text or file) to a one-click hosting service.
 //
-func (load *Loader) Upload(data string) *apiDbus.Error {
+func (load *Loader) Upload(data string) *dbus.Error {
 	if uncast := load.GetApplet("NetActivity"); uncast != nil {
 		net := uncast.(uploader)
 		net.Upload(data)
@@ -305,7 +307,7 @@ type debuger interface {
 
 // Debug change the debug state of an active applet.
 //
-func (load *Loader) Debug(applet string, state bool) *apiDbus.Error {
+func (load *Loader) Debug(applet string, state bool) *dbus.Error {
 	if uncast := load.GetApplet(applet); uncast != nil {
 		app := uncast.(debuger)
 		app.SetDebug(state)
@@ -315,7 +317,7 @@ func (load *Loader) Debug(applet string, state bool) *apiDbus.Error {
 
 // LogWindow opens the log terminal.
 //
-func (load *Loader) LogWindow() *apiDbus.Error {
+func (load *Loader) LogWindow() *dbus.Error {
 	if LogWindow != nil {
 		LogWindow()
 	} else {
@@ -353,7 +355,7 @@ func StartDock() error {
 // StopDock close the dock.
 //
 func StopDock() error {
-	return dbus.DockQuit()
+	return appdbus.DockQuit()
 }
 
 // RestartDock close and relaunch the dock.
@@ -371,25 +373,25 @@ func RestartDock() error {
 // Client is a Dbus client to connect to the internal Dbus server.
 //
 type Client struct {
-	apiDbus.Object
+	dbus.Object
 }
 
 // GetServer return a connection to the active instance of the internal Dbus
 // service if any. Return nil, nil if none found.
 //
 func GetServer() (*Client, error) {
-	conn, ec := apiDbus.SessionBus()
+	conn, ec := dbus.SessionBus()
 	if ec != nil {
 		return nil, ec
 	}
 
-	reply, e := conn.RequestName(localPath, apiDbus.NameFlagDoNotQueue)
+	reply, e := conn.RequestName(localPath, dbus.NameFlagDoNotQueue)
 	if e != nil {
 		return nil, e
 	}
 	conn.ReleaseName(localPath)
 
-	if reply != apiDbus.RequestNameReplyPrimaryOwner { // Found active instance, return client.
+	if reply != dbus.RequestNameReplyPrimaryOwner { // Found active instance, return client.
 		return &Client{*conn.Object(localPath, grr)}, nil
 	}
 
@@ -402,7 +404,7 @@ func (cl *Client) call(method string, args ...interface{}) error {
 }
 
 // func (cl *Client) Go(method string, args ...interface{}) error {
-// 	return cl.Object.Go(localPath+"."+method, apiDbus.FlagNoReplyExpected, nil, args...).Err
+// 	return cl.Object.Go(localPath+"."+method, dbus.FlagNoReplyExpected, nil, args...).Err
 // }
 
 // ListServices send action to displays active services.

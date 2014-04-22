@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/sqp/godock/libs/dbus"
+	"github.com/sqp/godock/libs/appdbus"
 	"github.com/sqp/godock/libs/srvdbus"
 )
 
@@ -28,8 +28,8 @@ func runRestart(cmd *Command, args []string) {
 	}
 
 	for _, name := range args { // Restart applet(s).
-		logger.Err(dbus.AppletRemove(name+".conf"), "AppletRemove")
-		logger.Err(dbus.AppletAdd(name), "AppletAdd")
+		logger.Err(appdbus.AppletRemove(name+".conf"), "AppletRemove")
+		logger.Err(appdbus.AppletAdd(name), "AppletAdd")
 	}
 }
 

@@ -66,17 +66,18 @@ func Green(msg string) string { return Colored(msg, FgGreen) }
 // Red formatting of text.
 func Red(msg string) string { return Colored(msg, FgRed) }
 
-func Colored(msg, color string) string { // Colored formatting of text.
+// Colored returns a colored message if any.
+func Colored(msg, color string) string {
 	if msg == "" {
 		return ""
 	}
 	return color + msg + Reset
 }
 
-// Parenthesis added around text if any.
+// Parenthesis returns parenthesis added around text if any.
 func Parenthesis(msg string) string { return addAround("(", msg, ")") }
 
-// Brackets added around text if any.
+// Bracket returns brackets added around text if any.
 func Bracket(msg string) string { return addAround("[", msg, "]") }
 
 func addAround(before, msg, after string) string {
@@ -390,6 +391,7 @@ func (hist *LogHistory) removeOld() int {
 var std = log.New(os.Stdout, "", log.Ltime) // log.Ldate
 var debug bool
 
+// Logs provides a default history logger.
 var Logs = &LogHistory{}
 
 // SetPrefix set the prefix of the logger display.

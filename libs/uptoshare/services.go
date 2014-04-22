@@ -3,12 +3,10 @@ package uptoshare
 import (
 	"github.com/andelf/go-curl" // imported as curl
 
-	"github.com/sqp/godock/libs/log" // Display info in terminal.
 	"github.com/sqp/godock/libs/ternary"
 
 	"io/ioutil"
 	"net/url"
-	"os/exec"
 	"path"
 	"strings"
 )
@@ -329,19 +327,19 @@ func VideoBinOrg(filepath, cLocalDir string, bAnonymous bool, limitRate int) Lin
 //
 //-----------------------------------------------------------------[ FREE.FR ]--
 
-const FreeFrUrl = "ftp://dl.free.fr/"
+const DlFreeFrUrl = "ftp://dl.free.fr/"
 
 // Use curl command for now as it allow the CombinedOutput to get the result from error pipe.
 //
 func DlFreeFr(filepath, cLocalDir string, bAnonymous bool, limitRate int) Links {
-	body, e := exec.Command("curl", "-q", "-v", "-T", filepath, "-u", "cairo@dock.org:toto", FreeFrUrl).CombinedOutput()
-	if e != nil || len(body) == 0 {
+	body, e := curlExecArgs("-q", "-v", "-T", filepath, "-u", "cairo@dock.org:toto", DlFreeFrUrl)
+	if e != nil {
 		return linkErr(e, "FreeFr")
 	}
 
 	list := NewLinks()
-	list.Add("link", findLink(string(body), "http://dl.free.fr/", "\r\n"))
-	list.Add("del", findLink(string(body), "http://dl.free.fr/rm.pl?", "\r\n"))
+	list.Add("link", findLink(body, "http://dl.free.fr/", "\r\n"))
+	list.Add("del", findLink(body, "http://dl.free.fr/rm.pl?", "\r\n"))
 	return list
 }
 
@@ -363,7 +361,7 @@ func FreeFrCurl(filepath, cLocalDir string, bAnonymous bool, limitRate int) Link
 	curly := curl.EasyInit()
 	defer curly.Cleanup()
 
-	curly.Setopt(curl.OPT_URL, FreeFrUrl+path.Base(filepath))
+	curly.Setopt(curl.OPT_URL, DlFreeFrUrl+path.Base(filepath))
 
 	curly.Setopt(curl.OPT_VERBOSE, true)
 
@@ -375,7 +373,7 @@ func FreeFrCurl(filepath, cLocalDir string, bAnonymous bool, limitRate int) Link
 
 	var current int
 	curly.Setopt(curl.OPT_READFUNCTION, func(ptr []byte, _ interface{}) int {
-		log.Info("read")
+		// log.Info("read")
 		size := ternary.Min(FreeFrBlock, len(data)-current)
 		sent := copy(ptr, data[current:current+size]) // WARNING: never use append()
 		current += sent
@@ -391,7 +389,7 @@ func FreeFrCurl(filepath, cLocalDir string, bAnonymous bool, limitRate int) Link
 		println("ERROR: ", err.Error())
 	}
 
-	a, e := curly.Getinfo(curl.INFO_FTP_ENTRY_PATH)
-	log.Info("out", a, e)
+	// a, e := curly.Getinfo(curl.INFO_FTP_ENTRY_PATH)
+	// log.Info("out", a, e)
 	return nil
 }
