@@ -5,7 +5,7 @@
 package main
 
 import (
-	"github.com/sqp/godock/libs/log"
+	"github.com/sqp/godock/libs/log/color"
 	"github.com/sqp/godock/libs/packages"
 	"github.com/sqp/godock/libs/term"
 
@@ -120,10 +120,10 @@ func printConsole(list packages.AppletPackages) {
 	for _, pack := range list {
 		line := lf.Line()
 		if pack.Type == packages.TypeUser {
-			line.Colored(0, log.FgGreen, " * ")
+			line.Colored(0, color.FgGreen, " * ")
 		}
 		if pack.Type == packages.TypeInDev {
-			line.Colored(0, log.FgYellow, " * ")
+			line.Colored(0, color.FgYellow, " * ")
 		}
 
 		line.Set(1, pack.DisplayedName)

@@ -5,16 +5,21 @@ import (
 )
 
 const (
+	// Position of the "new version" emblem.
 	EmblemVersion = cdtype.EmblemBottomLeft
-	EmblemTarget  = cdtype.EmblemTopLeft
-	// EmblemAction  = cdtype.EmblemTopRight
+
+	// Position of the "current target" emblem.
+	EmblemTarget = cdtype.EmblemTopLeft
 )
 
 const defaultVersionPollingTimer = 60
 
 var (
+	// Launchpad url that doesn't require auth to download.
 	LocationLaunchpad = "https+urllib://launchpad.net/"
-	CmdBzr            = "bzr" // Default command to get sources versions and upgrade.
+
+	// Default command to get dock sources versions and upgrade.
+	CmdBzr = "bzr"
 )
 
 //

@@ -8,7 +8,7 @@ import (
 	"github.com/sqp/godock/libs/appdbus"
 	"github.com/sqp/godock/libs/cdtype"
 	"github.com/sqp/godock/libs/dock" // Connection to cairo-dock.
-	"github.com/sqp/godock/libs/log"  // Display info in terminal.
+	"github.com/sqp/godock/libs/log/color"
 
 	"errors"
 	"strings"
@@ -242,7 +242,7 @@ func (load *Loader) ListServices() *dbus.Error {
 	println("Cairo-Dock applets services: active ", len(load.apps), "/", len(load.services))
 	for name := range load.services {
 		if _, ok := load.apps[name]; ok {
-			print(log.Colored(" * ", log.FgGreen))
+			print(color.Green(" * "))
 		} else {
 			print("   ")
 		}

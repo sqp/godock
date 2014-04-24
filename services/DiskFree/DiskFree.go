@@ -279,7 +279,7 @@ func (disks *diskFree) appendText(text *string, value float64, fs *fileSystem) {
 		*text += strconv.FormatFloat(value, 'f', 0, 64) + "%"
 	} else {
 		*text += "N/A"
-		// return
+		return
 	}
 
 	// disks.log.Debug(curText + " : " + fs.info.DirName)

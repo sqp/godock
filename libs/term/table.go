@@ -2,7 +2,7 @@
 package term
 
 import (
-	"github.com/sqp/godock/libs/log"
+	colors "github.com/sqp/godock/libs/log/color"
 
 	"fmt"
 	"strconv"
@@ -11,10 +11,10 @@ import (
 //
 //----------------------------------------------------------[ TABLE FORMATER ]--
 
-var tableBorder = [][]string{
-	{"┌", "┬", "┐"},
-	{"├", "┼", "┤"},
-	{"└", "┴", "┘"},
+var tableBorder = []string{
+	"┌", "┬", "┐",
+	"├", "┼", "┤",
+	"└", "┴", "┘",
 }
 
 const (
@@ -89,13 +89,13 @@ func (lf *TableFormater) rowSize(row int) int {
 }
 
 func (lf *TableFormater) printSeparator(pos int, withTitle bool) {
-	out := tableBorder[pos][0]
+	out := tableBorder[3*pos]
 	first := true
 	for id, col := range lf.cols {
 		if first {
 			first = false
 		} else {
-			out += tableBorder[pos][1]
+			out += tableBorder[3*pos+1]
 		}
 
 		if withTitle {
@@ -109,7 +109,7 @@ func (lf *TableFormater) printSeparator(pos int, withTitle bool) {
 			}
 		}
 	}
-	fmt.Println(out + tableBorder[pos][2])
+	fmt.Println(out + tableBorder[3*pos+2])
 }
 
 //
@@ -165,7 +165,7 @@ func (line *Line) Set(row int, text string) *Line {
 func (line Line) Colored(row int, color, text string) {
 	origsize := len(text)
 	line.testmax(row, origsize) // Size of text without formating.
-	line.content[row] = log.Colored(text, color)
+	line.content[row] = colors.Colored(text, color)
 	line.colorDelta[row] += len(line.content[row]) - origsize
 }
 

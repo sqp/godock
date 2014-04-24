@@ -38,6 +38,7 @@ package log
 
 import (
 	"github.com/sqp/godock/libs/cdtype"
+	"github.com/sqp/godock/libs/log/color"
 
 	"log"
 	"os"
@@ -54,26 +55,6 @@ import (
 //
 //-----------------------------------------------------------[ TEXT WRAPPERS ]--
 
-// Yellow formatting of text.
-func Yellow(msg string) string { return Colored(msg, FgYellow) }
-
-// Magenta formatting of text.
-func Magenta(msg string) string { return Colored(msg, FgMagenta) }
-
-// Green formatting of text.
-func Green(msg string) string { return Colored(msg, FgGreen) }
-
-// Red formatting of text.
-func Red(msg string) string { return Colored(msg, FgRed) }
-
-// Colored returns a colored message if any.
-func Colored(msg, color string) string {
-	if msg == "" {
-		return ""
-	}
-	return color + msg + Reset
-}
-
 // Parenthesis returns parenthesis added around text if any.
 func Parenthesis(msg string) string { return addAround("(", msg, ")") }
 
@@ -89,8 +70,8 @@ func addAround(before, msg, after string) string {
 
 // Format returns a formatted message in the given color with endline.
 //
-func Format(color, sender, msg string, more ...interface{}) string {
-	list := append([]interface{}{time.Now().Format("15:04:05"), Yellow(sender), Bracket(Colored(msg, color))}, more...)
+func Format(col, sender, msg string, more ...interface{}) string {
+	list := append([]interface{}{time.Now().Format("15:04:05"), color.Yellow(sender), Bracket(color.Colored(msg, col))}, more...)
 	return fmt.Sprintln(list...)
 }
 
@@ -98,7 +79,7 @@ func Format(color, sender, msg string, more ...interface{}) string {
 //
 func FormatErr(e string, sender string, msg ...interface{}) string {
 	str := fmt.Sprintln(msg...) // adds an undesired \n at the end, removed next line.
-	return Format(FgRed, sender, "error", str[:len(str)-1], ":", e)
+	return Format(color.FgRed, sender, "error", str[:len(str)-1], ":", e)
 }
 
 //
@@ -147,7 +128,7 @@ func (l *Log) Debug(msg string, more ...interface{}) {
 			l.LogOut.Debug(l.name, msg, more...)
 		} else {
 			println("manual debug", msg)
-			l.Render(FgMagenta, msg, more...)
+			l.Render(color.FgMagenta, msg, more...)
 		}
 
 		// l.Render(FgMagenta, msg, more...)
@@ -160,7 +141,7 @@ func (l *Log) Info(msg string, more ...interface{}) {
 	if l.LogOut != nil {
 		l.LogOut.Info(l.name, msg, more...)
 	} else {
-		l.Render(FgGreen, msg, more...)
+		l.Render(color.FgGreen, msg, more...)
 	}
 }
 
@@ -183,7 +164,7 @@ func (l *Log) Warn(e error, msg ...string) (fail bool) {
 // NewWarn log a new warning.
 //
 func (l *Log) NewWarn(e string, msg ...string) {
-	l.Render(FgYellow, "warning", msg, ":", e)
+	l.Render(color.FgYellow, "warning", msg, ":", e)
 }
 
 // Err test and log the error as Error type. Return true if an error was found.
@@ -318,7 +299,7 @@ func (hist *LogHistory) Raw(sender, msg string) {
 //
 func (hist *LogHistory) Debug(sender, msg string, more ...interface{}) {
 	hist.newMsg(LogMsg{
-		Text:   Format(FgMagenta, sender, msg, more...),
+		Text:   Format(color.FgMagenta, sender, msg, more...),
 		Sender: sender})
 }
 
@@ -326,7 +307,7 @@ func (hist *LogHistory) Debug(sender, msg string, more ...interface{}) {
 //
 func (hist *LogHistory) Info(sender, msg string, more ...interface{}) {
 	hist.newMsg(LogMsg{
-		Text:   Format(FgGreen, sender, msg, more...),
+		Text:   Format(color.FgGreen, sender, msg, more...),
 		Sender: sender})
 }
 
@@ -397,8 +378,8 @@ var Logs = &LogHistory{}
 // SetPrefix set the prefix of the logger display.
 //
 func SetPrefix(pre string) {
-	std.SetPrefix(Yellow("[" + pre + "] "))
-	log.SetPrefix(Yellow("[" + pre + "] "))
+	std.SetPrefix(color.Yellow("[" + pre + "] "))
+	log.SetPrefix(color.Yellow("[" + pre + "] "))
 	log.SetFlags(log.Ltime)
 }
 
@@ -412,7 +393,7 @@ func SetDebug(flag bool) {
 // Info displays normal informations on the standard output, with the first param in green.
 //
 func Info(msg string, more ...interface{}) {
-	Render(FgGreen, msg, more...)
+	Render(color.FgGreen, msg, more...)
 }
 
 // Debug is to be used every time a usefull step is reached in your module
@@ -424,16 +405,16 @@ func Info(msg string, more ...interface{}) {
 //
 func Debug(msg string, more ...interface{}) {
 	if debug {
-		Render(FgMagenta, msg, more...)
+		Render(color.FgMagenta, msg, more...)
 	}
 }
 
 // Render displays the msg argument in the given color. The colored message is
 // passed with others to classic println.
 //
-func Render(color, msg string, more ...interface{}) {
+func Render(col, msg string, more ...interface{}) {
 	// println(, list...)
-	list := append([]interface{}{time.Now().Format("15:04:05"), Yellow(caller()), Bracket(Colored(msg, color))}, more...)
+	list := append([]interface{}{time.Now().Format("15:04:05"), color.Yellow(caller()), Bracket(color.Colored(msg, col))}, more...)
 	fmt.Println(list...)
 	// log.Println(list...)
 }
@@ -455,7 +436,7 @@ func caller() string {
 // for temporary developer tests, so they could be easily tracked.
 //
 func DEV(msg string, more ...interface{}) {
-	Render(Bright, msg, more...)
+	Render(color.Bright, msg, more...)
 }
 
 // DETAIL prints the detailled content of a variable.
@@ -472,19 +453,19 @@ func DETAIL(i interface{}) {
 // Warn test and log the error as Warning type. Return true if an error was found.
 //
 func Warn(e error, msg string) (fail bool) {
-	return l(e, Yellow("Warning"), msg)
+	return l(e, color.Yellow("Warning"), msg)
 }
 
 // Err test and log the error as Error type. Return true if an error was found.
 //
 func Err(e error, msg string) (fail bool) {
-	return l(e, Red("Error"), msg)
+	return l(e, color.Red("Error"), msg)
 }
 
 // GetErr test and logs the error, and return it for later use.
 func GetErr(e error, msg string) error {
 	if e != nil {
-		std.Println(Red("Error"), msg, ":", e)
+		std.Println(color.Red("Error"), msg, ":", e)
 	}
 	return e
 }

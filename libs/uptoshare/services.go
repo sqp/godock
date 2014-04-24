@@ -18,13 +18,15 @@ import (
 //------------------------------------------------------------[ PASTEBIN.COM ]--
 
 const (
-	PasteBinComURL    = "http://pastebin.com/api/api_post.php"
+	URLPasteBinCom    = "http://pastebin.com/api/api_post.php"
 	PasteBinComFormat = "text"                             // pastebin is only used for text.
 	PasteBinComExpire = "1M"                               // 1 month
 	PasteBinComKey    = "4dacb211338b25bfad20bc6d4358e555" // if you re-use this code, please make your own key !
 	PasteBinComOption = "paste"
 )
 
+// PasteBinCom uploads text data to this website.
+//
 func PasteBinCom(text, cLocalDir string, bAnonymous bool, limitRate int) Links { //, gchar **cResultUrls, GError **pError)
 	values := make(url.Values)
 	values.Set("api_option", PasteBinComOption)
@@ -37,7 +39,7 @@ func PasteBinCom(text, cLocalDir string, bAnonymous bool, limitRate int) Links {
 
 	values.Set("api_paste_code", text)
 
-	link, e := postSimple(PasteBinComURL, values)
+	link, e := postSimple(URLPasteBinCom, values)
 	if e != nil {
 		return linkErr(e, "Pastebin")
 	}
@@ -53,11 +55,13 @@ func PasteBinCom(text, cLocalDir string, bAnonymous bool, limitRate int) Links {
 //--------------------------------------------------------[ PASTE.UBUNTU.COM ]--
 
 const (
-	PasteUbuntuComURL    = "http://paste.ubuntu.com"
+	URLPasteUbuntuCom    = "http://paste.ubuntu.com"
 	PasteUbuntuComFormat = "text"   // only used for text.
 	PasteUbuntuComSubmit = "Paste!" // button.
 )
 
+// PasteUbuntuCom uploads text data to this website.
+//
 func PasteUbuntuCom(text, cLocalDir string, bAnonymous bool, limitRate int) Links {
 	values := make(url.Values)
 	values.Set("syntax", PasteUbuntuComFormat)
@@ -66,7 +70,7 @@ func PasteUbuntuCom(text, cLocalDir string, bAnonymous bool, limitRate int) Link
 
 	values.Set("content", text)
 
-	data, e := postSimple(PasteUbuntuComURL, values)
+	data, e := postSimple(URLPasteUbuntuCom, values)
 	if e != nil {
 		return linkErr(e, "PasteUbuntuCom")
 	}
@@ -76,19 +80,21 @@ func PasteUbuntuCom(text, cLocalDir string, bAnonymous bool, limitRate int) Link
 		return linkWarn("PasteUbuntuCom: parse failed\n" + data)
 	}
 
-	return NewLinks().Add("link", PasteUbuntuComURL+"/"+ID)
+	return NewLinks().Add("link", URLPasteUbuntuCom+"/"+ID)
 }
 
 //
-//--------------------------------------------------------[ PASTE.UBUNTU.COM ]--
+//----------------------------------------------------[ PASTEBIN.MOZILLA.ORG ]--
 
 const (
-	PasteBinMozillaOrgURL    = "http://pastebin.mozilla.org"
+	URLPasteBinMozillaOrg    = "http://pastebin.mozilla.org"
 	PasteBinMozillaOrgFormat = "text" // only used for text.
 	PasteBinMozillaOrgExpiry = "d"    // a day?
 	PasteBinMozillaOrgSubmit = "Send" // button.
 )
 
+// PasteBinMozillaOrg uploads text data to this website.
+//
 func PasteBinMozillaOrg(text, cLocalDir string, bAnonymous bool, limitRate int) Links {
 	values := make(url.Values)
 	values.Set("format", PasteBinMozillaOrgFormat)
@@ -100,7 +106,7 @@ func PasteBinMozillaOrg(text, cLocalDir string, bAnonymous bool, limitRate int) 
 
 	values.Set("code2", text)
 
-	data, e := postSimple(PasteBinMozillaOrgURL, values)
+	data, e := postSimple(URLPasteBinMozillaOrg, values)
 	if e != nil {
 		return linkErr(e, "PasteBinMozillaOrg")
 	}
@@ -111,8 +117,8 @@ func PasteBinMozillaOrg(text, cLocalDir string, bAnonymous bool, limitRate int) 
 	}
 
 	list := NewLinks()
-	list.Add("link", PasteBinMozillaOrgURL+ID)
-	list.Add("dl", PasteBinMozillaOrgURL+"/"+ID[5:])
+	list.Add("link", URLPasteBinMozillaOrg+ID)
+	list.Add("dl", URLPasteBinMozillaOrg+"/"+ID[5:])
 	return list
 }
 
@@ -120,11 +126,13 @@ func PasteBinMozillaOrg(text, cLocalDir string, bAnonymous bool, limitRate int) 
 //-------------------------------------------------------------[ CODEPAD.ORG ]--
 
 const (
-	CodePadOrgURL    = "http://codepad.org"
+	URLCodePadOrg    = "http://codepad.org"
 	CodePadOrgFormat = "Plain Text" // only used for text.
 	CodePadOrgSubmit = "Submit"     // button.
 )
 
+// CodePadOrg uploads text data to this website.
+//
 func CodePadOrg(text, cLocalDir string, bAnonymous bool, limitRate int) Links {
 	values := make(url.Values)
 	values.Set("lang", CodePadOrgFormat)
@@ -132,7 +140,7 @@ func CodePadOrg(text, cLocalDir string, bAnonymous bool, limitRate int) Links {
 
 	values.Set("code", text)
 
-	data, e := postSimple(CodePadOrgURL, values)
+	data, e := postSimple(URLCodePadOrg, values)
 	if e != nil {
 		return linkErr(e, "CodePadOrg")
 	}
@@ -155,14 +163,16 @@ func CodePadOrg(text, cLocalDir string, bAnonymous bool, limitRate int) Links {
 //
 //-------------------------------------------------------------[ IMAGEBIN.CA ]--
 
-const ImageBinCaUrl = "http://imagebin.ca/upload.php"
+const URLImageBinCa = "http://imagebin.ca/upload.php"
 
+// ImageBinCa uploads an image file to this website.
+//
 func ImageBinCa(filepath, cLocalDir string, bAnonymous bool, limitRate int) Links {
 	opt := map[string]string{
 		// "t":       "file",
 		"private": "true",
 	}
-	curly := curler(ImageBinCaUrl, "file", filepath, opt)
+	curly := curler(URLImageBinCa, "file", filepath, opt)
 	defer curly.Cleanup()
 
 	var data string
@@ -188,16 +198,18 @@ func ImageBinCa(filepath, cLocalDir string, bAnonymous bool, limitRate int) Link
 //
 //-----------------------------------------------------------[ IMAGESHACK.US ]--
 
-const ImageShackUsUrl = "http://imageshack.us/upload_api.php"
+const URLImageShackUs = "http://imageshack.us/upload_api.php"
 const ImageShackUsKey = "ABDGHOQS7d32e206ee33ef8cefb208d55dd030a6"
 
+// ImageShackUs uploads an image file to this website.
+//
 func ImageShackUs(filepath, cLocalDir string, bAnonymous bool, limitRate int) Links {
 	opts := []string{
 		"key=" + ImageShackUsKey,
 		"public=no",
 		"xml=yes",
 	}
-	data, e := curlExec(ImageShackUsUrl, limitRate, "fileupload", filepath, opts)
+	data, e := curlExec(URLImageShackUs, limitRate, "fileupload", filepath, opts)
 	if e != nil {
 		return linkErr(e, "ImageShackUs")
 	}
@@ -211,12 +223,14 @@ func ImageShackUs(filepath, cLocalDir string, bAnonymous bool, limitRate int) Li
 //
 //---------------------------------------------------------------[ IMGUR.COM ]--
 
-const ImgurComUrl = "http://imgur.com/api/upload.xml"
+const URLImgurCom = "http://imgur.com/api/upload.xml"
 const ImgurComKey = "b3625162d3418ac51a9ee805b1840452"
 
+// ImgurCom uploads an image file to this website.
+//
 func ImgurCom(filepath, cLocalDir string, bAnonymous bool, limitRate int) Links {
 	opts := []string{"key=" + ImgurComKey}
-	data, e := curlExec(ImgurComUrl, limitRate, "image", filepath, opts)
+	data, e := curlExec(URLImgurCom, limitRate, "image", filepath, opts)
 	if e != nil {
 		return linkErr(e, "ImgurCom")
 	}
@@ -234,18 +248,20 @@ func ImgurCom(filepath, cLocalDir string, bAnonymous bool, limitRate int) Links 
 //
 //-----------------------------------------------------[ PIX.TOILE-LIBRE.ORG ]--
 
-const PixToileLibreOrgUrl = "http://pix.toile-libre.org/?action=upload"
+const URLPixToileLibreOrg = "http://pix.toile-libre.org/?action=upload"
 
+// PixToileLibreOrg uploads an image file to this website.
+//
 func PixToileLibreOrg(filepath, cLocalDir string, bAnonymous bool, limitRate int) Links {
 	opt := map[string]string{
 		"submit":  "Envoyer",
 		"private": "yes"}
-	curly := curler(PixToileLibreOrgUrl, "img", filepath, opt)
+	curly := curler(URLPixToileLibreOrg, "img", filepath, opt)
 	defer curly.Cleanup()
 
 	curly.Setopt(curl.OPT_WRITEFUNCTION, writeNull) // We do nothing, just prevent console flood.
 
-	url, e := curlEffectiveUrl(curly)
+	url, e := curlEffectiveURL(curly)
 	if e != nil {
 		return linkErr(e, "PixToileLibreOrg")
 	}
@@ -258,8 +274,10 @@ func PixToileLibreOrg(filepath, cLocalDir string, bAnonymous bool, limitRate int
 //
 //---------------------------------------------------------------[ UPPIX.COM ]--
 
-const UppixComUrl = "http://uppix.com/upload"
+const URLUppixCom = "http://uppix.com/upload"
 
+// UppixCom uploads an image file to this website.
+//
 func UppixCom(filepath, cLocalDir string, bAnonymous bool, limitRate int) Links {
 
 	// opt := map[string]string{"api": "1", "u_submit": "Upload", "u_agb": "yes"}
@@ -279,7 +297,7 @@ func UppixCom(filepath, cLocalDir string, bAnonymous bool, limitRate int) Links 
 	// return
 
 	opts := []string{"u_submit=Upload", "u_agb=yes"}
-	data, e := curlExec(UppixComUrl, limitRate, "u_file", filepath, opts)
+	data, e := curlExec(URLUppixCom, limitRate, "u_file", filepath, opts)
 	if e != nil {
 		return linkErr(e, "UppixCom")
 	}
@@ -296,14 +314,16 @@ func UppixCom(filepath, cLocalDir string, bAnonymous bool, limitRate int) Links 
 //
 //------------------------------------------------------------[ VIDEOBIN.ORG ]--
 
-const VideoBinOrgUrl = "http://videobin.org/add"
+const URLVideoBinOrg = "http://videobin.org/add"
 
+// VideoBinOrg uploads a video file to this website.
+//
 func VideoBinOrg(filepath, cLocalDir string, bAnonymous bool, limitRate int) Links {
 	opt := map[string]string{"api": "1"}
-	curly := curler(VideoBinOrgUrl, "videoFile", filepath, opt)
+	curly := curler(URLVideoBinOrg, "videoFile", filepath, opt)
 	defer curly.Cleanup()
 
-	url, e := curlEffectiveUrl(curly)
+	url, e := curlEffectiveURL(curly)
 	if e != nil {
 		return linkErr(e, "VideoBinOrg")
 	}
@@ -327,12 +347,14 @@ func VideoBinOrg(filepath, cLocalDir string, bAnonymous bool, limitRate int) Lin
 //
 //-----------------------------------------------------------------[ FREE.FR ]--
 
-const DlFreeFrUrl = "ftp://dl.free.fr/"
+const URLDlFreeFr = "ftp://dl.free.fr/"
 
+// DlFreeFr uploads any file to this website.
+//
 // Use curl command for now as it allow the CombinedOutput to get the result from error pipe.
 //
 func DlFreeFr(filepath, cLocalDir string, bAnonymous bool, limitRate int) Links {
-	body, e := curlExecArgs("-q", "-v", "-T", filepath, "-u", "cairo@dock.org:toto", DlFreeFrUrl)
+	body, e := curlExecArgs("-q", "-v", "-T", filepath, "-u", "cairo@dock.org:toto", URLDlFreeFr)
 	if e != nil {
 		return linkErr(e, "FreeFr")
 	}
@@ -361,7 +383,7 @@ func FreeFrCurl(filepath, cLocalDir string, bAnonymous bool, limitRate int) Link
 	curly := curl.EasyInit()
 	defer curly.Cleanup()
 
-	curly.Setopt(curl.OPT_URL, DlFreeFrUrl+path.Base(filepath))
+	curly.Setopt(curl.OPT_URL, URLDlFreeFr+path.Base(filepath))
 
 	curly.Setopt(curl.OPT_VERBOSE, true)
 

@@ -48,6 +48,8 @@ func FileNameFromUri(str string) string {
 //
 type FileType int
 
+// File and backends types supported.
+//
 const (
 	FileTypeUnknown FileType = iota
 	FileTypeText
@@ -89,10 +91,14 @@ var (
 //
 type Links map[string]string
 
+// NewLinks creates an empty links list.
+//
 func NewLinks() Links {
 	return make(Links)
 }
 
+// Add tests if link isn't empty before adding it to the list.
+//
 func (li Links) Add(key, link string) Links {
 	if link != "" {
 		li[key] = link
@@ -511,7 +517,7 @@ func curler(url, fileref, filepath string, opt map[string]string) *curl.CURL {
 
 // Perform and return redirected url.
 //
-func curlEffectiveUrl(curly *curl.CURL) (string, error) {
+func curlEffectiveURL(curly *curl.CURL) (string, error) {
 	if e := curly.Perform(); e != nil {
 		return "", e
 	}

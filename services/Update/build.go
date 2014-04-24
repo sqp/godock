@@ -34,7 +34,7 @@ type BuildTarget interface {
 
 // Create the target renderer/builder.
 //
-func (app *AppletUpdate) setBuildTarget() {
+func (app *Applet) setBuildTarget() {
 	if !app.conf.UserMode { // Tester mode.
 		app.target = &build.BuilderNull{}
 	} else {
@@ -91,7 +91,7 @@ func (app *AppletUpdate) setBuildTarget() {
 	go func() { time.Sleep(500 * time.Millisecond); app.showTarget() }()
 }
 
-func (app *AppletUpdate) showTarget() {
+func (app *Applet) showTarget() {
 	app.SetEmblem(app.target.Icon(), EmblemTarget)
 	app.SetLabel("Target: " + app.target.Label())
 }
@@ -99,7 +99,7 @@ func (app *AppletUpdate) showTarget() {
 // Restart target if needed, with everything necessary (like the dock for an
 // internal app).
 //
-func (app *AppletUpdate) restartTarget() {
+func (app *Applet) restartTarget() {
 	if !app.conf.BuildReload {
 		return
 	}
@@ -268,7 +268,7 @@ func (branch *Branch) update(dir string, progress func(float64)) (new int, e err
 /*
 // Get and launch bzr update script. Unused.
 //
-func (app *AppletUpdate) updateByBzrScript() {
+func (app *Applet) updateByBzrScript() {
 if logE("Wrong sources directory", os.Chdir(app.conf.SourceDir)) { // move to base dir.
 	return
 }

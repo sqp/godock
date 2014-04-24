@@ -3,7 +3,7 @@ package build
 import (
 	"github.com/sqp/godock/libs/appdbus"
 	"github.com/sqp/godock/libs/cdtype"
-	"github.com/sqp/godock/libs/log"
+	"github.com/sqp/godock/libs/log/color"
 	// "github.com/sqp/godock/libs/ternary"
 
 	"bufio"
@@ -299,7 +299,7 @@ func actionMakeAndInstall(progress func(float64)) error {
 			current, e := TrimInt(line[1:4])
 			if e == nil {
 				progress(float64(current) / 100)
-				fmt.Printf("[%3d%%] %s", progress, log.Green(line[7:]))
+				fmt.Printf("[%3d%%] %s", progress, color.Green(line[7:]))
 			}
 		} else {
 			fmt.Fprint(os.Stdout, line)

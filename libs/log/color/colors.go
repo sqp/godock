@@ -1,4 +1,4 @@
-package log
+package color
 
 const (
 	Reset      = "\x1b[0m"  // Reset terminal color.
@@ -25,3 +25,23 @@ const (
 	BgCyan     = "\x1b[46m" // Background Cyan.
 	BgWhite    = "\x1b[47m" // Background White.
 )
+
+// Yellow formatting of text.
+func Yellow(msg string) string { return Colored(msg, FgYellow) }
+
+// Magenta formatting of text.
+func Magenta(msg string) string { return Colored(msg, FgMagenta) }
+
+// Green formatting of text.
+func Green(msg string) string { return Colored(msg, FgGreen) }
+
+// Red formatting of text.
+func Red(msg string) string { return Colored(msg, FgRed) }
+
+// Colored returns a colored message if any.
+func Colored(msg, col string) string {
+	if msg == "" {
+		return ""
+	}
+	return col + msg + Reset
+}

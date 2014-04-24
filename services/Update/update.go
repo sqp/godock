@@ -37,7 +37,9 @@ var logger cdtype.Logger
 
 //------------------------------------------------------------------[ APPLET ]--
 
-type AppletUpdate struct {
+// Applet data and controlers.
+//
+type Applet struct {
 	*dock.CDApplet             // Dock interface.
 	conf           *updateConf // applet user configuration.
 
@@ -51,7 +53,7 @@ type AppletUpdate struct {
 // NewApplet create an new Update applet instance.
 //
 func NewApplet() dock.AppletInstance {
-	app := &AppletUpdate{CDApplet: dock.NewCDApplet()}
+	app := &Applet{CDApplet: dock.NewCDApplet()}
 	app.defineActions()
 
 	// Disabled in favor of the new progress bar.
@@ -80,7 +82,7 @@ func NewApplet() dock.AppletInstance {
 
 // Init load user configuration if needed and initialise applet.
 //
-func (app *AppletUpdate) Init(loadConf bool) {
+func (app *Applet) Init(loadConf bool) {
 	app.LoadConfig(loadConf, &app.conf) // Load config will crash if fail. Expected.
 
 	// Icon default settings.
@@ -110,7 +112,7 @@ func (app *AppletUpdate) Init(loadConf bool) {
 
 // DefineEvents set applet events callbacks.
 //
-func (app *AppletUpdate) DefineEvents() {
+func (app *Applet) DefineEvents() {
 
 	// Left click: launch configured action for current user mode.
 	//
@@ -193,7 +195,7 @@ func (app *AppletUpdate) DefineEvents() {
 
 // Got versions informations, Need to set a new emblem
 //
-func (app *AppletUpdate) onGotVersions(new int, e error) {
+func (app *Applet) onGotVersions(new int, e error) {
 	if new > 0 {
 		app.SetEmblem(app.FileLocation("img", app.conf.VersionEmblemNew), EmblemVersion)
 
@@ -211,7 +213,7 @@ func (app *AppletUpdate) onGotVersions(new int, e error) {
 
 // Define applet actions.
 //
-func (app *AppletUpdate) defineActions() {
+func (app *Applet) defineActions() {
 	app.Actions.Max = 1
 	app.Actions.Add(
 		&dock.Action{
@@ -308,7 +310,7 @@ func (app *AppletUpdate) defineActions() {
 
 // Open diff command, or toggle window visibility if application is monitored and opened.
 //
-func (app *AppletUpdate) actionShowDiff() {
+func (app *Applet) actionShowDiff() {
 	haveMonitor, hasFocus := app.HaveMonitor()
 	switch {
 	case app.conf.DiffMonitored && haveMonitor: // Application monitored and open.
@@ -325,7 +327,7 @@ func (app *AppletUpdate) actionShowDiff() {
 
 // Change target and display the new one.
 //
-func (app *AppletUpdate) cycleTarget(delta int) {
+func (app *Applet) cycleTarget(delta int) {
 	app.targetID += delta
 	switch {
 	case app.targetID >= len(app.conf.BuildTargets):
@@ -339,12 +341,12 @@ func (app *AppletUpdate) cycleTarget(delta int) {
 	app.showTarget()
 }
 
-func (app *AppletUpdate) actionToggleUserMode() {
+func (app *Applet) actionToggleUserMode() {
 	app.conf.UserMode = !app.conf.UserMode
 	app.setBuildTarget()
 }
 
-func (app *AppletUpdate) actionToggleReload() {
+func (app *Applet) actionToggleReload() {
 	app.conf.BuildReload = !app.conf.BuildReload
 }
 
@@ -352,14 +354,14 @@ func (app *AppletUpdate) actionToggleReload() {
 
 // Check new versions now and reset timer.
 //
-func (app *AppletUpdate) actionCheckVersions() {
+func (app *Applet) actionCheckVersions() {
 	app.Poller().Restart()
 }
 
 // To improve : parse http://bazaar.launchpad.net/~cairo-dock-team/cairo-dock-core/cairo-dock/changes/
 // and maybe see to use as download tool : http://golang.org/src/cmd/go/vcs.go
 //
-func (app *AppletUpdate) actionShowVersions(force bool) {
+func (app *Applet) actionShowVersions(force bool) {
 	for _, v := range app.version.Sources() {
 		if v.Delta > 0 {
 			force = true
@@ -383,7 +385,7 @@ func (app *AppletUpdate) actionShowVersions(force bool) {
 
 // Build current target.
 //
-func (app *AppletUpdate) actionBuildTarget() {
+func (app *Applet) actionBuildTarget() {
 	app.AddDataRenderer("progressbar", 1, "")
 	defer app.AddDataRenderer("progressbar", 0, "")
 
@@ -394,13 +396,13 @@ func (app *AppletUpdate) actionBuildTarget() {
 	}
 }
 
-// func (app *AppletUpdate) actionBuildCore()       {}
-// func (app *AppletUpdate) actionBuildApplets()    {}
-func (app *AppletUpdate) actionBuildAll()        {}
-func (app *AppletUpdate) actionDownloadCore()    {}
-func (app *AppletUpdate) actionDownloadApplets() {}
-func (app *AppletUpdate) actionDownloadAll()     {}
-func (app *AppletUpdate) actionUpdateAll()       {}
+// func (app *Applet) actionBuildCore()       {}
+// func (app *Applet) actionBuildApplets()    {}
+func (app *Applet) actionBuildAll()        {}
+func (app *Applet) actionDownloadCore()    {}
+func (app *Applet) actionDownloadApplets() {}
+func (app *Applet) actionDownloadAll()     {}
+func (app *Applet) actionUpdateAll()       {}
 
 //------------------------------------------------------------------[ COMMON ]--
 
