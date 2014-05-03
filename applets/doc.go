@@ -1,2 +1,2 @@
-// == APPLETS DATA AND STANDALONE BUILDER ==
-package documentation
+// == APPLETS DATA AND STANDALONE BUILDERS ==
+package applets

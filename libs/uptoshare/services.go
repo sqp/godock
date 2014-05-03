@@ -18,7 +18,8 @@ import (
 //------------------------------------------------------------[ PASTEBIN.COM ]--
 
 const (
-	URLPasteBinCom    = "http://pastebin.com/api/api_post.php" // Post url for the service.
+	 // URLPasteBinCom is the POST url for that service.
+	URLPasteBinCom    = "http://pastebin.com/api/api_post.php"
 	PasteBinComFormat = "text"                                 // pastebin is only used for text.
 	PasteBinComExpire = "1M"                                   // 1 month
 	PasteBinComKey    = "4dacb211338b25bfad20bc6d4358e555"     // if you re-use this code, please make your own key !
@@ -55,7 +56,8 @@ func PasteBinCom(text, cLocalDir string, bAnonymous bool, limitRate int) Links {
 //--------------------------------------------------------[ PASTE.UBUNTU.COM ]--
 
 const (
-	URLPasteUbuntuCom    = "http://paste.ubuntu.com" // Post url for the service.
+	 // URLPasteUbuntuComsssss is the POST url for that service.
+	URLPasteUbuntuCom    = "http://paste.ubuntu.com"
 	PasteUbuntuComFormat = "text"                    // only used for text.
 	PasteUbuntuComSubmit = "Paste!"                  // button.
 )
@@ -371,7 +373,7 @@ func DlFreeFr(filepath, cLocalDir string, bAnonymous bool, limitRate int) Links 
 //
 const FreeFrBlock = 10000
 
-// Not working, but almost.
+// FreeFrCurl is not working, but almost.
 // It upload the file but can't get the answer as it's only forwarded with the verbose flood.
 //
 func FreeFrCurl(filepath, cLocalDir string, bAnonymous bool, limitRate int) Links {

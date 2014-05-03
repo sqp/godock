@@ -22,10 +22,10 @@ import (
 )
 
 const (
-	// Location of cairo-dock applet market.
+	// DistantURL is the location of cairo-dock applet market.
 	DistantURL = "http://download.tuxfamily.org/glxdock/themes/third-party/"
 
-	// Applets list file on server.
+	// DistantList is the name of the applets list file on the server.
 	DistantList = "list.conf"
 )
 
@@ -57,6 +57,8 @@ func (list AppletPackages) Len() int { return len(list) }
 //
 func (list AppletPackages) Swap(i, j int) { list[i], list[j] = list[j], list[i] }
 
+// Exist returns true if the package was found in the list.
+//
 func (list AppletPackages) Exist(applet string) bool {
 	return list.Get(applet) != nil
 }
@@ -508,6 +510,8 @@ func DirExternal() (dir string, e error) {
 	return "", errors.New("can't get HOME directory")
 }
 
+// DirTheme returns external theme location for the given theme type.
+//
 func DirTheme(themeType string) (dir string, e error) {
 	if home := os.Getenv("HOME"); home != "" {
 		return filepath.Join(home, ".config", "cairo-dock", "extras", themeType), nil

@@ -1,2 +1,2 @@
 // == LIBRARIES ==
-package documentation
+package libs

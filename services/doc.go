@@ -1,2 +1,2 @@
 // == APPLETS SOURCES ==
-package documentation
+package services

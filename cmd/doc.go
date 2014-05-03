@@ -1,2 +1,2 @@
 // == COMMAND LINE ==
-package documentation
+package cmd
