@@ -99,13 +99,19 @@ See cdtype.Events and cdtype.SubEvents for the full list with arguments.
 	// Define applet events callbacks.
 	//
 	func (app *Applet) DefineEvents() {
-		app.Events.OnClick = app.LaunchFunc("left")
+		app.Events.OnClick = app.LaunchFunc("left")          // If you want to forward a click event to the optional command launcher.
 		app.Events.OnMiddleClick = app.LaunchFunc("middle")
 
-		app.Events.OnDropData = app.up.Upload
+		app.Events.OnDropData = func(data string) { // For simple callbacks event, use a closure.
+			app.Log.Info("dropped", data)
+		}
 
-		app.Events.OnBuildMenu = app.buildMenu
-		app.Events.OnMenuSelect = app.clickedMenu
+		app.Events.OnBuildMenu = func() {
+			menu := []string{"", "ok"} // First entry is a separator.
+			app.PopulateMenu(menu...)
+		}
+
+		app.Events.OnMenuSelect = app.clickedMenu // If you have more work to do, use a dedicated func.
 	}
 
 Poller

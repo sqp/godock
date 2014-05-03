@@ -22,11 +22,14 @@ import (
 )
 
 const (
-	DistantUrl  = "http://download.tuxfamily.org/glxdock/themes/third-party/"
+	// Location of cairo-dock applet market.
+	DistantURL = "http://download.tuxfamily.org/glxdock/themes/third-party/"
+
+	// Applets list file on server.
 	DistantList = "list.conf"
 )
 
-// Types of packagess.
+// PackageType defines the type of a package (maybe rename to state?).
 //
 type PackageType int
 
@@ -42,15 +45,24 @@ const (
 
 //---------------------------------------------------------[ APPLET PACKAGES ]--
 
+// AppletPackages defines a list of AppletPackage.
+//
 type AppletPackages []*AppletPackage
 
-func (list AppletPackages) Len() int      { return len(list) }
+// Len returns the number of packages in the list.
+//
+func (list AppletPackages) Len() int { return len(list) }
+
+// Swap exchanges the position of two packages.
+//
 func (list AppletPackages) Swap(i, j int) { list[i], list[j] = list[j], list[i] }
 
 func (list AppletPackages) Exist(applet string) bool {
 	return list.Get(applet) != nil
 }
 
+// Get returns the package matching the name provided if found.
+//
 func (list AppletPackages) Get(applet string) *AppletPackage {
 	for _, pack := range list { // Check if package exist in server list.
 		if applet == pack.DisplayedName {
@@ -60,9 +72,12 @@ func (list AppletPackages) Get(applet string) *AppletPackage {
 	return nil
 }
 
-// Package list sort methods.
+// ByName sorts the list of packages by name.
+//
 type ByName struct{ AppletPackages }
 
+// Less compares packages names for the sort.
+//
 func (list ByName) Less(i, j int) bool {
 	return list.AppletPackages[i].DisplayedName < list.AppletPackages[j].DisplayedName
 }
@@ -72,33 +87,40 @@ func (list ByName) Less(i, j int) bool {
 
 //-----------------------------------------------------------[ LIST DOWNLOAD ]--
 
-// Get the merged list of external packages in local and distant sources with downloable state.
+// ListDownload builds a merged list of external packages in local and distant
+// sources with downloadable state.
+// In case of multiple errors, the last one is returned.
+// (local access errors are more important than network errors)
 //
-func ListDownload(version string) AppletPackages {
+func ListDownload(version string) (AppletPackages, error) {
+	filled := make(map[string]*AppletPackage) // index by name so local packages will replace distant ones.
 
-	external, _ := ListDistant(version)
-	// log.Err(e, "")
-	// if e != nil {
-	// }
-	// Prepare the index with start size = nb packages on server.
-	filled := make(map[string]*AppletPackage, len(external))
-	for _, pack := range external {
-		// log.Info("distant", pack.DisplayedName)
-		filled[pack.DisplayedName] = pack
+	found, eRet := ListDistant(version)
+	if eRet == nil {
+		for _, pack := range found {
+			filled[pack.DisplayedName] = pack
+		}
 	}
 
 	// Get applets dir.
 	dir, eDir := DirExternal()
 	if eDir == nil {
-		local := ListExternalUser(dir, "applet")
-		for _, pack := range local {
-			if _, ok := filled[pack.DisplayedName]; !ok {
-				// fmt.Println("found unknown package", pack.DisplayedName)
-				pack.Type = TypeInDev
+		local, eUsr := ListExternalUser(dir, "applet")
+		if eUsr == nil {
+			for _, pack := range local {
+				if _, ok := filled[pack.DisplayedName]; !ok {
+					// fmt.Println("found unknown package", pack.DisplayedName)
+					pack.Type = TypeInDev
+				}
+				filled[pack.DisplayedName] = pack
 			}
-			filled[pack.DisplayedName] = pack
+		} else {
+			eRet = eUsr
 		}
+	} else {
+		eRet = eDir
 	}
+
 	// Prepare output slice with good size and fill it with packages.
 	sorted := make(AppletPackages, 0, len(filled))
 	for _, pack := range filled {
@@ -106,26 +128,29 @@ func ListDownload(version string) AppletPackages {
 	}
 
 	sort.Sort(ByName{sorted}) // Easy to get the list sorted the way we want.
-	return sorted
+	return sorted, eRet
 }
 
 //-----------------------------------------------------------------[ DISTANT ]--
 
-// Get list of packages available on the server applets market for given version.
+// ListDistant lists packages available on the server applets market for given version.
 //
 func ListDistant(version string) (AppletPackages, error) {
-	url := DistantUrl + version
+	url := DistantURL + version
 
 	// Download list from packages server.
 	resp, e := http.Get(url + "/" + DistantList)
-	if log.Err(e, "Connect to package server") {
+	// if log.Err(e, "Connect to package server") {
+	if e != nil {
 		return nil, e
 	}
+
 	defer resp.Body.Close()
 
 	// Parse distant list.
 	conf, e := config.NewFromReader(resp.Body) // Special conf reflector around the config file parser.
-	if log.Err(e, "Read distant applets info"); e != nil {
+	if e != nil {
+		// if log.Err(e, "Read distant applets info"); e != nil {
 		return nil, e
 	}
 
@@ -151,15 +176,16 @@ func ListDistant(version string) (AppletPackages, error) {
 
 //-----------------------------------------------------------[ USER EXTERNAL ]--
 
-// Get list of packages in external applets dir.
+// ListExternalUser lists packages in external applets dir.
 //
-func ListExternalUser(dir string, typ string) (list AppletPackages) {
+func ListExternalUser(dir string, typ string) (AppletPackages, error) {
 	files, e := ioutil.ReadDir(dir) // ([]os.FileInfo, error)
 	if e != nil {
 		log.Debug("ReadDir:", e)
-		return
+		return nil, e
 	}
 
+	var list AppletPackages
 	for _, info := range files {
 		if info.Name() == "po" || info.Name() == "locale" { // Drop crap.
 			continue
@@ -168,14 +194,19 @@ func ListExternalUser(dir string, typ string) (list AppletPackages) {
 		fullpath := filepath.Join(dir, info.Name())
 		info = fileGetLink(fullpath, info) // Get real dir if it is a link.
 		if info.IsDir() {
-			if pack := NewAppletPackageUser(dir, info.Name(), typ); pack != nil {
-				list = append(list, pack)
+			pack, e := NewAppletPackageUser(dir, info.Name(), typ)
+			if e != nil {
+				return nil, e
 			}
+
+			list = append(list, pack)
 		}
 	}
-	return list
+	return list, nil
 }
 
+// ReadPackageFile loads a package from its config file on disk.
+//
 func ReadPackageFile(dir, applet, typ string) (*AppletPackage, error) {
 	var file, group string
 	switch typ {
@@ -189,7 +220,7 @@ func ReadPackageFile(dir, applet, typ string) (*AppletPackage, error) {
 	filename := filepath.Join(dir, applet, file)
 	conf, e := config.NewFromFile(filename)
 
-	if log.Err(e, "Package description") {
+	if e != nil {
 		return nil, e
 	}
 	pack := &AppletPackage{}
@@ -234,24 +265,26 @@ type AppletPackage struct {
 	ModuleType      int
 }
 
-// NewAppletPackageUser try to read package info from dir for an external applet.
+// NewAppletPackageUser try to read an external applet package info from dir.
 //
-func NewAppletPackageUser(dir, name string, typ string) *AppletPackage {
-	fullpath := filepath.Join(dir, name)
+func NewAppletPackageUser(dir, name string, typ string) (*AppletPackage, error) {
 
-	if pack, e := ReadPackageFile(dir, name, typ); !log.Err(e, "ReadPackageFile") {
-		pack.DisplayedName = name
-		pack.Path = fullpath
-		pack.Type = TypeUser
-		pack.Size = float64(dirSize(fullpath)) / float64(bytesize.MB)
-
-		modif, e := ioutil.ReadFile(filepath.Join(fullpath, "last-modif"))
-		if !log.Err(e, "Get last-modif") {
-			pack.LastModifDate = strings.Replace(string(modif), "\n", "", -1) // strip \n. Check to use trimInt from Update.
-		}
-		return pack
+	pack, e := ReadPackageFile(dir, name, typ)
+	if log.Err(e, "read package description") {
+		return nil, e
 	}
-	return nil
+
+	fullpath := filepath.Join(dir, name)
+	pack.DisplayedName = name
+	pack.Path = fullpath
+	pack.Type = TypeUser
+	pack.Size = float64(dirSize(fullpath)) / float64(bytesize.MB)
+
+	// modif, e := ioutil.ReadFile(filepath.Join(fullpath, "last-modif"))
+	// if !log.Err(e, "Get last-modif") {
+	// 	pack.LastModifDate = strings.Replace(string(modif), "\n", "", -1) // strip \n. Check to use trimInt from Update.
+	// }
+	return pack, nil
 }
 
 // IsInstalled return true if the package is installed on disk.
@@ -298,6 +331,8 @@ func (pack *AppletPackage) FormatCategory() string {
 	return ""
 }
 
+// FormatState returns the human readable state for the applet.
+//
 func (pack *AppletPackage) FormatState() string {
 	switch pack.Type {
 	case TypeLocal:
@@ -316,10 +351,18 @@ func (pack *AppletPackage) FormatState() string {
 	return ""
 }
 
+// FormatSize returns the human readable size for the applet.
+//
 func (pack *AppletPackage) FormatSize() string {
 	return bytesize.ByteSize(pack.Size * float64(bytesize.MB)).String()
 }
 
+// GetPreview returns the location of the applet preview on disk.
+// The preview will be downloaded from the server for non installed applets.
+// If a temp file location is provided, it will be used, otherwise, the
+// Returned values are the file location and the boolean indicates if a temp
+// file was used and need to be removed when no more useful.
+//
 func (pack *AppletPackage) GetPreview(tmp string) (string, bool) {
 	if pack.Preview != "" {
 		return pack.Preview, false
@@ -365,6 +408,9 @@ func (pack *AppletPackage) GetPreview(tmp string) (string, bool) {
 	}
 }
 
+// GetDescription returns the package description text.
+// Description will be downloaded if needed (non installed package).
+//
 func (pack *AppletPackage) GetDescription() string {
 	if pack.Description == "" {
 		switch pack.Type {
@@ -388,8 +434,8 @@ func (pack *AppletPackage) GetDescription() string {
 
 //-----------------------------------------------------------[ DOWNLOAD EXTERNAL ]--
 
-// Download and extract external archive to package dir. Optional tar settings can
-// be passed.
+// Install downloads and extract an external archive to package dir.
+// Optional tar settings can be passed.
 //
 func (pack *AppletPackage) Install(version, options string) error {
 	// func DownloadPackage(version, name, options string) error {
@@ -399,7 +445,7 @@ func (pack *AppletPackage) Install(version, options string) error {
 		return eDir
 	}
 	// Connect a reader to the archive on server.
-	resp, eNet := http.Get(DistantUrl + version + "/" + pack.DisplayedName + "/" + pack.DisplayedName + ".tar.gz")
+	resp, eNet := http.Get(DistantURL + version + "/" + pack.DisplayedName + "/" + pack.DisplayedName + ".tar.gz")
 	if eNet != nil {
 		return eNet
 	}
@@ -418,8 +464,10 @@ func (pack *AppletPackage) Install(version, options string) error {
 		file := filepath.Join(dir, pack.DisplayedName, "last-modif")
 		log.Err(ioutil.WriteFile(file, []byte(lastModif), 0644), "Write last-modif")
 
-		newpack := NewAppletPackageUser(dir, pack.DisplayedName, "applet")
-
+		newpack, e := NewAppletPackageUser(dir, pack.DisplayedName, "applet")
+		if e != nil {
+			return e
+		}
 		pack.Type = TypeUser
 		pack.Path = newpack.Path
 		pack.Description = newpack.Description
@@ -435,52 +483,54 @@ func (pack *AppletPackage) Install(version, options string) error {
 	return nil
 }
 
+// Uninstall removes an external applet from disk.
+//
 func (pack *AppletPackage) Uninstall(version string) error {
 	if pack.Type != TypeUser && pack.Type != TypeUpdated {
-		return errors.New("Wrong package type " + pack.FormatState())
+		return errors.New("wrong package type " + pack.FormatState())
 	}
 	dir, eDir := DirExternal()
 	if eDir == nil && dir != "" && dir != "/" && pack.DisplayedName != "" {
 		pack.Type = TypeDistant
-		pack.Path = DistantUrl + version + "/" + pack.DisplayedName
+		pack.Path = DistantURL + version + "/" + pack.DisplayedName
 
 		return os.RemoveAll(filepath.Join(dir, pack.DisplayedName))
 	}
 	return eDir
 }
 
-// Get Cairo-Dock external applets location.
+// DirExternal returns external applets location.
 //
 func DirExternal() (dir string, e error) {
 	if home := os.Getenv("HOME"); home != "" {
 		return filepath.Join(home, ".config", "cairo-dock", cdtype.AppletsDirName), nil
 	}
-	return "", errors.New("Can't get HOME directory")
+	return "", errors.New("can't get HOME directory")
 }
 
 func DirTheme(themeType string) (dir string, e error) {
 	if home := os.Getenv("HOME"); home != "" {
 		return filepath.Join(home, ".config", "cairo-dock", "extras", themeType), nil
 	}
-	return "", errors.New("Can't get HOME directory")
+	return "", errors.New("can't get HOME directory")
 }
 
-// Get Cairo-Dock lanchers location.
+// DirLaunchers returns launchers location.
 //
 func DirLaunchers() (dir string, e error) {
 	if home := os.Getenv("HOME"); home != "" {
 		return filepath.Join(home, ".config", "cairo-dock", "current_theme", "launchers"), nil
 	}
-	return "", errors.New("Can't get HOME directory")
+	return "", errors.New("can't get HOME directory")
 }
 
-// Get Cairo-Dock main config file location.
+// MainConf returns the location of the Cairo-Dock main config file.
 //
 func MainConf() (filepat string, e error) {
 	if home := os.Getenv("HOME"); home != "" {
 		return filepath.Join(home, ".config", "cairo-dock", "current_theme", "cairo-dock.conf"), nil
 	}
-	return "", errors.New("Can't get HOME directory")
+	return "", errors.New("can't get HOME directory")
 }
 
 /*

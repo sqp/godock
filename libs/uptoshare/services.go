@@ -18,10 +18,10 @@ import (
 //------------------------------------------------------------[ PASTEBIN.COM ]--
 
 const (
-	URLPasteBinCom    = "http://pastebin.com/api/api_post.php"
-	PasteBinComFormat = "text"                             // pastebin is only used for text.
-	PasteBinComExpire = "1M"                               // 1 month
-	PasteBinComKey    = "4dacb211338b25bfad20bc6d4358e555" // if you re-use this code, please make your own key !
+	URLPasteBinCom    = "http://pastebin.com/api/api_post.php" // Post url for the service.
+	PasteBinComFormat = "text"                                 // pastebin is only used for text.
+	PasteBinComExpire = "1M"                                   // 1 month
+	PasteBinComKey    = "4dacb211338b25bfad20bc6d4358e555"     // if you re-use this code, please make your own key !
 	PasteBinComOption = "paste"
 )
 
@@ -55,9 +55,9 @@ func PasteBinCom(text, cLocalDir string, bAnonymous bool, limitRate int) Links {
 //--------------------------------------------------------[ PASTE.UBUNTU.COM ]--
 
 const (
-	URLPasteUbuntuCom    = "http://paste.ubuntu.com"
-	PasteUbuntuComFormat = "text"   // only used for text.
-	PasteUbuntuComSubmit = "Paste!" // button.
+	URLPasteUbuntuCom    = "http://paste.ubuntu.com" // Post url for the service.
+	PasteUbuntuComFormat = "text"                    // only used for text.
+	PasteUbuntuComSubmit = "Paste!"                  // button.
 )
 
 // PasteUbuntuCom uploads text data to this website.
