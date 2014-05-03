@@ -1,0 +1,9 @@
+{{define "ListNotif"}}{{range .}}{{template "SingleMail" .}}{{end}}{{end}}
+
+{{define "SingleMail"}}<b>{{.Title}}</b>
+{{.Content}}
+<tt>{{.Sender}}</tt>
+{{end}}
+
+
+
