@@ -230,8 +230,14 @@ func (build *BuilderCompiled) Build() error {
 	}
 
 	t := time.NewTicker(100 * time.Millisecond)
-	defer t.Stop()
-	go activityBar(t.C, build.BuilderProgress.f)
+	quit := make(chan struct{})
+	defer func() {
+		t.Stop()
+		quit <- struct{}{}
+		close(quit)
+	}()
+
+	go activityBar(quit, t.C, build.BuilderProgress.f)
 
 	return Log.ExecShow("make")
 }
@@ -311,15 +317,21 @@ func actionMakeAndInstall(progress func(float64)) error {
 	return Log.ExecShow(CmdSudo, "make", "install")
 }
 
-func activityBar(c <-chan time.Time, render func(float64)) {
+func activityBar(quit chan struct{}, c <-chan time.Time, render func(float64)) {
 	var val, step float64
 	step = 0.05
-	for _ = range c {
-		if val+step < 0 || 1 < val+step {
-			step = -step
+	for {
+		select {
+		case <-c:
+			if val+step < 0 || 1 < val+step {
+				step = -step
+			}
+			val += step
+			render(val)
+
+		case <-quit:
+			return
 		}
-		val += step
-		render(val)
 	}
 }
 

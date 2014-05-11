@@ -36,7 +36,8 @@ type RenderSimple interface {
 type AppletInstance interface {
 	// Need to be defined in user applet.
 	Init(loadConf bool)
-	DefineEvents()
+
+	// DefineEvents() // optional.
 
 	// Defined by CDApplet
 	AddPoller(call func()) *poller.Poller
@@ -46,8 +47,13 @@ type AppletInstance interface {
 	// Defined by CDDbus
 	ConnectToBus() (<-chan *dbus.Signal, error)
 	ConnectEvents(conn *dbus.Conn) error
+	RegisterEvents(interface{}) []error
 	SetArgs(args []string)
 	OnSignal(*dbus.Signal) (exit bool)
+}
+
+type defineEventser interface {
+	DefineEvents()
 }
 
 // StartApplet will prepare and launch a cairo-dock applet. If you have provided
@@ -63,6 +69,11 @@ type AppletInstance interface {
 //   * Wait for the dock End signal to close the applet.
 //
 func StartApplet(app AppletInstance) {
+	if app == nil {
+		// log.Info("Applet failed to start")
+		return
+	}
+
 	log.Debug("Applet started")
 	defer log.Debug("Applet stopped")
 
@@ -70,9 +81,15 @@ func StartApplet(app AppletInstance) {
 	app.SetArgs(os.Args)
 
 	app.SetEventReload(func(loadConf bool) { app.Init(loadConf) })
-	app.DefineEvents()
+
+	if d, ok := app.(defineEventser); ok { // Old events callback method.
+		d.DefineEvents()
+	}
+
 	dbusEvent, e := app.ConnectToBus()
 	log.Fatal(e, "ConnectToBus") // Mandatory.
+
+	app.RegisterEvents(app) // New events callback method.
 
 	// Initialise applet: Load config and apply user settings.
 	app.Init(true)
@@ -416,4 +433,38 @@ func PollerInterval(val ...int) int {
 		}
 	}
 	return 3600 * 24 // Failed to provide a valid value. Set check interval to one day.
+}
+
+//
+//-------------------------------------------------------------[ MENU SIMPLE ]--
+
+// Menu is a really simple menu to store callbacks at creation to be sure the
+// answer match the user request.
+// It's gonna evolve when we'll have access to the better menu build method, but
+// its goal will stay the same.
+//
+type Menu struct {
+	Actions []func() // Menu callbacks are saved to be sure we launch the good action (options can change).
+	Names   []string
+}
+
+// Append an item to the menu with its callback.
+//
+func (menu *Menu) Append(name string, call func()) {
+	menu.Names = append(menu.Names, name)
+	menu.Actions = append(menu.Actions, call)
+}
+
+// Launch calls the action referenced by its id.
+func (menu *Menu) Launch(id int32) {
+	if int(id) < len(menu.Actions) {
+		menu.Actions[id]()
+	}
+}
+
+// Clear resets the menu items list.
+//
+func (menu *Menu) Clear() {
+	menu.Actions = nil
+	menu.Names = nil
 }

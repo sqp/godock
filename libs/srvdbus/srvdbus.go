@@ -251,6 +251,10 @@ func (load *Loader) ListServices() *dbus.Error {
 	return nil
 }
 
+type defineEventser interface {
+	DefineEvents()
+}
+
 // StartApplet creates a new applet instance with args from command line.
 //
 func (load *Loader) StartApplet(a, b, c, d, e, f, g, h string) *dbus.Error {
@@ -271,10 +275,16 @@ func (load *Loader) StartApplet(a, b, c, d, e, f, g, h string) *dbus.Error {
 
 	// Define and connect applet events to the dock.
 	app.SetArgs(args)
-	app.DefineEvents()
+
+	if d, ok := app.(defineEventser); ok { // Old events callback method.
+		d.DefineEvents()
+	}
+
 	app.SetEventReload(func(loadConf bool) { app.Init(loadConf) })
 	er := app.ConnectEvents(load.conn)
 	Log.Err(er, "ConnectEvents") // TODO: Big problem, need to handle better?
+
+	app.RegisterEvents(app) // New events callback method.
 
 	// Initialise applet: Load config and apply user settings.
 	app.Init(true)
