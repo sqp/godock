@@ -1,12 +1,16 @@
 package Audio
 
+import "github.com/sqp/godock/libs/cdtype"
+
 // const defaultUpdateDelay = 3
 // const historyFile = "appdata/uptoshare_history.txt"
 
 const VolumeMax = 65535
 
-// EmblemAction is the position of the "upload in progress" emblem.
-// const EmblemAction = cdtype.EmblemTopRight
+// EmblemMuted is the position of the "upload in progress" emblem.
+const EmblemMuted = cdtype.EmblemTopRight
+
+const DefaultIconMuted = "muted.svg"
 
 //------------------------------------------------------------------[ CONFIG ]--
 
@@ -17,6 +21,7 @@ type appletConf struct {
 }
 
 type groupIcon struct {
+	Icon string `conf:"icon"`
 	Name string `conf:"name"`
 }
 

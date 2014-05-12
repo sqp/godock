@@ -3,6 +3,7 @@ package Audio
 
 import (
 	"github.com/guelfey/go.dbus" // imported as dbus.
+
 	"github.com/sqp/pulseaudio"
 
 	"github.com/sqp/godock/libs/cdtype"
@@ -49,6 +50,7 @@ func (app *Applet) Init(loadConf bool) {
 	}
 
 	app.SetDefaults(dock.Defaults{
+		Icon:  app.conf.Icon,
 		Label: ternary.String(app.conf.Name != "", app.conf.Name, app.AppletName),
 		Commands: dock.Commands{
 			"mixer": dock.NewCommand(app.conf.LeftAction == 1, app.conf.MixerCommand, app.conf.MixerClass)},
@@ -141,7 +143,6 @@ func (app *Applet) OnShortkey(string) {
 }
 
 func (app *Applet) OnSubMiddleClick(name string) {
-	app.Log.Info("mid", name)
 	switch app.conf.MiddleAction {
 	case 3: // TODO: need more actions and constants to define them.
 		dev := app.pulse.Stream(dbus.ObjectPath(name))
@@ -347,11 +348,13 @@ func (ap *AppPulse) DisplayStreamVolume(name string, values []uint32) error {
 	}
 	label := VolumeToPercent(VolumeToFloat(values))
 
+	emblem := ""
 	if mute {
-		label += " [M]"
+		// label += " [M]"
+		emblem = ap.icon.FileLocation("img", DefaultIconMuted)
 	}
 
-	// ap.log.Err(ap.icon.Icons[name].DemandsAttention(true, "default"))
+	ap.icon.Icons[name].SetEmblem(emblem, EmblemMuted)
 
 	return ap.icon.Icons[name].SetQuickInfo(label)
 }
@@ -413,10 +416,15 @@ func (ap *AppPulse) PlaybackStreamRemoved(path dbus.ObjectPath) {
 }
 
 func (ap *AppPulse) StreamVolumeUpdated(path dbus.ObjectPath, values []uint32) {
-	ap.DisplayStreamVolume(string(path), values)
+	if ap.StreamIcons {
+		ap.DisplayStreamVolume(string(path), values)
+	}
 }
 
 func (ap *AppPulse) StreamMuteUpdated(path dbus.ObjectPath, mute bool) {
+	if !ap.StreamIcons {
+		return
+	}
 	values, e := ap.Stream(path).ListUint32("Volume")
 	if e != nil {
 		return

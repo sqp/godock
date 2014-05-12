@@ -15,14 +15,15 @@ import (
 	"time"
 )
 
-const localPath = "org.cairodock.GoDock"
-const grr = "/org/cairodock/GoDock"
+// SrvObj is the Dbus object name for the service.
+const SrvObj = "org.cairodock.GoDock"
 
-const prefixName = len("/org/cairodock/CairoDock/")
+// SrvPath is the Dbus path name for the service.
+const SrvPath = "/org/cairodock/GoDock"
 
 const intro = `
 <node>
-	<interface name="` + localPath + `">
+	<interface name="` + SrvObj + `">
 		<signal name="ListServices"></signal>
 		<signal name="RestartDock"></signal>
 		<signal name="StopDock"></signal>
@@ -89,7 +90,7 @@ func NewLoader(services map[string]func() dock.AppletInstance) *Loader {
 // no loop will be started, the function just return with the error if any.
 //
 func (load *Loader) StartServer() (bool, error) {
-	reply, e := load.conn.RequestName(localPath, dbus.NameFlagDoNotQueue)
+	reply, e := load.conn.RequestName(SrvObj, dbus.NameFlagDoNotQueue)
 	if e != nil {
 		return false, e
 	}
@@ -99,10 +100,10 @@ func (load *Loader) StartServer() (bool, error) {
 	}
 
 	// Everything OK, we can register our Dbus methods.
-	e = load.conn.Export(load, grr, localPath)
+	e = load.conn.Export(load, SrvPath, SrvObj)
 	Log.Err(e, "register service object")
 
-	e = load.conn.Export(introspect.Introspectable(intro), grr, "org.freedesktop.DBus.Introspectable")
+	e = load.conn.Export(introspect.Introspectable(intro), SrvPath, "org.freedesktop.DBus.Introspectable")
 	Log.Err(e, "register service introspect")
 
 	return true, nil
@@ -111,7 +112,7 @@ func (load *Loader) StartServer() (bool, error) {
 // StartLoop handle applets (and dock) until there's no nothing more to handle.
 //
 func (load *Loader) StartLoop() {
-	defer load.conn.ReleaseName(localPath)
+	defer load.conn.ReleaseName(SrvObj)
 	defer Log.Info("StopServer")
 	Log.Info("StartServer")
 
@@ -174,10 +175,10 @@ func (load *Loader) dispatchDbusSignal(s *dbus.Signal) bool {
 
 	switch {
 
-	case strings.HasPrefix(string(s.Name), localPath): // Signal to applet manager.
+	case strings.HasPrefix(string(s.Name), SrvObj): // Signal to applet manager.
 
-		if len(s.Name) > len(localPath) {
-			switch s.Name[len(localPath)+1:] { // Forwarded from here too so they can be called easily as signal with dbus-send.
+		if len(s.Name) > len(SrvObj) {
+			switch s.Name[len(SrvObj)+1:] { // Forwarded from here too so they can be called easily as signal with dbus-send.
 			case "ListServices":
 				load.ListServices()
 
@@ -188,7 +189,7 @@ func (load *Loader) dispatchDbusSignal(s *dbus.Signal) bool {
 				load.StopDock()
 
 			default:
-				Log.Info("unknown service request", s.Name[len(localPath)+1:], s.Body)
+				Log.Info("unknown service request", s.Name[len(SrvObj)+1:], s.Body)
 			}
 		}
 
@@ -395,14 +396,14 @@ func GetServer() (*Client, error) {
 		return nil, ec
 	}
 
-	reply, e := conn.RequestName(localPath, dbus.NameFlagDoNotQueue)
+	reply, e := conn.RequestName(SrvObj, dbus.NameFlagDoNotQueue)
 	if e != nil {
 		return nil, e
 	}
-	conn.ReleaseName(localPath)
+	conn.ReleaseName(SrvObj)
 
 	if reply != dbus.RequestNameReplyPrimaryOwner { // Found active instance, return client.
-		return &Client{*conn.Object(localPath, grr)}, nil
+		return &Client{*conn.Object(SrvObj, SrvPath)}, nil
 	}
 
 	// no active instance.
@@ -410,11 +411,11 @@ func GetServer() (*Client, error) {
 }
 
 func (cl *Client) call(method string, args ...interface{}) error {
-	return cl.Call(localPath+"."+method, 0, args...).Err
+	return cl.Call(SrvObj+"."+method, 0, args...).Err
 }
 
 // func (cl *Client) Go(method string, args ...interface{}) error {
-// 	return cl.Object.Go(localPath+"."+method, dbus.FlagNoReplyExpected, nil, args...).Err
+// 	return cl.Object.Go(SrvObj+"."+method, dbus.FlagNoReplyExpected, nil, args...).Err
 // }
 
 // ListServices send action to displays active services.
@@ -456,12 +457,12 @@ func (cl *Client) LogWindow() error {
 // Send command to the active server.
 //
 func (load *Loader) Send(method string, args ...interface{}) error {
-	busD := load.conn.Object(localPath, grr)
+	busD := load.conn.Object(SrvObj, SrvPath)
 	if busD == nil {
 		return errors.New("can't connect to active instance")
 	}
 
-	return busD.Call(localPath+"."+method, 0, args...).Err
+	return busD.Call(SrvObj+"."+method, 0, args...).Err
 }
 
 //
@@ -508,8 +509,13 @@ func (pl plopers) Remove(name string) {
 //-----------------------------------------------------------------[ HELPERS ]--
 
 func pathToName(path string) string {
-	if len(path) > prefixName {
-		return path[prefixName:]
+	prefixSize := len(appdbus.DbusPathDock) + 1 // +1 for the trailing /
+	if len(path) <= prefixSize {
+		return ""
 	}
-	return ""
+	text := path[prefixSize:]
+	if i := strings.Index(text, "/"); i > 0 { // remove "/sub_icons" at the end if any.
+		return text[:i]
+	}
+	return text
 }
