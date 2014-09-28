@@ -182,8 +182,13 @@ Applet data files
 
 To register our "demo" applet in the dock, we have to link it as "demo" in the external applets dir.
  ~/.config/cairo-dock/third-party/demo
+
  This can be done easily once you have configured the SOURCE location in the
  Makefile with the "make link" command.
+
+or use the external system directory
+
+  /usr/share/cairo-dock/plug-ins/Dbus/third-party/
 
 Files needed in the "demo" directory:
    demo            the executable binary or script, without extension (use the shebang on the first line).
@@ -274,9 +279,7 @@ Notes:
 
 	tocdc:
 		#!/bin/sh
-		cdc service $* &
-
-
+		cdc service $* "$(pwd)" &
 
 
 */

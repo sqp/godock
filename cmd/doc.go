@@ -1,2 +1,0 @@
-// == COMMAND LINE ==
-package cmd

@@ -3,6 +3,8 @@
 package main
 
 import (
+	// "github.com/conformal/gotk3/gdk"
+	// "github.com/conformal/gotk3/glib"
 	"github.com/conformal/gotk3/gtk"
 
 	"github.com/sqp/vte/vte.gtk3"
@@ -51,12 +53,12 @@ func onOpen() {
 	window.Add(term)
 
 	window.SetTitle(WindowTitle)
-	window.SetWMClass("cdc", WindowTitle)
+	// window.SetWMClass("cdc", WindowTitle)
 	window.ShowAll()
 
 	_, e := window.Connect("destroy", onDestroy)
 	logger.Err(e, "connect destroy")
-	// _, e = term.Connect("button-press-event", termClicked)
+	// _, e = term.Connect("button-release-event", termClicked)
 	// log.Err(e, "connect clicked")
 }
 
@@ -64,3 +66,7 @@ func onDestroy() {
 	log.Logs.SetTerminal(nil)
 	window = nil
 }
+
+// func termClicked(widget *glib.Object, event *gdk.Event) {
+// 	logger.Info("clicked", event.GetButtonID())
+// }

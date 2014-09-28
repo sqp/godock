@@ -260,18 +260,23 @@ type defineEventser interface {
 //
 func (load *Loader) StartApplet(a, b, c, d, e, f, g, h string) *dbus.Error {
 	name := pathToName(c)
-	Log.Info("StartApplet", name)
-
 	a = "./" + name
 	args := []string{a, b, c, d, e, f, g, h}
 
-	// Create applet instance.
-	fn, ok := load.services[name]
-	if !ok {
+	if _, ok := load.apps[name]; ok {
+		Log.NewErr("StartApplet: applet already started", name)
 		return nil
 	}
-	app := fn()
 
+	fn, ok := load.services[name]
+	if !ok {
+		Log.NewErr("StartApplet: applet unknown (maybe not enabled at compile)", name)
+		return nil
+	}
+
+	// Create applet instance.
+	Log.Info("StartApplet", name)
+	app := fn()
 	load.apps[name] = app
 
 	// Define and connect applet events to the dock.

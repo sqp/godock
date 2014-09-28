@@ -219,10 +219,11 @@ func (l *Log) ExecAsync(command string, args ...string) error {
 // ExecSync run a command with and grab the output to return it when finished.
 //
 func (l *Log) ExecSync(command string, args ...string) (string, error) {
-	out, e := exec.Command(command, args...).Output()
-	if l.Err(e, "ExecSync: "+strings.Join(args, " ")) {
-		args = append([]string{command}, args...)
-	}
+	out, e := exec.Command(command, args...).CombinedOutput() // Output()
+
+	// if l.Err(e, "ExecSync: "+strings.Join(args, " ")) {
+	// 	args = append([]string{command}, args...)
+	// }
 	return string(out), e
 }
 

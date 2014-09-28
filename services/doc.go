@@ -1,2 +1,0 @@
-// == APPLETS SOURCES ==
-package services
