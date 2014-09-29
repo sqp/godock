@@ -18,7 +18,7 @@ type FormatIO func(device string, in, out uint64) string
 type IOActivity struct {
 	Log cdtype.Logger
 
-	list     map[string]*stat
+	list     []*stat
 	interval uint64
 	info     ITextInfo         // Paired values text renderer.
 	app      dock.RenderSimple // Controler to the Cairo-Dock icon.
@@ -32,8 +32,7 @@ type IOActivity struct {
 //
 func NewIOActivity(app dock.RenderSimple) *IOActivity {
 	return &IOActivity{
-		list: make(map[string]*stat),
-		app:  app,
+		app: app,
 	}
 }
 
@@ -42,12 +41,12 @@ func NewIOActivity(app dock.RenderSimple) *IOActivity {
 func (ioa *IOActivity) Settings(interval uint64, textPosition cdtype.InfoPosition, renderer, graphType int, gaugeTheme string, names ...string) {
 	ioa.interval = interval
 
-	ioa.list = make(map[string]*stat) // Clear list. Nothing must remain.
+	ioa.list = []*stat{} // Clear list. Nothing must remain.
 	ioa.app.AddDataRenderer("", 0, "")
 
 	if len(names) > 0 {
 		for _, name := range names {
-			ioa.list[name] = &stat{}
+			ioa.list = append(ioa.list, &stat{name: name})
 		}
 
 		switch textPosition { // Add text renderer info.
@@ -98,12 +97,12 @@ func (ioa *IOActivity) Check() {
 	ioa.info.Clear()
 	var values []float64
 
-	for name, stat := range ioa.list {
+	for _, stat := range ioa.list {
 		if in, out, ok := stat.Current(); ok {
-			ioa.info.Append(name, stat.rateReadNow, stat.rateWriteNow)
+			ioa.info.Append(stat.name, stat.rateReadNow, stat.rateWriteNow)
 			values = append(values, in, out)
 		} else {
-			ioa.info.Fail(name)
+			ioa.info.Fail(stat.name)
 			values = append(values, 0, 0)
 		}
 	}
@@ -132,12 +131,23 @@ func (ioa *IOActivity) Get() {
 	}
 
 	for _, newv := range l {
-		if stat, ok := ioa.list[newv.Field]; ok {
-			stat.Set(newv.In, newv.Out, ioa.interval)
+		if st := ioa.find(newv.Field); st != nil {
+			st.Set(newv.In, newv.Out, ioa.interval)
 		} else {
 			// log.DEV("unknown", newv.Field)
 		}
 	}
+}
+
+// find returns the stat matching the given reference.
+//
+func (ioa *IOActivity) find(name string) *stat {
+	for _, st := range ioa.list {
+		if st.name == name {
+			return st
+		}
+	}
+	return nil
 }
 
 //

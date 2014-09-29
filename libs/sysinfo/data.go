@@ -114,6 +114,8 @@ func GetNetActivity() ([]value, error) {
 //-------------------------------------------------------------[ DELTA STATS ]--
 
 type stat struct {
+	name string
+
 	rateReadNow  uint64
 	rateWriteNow uint64
 

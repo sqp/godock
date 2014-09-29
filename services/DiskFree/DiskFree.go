@@ -88,9 +88,21 @@ func (app *Applet) DefineEvents() {
 //
 //----------------------------------------------------------------[ DISKFREE ]--
 
+type listFS []*fileSystem
+
+func (ls listFS) Index(name string) int {
+	for k, fs := range ([]*fileSystem)(ls) {
+		if fs.name == name {
+			return k
+		}
+	}
+	return -1
+}
+
 // Informations about a partition and its usage.
 //
 type fileSystem struct {
+	name  string
 	info  sigar.FileSystem
 	usage sigar.FileSystemUsage
 }
@@ -98,10 +110,10 @@ type fileSystem struct {
 // Data poller for disk usage monitoring.
 //
 type diskFree struct {
-	listUser   map[string]*fileSystem // Data about user list of partitions.
-	listFound  map[string]*fileSystem // Data about other partitions.
-	autoDetect bool                   // Will autodetect mounted partitions.
-	names      []string               // User provided list of partitions.
+	listUser   listFS   // Data about user list of partitions.
+	listFound  listFS   // Data about other partitions.
+	autoDetect bool     // Will autodetect mounted partitions.
+	names      []string // User provided list of partitions.
 	nbValues   int
 
 	textPosition cdtype.InfoPosition
@@ -124,8 +136,7 @@ func (disks *diskFree) Settings(textPosition cdtype.InfoPosition, autoDetect boo
 	disks.gaugeName = gaugeName
 	disks.names = names
 
-	disks.app.AddDataRenderer("", 0, "")          // Remove renderer when settings changed to be sure.
-	disks.listUser = make(map[string]*fileSystem) // Clear list. Nothing must remain.
+	disks.app.AddDataRenderer("", 0, "") // Remove renderer when settings changed to be sure.
 	disks.clearData()
 
 	disks.nbValues = len(disks.listUser) + disks.countFound()
@@ -146,9 +157,10 @@ func (disks *diskFree) setRenderer() {
 // Clear internal before a new check.
 //
 func (disks *diskFree) clearData() {
-	disks.listFound = make(map[string]*fileSystem)
+	disks.listUser = listFS{}
+	disks.listFound = listFS{}
 	for _, name := range disks.names { // Fill user list with placeholders to detect missing ones.
-		disks.listUser[name] = nil
+		disks.listUser = append(disks.listUser, &fileSystem{name: name})
 	}
 }
 
@@ -165,16 +177,17 @@ func (disks *diskFree) GetData() {
 	for _, fs := range fullList.List {
 		if isFsValid(fs) {
 			part := &fileSystem{
+				name:  fs.DirName,
 				info:  fs,
 				usage: sigar.FileSystemUsage{},
 			}
 			part.usage.Get(fs.DirName)
 
-			if _, ok := disks.listUser[fs.DirName]; ok { // Fill user provided list with data.
-				disks.listUser[fs.DirName] = part
+			if k := disks.listUser.Index(fs.DirName); k > -1 { // Fill user provided list with data.
+				disks.listUser[k] = part
 
 			} else if disks.autoDetect { // Only fill second list if needed.
-				disks.listFound[fs.DirName] = part
+				disks.listFound = append(disks.listFound, part)
 			}
 		}
 	}
@@ -193,7 +206,7 @@ func (disks *diskFree) countFound() (count int) {
 		fullList := sigar.FileSystemList{}
 		fullList.Get()
 		for _, fs := range fullList.List {
-			if _, ok := disks.listUser[fs.DirName]; !ok && isFsValid(fs) {
+			if k := disks.listUser.Index(fs.DirName); k < 0 && isFsValid(fs) {
 				disks.log.Debug("found extra partition", fs.DirName)
 				count++
 			}
