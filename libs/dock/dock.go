@@ -1,7 +1,7 @@
 package dock
 
 import (
-	"github.com/guelfey/go.dbus" // imported as dbus.
+	"github.com/godbus/dbus"
 
 	"github.com/sqp/godock/libs/appdbus" // Connection to cairo-dock.
 	"github.com/sqp/godock/libs/cdtype"

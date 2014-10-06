@@ -7,7 +7,7 @@ package Notifications
 // https://developer.gnome.org/notification-spec/
 
 import (
-	"github.com/guelfey/go.dbus" // imported as dbus.
+	"github.com/godbus/dbus"
 
 	"github.com/sqp/godock/libs/appdbus"
 	"github.com/sqp/godock/libs/dock" // Connection to cairo-dock.
@@ -73,8 +73,8 @@ func (app *Applet) DefineEvents() {
 	}
 
 	app.Events.OnBuildMenu = func() {
-		// menu := []string{"", "ok"} // First entry is a separator.
-		// app.PopulateMenu(menu...)
+		menu := []string{"", "ok"} // First entry is a separator.
+		app.PopulateMenu(menu...)
 	}
 
 	app.Events.OnShortkey = func(key string) {

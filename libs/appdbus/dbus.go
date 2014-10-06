@@ -50,7 +50,7 @@ Still to do;
 package appdbus
 
 import (
-	"github.com/guelfey/go.dbus"
+	"github.com/godbus/dbus"
 
 	"github.com/sqp/pulseaudio"
 
@@ -368,7 +368,7 @@ func (cda *CDDbus) AddMenuItems() error {
 			"id":   int32(1),
 			// "tooltip": "this is the tooltip that will appear when you hover this entry",
 		},
-		// {},
+		{},
 	}
 
 	var data []map[string]dbus.Variant

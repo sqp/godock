@@ -2,8 +2,8 @@
 package srvdbus
 
 import (
-	"github.com/guelfey/go.dbus" // imported as dbus.
-	"github.com/guelfey/go.dbus/introspect"
+	"github.com/godbus/dbus"
+	"github.com/godbus/dbus/introspect"
 
 	"github.com/sqp/godock/libs/appdbus"
 	"github.com/sqp/godock/libs/cdtype"

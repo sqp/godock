@@ -2,7 +2,7 @@
 package Audio
 
 import (
-	"github.com/guelfey/go.dbus" // imported as dbus.
+	"github.com/godbus/dbus"
 
 	"github.com/sqp/pulseaudio"
 

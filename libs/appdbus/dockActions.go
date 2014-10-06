@@ -1,7 +1,7 @@
 package appdbus
 
 import (
-	"github.com/guelfey/go.dbus"
+	"github.com/godbus/dbus"
 
 	"github.com/sqp/godock/libs/log"
 	"github.com/sqp/godock/libs/packages"
@@ -299,74 +299,77 @@ func ListIcons() (list []*CDIcon) {
 // InfoApplet asks the dock all informations about an applet.
 //
 func InfoApplet(name string) *packages.AppletPackage {
-	list := ListApplets(name)
-	if app, ok := list[name]; ok {
-		return app
+	for _, props := range DockProperties("type=Module & name=" + name) {
+		return parseApplet(props)
 	}
 	return nil
 }
 
 // ListApplets asks the dock informations about all known applets.
-// Optional name to query. Only one can be provided.
 //
-func ListApplets(name ...string) map[string]*packages.AppletPackage {
+func ListApplets() map[string]*packages.AppletPackage {
 	list := make(map[string]*packages.AppletPackage)
-	query := "type=Module"
-	if len(name) > 0 {
-		query += " & name=" + name[0]
-	}
-	for _, props := range DockProperties(query) {
-		pack := &packages.AppletPackage{}
+	// var list []*packages.AppletPackage
+	for _, props := range DockProperties("type=Module") {
+		pack := parseApplet(props)
 
-		for k, v := range props {
-			switch k {
-			case "type": // == "Module"
+		// println(pack.DisplayedName)
 
-			case "name":
-				pack.DisplayedName = v.Value().(string)
-
-			case "title":
-				pack.Title = v.Value().(string)
-
-			case "author":
-				pack.Author = v.Value().(string)
-
-			case "instances":
-				if instances, ok := v.Value().([]string); ok {
-					pack.Instances = instances
-				}
-
-			case "icon":
-				pack.Icon = v.Value().(string)
-
-			case "description":
-				pack.Description = v.Value().(string)
-
-			case "is-multi-instance":
-				pack.IsMultiInstance = v.Value().(bool)
-
-			case "category":
-				if cat, ok := v.Value().(uint32); ok {
-					pack.Category = int(cat)
-				}
-
-			case "preview":
-				pack.Preview = v.Value().(string)
-
-			case "module-type":
-				pack.ModuleType = int(v.Value().(uint32))
-
-			default:
-				log.Info("ListApplets unmatched", k, v)
-			}
-		}
 		if pack.DisplayedName != "" {
 			list[pack.DisplayedName] = pack
+			// list = append(list, pack)
 			// log.Info("----------------")
 			// log.DETAIL(pack)
 		}
 	}
 	return list
+}
+
+func parseApplet(props map[string]dbus.Variant) *packages.AppletPackage {
+	pack := &packages.AppletPackage{}
+	for k, v := range props {
+		switch k {
+		case "type": // == "Module"
+
+		case "name":
+			pack.DisplayedName = v.Value().(string)
+
+		case "title":
+			pack.Title = v.Value().(string)
+
+		case "author":
+			pack.Author = v.Value().(string)
+
+		case "instances":
+			if instances, ok := v.Value().([]string); ok {
+				pack.Instances = instances
+			}
+
+		case "icon":
+			pack.Icon = v.Value().(string)
+
+		case "description":
+			pack.Description = v.Value().(string)
+
+		case "is-multi-instance":
+			pack.IsMultiInstance = v.Value().(bool)
+
+		case "category":
+			if cat, ok := v.Value().(uint32); ok {
+				pack.Category = int(cat)
+			}
+
+		case "preview":
+			pack.Preview = v.Value().(string)
+
+		case "module-type":
+			pack.ModuleType = int(v.Value().(uint32))
+
+		default:
+			log.Info("ListApplets unmatched", k, v)
+		}
+	}
+	return pack
 }
 
 // type AppletPackage struct {
