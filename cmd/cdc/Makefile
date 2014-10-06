@@ -1,7 +1,10 @@
 TARGET=cdc
 VERSION=0.0.1-1
 SOURCE=github.com/sqp/godock/cmd
-APPLETS=DiskActivity DiskFree GoGmail NetActivity Update
+APPLETS=Audio Cpu DiskActivity DiskFree GoGmail Mem NetActivity Update
+
+# unstable applets requires uncommited patches to build.
+UNSTABLE=Notifications TVPlay config log gtk
 
 
 %: build
