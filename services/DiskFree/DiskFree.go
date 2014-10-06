@@ -13,28 +13,32 @@ import (
 	"github.com/cloudfoundry/gosigar" // Partitions and usage informations.
 
 	"github.com/sqp/godock/libs/cdtype"
-	"github.com/sqp/godock/libs/dock"    // Connection to cairo-dock.
+	"github.com/sqp/godock/libs/dock" // Connection to cairo-dock.
+	"github.com/sqp/godock/libs/sysinfo"
 	"github.com/sqp/godock/libs/ternary" // Ternary operators.
-
-	"strconv"
 )
 
-// Applet DiskUsage data and controlers.
+// Applet data and controlers.
 //
 type Applet struct {
 	*dock.CDApplet
-	disks *diskFree
-	conf  *appletConf
+	conf    *appletConf
+	service DiskFree
 }
 
-// NewApplet create a new DiskUsage applet instance.
+// NewApplet create a new DiskFree applet instance.
 //
 func NewApplet() dock.AppletInstance {
 	app := &Applet{CDApplet: dock.NewCDApplet()} // Icon controler and interface to cairo-dock.
+	app.AddPoller(app.service.Check)
 
-	app.disks = newDiskFree(app)
-	app.disks.log = app.Log
-	app.AddPoller(func() { app.disks.GetData(); app.disks.Display() })
+	app.service.App = app
+	app.service.log = app.Log
+	app.service.Texts = map[cdtype.InfoPosition]sysinfo.RenderOne{
+		cdtype.InfoNone:    {},
+		cdtype.InfoOnIcon:  {Sep: "\n", ShowPost: false},
+		cdtype.InfoOnLabel: {Sep: "\n", ShowPost: true},
+	}
 
 	return app
 }
@@ -44,6 +48,10 @@ func NewApplet() dock.AppletInstance {
 func (app *Applet) Init(loadConf bool) {
 	app.LoadConfig(loadConf, &app.conf) // Load config will crash if fail. Expected.
 
+	// Settings for DiskFree.
+	app.service.Settings(app.conf.DisplayText, 0, 0, app.conf.GaugeName)
+	app.service.SetParts(app.conf.Partitions, app.conf.AutoDetect)
+
 	// Set defaults to dock icon: display and controls.
 	app.SetDefaults(dock.Defaults{
 		Label:          ternary.String(app.conf.Name != "", app.conf.Name, app.AppletName),
@@ -52,9 +60,6 @@ func (app *Applet) Init(loadConf bool) {
 			"left":   dock.NewCommandStd(app.conf.LeftAction, app.conf.LeftCommand, app.conf.LeftClass),
 			"middle": dock.NewCommandStd(app.conf.MiddleAction, app.conf.MiddleCommand)},
 		Debug: app.conf.Debug})
-
-	// Settings for diskFree and poller.
-	app.disks.Settings(cdtype.InfoPosition(app.conf.DisplayText), app.conf.AutoDetect, app.conf.GaugeName, app.conf.Partitions...)
 }
 
 //
@@ -88,134 +93,85 @@ func (app *Applet) DefineEvents() {
 //
 //----------------------------------------------------------------[ DISKFREE ]--
 
-type listFS []*fileSystem
-
-func (ls listFS) Index(name string) int {
-	for k, fs := range ([]*fileSystem)(ls) {
-		if fs.name == name {
-			return k
-		}
-	}
-	return -1
-}
-
-// Informations about a partition and its usage.
-//
-type fileSystem struct {
-	name  string
-	info  sigar.FileSystem
-	usage sigar.FileSystemUsage
-}
-
 // Data poller for disk usage monitoring.
 //
-type diskFree struct {
-	listUser   listFS   // Data about user list of partitions.
-	listFound  listFS   // Data about other partitions.
+type DiskFree struct {
+	sysinfo.RenderPercent
+
 	autoDetect bool     // Will autodetect mounted partitions.
 	names      []string // User provided list of partitions.
 	nbValues   int
 
-	textPosition cdtype.InfoPosition
-	gaugeName    string
-	app          dock.RenderSimple // Controler to the Cairo-Dock icon.
-	log          cdtype.Logger
+	log cdtype.Logger
 }
 
-// Create a new data poller for disk usage monitoring.
+// Set the user monitored pertitions.
 //
-func newDiskFree(app dock.RenderSimple) *diskFree {
-	return &diskFree{app: app}
-}
-
-// Apply user settings from config.
-//
-func (disks *diskFree) Settings(textPosition cdtype.InfoPosition, autoDetect bool, gaugeName string, names ...string) {
-	disks.textPosition = textPosition
+func (disks *DiskFree) SetParts(parts []string, autoDetect bool) {
+	disks.names = parts
 	disks.autoDetect = autoDetect
-	disks.gaugeName = gaugeName
-	disks.names = names
 
-	disks.app.AddDataRenderer("", 0, "") // Remove renderer when settings changed to be sure.
-	disks.clearData()
-
-	disks.nbValues = len(disks.listUser) + disks.countFound()
+	disks.nbValues = len(parts) + len(disks.findOthers())
+	disks.SetSize(int32(disks.nbValues))
 
 	if disks.nbValues == 0 {
 		disks.log.NewErr("none", "disk found")
-		disks.app.SetLabel("No disks found.")
-	}
-	disks.setRenderer()
-}
-
-// Set the Cairo-Dock renderer.
-//
-func (disks *diskFree) setRenderer() {
-	disks.app.AddDataRenderer("gauge", int32(disks.nbValues), disks.gaugeName)
-}
-
-// Clear internal before a new check.
-//
-func (disks *diskFree) clearData() {
-	disks.listUser = listFS{}
-	disks.listFound = listFS{}
-	for _, name := range disks.names { // Fill user list with placeholders to detect missing ones.
-		disks.listUser = append(disks.listUser, &fileSystem{name: name})
+		disks.App.SetLabel("No disks found.")
 	}
 }
-
-//
-//----------------------------------------------------------------[ GET DATA ]--
 
 // Get disk usage information from the system.
 //
-func (disks *diskFree) GetData() {
-	disks.clearData()
+func (disks *DiskFree) Check() {
+	disks.Clear()
 
-	fullList := sigar.FileSystemList{}
-	fullList.Get()
-	for _, fs := range fullList.List {
-		if isFsValid(fs) {
-			part := &fileSystem{
-				name:  fs.DirName,
-				info:  fs,
-				usage: sigar.FileSystemUsage{},
-			}
-			part.usage.Get(fs.DirName)
+	parts := append(disks.names, disks.findOthers()...)
 
-			if k := disks.listUser.Index(fs.DirName); k > -1 { // Fill user provided list with data.
-				disks.listUser[k] = part
-
-			} else if disks.autoDetect { // Only fill second list if needed.
-				disks.listFound = append(disks.listFound, part)
-			}
+	for _, name := range parts {
+		usage := sigar.FileSystemUsage{}
+		value := float64(-1)
+		if usage.Get(name) == nil { // no error
+			value = float64(usage.UsePercent()) / 100
 		}
+		disks.Append(name, value)
 	}
 
-	if newcount := len(disks.listUser) + len(disks.listFound); newcount != disks.nbValues {
+	if newcount := len(parts); newcount != disks.nbValues {
 		disks.log.Debug("Number of partitions changed. Resizing", disks.nbValues, "=>", newcount)
 		disks.nbValues = newcount
-		disks.setRenderer()
+		disks.SetSize(int32(newcount))
 	}
+
+	disks.Display()
 }
 
-// Count extra disks for the size of the renderer (only those not in the user list).
+// findOthers returns the list of partitions found and not in user list.
 //
-func (disks *diskFree) countFound() (count int) {
+func (disks *DiskFree) findOthers() (list []string) {
 	if disks.autoDetect {
-		fullList := sigar.FileSystemList{}
-		fullList.Get()
-		for _, fs := range fullList.List {
-			if k := disks.listUser.Index(fs.DirName); k < 0 && isFsValid(fs) {
-				disks.log.Debug("found extra partition", fs.DirName)
-				count++
+		all := sigar.FileSystemList{}
+		all.Get()
+		for _, fs := range all.List {
+			if isFsValid(fs) && !disks.isListed(fs.DirName) {
+				list = append(list, fs.DirName)
 			}
 		}
 	}
 	return
 }
 
-// Check if the filesystem isn't in the banned list.
+// isListed returns whether the provided partition is already in the user list or not.
+//
+func (disks *DiskFree) isListed(name string) bool {
+	for _, diskName := range disks.names {
+		if diskName == name {
+			return true
+		}
+	}
+	return false
+}
+
+// isFsValid returns whether the filesystem isn't in the banned list or not.
 //
 func isFsValid(fs sigar.FileSystem) bool {
 	if fs.DevName == "none" ||
@@ -235,72 +191,4 @@ func isFsValid(fs sigar.FileSystem) bool {
 	}
 
 	return true
-}
-
-//
-//-----------------------------------------------------------------[ DISPLAY ]--
-
-// Display disk usage info on the Cairo-Dock icon (renderer, quickinfo, label).
-//
-func (disks *diskFree) Display() {
-	var values []float64
-	var text string
-
-	// User defined partitions.
-	// for name, fs := range disks.listUser {
-	for _, fs := range disks.listUser {
-		var value float64
-
-		if fs != nil {
-			value = float64(fs.usage.UsePercent())
-		} else {
-			// disks.log.Info("DISK NOT FOUND", name)
-		}
-
-		values = append(values, value/100)
-		disks.appendText(&text, value, fs)
-	}
-
-	// Autodetected partitions.
-	for _, fs := range disks.listFound {
-		value := float64(fs.usage.UsePercent())
-		values = append(values, value/100)
-		disks.appendText(&text, value, fs)
-	}
-
-	if len(values) > 0 {
-		disks.app.RenderValues(values...)
-	}
-
-	switch disks.textPosition {
-	case cdtype.InfoOnIcon:
-		disks.app.SetQuickInfo(text)
-
-	case cdtype.InfoOnLabel:
-		disks.app.SetLabel(text)
-	}
-}
-
-// Append one value to the text info.
-//
-func (disks *diskFree) appendText(text *string, value float64, fs *fileSystem) {
-	if *text != "" {
-		*text += "\n"
-	}
-
-	if value > -1 && fs != nil {
-		*text += strconv.FormatFloat(value, 'f', 0, 64) + "%"
-	} else {
-		*text += "N/A"
-		return
-	}
-
-	// disks.log.Debug(curText + " : " + fs.info.DirName)
-
-	switch disks.textPosition {
-	// case cdtype.InfoOnIcon:
-
-	case cdtype.InfoOnLabel:
-		*text += " : " + fs.info.DirName //  fmt.Sprintf("%s : %s", curText, fs.info.DirName)
-	}
 }

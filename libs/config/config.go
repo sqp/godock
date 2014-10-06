@@ -4,6 +4,8 @@ package config
 import (
 	"github.com/robfig/config" // Config parser.
 
+	"github.com/sqp/godock/libs/cdtype"
+
 	"bufio"
 	"errors"
 	"io"
@@ -137,7 +139,7 @@ func (c *Config) getField(elem reflect.Value, group, key string) {
 		val, e = c.Bool(group, key)
 		elem.SetBool(val)
 
-	case int, int32:
+	case int, int32, cdtype.InfoPosition:
 		var val int
 		val, e = c.Int(group, key)
 		elem.SetInt(int64(val))

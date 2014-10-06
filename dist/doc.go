@@ -1,5 +1,5 @@
 /*
-Linux package installation
+Linux package installation.
 
 
 Archlinux package
@@ -13,9 +13,9 @@ Create package
   makepkg
 
 Install package
-  makepkg -i # -f to force rebuild
+  makepkg -i
 
 Remove Package
   pacman -R cairo-dock-control
 */
-package documentation
+package dist

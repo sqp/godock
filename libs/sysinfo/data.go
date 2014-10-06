@@ -27,14 +27,14 @@ const ( // Position of our data in the kernel file.
 //
 // Using Linux iostat : http://www.kernel.org/doc/Documentation/iostats.txt
 //
-func GetDiskActivity() ([]value, error) {
+func GetDiskActivity() ([]Value, error) {
 	file, e := os.Open(KernelDiskStats)
 	if e != nil {
 		return nil, errors.New("your kernel doesn't support diskstat. (2.5.70 or above required)")
 	}
 	defer file.Close()
 
-	var values []value
+	var values []Value
 
 	r := bufio.NewReader(file)
 	line, err := r.ReadString('\n')
@@ -51,7 +51,7 @@ func GetDiskActivity() ([]value, error) {
 			in, _ := strconv.ParseUint(data[diskIn], 10, 64)
 			out, _ := strconv.ParseUint(data[diskOut], 10, 64)
 
-			values = append(values, value{
+			values = append(values, Value{
 				Field: data[diskName],
 				In:    in,
 				Out:   out})
@@ -77,13 +77,13 @@ const ( // Position of our data in the kernel file.
 
 // GetNetActivity returns activity information for configured network interfaces.
 //
-func GetNetActivity() ([]value, error) {
+func GetNetActivity() ([]Value, error) {
 	file, e := os.Open(KernelNetStats)
 	if e != nil {
 		return nil, e
 	}
 	defer file.Close()
-	var values []value
+	var values []Value
 
 	r := bufio.NewReader(file)
 
@@ -101,7 +101,7 @@ func GetNetActivity() ([]value, error) {
 			in, _ := strconv.ParseUint(data[netIn], 10, 64)
 			out, _ := strconv.ParseUint(data[netOut], 10, 64)
 
-			values = append(values, value{
+			values = append(values, Value{
 				Field: data[netName][:len(data[netName])-1], // Remove ":" at the end of interface name.
 				In:    in,
 				Out:   out})
@@ -159,7 +159,7 @@ func currentRate(speed uint64, max *uint64) float64 {
 	return 0
 }
 
-type value struct {
+type Value struct {
 	Field string
 	In    uint64
 	Out   uint64

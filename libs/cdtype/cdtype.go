@@ -150,9 +150,9 @@ const (
 type InfoPosition int32
 
 const (
-	InfoNone    = iota // don't display anything.
-	InfoOnIcon         // display info on the icon (as quick-info).
-	InfoOnLabel        // display on the label of the icon.
+	InfoNone    InfoPosition = iota // don't display anything.
+	InfoOnIcon                      // display info on the icon (as quick-info).
+	InfoOnLabel                     // display on the label of the icon.
 )
 
 // EmblemPosition is the location where an emblem is displayed.

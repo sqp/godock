@@ -4,10 +4,164 @@ import (
 	"github.com/sqp/godock/libs/cdtype"
 	"github.com/sqp/godock/libs/cdtype/bytesize"
 	"github.com/sqp/godock/libs/dock" // Connection to cairo-dock.
+
+	"fmt"
 )
 
+// DockGraphType defines graph rendering types.
 //
 var DockGraphType = []string{"Line", "Plain", "Bar", "Circle", "Plain Circle"}
+
+// percent provides a couple of text and value to render.
+//
+type percent struct {
+	text  string
+	value float64
+}
+
+// RenderPercent provides a simple icon/label text renderer with values in percent.
+//
+type RenderPercent struct {
+	text   RenderOne
+	values []percent
+	App    dock.RenderSimple
+	Texts  map[cdtype.InfoPosition]RenderOne
+	cbText func(string) error // Display callback.
+
+	DisplayText   cdtype.InfoPosition
+	DisplayValues int
+	GaugeTheme    string
+	GraphType     int
+}
+
+// Settings is a all in one method to apply applet settings.
+//
+func (rp *RenderPercent) Settings(textPosition cdtype.InfoPosition, renderer, graphType int, gaugeTheme string) {
+	rp.DisplayValues = renderer
+	rp.GraphType = graphType
+	rp.GaugeTheme = gaugeTheme
+
+	rp.text = rp.Texts[textPosition]
+
+	switch textPosition { // Add text renderer info.
+	case cdtype.InfoOnIcon:
+		rp.cbText = rp.App.SetQuickInfo
+
+	case cdtype.InfoOnLabel:
+		rp.cbText = rp.App.SetLabel
+
+	default:
+		rp.cbText = nilText
+	}
+}
+
+// SetSize sets the number of values to render on icon.
+// Mandatory with and after Settings.
+//
+func (rp *RenderPercent) SetSize(size int32) {
+	rp.App.AddDataRenderer("", 0, "")
+
+	switch {
+	case rp.DisplayValues == 0:
+		rp.App.AddDataRenderer("gauge", size, rp.GaugeTheme)
+
+	case rp.DisplayValues == 1:
+		rp.App.AddDataRenderer("graph", size, DockGraphType[rp.GraphType])
+	}
+}
+
+// Append adds a value to the renderer.
+//
+func (rp *RenderPercent) Append(str string, value float64) {
+	rp.values = append(rp.values, percent{text: str, value: value})
+}
+
+// Display renders and displays the provided values.
+//
+func (rp *RenderPercent) Display() {
+	if len(rp.values) == 0 {
+		return
+	}
+
+	var values []float64
+	rp.text.Clear()
+	for _, v := range rp.values {
+		values = append(values, v.value)
+		rp.text.Append(v.text, v.value*100)
+	}
+	rp.App.RenderValues(values...)
+	rp.cbText(rp.text.Text())
+}
+
+// Clear resets the internal data.
+//
+func (rp *RenderPercent) Clear() {
+	rp.text.Clear()
+	rp.values = nil
+}
+
+// stub for text rendering.
+func nilText(string) error { return nil }
+
+//
+//-----------------------------------------------------------[ SINGLE VALUES ]--
+
+// RenderOne provides a simple icon/label text renderer with values in percent.
+//
+type RenderOne struct {
+	info     string // info to display.
+	Sep      string // separator between lines.
+	ShowPre  bool   // text pre value.
+	ShowPost bool   // text post value.
+}
+
+// Append adds new data values to the renderer.
+// The value must be in the 0..100 range.
+//
+func (ro *RenderOne) Append(str string, value float64) {
+	if ro.info != "" {
+		ro.info += ro.Sep
+	}
+	if ro.ShowPre && str != "" {
+		ro.info += str + " "
+	}
+
+	ro.info += formatPercent(value)
+
+	if ro.ShowPost && str != "" {
+		ro.info += " " + str
+	}
+}
+
+// Text returns the text to display.
+//
+func (ro *RenderOne) Text() string {
+	return ro.info
+}
+
+// Clear resets the internal text.
+//
+func (ro *RenderOne) Clear() {
+	ro.info = ""
+}
+
+// format value as percent.
+//
+func formatPercent(value float64) string {
+	format := ""
+	switch {
+	case value < 0:
+		return "N/A"
+	case value < 10:
+		format = "%1.1f%%"
+	default:
+		format = "%2.f%%"
+	}
+	return fmt.Sprintf(format, value)
+}
+
+//
+//----------------------------------------------------------[ COUPLED VALUES ]--
 
 // FormatIO is a text format method for IOActivity.
 //
@@ -25,7 +179,7 @@ type IOActivity struct {
 
 	FormatIcon  FormatIO
 	FormatLabel FormatIO
-	GetData     func() ([]value, error)
+	GetData     func() ([]Value, error)
 }
 
 // NewIOActivity create a new data store for IO activity monitoring.

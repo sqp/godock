@@ -1,5 +1,7 @@
 package DiskFree
 
+import "github.com/sqp/godock/libs/cdtype"
+
 const (
 	defaultUpdateDelay = 60 // every minute.
 )
@@ -17,7 +19,7 @@ type groupIcon struct {
 }
 
 type groupConfiguration struct {
-	DisplayText int
+	DisplayText cdtype.InfoPosition
 
 	GaugeName string
 
