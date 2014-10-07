@@ -7,7 +7,7 @@ pkgdesc="Cairo-Dock control tool and go applets."
 arch=('x86_64' 'i686')
 url="http://github.com/sqp/godock"
 license=('GPL3')
-depends=('gtk3' 'vte3' 'curl')
+depends=('gtk3' 'vte3' 'curl' 'gupnp-av')
 makedepends=('git' 'go')
 optdepends=(
   'bzr: dock version check (Update)'
@@ -15,17 +15,30 @@ optdepends=(
 )
 options=('!strip' '!emptydirs')
 srcpath=github.com/sqp/godock
-applets="Audio DiskActivity DiskFree GoGmail NetActivity Update"
-cdctags="log gtk" # only use of gtk3 and vte3 for now (the log window)
+applets="Audio Cpu DiskActivity DiskFree GoGmail Mem NetActivity Notifications TVPlay Update"
+cdctags="log gtk"
 appdir=usr/share/cairo-dock/plug-ins/Dbus/third-party/
 
 build() {
   # Download
-  GOPATH="$srcdir" go get -d -tags "$applets $cdctags" $srcpath/cmd/cdc
+  GOPATH="$srcdir" go get -d -u -tags "$applets $cdctags" $srcpath/cmd/cdc
 
-  # Patch
+  # Patch GTK
   cd "$srcdir/src/github.com/conformal/gotk3"
-  git pull --no-commit https://github.com/sqp/gotk3 master
+  # git pull --no-commit https://github.com/sqp/gotk3 master
+
+  git pull --commit --no-edit https://github.com/sqp/gotk3 scale
+  git pull --commit --no-edit https://github.com/sqp/gotk3 iconview
+  git pull --commit --no-edit https://github.com/sqp/gotk3 liststore_hack
+  git pull --commit --no-edit https://github.com/sqp/gotk3 widget_set
+  git pull --commit --no-edit https://github.com/sqp/gotk3 pixbuf_at_scale
+
+  git pull --commit --no-edit https://github.com/sqp/gotk3 gliblist
+
+
+  # Patch Dbus (for Notifications)
+  cd "$srcdir/src/github.com/godbus/dbus"
+  git pull --commit https://github.com/sqp/dbus fixeavesdrop
 
   # Build
   GOPATH="$srcdir" go get -fix -v -tags "$applets $cdctags" $srcpath/cmd/cdc # -x 

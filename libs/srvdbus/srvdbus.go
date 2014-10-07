@@ -117,34 +117,31 @@ func (load *Loader) StartLoop() {
 	Log.Info("StartServer")
 
 	action := true
-	name := ""
+	var waiter <-chan time.Time
+
 	for { // Start main loop and handle events until the End signal is received from the dock.
 		if action {
-			if name != "" {
-				load.plopers.Add(name, load.apps[name].Poller().GetInterval()) // set time to max for given poller so it will be recheck. Can be considerer as a hack?
-				name = ""
-			}
-
 			for name, app := range load.apps {
 				poller := app.Poller()
 				if poller != nil && load.plopers.Test(name, poller.GetInterval()) {
 					go poller.Action()
 				}
 			}
-			action = false
-		}
 
-		waiter := time.After(time.Second)
+			action = false
+			waiter = time.After(time.Second)
+		}
 
 		select { // Wait for events. Until the End signal is received from the dock.
 
 		case s := <-load.c: // Listen to DBus events.
 			if load.dispatchDbusSignal(s) {
-				return
+				return // signal was Stop.
 			}
 
-		case name = <-load.restart: // Wait for manual restart poller event. Reloop and check.
-			action = true
+		case name := <-load.restart: // Wait for manual restart poller event. Reloop and check.
+			go load.apps[name].Poller().Action()
+			load.plopers.Add(name, 0) // reset timer for given poller.
 
 		case <-waiter: // Wait for the end of the timer. Reloop and check.
 			action = true
@@ -162,7 +159,6 @@ func (load *Loader) StopApplet(name string) {
 
 	delete(load.apps, name)
 	Log.Info("StopApplet", name)
-
 }
 
 // Forward the Dbus signal to local manager or applet
@@ -489,7 +485,7 @@ func (pl plopers) Test(name string, interval int) bool {
 	// 	return false
 	// }
 	pl[name]++
-	if pl[name] > interval {
+	if pl[name] >= interval {
 		pl[name] = 0
 		return true
 	}
