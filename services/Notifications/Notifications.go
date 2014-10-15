@@ -24,7 +24,7 @@ type Applet struct {
 	notifs *Notifs
 }
 
-// Create a new applet instance.
+// NewApplet creates a new Notifications applet instance.
 //
 func NewApplet() dock.AppletInstance {
 	app := &Applet{CDApplet: dock.NewCDApplet()} // Icon controler and interface to cairo-dock.
@@ -35,7 +35,7 @@ func NewApplet() dock.AppletInstance {
 	return app
 }
 
-// Load user configuration if needed and initialise applet.
+// Init loads user configuration if needed and initialise applet.
 //
 func (app *Applet) Init(loadConf bool) {
 	app.LoadConfig(loadConf, &app.conf) // Load config will crash if fail. Expected.
@@ -62,7 +62,7 @@ func (app *Applet) Init(loadConf bool) {
 
 //------------------------------------------------------------------[ EVENTS ]--
 
-// Define applet events callbacks.
+// DefineEvents sets applet events callbacks.
 //
 func (app *Applet) DefineEvents() {
 
@@ -118,22 +118,26 @@ func (app *Applet) displayAll() {
 		app.Log.Err(e, "template")
 		msg = strings.TrimRight(text, "\n")
 	}
-	dialog_attributes := map[string]interface{}{
+	dialogAttributes := map[string]interface{}{
 		"message":     msg,
 		"use-markup":  true,
 		"time-length": uint32(0)}
 	// if self.config['clear'] else 4 + len(msg)/40 }  // if we're going to clear the history, show the dialog until the user closes it
-	app.PopupDialog(dialog_attributes, nil)
+	app.PopupDialog(dialogAttributes, nil)
 }
 
 //
 //-----------------------------------------------------------[ NOTIFICATIONS ]--
 
+// Notif defines a single Dbus notification.
+//
 type Notif struct {
 	Sender, Icon, Title, Content string
 	duration, ID                 uint32
 }
 
+// Notifs handles Dbus notifications management.
+//
 type Notifs struct {
 	C         chan *dbus.Message
 	MaxSize   int

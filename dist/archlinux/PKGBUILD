@@ -35,10 +35,13 @@ build() {
 
   git pull --commit --no-edit https://github.com/sqp/gotk3 gliblist
 
+  #git pull --commit --no-edit https://github.com/shish/gotk3 file-chooser
+  #git pull --commit --no-edit https://github.com/shish/gotk3 paned
+
 
   # Patch Dbus (for Notifications)
   cd "$srcdir/src/github.com/godbus/dbus"
-  git pull --commit https://github.com/sqp/dbus fixeavesdrop
+  git pull --commit --no-edit https://github.com/sqp/dbus fixeavesdrop
 
   # Build
   GOPATH="$srcdir" go get -fix -v -tags "$applets $cdctags" $srcpath/cmd/cdc # -x 

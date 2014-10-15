@@ -455,6 +455,13 @@ func (menu *Menu) Append(name string, call func()) {
 	menu.Actions = append(menu.Actions, call)
 }
 
+// Separator adds a separator to the menu.
+//
+func (menu *Menu) Separator() {
+	menu.Names = append(menu.Names, "")
+	menu.Actions = append(menu.Actions, func() {})
+}
+
 // Launch calls the action referenced by its id.
 func (menu *Menu) Launch(id int32) {
 	if int(id) < len(menu.Actions) {

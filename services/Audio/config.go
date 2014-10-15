@@ -5,11 +5,13 @@ import "github.com/sqp/godock/libs/cdtype"
 // const defaultUpdateDelay = 3
 // const historyFile = "appdata/uptoshare_history.txt"
 
+// VolumeMax is the pulseaudio max value for speakers and channels volumes.
 const VolumeMax = 65535
 
 // EmblemMuted is the position of the "upload in progress" emblem.
 const EmblemMuted = cdtype.EmblemTopRight
 
+// DefaultIconMuted is the default emblem icon for muted streams.
 const DefaultIconMuted = "muted.svg"
 
 //------------------------------------------------------------------[ CONFIG ]--

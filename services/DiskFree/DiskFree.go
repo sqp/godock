@@ -26,7 +26,7 @@ type Applet struct {
 	service DiskFree
 }
 
-// NewApplet create a new DiskFree applet instance.
+// NewApplet creates a new DiskFree applet instance.
 //
 func NewApplet() dock.AppletInstance {
 	app := &Applet{CDApplet: dock.NewCDApplet()} // Icon controler and interface to cairo-dock.
@@ -43,7 +43,7 @@ func NewApplet() dock.AppletInstance {
 	return app
 }
 
-// Init load user configuration if needed and initialise applet.
+// Init loads user configuration if needed and initialise applet.
 //
 func (app *Applet) Init(loadConf bool) {
 	app.LoadConfig(loadConf, &app.conf) // Load config will crash if fail. Expected.
@@ -65,7 +65,7 @@ func (app *Applet) Init(loadConf bool) {
 //
 //------------------------------------------------------------------[ EVENTS ]--
 
-// DefineEvents set applet events callbacks.
+// DefineEvents sets applet events callbacks.
 //
 func (app *Applet) DefineEvents() {
 
@@ -93,7 +93,7 @@ func (app *Applet) DefineEvents() {
 //
 //----------------------------------------------------------------[ DISKFREE ]--
 
-// Data poller for disk usage monitoring.
+// DiskFree is a data poller for disk usage monitoring.
 //
 type DiskFree struct {
 	sysinfo.RenderPercent
@@ -105,7 +105,7 @@ type DiskFree struct {
 	log cdtype.Logger
 }
 
-// Set the user monitored pertitions.
+// SetParts sets the user monitored pertitions.
 //
 func (disks *DiskFree) SetParts(parts []string, autoDetect bool) {
 	disks.names = parts
@@ -120,7 +120,7 @@ func (disks *DiskFree) SetParts(parts []string, autoDetect bool) {
 	}
 }
 
-// Get disk usage information from the system.
+// Check updates disk usage information from the system.
 //
 func (disks *DiskFree) Check() {
 	disks.Clear()

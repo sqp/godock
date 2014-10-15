@@ -2,6 +2,8 @@
 package TVPlay
 
 import (
+	"github.com/conformal/gotk3/gtk"
+
 	"github.com/sqp/gupnp/mediacp"        // upnp control point.
 	"github.com/sqp/gupnp/mediacp/guigtk" // upnp gui.
 	"github.com/sqp/gupnp/upnpcp"
@@ -16,6 +18,8 @@ type Applet struct {
 	*dock.CDApplet
 	conf *appletConf
 	cp   *mediacp.MediaControl
+	gui  *guigtk.TVGui
+	win  *gtk.Window
 }
 
 // NewApplet creates a new TVPlay applet instance.
@@ -28,7 +32,10 @@ func NewApplet() dock.AppletInstance {
 	app.cp, e = mediacp.New()
 	app.Log.Err(e, "temp Dir")
 
-	guigtk.NewGui(app.cp, false).Load()
+	app.gui, app.win = guigtk.NewGui(app.cp, false)
+	if app.gui != nil {
+		app.gui.Load()
+	}
 
 	// func (gui *TVGui) ConnectControl() {
 	hook := app.cp.SubscribeHook("applet")
@@ -56,6 +63,10 @@ func NewApplet() dock.AppletInstance {
 //
 func (app *Applet) Init(loadConf bool) {
 	app.LoadConfig(loadConf, &app.conf) // Load config will crash if fail. Expected.
+
+	if app.win != nil {
+		app.win.SetIconFromFile(app.FileLocation("icon")) // TODO: debug  path.Join(localDir, "data/icon.png")
+	}
 
 	// Set defaults to dock icon: display and controls.
 	app.SetDefaults(dock.Defaults{
@@ -111,8 +122,8 @@ func (app *Applet) DefineEvents() {
 		if haveMonitor { // Window opened.
 			app.ShowAppli(!hasFocus)
 		} else {
-			guigtk.NewGui(app.cp, true).Load() // shouldn't be reached ATM.
-			app.cpInit()
+			// guigtk.NewGui(app.cp, true).Load() // shouldn't be reached ATM.
+			// app.cpInit()
 		}
 	}
 

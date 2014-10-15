@@ -28,7 +28,7 @@ func runInstall(cmd *Command, args []string) {
 		cmd.Usage()
 	}
 
-	distant, e := packages.ListDistant(version)
+	distant, e := packages.ListDistant(packages.ThirdParty + "/" + version)
 	exitIfFail(e, "List distant applets") // Ensure we have the server list.
 
 	options := ""

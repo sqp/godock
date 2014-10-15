@@ -44,7 +44,7 @@ type groupActions struct {
 
 // Actions available in right click menu.
 //
-var dockMenu []int = []int{
+var dockMenu = []int{
 	mediacp.ActionToggleMute,
 	mediacp.ActionVolumeUp,
 	mediacp.ActionVolumeDown,

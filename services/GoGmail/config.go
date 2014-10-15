@@ -26,6 +26,8 @@ const (
 	EmblemLarge = "large emblem"
 )
 
+// Mail client action settings.
+//
 const (
 	MailClientLocation = iota // Open mail client as location, with xdg-open.
 	MailClientProgram         // Open mail client as command.

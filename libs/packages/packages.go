@@ -10,6 +10,7 @@ import (
 
 	"errors"
 	// "fmt"
+	"encoding/xml"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -23,10 +24,13 @@ import (
 
 const (
 	// DistantURL is the location of cairo-dock applet market.
-	DistantURL = "http://download.tuxfamily.org/glxdock/themes/third-party/"
+	DistantURL = "http://download.tuxfamily.org/glxdock/themes/"
 
 	// DistantList is the name of the applets list file on the server.
 	DistantList = "list.conf"
+
+	// ThirdParty applets location in config dir.
+	ThirdParty = "third-party"
 )
 
 // PackageType defines the type of a package (maybe rename to state?).
@@ -41,6 +45,13 @@ const (
 	TypeUpdated                    // package present locally but with a more recent version on the server, or distant package that has been updated in the past month.
 	TypeInDev                      // package present locally but not on server. It's a user special applet we must not alter.
 	TypeAny                        // joker (the search path function will search locally first, and on the server then).
+)
+
+type PackageSource int
+
+const (
+	SourceApplet PackageSource = iota
+	SourceTheme
 )
 
 //---------------------------------------------------------[ APPLET PACKAGES ]--
@@ -97,7 +108,7 @@ func (list ByName) Less(i, j int) bool {
 func ListDownload(version string) (AppletPackages, error) {
 	filled := make(map[string]*AppletPackage) // index by name so local packages will replace distant ones.
 
-	found, eRet := ListDistant(version)
+	found, eRet := ListDistant(ThirdParty + "/" + version)
 	if eRet == nil {
 		for _, pack := range found {
 			filled[pack.DisplayedName] = pack
@@ -107,7 +118,7 @@ func ListDownload(version string) (AppletPackages, error) {
 	// Get applets dir.
 	dir, eDir := DirExternal()
 	if eDir == nil {
-		local, eUsr := ListExternalUser(dir, "applet")
+		local, eUsr := ListFromDir(dir, TypeUser, SourceApplet)
 		if eUsr == nil {
 			for _, pack := range local {
 				if _, ok := filled[pack.DisplayedName]; !ok {
@@ -178,9 +189,9 @@ func ListDistant(version string) (AppletPackages, error) {
 
 //-----------------------------------------------------------[ USER EXTERNAL ]--
 
-// ListExternalUser lists packages in external applets dir.
+// ListFromDir lists packages in external applets dir.
 //
-func ListExternalUser(dir string, typ string) (AppletPackages, error) {
+func ListFromDir(dir string, typ PackageType, source PackageSource) (AppletPackages, error) {
 	files, e := ioutil.ReadDir(dir) // ([]os.FileInfo, error)
 	if e != nil {
 		log.Debug("ReadDir:", e)
@@ -196,7 +207,7 @@ func ListExternalUser(dir string, typ string) (AppletPackages, error) {
 		fullpath := filepath.Join(dir, info.Name())
 		info = fileGetLink(fullpath, info) // Get real dir if it is a link.
 		if info.IsDir() {
-			pack, e := NewAppletPackageUser(dir, info.Name(), typ)
+			pack, e := NewAppletPackageUser(dir, info.Name(), typ, source)
 			if e != nil {
 				return nil, e
 			}
@@ -205,30 +216,6 @@ func ListExternalUser(dir string, typ string) (AppletPackages, error) {
 		}
 	}
 	return list, nil
-}
-
-// ReadPackageFile loads a package from its config file on disk.
-//
-func ReadPackageFile(dir, applet, typ string) (*AppletPackage, error) {
-	var file, group string
-	switch typ {
-	case "applet":
-		file = "auto-load.conf"
-		group = "Register"
-	case "theme":
-		file = "theme.conf"
-		group = "Description"
-	}
-	filename := filepath.Join(dir, applet, file)
-	conf, e := config.NewFromFile(filename)
-
-	if e != nil {
-		return nil, e
-	}
-	pack := &AppletPackage{}
-	conf.UnmarshalGroup(reflect.ValueOf(pack).Elem(), group, config.GetTag)
-
-	return pack, nil
 }
 
 //-----------------------------------------------------------[ APPLET PACKAGE ]--
@@ -260,7 +247,7 @@ type AppletPackage struct {
 
 	// From Dbus only
 	Icon            string
-	Title           string `conf:"Name"`
+	Title           string `conf:"name"`
 	Preview         string
 	IsMultiInstance bool
 	Instances       []string
@@ -269,9 +256,9 @@ type AppletPackage struct {
 
 // NewAppletPackageUser try to read an external applet package info from dir.
 //
-func NewAppletPackageUser(dir, name string, typ string) (*AppletPackage, error) {
+func NewAppletPackageUser(dir, name string, typ PackageType, source PackageSource) (*AppletPackage, error) {
 
-	pack, e := ReadPackageFile(dir, name, typ)
+	pack, e := ReadPackageFile(dir, name, source)
 	if log.Err(e, "read package description") {
 		return nil, e
 	}
@@ -279,13 +266,37 @@ func NewAppletPackageUser(dir, name string, typ string) (*AppletPackage, error) 
 	fullpath := filepath.Join(dir, name)
 	pack.DisplayedName = name
 	pack.Path = fullpath
-	pack.Type = TypeUser
+	pack.Type = typ
 	pack.Size = float64(dirSize(fullpath)) / float64(bytesize.MB)
 
 	// modif, e := ioutil.ReadFile(filepath.Join(fullpath, "last-modif"))
 	// if !log.Err(e, "Get last-modif") {
 	// 	pack.LastModifDate = strings.Replace(string(modif), "\n", "", -1) // strip \n. Check to use trimInt from Update.
 	// }
+	return pack, nil
+}
+
+// ReadPackageFile loads a package from its config file on disk.
+//
+func ReadPackageFile(dir, applet string, source PackageSource) (*AppletPackage, error) {
+	var file, group string
+	switch source {
+	case SourceApplet:
+		file = "auto-load.conf"
+		group = "Register"
+	case SourceTheme:
+		file = "theme.conf"
+		group = "Description"
+	}
+	filename := filepath.Join(dir, applet, file)
+	conf, e := config.NewFromFile(filename)
+
+	if e != nil {
+		return nil, e
+	}
+	pack := &AppletPackage{}
+	conf.UnmarshalGroup(reflect.ValueOf(pack).Elem(), group, config.GetTag)
+
 	return pack, nil
 }
 
@@ -342,13 +353,36 @@ func (pack *AppletPackage) FormatState() string {
 	case TypeUser:
 		return "User"
 	case TypeDistant:
-		return "Net"
+		return "On server"
 	case TypeNew:
 		return "New"
 	case TypeUpdated:
 		return "Updated"
 	case TypeInDev:
-		return "TypeInDev"
+		return "Dev by user"
+	}
+	return ""
+}
+
+// IconState returns the icon location for the state for the applet.
+//
+// GLDI_SHARE_DATA_DIR
+func (pack *AppletPackage) IconState() string {
+	switch pack.Type {
+	case TypeLocal:
+		return "icons/theme-local.svg"
+	case TypeUser:
+		return "icons/theme-user.svg"
+	case TypeDistant:
+		return "icons/theme-distant.svg"
+	case TypeNew:
+		return "icons/theme-new.svg"
+	case TypeUpdated:
+		return "icons/theme-updated.svg"
+	case TypeInDev:
+		// return "TypeInDev"
+		return "icons/theme-local.svg" // TODO: improve !
+
 	}
 	return ""
 }
@@ -440,14 +474,13 @@ func (pack *AppletPackage) GetDescription() string {
 // Optional tar settings can be passed.
 //
 func (pack *AppletPackage) Install(version, options string) error {
-	// func DownloadPackage(version, name, options string) error {
 	// Get applets dir.
 	dir, eDir := DirExternal()
 	if eDir != nil {
 		return eDir
 	}
 	// Connect a reader to the archive on server.
-	resp, eNet := http.Get(DistantURL + version + "/" + pack.DisplayedName + "/" + pack.DisplayedName + ".tar.gz")
+	resp, eNet := http.Get(DistantURL + ThirdParty + "/" + version + "/" + pack.DisplayedName + "/" + pack.DisplayedName + ".tar.gz")
 	if eNet != nil {
 		return eNet
 	}
@@ -466,11 +499,10 @@ func (pack *AppletPackage) Install(version, options string) error {
 		file := filepath.Join(dir, pack.DisplayedName, "last-modif")
 		log.Err(ioutil.WriteFile(file, []byte(lastModif), 0644), "Write last-modif")
 
-		newpack, e := NewAppletPackageUser(dir, pack.DisplayedName, "applet")
+		newpack, e := NewAppletPackageUser(dir, pack.DisplayedName, TypeUser, SourceApplet)
 		if e != nil {
 			return e
 		}
-		pack.Type = TypeUser
 		pack.Path = newpack.Path
 		pack.Description = newpack.Description
 		pack.Version = newpack.Version
@@ -494,7 +526,7 @@ func (pack *AppletPackage) Uninstall(version string) error {
 	dir, eDir := DirExternal()
 	if eDir == nil && dir != "" && dir != "/" && pack.DisplayedName != "" {
 		pack.Type = TypeDistant
-		pack.Path = DistantURL + version + "/" + pack.DisplayedName
+		pack.Path = DistantURL + ThirdParty + "/" + version + "/" + pack.DisplayedName
 
 		return os.RemoveAll(filepath.Join(dir, pack.DisplayedName))
 	}
@@ -548,6 +580,50 @@ func stripComments(l string) string {
 	return l
 }
 */
+
+//----------------------------------------------------------[ APPLETS THEMES ]--
+
+type Gauge struct {
+	XMLName xml.Name `xml:"gauge"`
+	Theme
+}
+
+type Theme struct {
+	// Name    string      `xml:"name"`   // name of the package
+	DirName string      // really = directory name (used as key).
+	Title   string      `xml:"name"`
+	Author  string      `xml:"author"` // author(s)
+	Version string      `xml:"version"`
+	Type    PackageType // type of package : installed, user, distant...
+}
+
+// ListThemesDir lists themes in a given directory.
+//
+func ListThemesDir(dir string, typ PackageType) ([]Theme, error) {
+	files, e := ioutil.ReadDir(dir) // ([]os.FileInfo, error)
+	if e != nil {
+		log.Debug("ReadDir:", e)
+		return nil, e
+	}
+
+	var list []Theme
+	for _, info := range files {
+		info = fileGetLink(filepath.Join(dir, info.Name()), info) // Get real dir if it is a link.
+		if info.IsDir() {
+			fullpath := filepath.Join(dir, info.Name(), "theme.xml")
+			body, _ := ioutil.ReadFile(fullpath)
+
+			// Parse data.
+			theme := Theme{Type: typ, DirName: info.Name()}
+			gauge := Gauge{Theme: theme}
+			if e := xml.Unmarshal(body, &gauge); e == nil {
+				list = append(list, gauge.Theme)
+			}
+
+		}
+	}
+	return list, nil
+}
 
 //-----------------------------------------------------------[ HELPER ]--
 

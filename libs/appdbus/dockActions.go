@@ -6,6 +6,8 @@ import (
 	"github.com/sqp/godock/libs/log"
 	"github.com/sqp/godock/libs/packages"
 
+	"path/filepath"
+	"sort"
 	"strings"
 )
 
@@ -205,6 +207,45 @@ func (icon *CDIcon) FormatName() (name string) {
 	return
 }
 
+func (icon *CDIcon) DefaultNameIcon(applets map[string]*packages.AppletPackage) (name, img string) {
+
+	name = icon.FormatName()
+	if icon.Type == IconTypeApplet {
+		if pack, ok := applets[icon.Module]; ok {
+			name = pack.Title
+		}
+	}
+
+	switch {
+	case icon.Type == IconTypeApplet:
+		if pack, ok := applets[icon.Module]; ok {
+			img = pack.Icon
+		} else {
+			log.Info("module not found for icon", icon.Module)
+		}
+
+	case icon.Icon != "":
+		img = icon.Icon
+
+		// case icon.Type != IconTypeSeparator:
+		// log.Info("no ICON", icon.Type, icon.FormatName())
+	}
+	return
+}
+
+func (icon *CDIcon) ConfigPath() string {
+	switch icon.Type {
+	case IconTypeApplet:
+		return icon.ConfigFile
+
+	case IconTypeLauncher, IconTypeSeparator, IconTypeSubDock:
+		if dir, e := packages.DirLaunchers(); !log.Err(e, "config launchers") {
+			return filepath.Join(dir, icon.ConfigFile)
+		}
+	}
+	return ""
+}
+
 // ListIcons asks the dock the list of active icons.
 //
 // TODO: add argument for advanced queries.
@@ -251,6 +292,44 @@ func ListIcons() (list []*CDIcon) {
 		list = append(list, pack)
 	}
 	return
+}
+
+//----------------------------------------------------------[ ICONS BY ORDER ]--
+
+// IconsByOrder defines a list of icons that can be sorted on the order field.
+//
+type IconsByOrder []*CDIcon
+
+// Len returns the size of the list.
+//
+func (a IconsByOrder) Len() int {
+	return len(a)
+}
+
+// Swap swaps the position of two icons.
+//
+func (a IconsByOrder) Swap(i, j int) {
+	a[i], a[j] = a[j], a[i]
+}
+
+// Less compares the order of two icons.
+//
+func (a IconsByOrder) Less(i, j int) bool {
+	return a[i].Order < a[j].Order
+}
+
+// ListIconsOrdered builds the list of dock icons sorted by container and order.
+//
+func ListIconsOrdered() map[string]IconsByOrder {
+	list := make(map[string]IconsByOrder)
+	for _, icon := range ListIcons() {
+		list[icon.Container] = append(list[icon.Container], icon)
+	}
+
+	for container, _ := range list {
+		sort.Sort(IconsByOrder(list[container]))
+	}
+	return list
 }
 
 // func ListLaunchers() (list []*CDIcon) {

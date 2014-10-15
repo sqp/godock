@@ -103,6 +103,16 @@ func (b *BuildHelper) GetFrame(name string) *gtk.Frame {
 // 	return nil
 // }
 
+func (b *BuildHelper) GetImage(name string) *gtk.Image {
+	if obj, e := b.GetObject(name); !b.err(e) {
+		if widget, ok := obj.(*gtk.Image); ok {
+			return widget
+		}
+		b.badtype(name, "Image")
+	}
+	return nil
+}
+
 func (b *BuildHelper) GetLabel(name string) *gtk.Label {
 	if obj, e := b.GetObject(name); !b.err(e) {
 		if widget, ok := obj.(*gtk.Label); ok {
