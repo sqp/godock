@@ -159,6 +159,8 @@ func currentRate(speed uint64, max *uint64) float64 {
 	return 0
 }
 
+// Value define a counter value for the paired renderer.
+//
 type Value struct {
 	Field string
 	In    uint64

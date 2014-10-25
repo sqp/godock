@@ -1,6 +1,7 @@
 // Package cdtype defines main types and constants for Cairo-Dock applets.
 package cdtype
 
+// Dock constants.
 const (
 	AppletsDirName = "third-party"
 )
@@ -85,7 +86,7 @@ type SubEvents struct {
 	OnSubDropData func(data string, icon string)
 }
 
-// Logger is the interface for reporting information.
+// Logger defines the interface for reporting information.
 //
 type Logger interface {
 	SetDebug(debug bool)
@@ -104,6 +105,8 @@ type Logger interface {
 	ExecAsync(command string, args ...string) error
 }
 
+// LogOut defines the interface for log forwarding.
+//
 type LogOut interface {
 	Raw(sender, msg string)
 	Info(sender, msg string, more ...interface{})
@@ -129,6 +132,7 @@ type DockProperties struct {
 // ScreenPosition refers to the border of the screen the dock is attached to.
 type ScreenPosition int32
 
+// Dock position on screen.
 const (
 	ScreenBottom ScreenPosition = iota // Dock in the bottom.
 	ScreenTop                          // Dock in the top.
@@ -140,6 +144,7 @@ const (
 //
 type ContainerType int32
 
+// Applet container type.
 const (
 	ContainerDock    ContainerType = iota // Applet in a dock.
 	ContainerDesklet                      // Applet in a desklet.
@@ -149,6 +154,7 @@ const (
 //
 type InfoPosition int32
 
+// Applet text info position.
 const (
 	InfoNone    InfoPosition = iota // don't display anything.
 	InfoOnIcon                      // display info on the icon (as quick-info).
@@ -159,6 +165,7 @@ const (
 //
 type EmblemPosition int32
 
+// Applet emblem position.
 const (
 	EmblemTopLeft     EmblemPosition = iota // Emblem in top left.
 	EmblemBottomLeft                        // Emblem in bottom left.
@@ -182,6 +189,7 @@ const (
 //
 type MenuItemType int32
 
+// Applet menu entry type.
 const (
 	MenuEntry       MenuItemType = iota // Simple menu text entry.
 	MenuSubMenu                         // Not working.
@@ -197,6 +205,7 @@ const (
 
 // DialogKey
 
+// Applet dialog answer keys.
 const (
 	DialogKeyEnter  = -1 // Answer when the user press enter.
 	DialogKeyEscape = -2 // Answer when the user press escape.

@@ -1,5 +1,7 @@
+// Package color formats colored terminal output.
 package color
 
+// Terminal colors.
 const (
 	Reset      = "\x1b[0m"  // Reset terminal color.
 	Bright     = "\x1b[1m"  // Set bright display.

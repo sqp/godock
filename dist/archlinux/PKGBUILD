@@ -25,18 +25,13 @@ build() {
 
   # Patch GTK
   cd "$srcdir/src/github.com/conformal/gotk3"
-  # git pull --no-commit https://github.com/sqp/gotk3 master
+  git pull --commit --no-edit https://github.com/sqp/gotk3 current
 
-  git pull --commit --no-edit https://github.com/sqp/gotk3 scale
-  git pull --commit --no-edit https://github.com/sqp/gotk3 iconview
-  git pull --commit --no-edit https://github.com/sqp/gotk3 liststore_hack
-  git pull --commit --no-edit https://github.com/sqp/gotk3 widget_set
-  git pull --commit --no-edit https://github.com/sqp/gotk3 pixbuf_at_scale
-
-  git pull --commit --no-edit https://github.com/sqp/gotk3 gliblist
-
-  #git pull --commit --no-edit https://github.com/shish/gotk3 file-chooser
-  #git pull --commit --no-edit https://github.com/shish/gotk3 paned
+  # branches grouped in this tree:
+  # https://github.com/sqp/gotk3 nil_case file-chooser scale treestore icontheme pixbuf_at_scale gliblist others widget_set liststore_hack
+  # iconview link_font_button
+  # https://github.com/shish/gotk3 file-chooser
+  # https://github.com/shish/gotk3 paned
 
 
   # Patch Dbus (for Notifications)

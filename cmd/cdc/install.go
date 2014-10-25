@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/sqp/godock/libs/cdtype"
 	"github.com/sqp/godock/libs/packages"
 
 	"strings"
@@ -28,7 +29,7 @@ func runInstall(cmd *Command, args []string) {
 		cmd.Usage()
 	}
 
-	distant, e := packages.ListDistant(packages.ThirdParty + "/" + version)
+	distant, e := packages.ListDistant(cdtype.AppletsDirName + "/" + version)
 	exitIfFail(e, "List distant applets") // Ensure we have the server list.
 
 	options := ""

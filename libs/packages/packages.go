@@ -28,15 +28,14 @@ const (
 
 	// DistantList is the name of the applets list file on the server.
 	DistantList = "list.conf"
-
-	// ThirdParty applets location in config dir.
-	ThirdParty = "third-party"
 )
 
 // PackageType defines the type of a package (maybe rename to state?).
 //
 type PackageType int
 
+// Types of packages (location).
+//
 const (
 	TypeLocal   PackageType = iota // package installed as root on the machine (in a sub-folder /usr).
 	TypeUser                       // package located in the user's home
@@ -47,8 +46,12 @@ const (
 	TypeAny                        // joker (the search path function will search locally first, and on the server then).
 )
 
+// PackageSource defines whether the loaded package is an applet or a theme.
+//
 type PackageSource int
 
+// Source of package to load (applet or theme).
+//
 const (
 	SourceApplet PackageSource = iota
 	SourceTheme
@@ -108,7 +111,7 @@ func (list ByName) Less(i, j int) bool {
 func ListDownload(version string) (AppletPackages, error) {
 	filled := make(map[string]*AppletPackage) // index by name so local packages will replace distant ones.
 
-	found, eRet := ListDistant(ThirdParty + "/" + version)
+	found, eRet := ListDistant(cdtype.AppletsDirName + "/" + version)
 	if eRet == nil {
 		for _, pack := range found {
 			filled[pack.DisplayedName] = pack
@@ -480,7 +483,7 @@ func (pack *AppletPackage) Install(version, options string) error {
 		return eDir
 	}
 	// Connect a reader to the archive on server.
-	resp, eNet := http.Get(DistantURL + ThirdParty + "/" + version + "/" + pack.DisplayedName + "/" + pack.DisplayedName + ".tar.gz")
+	resp, eNet := http.Get(DistantURL + cdtype.AppletsDirName + "/" + version + "/" + pack.DisplayedName + "/" + pack.DisplayedName + ".tar.gz")
 	if eNet != nil {
 		return eNet
 	}
@@ -526,7 +529,7 @@ func (pack *AppletPackage) Uninstall(version string) error {
 	dir, eDir := DirExternal()
 	if eDir == nil && dir != "" && dir != "/" && pack.DisplayedName != "" {
 		pack.Type = TypeDistant
-		pack.Path = DistantURL + ThirdParty + "/" + version + "/" + pack.DisplayedName
+		pack.Path = DistantURL + cdtype.AppletsDirName + "/" + version + "/" + pack.DisplayedName
 
 		return os.RemoveAll(filepath.Join(dir, pack.DisplayedName))
 	}
@@ -583,11 +586,15 @@ func stripComments(l string) string {
 
 //----------------------------------------------------------[ APPLETS THEMES ]--
 
+// Gauge is an icon theme.
+//
 type Gauge struct {
 	XMLName xml.Name `xml:"gauge"`
 	Theme
 }
 
+// Theme represents an icon theme (gauge, clock...).
+//
 type Theme struct {
 	// Name    string      `xml:"name"`   // name of the package
 	DirName string      // really = directory name (used as key).

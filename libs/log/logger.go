@@ -248,26 +248,26 @@ type feeder interface {
 	Feed(string)
 }
 
-// LogMsg defines a single log message.
+// Msg defines a single log message.
 //
-type LogMsg struct {
+type Msg struct {
 	Text   string
 	Sender string
 	Time   time.Time
 }
 
-// LogHistory provides an history for the Log system.
+// History provides an history for the Log system.
 //
-type LogHistory struct {
+type History struct {
 	term  feeder
-	msgs  []LogMsg
+	msgs  []Msg
 	mutex sync.RWMutex
 }
 
-// NewLogHistory creates a logging history with an optional forwarder.
+// NewHistory creates a logging history with an optional forwarder.
 //
-func NewLogHistory(optionalFeeder ...feeder) *LogHistory {
-	hist := &LogHistory{}
+func NewHistory(optionalFeeder ...feeder) *History {
+	hist := &History{}
 	if len(optionalFeeder) > 0 {
 		hist.SetTerminal(optionalFeeder[0])
 	}
@@ -276,13 +276,13 @@ func NewLogHistory(optionalFeeder ...feeder) *LogHistory {
 
 // SetTerminal sets the optional terminal forwarder.
 //
-func (hist *LogHistory) SetTerminal(f feeder) {
+func (hist *History) SetTerminal(f feeder) {
 	hist.term = f
 }
 
 // List returns the log messages saved.
 //
-func (hist *LogHistory) List() []LogMsg {
+func (hist *History) List() []Msg {
 	hist.mutex.Lock()
 	defer hist.mutex.Unlock()
 	return hist.msgs
@@ -290,32 +290,32 @@ func (hist *LogHistory) List() []LogMsg {
 
 // Raw logs a raw data message.
 //
-func (hist *LogHistory) Raw(sender, msg string) {
-	hist.newMsg(LogMsg{
+func (hist *History) Raw(sender, msg string) {
+	hist.newMsg(Msg{
 		Text:   msg,
 		Sender: sender})
 }
 
 // Debug logs a message of type debug.
 //
-func (hist *LogHistory) Debug(sender, msg string, more ...interface{}) {
-	hist.newMsg(LogMsg{
+func (hist *History) Debug(sender, msg string, more ...interface{}) {
+	hist.newMsg(Msg{
 		Text:   Format(color.FgMagenta, sender, msg, more...),
 		Sender: sender})
 }
 
 // Info logs a message of type info.
 //
-func (hist *LogHistory) Info(sender, msg string, more ...interface{}) {
-	hist.newMsg(LogMsg{
+func (hist *History) Info(sender, msg string, more ...interface{}) {
+	hist.newMsg(Msg{
 		Text:   Format(color.FgGreen, sender, msg, more...),
 		Sender: sender})
 }
 
 // Err logs a message of type error.
 //
-func (hist *LogHistory) Err(e string, sender string, msg ...interface{}) {
-	hist.newMsg(LogMsg{
+func (hist *History) Err(e string, sender string, msg ...interface{}) {
+	hist.newMsg(Msg{
 		Text:   FormatErr(e, sender, msg...),
 		Sender: sender})
 }
@@ -323,13 +323,13 @@ func (hist *LogHistory) Err(e string, sender string, msg ...interface{}) {
 // Write saves the log into his history and send it back to the default output.
 // If a terminal is defined, it will have the data forwarded too.
 //
-func (hist *LogHistory) Write(p []byte) (n int, err error) {
-	hist.newMsg(LogMsg{Text: string(p), Sender: "dock"})
+func (hist *History) Write(p []byte) (n int, err error) {
+	hist.newMsg(Msg{Text: string(p), Sender: "dock"})
 	return len(p), nil
 }
 
 // save and display message.
-func (hist *LogHistory) newMsg(msg LogMsg) {
+func (hist *History) newMsg(msg Msg) {
 
 	// Forward to standard output.
 	// TODO: should reenable!
@@ -352,7 +352,7 @@ func (hist *LogHistory) newMsg(msg LogMsg) {
 
 // return index of first valid message.
 //
-func (hist *LogHistory) removeOld() int {
+func (hist *History) removeOld() int {
 	var lastindex int
 	var datecomp = time.Now().Add(-12 * time.Hour)
 	for i, msg := range hist.msgs {
@@ -374,7 +374,7 @@ var std = log.New(os.Stdout, "", log.Ltime) // log.Ldate
 var debug bool
 
 // Logs provides a default history logger.
-var Logs = &LogHistory{}
+var Logs = &History{}
 
 // SetPrefix set the prefix of the logger display.
 //

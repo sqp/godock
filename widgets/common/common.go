@@ -6,7 +6,7 @@ import (
 	"github.com/conformal/gotk3/gtk"
 
 	"errors"
-	"math"
+	// "math"
 )
 
 //
@@ -20,10 +20,14 @@ import (
 // #cgo pkg-config: x11
 import "C"
 
+// GRRTHREADS is a dirty hack to prevent threads related crashs.
+//
 func GRRTHREADS() {
 	C.XInitThreads()
 }
 
+// InitGtk provides GTK start and stop callbacks.
+//
 func InitGtk() (onstart, onstop func()) {
 	gtkStart := func() {
 
@@ -36,7 +40,7 @@ func InitGtk() (onstart, onstop func()) {
 	return gtkStart, gtk.MainQuit
 }
 
-// Create a new toplevel window, set size and pack the main widget.
+// NewWindowMain creates a new toplevel window, set size and pack the main widget.
 //
 func NewWindowMain(widget gtk.IWidget, w, h int) *gtk.Window {
 	win, err := gtk.WindowNew(gtk.WINDOW_TOPLEVEL)
@@ -64,14 +68,18 @@ func PixbufNewFromFile(cIcon string, iSize int) (pixbuf *gdk.Pixbuf, e error) {
 }
 */
 
+// PixbufAtSize loads an image from disk as pixbuf.
+//
 func PixbufAtSize(file string, maxW, maxH int) (*gdk.Pixbuf, error) {
-	if _, imgW, imgH := gdk.PixbufGetFileInfo(file); imgW > 0 {
-		ratio := math.Min(math.Min(float64(maxW)/float64(imgW), float64(maxH)/float64(imgH)), 1)
-		// log.Info("ratio", ratio)
-		pix, e := gdk.PixbufNewFromFileAtSize(file, int(float64(imgW)*ratio), int(float64(imgH)*ratio))
-		return pix, e
-	}
-	return nil, errors.New("Problem getting file info: " + file)
+	// if _, imgW, imgH := gdk.PixbufGetFileInfo(file); imgW > 0 {
+	// 	ratio := math.Min(math.Min(float64(maxW)/float64(imgW), float64(maxH)/float64(imgH)), 1)
+	// 	// log.Info("ratio", ratio)
+	// 	pix, e := gdk.PixbufNewFromFileAtSize(file, int(float64(imgW)*ratio), int(float64(imgH)*ratio))
+	// 	return pix, e
+	// }
+	// return nil, errors.New("Problem getting file info: " + file)
+
+	return gdk.PixbufNewFromFileAtScale(file, maxW, maxH, true)
 }
 
 func ImageNewFromFile(cIcon string, iSize int) (pImage *gtk.Image) {
@@ -107,34 +115,35 @@ func ImageNewFromFile(cIcon string, iSize int) (pImage *gtk.Image) {
 	return pImage
 }
 
-func PixbufNewFromFile(cIcon string, iSize int) (pixbuf *gdk.Pixbuf, e error) {
+// PixbufNewFromFile loads an icon from stock or disk as pixbuf.
+//
+func PixbufNewFromFile(iconName string, size int) (pixbuf *gdk.Pixbuf, e error) {
 	switch {
-	case len(cIcon) == 0:
+	case len(iconName) == 0:
 		return nil, errors.New("PixbufNewFromFile: empty name")
 
-	case cIcon[0] != '/': // GTK stock icon
-		// return gtk.PixbufNewFromStock(cIcon, iSize)
-
-		// return gdk.PixbufNewFromResourceAtScale(cIcon, iSize, iSize, true)
-		// img, e := gdk.PixbufNewFromResourceAtScale(cIcon, iSize, iSize, true)
-		// log.Err(e, "Load image stock")
-		// return img, nil
+	case iconName[0] != '/' && iconName[0] != '~': // GTK stock icon
+		t, e := gtk.IconThemeGetDefault()
+		if e != nil {
+			return nil, e
+		}
+		return t.LoadIcon(iconName, size, gtk.ICON_LOOKUP_USE_BUILTIN)
 
 	default: // Full path.
 
-		// if iSize == GTK_ICON_SIZE_BUTTON { /// TODO: find a way to get a correct transposition...
-		// 	iSize = CAIRO_DOCK_TAB_ICON_SIZE
-		// } else if iSize == GTK_ICON_SIZE_MENU {
-		// 	iSize = CAIRO_DOCK_FRAME_ICON_SIZE
+		// if size == GTK_ICON_SIZE_BUTTON { /// TODO: find a way to get a correct transposition...
+		// 	size = CAIRO_DOCK_TAB_ICON_SIZE
+		// } else if size == GTK_ICON_SIZE_MENU {
+		// 	size = CAIRO_DOCK_FRAME_ICON_SIZE
 		// }
 
-		return PixbufAtSize(cIcon, iSize, iSize)
-		// if pix, e := PixbufAtSize(cIcon, iSize, iSize); !log.Err(e, "Load image pixbuf") {
+		return PixbufAtSize(iconName, size, size)
+		// if pix, e := PixbufAtSize(iconName, iSize, iSize); !log.Err(e, "Load image pixbuf") {
 		// 	return pix
 		// }
 	}
 
-	return nil, errors.New("PixbufNewFromFile: no match for " + cIcon)
+	return nil, errors.New("PixbufNewFromFile: no match for " + iconName)
 }
 
 func Big(text string) string   { return "<big>" + text + "</big>" }

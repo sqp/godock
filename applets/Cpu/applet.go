@@ -1,4 +1,5 @@
-/* CPU activity monitoring applet for the Cairo-Dock project.
+/*
+CPU activity monitoring applet for the Cairo-Dock project.
 
 Install go and get go environment: you need a valid $GOPATH var and directory.
 

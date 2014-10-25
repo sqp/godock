@@ -169,6 +169,7 @@ const (
 	IconTypeLauncher  = "Launcher"
 	IconTypeSeparator = "Separator"
 	IconTypeSubDock   = "Stack-icon"
+	IconTypeTaskbar   = "Taskbar"
 )
 
 // CDIcon defines a dock icon properties.
@@ -192,7 +193,7 @@ type CDIcon struct {
 	Module     string
 }
 
-// FormatName return the user readable name for the applet.
+// FormatName return the user readable name for the icon.
 //
 func (icon *CDIcon) FormatName() (name string) {
 	switch icon.Type {
@@ -207,6 +208,9 @@ func (icon *CDIcon) FormatName() (name string) {
 	return
 }
 
+// DefaultNameIcon returns improved name and image for the icon if possible.
+// (can fix those for applets using the given list)
+//
 func (icon *CDIcon) DefaultNameIcon(applets map[string]*packages.AppletPackage) (name, img string) {
 
 	name = icon.FormatName()
@@ -233,9 +237,20 @@ func (icon *CDIcon) DefaultNameIcon(applets map[string]*packages.AppletPackage) 
 	return
 }
 
+//
+
+// interface
+
+// func (icon *CDIcon) MainConf() string {
+// 	path, _ := packages.MainConf()
+// 	return path
+// }
+
+// ConfigPath returns the full path to the icon config file.
+//
 func (icon *CDIcon) ConfigPath() string {
 	switch icon.Type {
-	case IconTypeApplet:
+	case IconTypeApplet, IconTypeTaskbar:
 		return icon.ConfigFile
 
 	case IconTypeLauncher, IconTypeSeparator, IconTypeSubDock:
@@ -245,6 +260,14 @@ func (icon *CDIcon) ConfigPath() string {
 	}
 	return ""
 }
+
+// IsTaskbar returns whether the icon belongs to the taskbar or not.
+//
+func (icon *CDIcon) IsTaskbar() bool {
+	return icon.Type == IconTypeTaskbar
+}
+
+//
 
 // ListIcons asks the dock the list of active icons.
 //
@@ -326,7 +349,7 @@ func ListIconsOrdered() map[string]IconsByOrder {
 		list[icon.Container] = append(list[icon.Container], icon)
 	}
 
-	for container, _ := range list {
+	for container := range list {
 		sort.Sort(IconsByOrder(list[container]))
 	}
 	return list

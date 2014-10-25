@@ -1,4 +1,5 @@
-/* Update and build your dock from sources with this applet for the Cairo-Dock project.
+/*
+Update and build your dock from sources with this applet for the Cairo-Dock project.
 
 Install go and get go environment: you need a valid $GOPATH var and directory.
 

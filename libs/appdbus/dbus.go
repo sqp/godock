@@ -1,5 +1,5 @@
 /*
-Package dbus is the godock cairo-dock connector using DBus.
+Package appdbus is the godock cairo-dock connector using DBus.
 
 Its goal is to connect the main Cairo-Dock Golang API, godock/libs/dock, to its parent.
 
@@ -61,6 +61,8 @@ import (
 	"strings"
 )
 
+// Dbus dock paths.
+//
 const (
 	DbusObject             = "org.cairodock.CairoDock"
 	DbusPathDock           = "/org/cairodock/CairoDock"
@@ -654,7 +656,7 @@ func toMapVariant(input map[string]interface{}) map[string]dbus.Variant {
 //
 //-----------------------------------------------------------[ NEW CALLBACKS ]--
 
-// Register connects an object to the dock events hooks it implements.
+// RegisterEvents connects an object to the dock events hooks it implements.
 // If the object declares any of the method in the Define... interfaces list, it
 // will be registered to receive those events.
 //
@@ -664,6 +666,8 @@ func (cda *CDDbus) RegisterEvents(obj interface{}) (errs []error) {
 	return errs
 }
 
+// UnregisterEvents disconnects an object from the dock events hooks.
+//
 func (cda *CDDbus) UnregisterEvents(obj interface{}) (errs []error) {
 	// tolisten := cda.hooker.Unregister(obj)
 	// cda.Log.Info("toliste", tolisten)
@@ -671,70 +675,87 @@ func (cda *CDDbus) UnregisterEvents(obj interface{}) (errs []error) {
 	return errs
 }
 
+// DefineOnClick is an interface to the OnClick method.
 type DefineOnClick interface {
 	OnClick()
 }
 
+// DefineOnMiddleClick is an interface to the OnMiddleClick method.
 type DefineOnMiddleClick interface {
 	OnMiddleClick()
 }
 
+// DefineOnBuildMenu is an interface to the OnBuildMenu method.
 type DefineOnBuildMenu interface {
 	OnBuildMenu()
 }
 
+// DefineOnMenuSelect is an interface to the OnMenuSelect method.
 type DefineOnMenuSelect interface {
 	OnMenuSelect(int32)
 }
 
+// DefineOnScroll is an interface to the OnScroll method.
 type DefineOnScroll interface {
 	OnScroll(up bool)
 }
 
+// DefineOnDropData is an interface to the OnDropData method.
 type DefineOnDropData interface {
 	OnDropData(string)
 }
 
+// DefineOnAnswer is an interface to the OnAnswer method.
 type DefineOnAnswer interface {
 	OnAnswer(interface{})
 }
 
+// DefineOnAnswerDialog is an interface to the OnAnswerDialog method.
 type DefineOnAnswerDialog interface {
 	OnAnswerDialog(int32, interface{})
 }
 
+// DefineOnShortkey is an interface to the OnShortkey method.
 type DefineOnShortkey interface {
 	OnShortkey(string)
 }
 
+// DefineOnChangeFocus is an interface to the OnChangeFocus method.
 type DefineOnChangeFocus interface {
 	OnChangeFocus(bool)
 }
 
+// DefineOnReload is an interface to the OnReload method.
 type DefineOnReload interface {
 	OnReload(bool)
 }
 
+// DefineOnStopModule is an interface to the OnStopModule method.
 type DefineOnStopModule interface {
 	OnStopModule()
 }
 
+// DefineOnSubClick is an interface to the OnSubClick method.
 type DefineOnSubClick interface {
 	OnSubClick(int32, string)
 }
 
+// DefineOnSubMiddleClick is an interface to the OnSubMiddleClick method.
 type DefineOnSubMiddleClick interface {
 	OnSubMiddleClick(string)
 }
 
+// DefineOnSubScroll is an interface to the OnSubScroll method.
 type DefineOnSubScroll interface {
 	OnSubScroll(bool, string)
 }
 
+// DefineOnSubDropData is an interface to the OnSubDropData method.
 type DefineOnSubDropData interface {
 	OnSubDropData(string, string)
 }
 
+// DefineOnSubBuildMenu is an interface to the OnSubBuildMenu method.
 type DefineOnSubBuildMenu interface {
 	OnSubBuildMenu(string)
 }

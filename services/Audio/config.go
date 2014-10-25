@@ -2,9 +2,6 @@ package Audio
 
 import "github.com/sqp/godock/libs/cdtype"
 
-// const defaultUpdateDelay = 3
-// const historyFile = "appdata/uptoshare_history.txt"
-
 // VolumeMax is the pulseaudio max value for speakers and channels volumes.
 const VolumeMax = 65535
 

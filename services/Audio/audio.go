@@ -282,6 +282,8 @@ func (ap *AppPulse) Init() error {
 	return ap.SetSink(sink)
 }
 
+// SetSink sets the sink (device) to monitor.
+//
 func (ap *AppPulse) SetSink(sink dbus.ObjectPath) error {
 	ap.sink = sink
 	values, e := ap.Volume()
@@ -441,7 +443,7 @@ func (ap *AppPulse) DeviceVolumeUpdated(path dbus.ObjectPath, values []uint32) {
 	ap.DisplayVolume(values)
 }
 
-// DeviceVolumeUpdated receives a device mute update.
+// DeviceMuteUpdated receives a device mute update.
 //
 func (ap *AppPulse) DeviceMuteUpdated(dbus.ObjectPath, bool) {
 	values, e := ap.Device(ap.sink).ListUint32("Volume")

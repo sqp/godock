@@ -5,8 +5,12 @@ import "fmt"
 
 //-----------------------------------------------------------[ BYTESIZE ]--
 
+// ByteSize formats size into human-readable content.
+//
 type ByteSize float64
 
+// Size constants.
+//
 const (
 	_           = iota // ignore first value by assigning to blank identifier
 	KB ByteSize = 1 << (10 * iota)

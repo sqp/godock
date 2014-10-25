@@ -16,6 +16,7 @@ import (
 	"strings"
 )
 
+// Window settings.
 const (
 	WindowTitle  = "cairo-dock-console"
 	WindowWidth  = 700

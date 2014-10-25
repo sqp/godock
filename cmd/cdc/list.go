@@ -5,6 +5,7 @@
 package main
 
 import (
+	"github.com/sqp/godock/libs/cdtype"
 	"github.com/sqp/godock/libs/log/color"
 	"github.com/sqp/godock/libs/packages"
 	"github.com/sqp/godock/libs/term"
@@ -81,7 +82,7 @@ func runList(cmd *Command, args []string) {
 	var e error
 	switch {
 	case *listDistant:
-		listPackages, e = packages.ListDistant(packages.ThirdParty + "/" + version)
+		listPackages, e = packages.ListDistant(cdtype.AppletsDirName + "/" + version)
 		logger.Err(e, "get packages list from server")
 	case *listLocal:
 		// Get applets dir.

@@ -1,4 +1,5 @@
-/* Disk usage monitoring applet for the Cairo-Dock project.
+/*
+Disk usage monitoring applet for the Cairo-Dock project.
 
 Show disk usage for mounted partitions.
 Partitions can be autodetected or you can provide a list of partitions.
