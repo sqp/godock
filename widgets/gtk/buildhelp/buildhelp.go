@@ -1,5 +1,5 @@
-// Package buildHelper is a small wrapper around gtk.Builder to load interfaces easily.
-package buildHelper
+// Package buildhelp is a small wrapper around gtk.Builder to load interfaces easily.
+package buildhelp
 
 import (
 	"github.com/conformal/gotk3/gtk"

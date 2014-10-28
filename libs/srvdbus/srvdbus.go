@@ -113,8 +113,8 @@ func (load *Loader) StartServer() (bool, error) {
 //
 func (load *Loader) StartLoop() {
 	defer load.conn.ReleaseName(SrvObj)
-	defer Log.Info("StopServer")
-	Log.Info("StartServer")
+	defer Log.Info("Applets service stopped")
+	Log.Info("Applets service started")
 
 	action := true
 	var waiter <-chan time.Time

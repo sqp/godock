@@ -1,4 +1,66 @@
-// Package config is an automatic configuration loader for cairo-dock.
+/*
+Package config is an automatic configuration loader for cairo-dock.
+
+Config will fills the data of a struct from an INI config file with reflection.
+Groups and keys in the file can be matched with the data struct by name or by a
+special "conf" tag.
+
+	GetKey  : Only parse using the field name. Names and keys need to be UpperCase.
+	GetTag  ; Only parse using the "conf" tag of the field.
+	GetBoth : Parse using both methods (tag is used when defined, name as fallback).
+
+Parsing errors are stored in the Errors field.
+
+Example for a single group
+
+Load the data from the file and UnmarshalGroup a group.
+
+	conf, e := config.NewFromFile(filepath) // Special conf reflector around the config file parser.
+	if e != nil {
+		return e
+	}
+	data := &groupConfiguration{}
+	conf.UnmarshalGroup(data, groupName, config.GetKey)
+
+Example with multiple groups
+
+To load data from many groups splitted in according strucs, like applets config,
+you have to define the main struct with a "group" tag that match the group in
+the config file.
+
+	data := &appletConf{}
+	e := config.Load(filepath, data, config.GetBoth)
+
+Structs data for the examples
+
+This is an example of applet data with multiple groups and able to use the
+lowercase keys of the Icon group.
+
+	type appletConf struct {
+		groupIcon          `group:"Icon"`
+		groupConfiguration `group:"Configuration"`
+	}
+
+	type groupIcon struct {
+		Icon string `conf:"icon"`
+		Name string `conf:"name"`
+	}
+
+	type groupConfiguration struct {
+		DisplayText   int
+		DisplayValues int
+
+		GaugeName string
+
+		IconBroken  string
+		VolumeStep  int
+		StreamIcons bool
+
+		// Still hidden.
+		Debug bool
+	}
+
+*/
 package config
 
 import (
@@ -12,6 +74,38 @@ import (
 	"reflect"
 	"strings"
 )
+
+//
+//--------------------------------------------------------------------[ KEYS ]--
+
+// GetFieldKey is method to match config key name and struct field.
+//
+type GetFieldKey func(reflect.StructField) string
+
+// GetKey is a GetFieldKey test that matches by the field name.
+//
+func GetKey(struc reflect.StructField) string {
+	return struc.Name
+}
+
+// GetTag is a test GetFieldKey that matches by the struct tag is defined.
+//
+func GetTag(struc reflect.StructField) string {
+	return struc.Tag.Get("conf")
+}
+
+// GetBoth is a GetFieldKey test that matches by the struct tag is defined,
+// otherwise, use the field name.
+//
+func GetBoth(struc reflect.StructField) string {
+	if tag := struc.Tag.Get("conf"); tag != "" {
+		return tag // Got tag, use it.
+	}
+	return struc.Name // Else, use name.
+}
+
+//
+//-----------------------------------------------------------------[ LOADING ]--
 
 // Config file unmarshall. Parsing errors will be stacked in the Errors field.
 //
@@ -56,31 +150,8 @@ func Load(filename string, v interface{}, fieldKey GetFieldKey) error {
 	return nil
 }
 
-// GetFieldKey is method to match config key name and struct field.
 //
-type GetFieldKey func(reflect.StructField) string
-
-// GetKey is a GetFieldKey test that matches by the field name.
-//
-func GetKey(struc reflect.StructField) string {
-	return struc.Name
-}
-
-// GetTag is a test GetFieldKey that matches by the struct tag is defined.
-//
-func GetTag(struc reflect.StructField) string {
-	return struc.Tag.Get("conf")
-}
-
-// GetBoth is a GetFieldKey test that matches by the struct tag is defined,
-// otherwise, use the field name.
-//
-func GetBoth(struc reflect.StructField) string {
-	if tag := struc.Tag.Get("conf"); tag != "" {
-		return tag // Got tag, use it.
-	}
-	return struc.Name // Else, use name.
-}
+//---------------------------------------------------------------[ UNMARSHAL ]--
 
 // Unmarshall fills a struct of struct with data from config.
 // The First level is config group, matched by the key group.
@@ -95,7 +166,7 @@ func (c *Config) Unmarshall(v interface{}, fieldKey GetFieldKey) error {
 	for i := 0; i < typ.NumField(); i++ { // Parsing all fields in grre.
 		// log.Info("field", i, typ.Field(i).Name, typ.Field(i).Tag.Get("group"))
 		if group := typ.Field(i).Tag.Get("group"); group != "" {
-			c.UnmarshalGroup(val.Elem().Field(i), group, fieldKey)
+			c.unmarshalGroup(val.Elem().Field(i), group, fieldKey)
 		}
 	}
 
@@ -116,12 +187,18 @@ func (c *Config) Unmarshall(v interface{}, fieldKey GetFieldKey) error {
 	return nil
 }
 
-// UnmarshalGroup parse config to fill the conf param with values from the given
-// group in the file.
+// UnmarshalGroup parse config to fill the struct provided with values from the
+// given group in the file.
 //
 // The group param must match a group in the file with the format [MYGROUP]
 //
-func (c *Config) UnmarshalGroup(conf reflect.Value, group string, fieldKey GetFieldKey) {
+func (c *Config) UnmarshalGroup(v interface{}, group string, fieldKey GetFieldKey) {
+	conf := reflect.ValueOf(v).Elem()
+	c.unmarshalGroup(conf, group, fieldKey)
+}
+
+// see UnmarshalGroup.
+func (c *Config) unmarshalGroup(conf reflect.Value, group string, fieldKey GetFieldKey) {
 	typ := conf.Type()
 	for i := 0; i < typ.NumField(); i++ { // Parsing all fields in type.
 		c.getField(conf.Field(i), group, fieldKey(typ.Field(i)))

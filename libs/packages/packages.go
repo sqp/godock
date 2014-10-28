@@ -16,7 +16,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"reflect"
 	"sort"
 	"strings"
 	"time"
@@ -177,7 +176,7 @@ func ListDistant(version string) (AppletPackages, error) {
 		if name != "DEFAULT" && name != "locale" { // The parser add a DEFAULT group we don't need.
 
 			pack := &AppletPackage{}
-			conf.UnmarshalGroup(reflect.ValueOf(pack).Elem(), name, config.GetTag)
+			conf.UnmarshalGroup(pack, name, config.GetTag)
 
 			pack.DisplayedName = name
 			pack.Type = TypeDistant
@@ -298,7 +297,7 @@ func ReadPackageFile(dir, applet string, source PackageSource) (*AppletPackage, 
 		return nil, e
 	}
 	pack := &AppletPackage{}
-	conf.UnmarshalGroup(reflect.ValueOf(pack).Elem(), group, config.GetTag)
+	conf.UnmarshalGroup(pack, group, config.GetTag)
 
 	return pack, nil
 }

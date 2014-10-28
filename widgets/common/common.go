@@ -54,20 +54,6 @@ func NewWindowMain(widget gtk.IWidget, w, h int) *gtk.Window {
 	return win
 }
 
-/*
-func PixbufAtSize(file string, maxW, maxH int) (*gdk.Pixbuf, error) {
-	return nil, nil
-}
-
-func ImageNewFromFile(cIcon string, iSize int) (pImage *gtk.Image) {
-	return nil
-}
-
-func PixbufNewFromFile(cIcon string, iSize int) (pixbuf *gdk.Pixbuf, e error) {
-	return nil, nil
-}
-*/
-
 // PixbufAtSize loads an image from disk as pixbuf.
 //
 func PixbufAtSize(file string, maxW, maxH int) (*gdk.Pixbuf, error) {
