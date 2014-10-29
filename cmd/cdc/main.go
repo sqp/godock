@@ -74,6 +74,7 @@ func Commands() []*Command {
 		cmdBuild,
 		cmdConfig,
 		cmdDebug,
+		cmdDock,
 		cmdInstall,
 		cmdList,
 		// cmdRun,
@@ -100,6 +101,7 @@ var (
 
 	// Global variables for optional actions.
 	cmdConfig *Command
+	cmdDock   *Command
 
 	cmdShortcuts = map[byte]string{
 		'c': "config",

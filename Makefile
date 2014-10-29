@@ -4,8 +4,8 @@ VERSION=0.0.1-2
 APPLETS=Audio Cpu DiskActivity DiskFree GoGmail Mem NetActivity Update
 
 # unstable applets requires uncommited patches to build.
-UNSTABLE=Notifications TVPlay config log gtk
-
+UNSTABLE=Notifications TVPlay log gtk
+DOCK=dock
 
 %: build
 
@@ -20,4 +20,7 @@ build:
 
 unstable:
 	go install -tags '$(APPLETS) $(UNSTABLE)' $(SOURCE)/$(TARGET)
+
+dock:
+	go install -tags '$(APPLETS) $(UNSTABLE) $(DOCK)' $(SOURCE)/$(TARGET)
 
