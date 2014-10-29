@@ -13,7 +13,7 @@ import (
 	// "github.com/sqp/godock/libs/packages"
 	"github.com/sqp/godock/widgets/appletlist"
 	"github.com/sqp/godock/widgets/appletpreview"
-	"github.com/sqp/godock/widgets/confbuilder/dataType"
+	"github.com/sqp/godock/widgets/confbuilder/datatype"
 
 	"os"
 )
@@ -37,8 +37,8 @@ const (
 //
 type ListInterface interface {
 	gtk.IWidget
-	Load(map[string]dataType.Appleter)
-	Selected() dataType.Appleter
+	Load(map[string]datatype.Appleter)
+	Selected() datatype.Appleter
 	Delete(string)
 }
 
@@ -46,7 +46,7 @@ type ListInterface interface {
 //
 type GUIControl interface {
 	SelectIcons(string)
-	ListApplets() map[string]dataType.Appleter
+	ListApplets() map[string]datatype.Appleter
 }
 
 // ConfApplet provides an applet downloader widget.
@@ -60,7 +60,7 @@ type ConfApplet struct {
 	preview *appletpreview.Preview
 
 	mode    ListMode
-	Applets *map[string]dataType.Appleter // List of applets known by the Dock.
+	Applets *map[string]datatype.Appleter // List of applets known by the Dock.
 }
 
 // New creates a widget to download cairo-dock applets.
@@ -129,7 +129,7 @@ func (widget *ConfApplet) Clean() {
 
 // OnSelect reacts when a row is selected. Show preview and set menu position.
 //
-func (widget *ConfApplet) OnSelect(pack dataType.Appleter) {
+func (widget *ConfApplet) OnSelect(pack datatype.Appleter) {
 	if widget.menu != nil {
 		widget.menu.OnSelect(pack)
 	}
@@ -151,7 +151,7 @@ func (widget *ConfApplet) SetControlInstall(ctrl appletlist.ControlInstall) {
 // MenuDownloader forwards events to other widgets.
 //
 type MenuDownloader interface {
-	OnSelect(dataType.Appleter)
+	OnSelect(datatype.Appleter)
 	SetControlInstall(appletlist.ControlInstall)
 }
 
@@ -166,7 +166,7 @@ type MenuDownload struct {
 	handlerActive    glib.SignalHandle
 
 	applets appletlist.ControlInstall // still needed?
-	current dataType.Appleter
+	current datatype.Appleter
 }
 
 // NewMenuDownload creates the menu to control the selected applet.
@@ -214,7 +214,7 @@ func (widget *MenuDownload) SetControlInstall(ctrl appletlist.ControlInstall) {
 // OnSelect reacts when a row is selected.
 // Set preview data and set installed and active buttons state.
 //
-func (widget *MenuDownload) OnSelect(pack dataType.Appleter) {
+func (widget *MenuDownload) OnSelect(pack datatype.Appleter) {
 	widget.current = pack
 
 	// Set installed button state.

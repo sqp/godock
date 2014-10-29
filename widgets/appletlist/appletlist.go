@@ -7,7 +7,7 @@ import (
 
 	"github.com/sqp/godock/libs/log"
 	"github.com/sqp/godock/widgets/common"
-	"github.com/sqp/godock/widgets/confbuilder/dataType"
+	"github.com/sqp/godock/widgets/confbuilder/datatype"
 	"github.com/sqp/godock/widgets/gtk/buildhelp"
 	"github.com/sqp/godock/widgets/gtk/gunvalue"
 
@@ -32,14 +32,14 @@ const (
 // ControlDownload is the interface to the main GUI for the download page.
 //
 type ControlDownload interface {
-	OnSelect(dataType.Appleter)
+	OnSelect(datatype.Appleter)
 	SetControlInstall(ControlInstall)
 }
 
 // ControlInstall is the interface to the download page for the main GUI.
 //
 type ControlInstall interface {
-	Selected() dataType.Appleter
+	Selected() datatype.Appleter
 	SetActive(state bool)
 }
 
@@ -47,7 +47,7 @@ type ControlInstall interface {
 //
 type Row struct {
 	Iter *gtk.TreeIter
-	Pack dataType.Appleter
+	Pack datatype.Appleter
 }
 
 // List defines an applets list widget.
@@ -116,7 +116,7 @@ func (widget *List) setActiveIter(iter *gtk.TreeIter, state bool) {
 
 // Selected returns the applet package for the selected line.
 //
-func (widget *List) Selected() dataType.Appleter {
+func (widget *List) Selected() datatype.Appleter {
 	sel, _ := widget.tree.GetSelection()
 	var iter gtk.TreeIter
 	var treeModel gtk.ITreeModel = widget.model
@@ -131,7 +131,7 @@ func (widget *List) Selected() dataType.Appleter {
 	return nil
 }
 
-func (widget *List) newIter(name string, pack dataType.Appleter) *gtk.TreeIter {
+func (widget *List) newIter(name string, pack datatype.Appleter) *gtk.TreeIter {
 	iter := widget.model.Append()
 	widget.rows[name] = &Row{iter, pack}
 	return iter
@@ -173,7 +173,7 @@ func NewListAdd(control ControlDownload) *ListAdd {
 
 // Load loads the applet list into the widget.
 //
-func (widget *ListAdd) Load(list map[string]dataType.Appleter) {
+func (widget *ListAdd) Load(list map[string]datatype.Appleter) {
 	for key, app := range list {
 		if app.CanAdd() {
 			iter := widget.newIter(key, app)
@@ -214,7 +214,7 @@ func NewListExternal(control ControlDownload, appletsVersion string) *ListExtern
 
 // Load loads the applet list into the widget.
 //
-func (widget *ListExternal) Load(list map[string]dataType.Appleter) {
+func (widget *ListExternal) Load(list map[string]datatype.Appleter) {
 	// packs, e := packages.ListDownload(widget.appletsVersion)
 	// log.Err(e, "ListExternal")
 

@@ -6,7 +6,7 @@ import (
 
 	"github.com/sqp/godock/libs/log"
 	"github.com/sqp/godock/widgets/common"
-	"github.com/sqp/godock/widgets/confbuilder/dataType"
+	"github.com/sqp/godock/widgets/confbuilder/datatype"
 	"github.com/sqp/godock/widgets/gtk/buildhelp"
 
 	"fmt"
@@ -71,7 +71,7 @@ func New() *Preview {
 
 // Load loads an applet in the preview.
 //
-func (widget *Preview) Load(pack dataType.Appleter) {
+func (widget *Preview) Load(pack datatype.Appleter) {
 	widget.title.SetMarkup(common.Big(common.Bold(pack.GetTitle())))
 	widget.author.SetMarkup(common.Small(common.Mono(fmt.Sprintf("by %s", pack.GetAuthor()))))
 	// widget.stateText.SetMarkup(pack.FormatState())
@@ -91,7 +91,7 @@ func (widget *Preview) Load(pack dataType.Appleter) {
 	go widget.setImage(pack)
 }
 
-func (widget *Preview) setImage(pack dataType.Appleter) {
+func (widget *Preview) setImage(pack datatype.Appleter) {
 	imageLocation := pack.GetPreviewFilePath()
 	// imageLocation, isTemp := pack.GetPreview(widget.TmpFile) // reuse the same tmp location if needed.
 	if imageLocation != "" {
