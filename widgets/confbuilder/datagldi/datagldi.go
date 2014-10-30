@@ -2,13 +2,17 @@
 package datagldi
 
 import (
+	"github.com/bradfitz/iter"
+
 	"github.com/sqp/godock/libs/gldi"
 	"github.com/sqp/godock/libs/gldi/globals"
+	"github.com/sqp/godock/libs/ternary"
 	// "github.com/sqp/godock/libs/maindock"
 	"github.com/sqp/godock/widgets/confbuilder/datatype"
 	"github.com/sqp/godock/widgets/gtk/keyfile"
 
 	// "path/filepath"
+	"strconv"
 )
 
 //--------------------------------------------------------[ ICONER GLDI ICON ]--
@@ -204,6 +208,55 @@ func (Data) ListIcons() map[string][]datatype.Iconer {
 	return list
 }
 
+// ListScreens returns the list of screens.
+//
+func (Data) ListScreens() (list []datatype.Field) {
+	geo := gldi.GetDesktopGeometry()
+	nb := geo.NbScreens()
+	if nb <= 1 {
+		return []datatype.Field{{Key: "0", Name: "Use all screens"}}
+	}
+
+	var xmax, ymax int
+	for i := range iter.N(nb) {
+		x, y := geo.ScreenPosition(i)
+		xmax = ternary.Max(x, xmax)
+		ymax = ternary.Max(y, ymax)
+	}
+
+	for i := range iter.N(nb) {
+		var xstr, ystr string
+		x, y := geo.ScreenPosition(i)
+		if xmax > 0 { // at least 2 screens horizontally
+			switch {
+			case x == 0:
+				xstr = "left"
+			case x == xmax:
+				xstr = "right"
+			default:
+				xstr = "middle"
+			}
+		}
+
+		if ymax > 0 { // at least 2 screens vertically
+			switch {
+			case y == 0:
+				ystr = "top"
+			case y == ymax:
+				ystr = "bottom"
+			default:
+				ystr = "middle"
+			}
+		}
+		key := strconv.Itoa(i)
+		sep := ternary.String(xstr != "" && ystr != "", " - ", "")
+		name := "Screen" + " " + key + " (" + xstr + sep + ystr + ")"
+
+		list = append(list, datatype.Field{Key: key, Name: name})
+	}
+	return list
+}
+
 // ListViews returns the list of views.
 //
 func (Data) ListViews() (list []datatype.Field) {
@@ -340,30 +393,3 @@ func (Data) Handbook(name string) datatype.Handbooker {
 func (Data) ManagerReload(name string, b bool, keyf keyfile.KeyFile) {
 	gldi.ManagerReload(name, b, keyf)
 }
-
-//
-
-//
-
-//
-
-// case CAIRO_DOCK_WIDGET_SCREENS_LIST :
-// {
-// 	GHashTable *pHashTable = _cairo_dock_build_screens_list ();
-
-// 	GtkListStore *pScreensListStore = _cairo_dock_build_screens_list_for_gui (pHashTable);
-
-// 	_add_combo_from_modele (pScreensListStore, FALSE, FALSE, FALSE);
-
-// 	g_object_unref (pScreensListStore);
-// 	g_hash_table_destroy (pHashTable);
-
-// 	gldi_object_register_notification (&myDesktopMgr,
-// 		NOTIFICATION_DESKTOP_GEOMETRY_CHANGED,
-// 		(GldiNotificationFunc) _on_screen_modified,
-// 		GLDI_RUN_AFTER, pScreensListStore);
-// 	g_signal_connect (pOneWidget, "destroy", G_CALLBACK (_on_list_destroyed), NULL);
-
-// 	if (g_desktopGeometry.iNbScreens <= 1)
-// 		gtk_widget_set_sensitive (pOneWidget, FALSE);
-// }

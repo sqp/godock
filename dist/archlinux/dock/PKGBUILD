@@ -7,8 +7,8 @@ pkgdesc="Cairo-Dock control tool and go applets."
 arch=('x86_64' 'i686')
 url="http://github.com/sqp/godock"
 license=('GPL3')
-depends=('gtk3' 'vte3' 'curl' 'gupnp-av')
-makedepends=('git' 'go', 'cairo-dock') # only set the dock as required to build so it could use a custom install.
+depends=('gtk3' 'vte3' 'curl' 'gupnp-av') # also depends on the dock but it's removed so we could use a custom install.
+makedepends=('git' 'go')
 optdepends=(
   'bzr: dock version check (Update)'
   'xclip: clipboard control for uptoshare (NetActivity)'
@@ -23,9 +23,8 @@ build() {
   # Download
   GOPATH="$srcdir" go get -d -u -tags "$applets $cdctags" $srcpath/cmd/cdc
 
-  # Patch
-  cd "$srcdir/src/$srcpath"
-  GOPATH="$srcdir" make patch
+  # Patch  
+  cd "$srcdir/src/$srcpath" && GOPATH="$srcdir" make patch
 
   # Build
   GOPATH="$srcdir" go get -fix -v -tags "$applets $cdctags" $srcpath/cmd/cdc # -x 

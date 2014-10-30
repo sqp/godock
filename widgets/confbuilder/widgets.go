@@ -212,22 +212,6 @@ func (build *Builder) WidgetColorSelector(key *Key) {
 	// bAddBackButton = TRUE,
 }
 
-// WidgetViewList adds a view list widget.
-//
-func (build *Builder) WidgetViewList(key *Key) {
-	model, _ := newModelSimple()
-	list := append([]datatype.Field{{Key: "", Name: "default"}}, build.data.ListViews()...)
-
-	current, _ := build.Conf.GetString(key.Group, key.Name)
-	index := fillModelWithViews(model, list, current)
-
-	// 	gtk_tree_sortable_set_sort_column_id (GTK_TREE_SORTABLE (pListStore), CAIRO_DOCK_MODEL_NAME, GTK_SORT_ASCENDING);
-
-	combo, getValue := build.newComboBoxWithModel(model, true, false, true)
-	combo.Set("active", index)
-	build.addKeyWidget(combo, key, getValue)
-}
-
 // WidgetListTheme adds an theme list widget.
 //
 func (build *Builder) WidgetListTheme(key *Key) {
@@ -317,66 +301,48 @@ func (build *Builder) WidgetListTheme(key *Key) {
 // WidgetIconThemeList adds a desktop icon-themes list widget.
 //
 func (build *Builder) WidgetIconThemeList(key *Key) {
-	model, _ := newModelSimple()
 	list := append([]datatype.Field{
 		{},
 		{Key: "_Custom Icons_", Name: "_Custom Icons_"}}, // TODO: gettext translate
 		build.data.ListIconTheme()...)
+	build.newComboBoxFields(key, list)
+}
 
-	combo, getValue := build.newComboBoxWithModel(model, false, false, false)
-	current, _ := build.Conf.GetString(key.Group, key.Name)
-	iter := fillModelWithAnimation(model, list, current)
-	combo.SetActiveIter(iter)
+// WidgetViewList adds a view list widget.
+//
+func (build *Builder) WidgetViewList(key *Key) {
+	list := append([]datatype.Field{{Key: "", Name: "default"}}, build.data.ListViews()...)
+	build.newComboBoxFields(key, list)
 
-	build.addKeyWidget(combo, key, getValue)
+	// RowDesc: "none"}) // (pRenderer != NULL ? pRenderer->cReadmeFilePath : "none")
+	// 		CAIRO_DOCK_MODEL_IMAGE, (pRenderer != NULL ? pRenderer->cPreviewFilePath : "none")
+
+	// 	gtk_tree_sortable_set_sort_column_id (GTK_TREE_SORTABLE (pListStore), CAIRO_DOCK_MODEL_NAME, GTK_SORT_ASCENDING);
 }
 
 // WidgetAnimationList adds an animation list widget.
 //
 func (build *Builder) WidgetAnimationList(key *Key) {
-	model, _ := newModelSimple()
 	list := append([]datatype.Field{{}}, build.data.ListAnimations()...)
-
-	combo, getValue := build.newComboBoxWithModel(model, false, false, false)
-	current, _ := build.Conf.GetString(key.Group, key.Name)
-	iter := fillModelWithAnimation(model, list, current)
-	combo.SetActiveIter(iter)
-
-	build.addKeyWidget(combo, key, getValue)
+	build.newComboBoxFields(key, list)
 }
 
 // WidgetDialogDecoratorList adds an dialog decorator list widget.
 //
 func (build *Builder) WidgetDialogDecoratorList(key *Key) {
-	model, _ := newModelSimple()
 	list := build.data.ListDialogDecorator()
-
-	combo, getValue := build.newComboBoxWithModel(model, false, false, false)
-	current, _ := build.Conf.GetString(key.Group, key.Name)
-	iter := fillModelWithAnimation(model, list, current)
-	combo.SetActiveIter(iter)
-
-	build.addKeyWidget(combo, key, getValue)
+	build.newComboBoxFields(key, list)
 }
 
 // WidgetListDeskletDecoration adds a desklet decoration list widget.
 //
 func (build *Builder) WidgetListDeskletDecoration(key *Key) {
-	model, _ := newModelSimple()
 	list := build.data.ListDeskletDecorations()
-
 	if key.Type == WidgetDeskletDecorationListWithDefault {
-		list = append([]datatype.Field{{Key: "default", Name: "default"}}, list...)
+		list = append([]datatype.Field{{Key: "default", Name: "default"}}, list...) // prepend default.
 	}
-
-	current, _ := build.Conf.GetString(key.Group, key.Name)
-	iter := fillModelWithDeskletDecoration(model, list, current)
-
+	build.newComboBoxFields(key, list)
 	// 	gtk_tree_sortable_set_sort_column_id (GTK_TREE_SORTABLE (pListStore), CAIRO_DOCK_MODEL_NAME, GTK_SORT_ASCENDING);
-
-	combo, getValue := build.newComboBoxWithModel(model, false, false, false)
-	combo.SetActiveIter(iter)
-	build.addKeyWidget(combo, key, getValue)
 
 	// _allocate_new_buffer;
 	// data[0] = pKeyBox;
@@ -386,6 +352,7 @@ func (build *Builder) WidgetListDeskletDecoration(key *Key) {
 	// iNbControlledWidgets --;  // car dans cette fonction, on ne compte pas le separateur.
 	// g_signal_connect (G_OBJECT (pOneWidget), "changed", G_CALLBACK (_cairo_dock_select_custom_item_in_combo), data);
 
+	current, _ := build.Conf.GetString(key.Group, key.Name)
 	if current == "personnal" { // Disable the next widgets.
 		// 		CDControlWidget *cw = g_new0 (CDControlWidget, 1);
 		// 		pControlWidgets = g_list_prepend (pControlWidgets, cw);
@@ -396,6 +363,22 @@ func (build *Builder) WidgetListDeskletDecoration(key *Key) {
 	}
 }
 
+// WidgetScreensList adds a screen selection widget.
+//
+func (build *Builder) WidgetScreensList(key *Key) {
+	list := build.data.ListScreens()
+	combo := build.newComboBoxFields(key, list)
+	if len(list) <= 1 {
+		combo.SetSensitive(false)
+	}
+
+	// 	gldi_object_register_notification (&myDesktopMgr,
+	// 		NOTIFICATION_DESKTOP_GEOMETRY_CHANGED,
+	// 		(GldiNotificationFunc) _on_screen_modified,
+	// 		GLDI_RUN_AFTER, pScreensListStore);
+	// 	g_signal_connect (pOneWidget, "destroy", G_CALLBACK (_on_list_destroyed), NULL);
+}
+
 // WidgetDockList adds a dock list widget.
 //
 func (build *Builder) WidgetDockList(key *Key) {
@@ -403,16 +386,18 @@ func (build *Builder) WidgetDockList(key *Key) {
 	iIconType, _ := build.Conf.GetInteger(key.Group, "Icon Type")
 	SubdockName := ""
 	if iIconType == UserIconStack { // it's a stack-icon
-		SubdockName, _ = build.Conf.GetString(key.Group, "Name")
+		SubdockName, _ = build.Conf.GetString(key.Group, "Name") // It's a subdock, get its name to remove the selection of a recursive position (inside itself).
 	}
 
+	list := build.data.ListDocks("", SubdockName)                                 // Get the list of available docks. Keep parent, but remove itself from the list.
+	list = append(list, datatype.Field{Key: "_New Dock_", Name: "New main dock"}) // append create new.
+
 	model, _ := newModelSimple()
-	docks := build.data.ListDocks("", SubdockName) // Get the list of available docks. Keep parent, but remove itself from the list.
 	current, _ := build.Conf.GetString(key.Group, key.Name)
 
 	model.SetSortColumnId(RowName, gtk.SORT_ASCENDING)
 
-	iter := fillModelWithDocks(model, docks, current)
+	iter := fillModelWithFields(model, list, current)
 	combo, _ := gtk.ComboBoxNewWithModel(model)
 	renderer, _ := gtk.CellRendererTextNew()
 	combo.PackStart(renderer, false)
@@ -601,32 +586,6 @@ func (build *Builder) WidgetIconsList(key *Key) {
 	// 		}
 	// 	}
 	// 	g_free (cValue);
-	// }
-
-}
-
-// WidgetScreensList adds a screen selection widget.
-// MAINCONF && MAINDOCK
-//
-func (build *Builder) WidgetScreensList(key *Key) {
-	// {
-	// 	GHashTable *pHashTable = _cairo_dock_build_screens_list ();
-
-	// 	GtkListStore *pScreensListStore = _cairo_dock_build_screens_list_for_gui (pHashTable);
-
-	// 	_add_combo_from_modele (pScreensListStore, FALSE, FALSE, FALSE);
-
-	// 	g_object_unref (pScreensListStore);
-	// 	g_hash_table_destroy (pHashTable);
-
-	// 	gldi_object_register_notification (&myDesktopMgr,
-	// 		NOTIFICATION_DESKTOP_GEOMETRY_CHANGED,
-	// 		(GldiNotificationFunc) _on_screen_modified,
-	// 		GLDI_RUN_AFTER, pScreensListStore);
-	// 	g_signal_connect (pOneWidget, "destroy", G_CALLBACK (_on_list_destroyed), NULL);
-
-	// 	if (g_desktopGeometry.iNbScreens <= 1)
-	// 		gtk_widget_set_sensitive (pOneWidget, FALSE);
 	// }
 
 }

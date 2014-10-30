@@ -11,6 +11,7 @@ package gldi
 #include "cairo-dock-backends-manager.h"         // cairo_dock_foreach_dock_renderer
 #include "cairo-dock-config.h"                   // cairo_dock_load_current_theme
 #include "cairo-dock-class-manager.h"            // cairo_dock_get_class_command
+#include "cairo-dock-desktop-manager.h"          // g_desktopGeometry
 #include "cairo-dock-dock-factory.h"             // CairoDock
 #include "cairo-dock-dock-facility.h"            // cairo_dock_get_available_docks
 #include "cairo-dock-dock-manager.h"             // gldi_dock_get_readable_name
@@ -34,6 +35,12 @@ extern gboolean          g_bUseOpenGL;
 
 extern gchar *g_cCurrentLaunchersPath;
 
+extern GldiDesktopGeometry g_desktopGeometry;
+
+
+
+static int screen_position_x(int i) { return g_desktopGeometry.pScreens[i].x; }
+static int screen_position_y(int i) { return g_desktopGeometry.pScreens[i].y; }
 
 static gboolean IconIsSeparator    (Icon *icon) { return CAIRO_DOCK_ICON_TYPE_IS_SEPARATOR(icon); }
 static gboolean IconIsSeparatorAuto(Icon *icon) { return CAIRO_DOCK_IS_AUTOMATIC_SEPARATOR(icon); }
@@ -773,6 +780,30 @@ func ManagerReload(name string, b bool, keyf keyfile.KeyFile) {
 		return
 	}
 	C.manager_reload(manager.Ptr, cbool(b), (*C.GKeyFile)(unsafe.Pointer(keyf.ToNative())))
+}
+
+//
+//---------------------------------------------------------[ DESKTOPGEOMETRY ]--
+
+type DesktopGeometry struct {
+	Obj C.GldiDesktopGeometry
+}
+
+func GetDesktopGeometry() *DesktopGeometry {
+	return &DesktopGeometry{C.g_desktopGeometry}
+}
+
+func (dg *DesktopGeometry) NbScreens() int {
+	return int(dg.Obj.iNbScreens)
+}
+
+func (dg *DesktopGeometry) ScreenPosition(i int) (int, int) {
+	if 0 > i || i >= dg.NbScreens() {
+		return 0, 0
+	}
+	x := int(C.screen_position_x(C.int(i)))
+	y := int(C.screen_position_y(C.int(i)))
+	return x, y
 }
 
 //

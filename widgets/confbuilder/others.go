@@ -93,24 +93,6 @@ func (widget *Handbook) SetPackage(book datatype.Handbooker) {
 //
 //-------------------------------------------------------------[ MODELS DATA ]--
 
-func fillModelWithViews(model *gtk.ListStore, list []datatype.Field, current string) (toSelect int) {
-	i := 0
-	for _, field := range list {
-		model.SetCols(model.Append(), gtk.Cols{
-			RowKey:  field.Key,
-			RowName: field.Name, // GETTEXT TRANSLATE
-			// RowIcon: "none",
-			RowDesc: "none"}) // (pRenderer != NULL ? pRenderer->cReadmeFilePath : "none")
-		// 		CAIRO_DOCK_MODEL_IMAGE, (pRenderer != NULL ? pRenderer->cPreviewFilePath : "none")
-
-		if field.Key == current {
-			toSelect = i
-		}
-		i++
-	}
-	return
-}
-
 func fillModelWithTheme(model *gtk.ListStore, list []packages.Theme, current string) (toSelect *gtk.TreeIter) {
 	for _, theme := range list {
 		key := fmt.Sprintf("%s[%d]", theme.DirName, theme.Type)
@@ -203,7 +185,7 @@ func fillModelWithThemeINI(model *gtk.ListStore, list packages.AppletPackages, c
 // 	}
 // }
 
-func fillModelWithAnimation(model *gtk.ListStore, list []datatype.Field, current string) (toSelect *gtk.TreeIter) {
+func fillModelWithFields(model *gtk.ListStore, list []datatype.Field, current string) (toSelect *gtk.TreeIter) {
 	for _, field := range list {
 		iter := model.Append()
 		model.SetCols(iter, gtk.Cols{
@@ -216,44 +198,6 @@ func fillModelWithAnimation(model *gtk.ListStore, list []datatype.Field, current
 			toSelect = iter
 		}
 	}
-	return
-}
-
-func fillModelWithDeskletDecoration(model *gtk.ListStore, list []datatype.Field, current string) (toSelect *gtk.TreeIter) {
-	for _, field := range list {
-		iter := model.Append()
-		model.SetCols(iter, gtk.Cols{
-			RowKey:  field.Key,
-			RowName: field.Name, // GETTEXT TRANSLATE  pDecoration->cDisplayedName if available before name
-			// RowIcon: "none",
-			RowDesc: "none"})
-
-		if field.Key == current {
-			toSelect = iter
-		}
-	}
-	return
-}
-
-func fillModelWithDocks(model *gtk.ListStore, list []datatype.Field, current string) (toSelect *gtk.TreeIter) {
-	for _, field := range list {
-		iter := model.Append()
-		model.SetCols(iter, gtk.Cols{
-			RowKey:  field.Key,
-			RowName: field.Name,
-			// RowIcon: "none",
-			RowDesc: "none"})
-
-		if field.Key == current {
-			toSelect = iter
-		}
-	}
-	model.SetCols(model.Append(), gtk.Cols{
-		RowKey:  "_New Dock_", // special new dock key.
-		RowName: "New main dock",
-		// RowIcon: "none",
-		RowDesc: "none",
-	})
 	return
 }
 
@@ -310,6 +254,19 @@ func newComboBox(withEntry, numbered bool) (widget *gtk.ComboBox, model *gtk.Lis
 		}
 	}
 	return
+}
+
+// newComboBoxFields adds and fills a list widget.
+//
+func (build *Builder) newComboBoxFields(key *Key, list []datatype.Field) *gtk.ComboBox {
+	model, _ := newModelSimple()
+	combo, getValue := build.newComboBoxWithModel(model, false, false, false)
+	current, _ := build.Conf.GetString(key.Group, key.Name)
+	iter := fillModelWithFields(model, list, current)
+	combo.SetActiveIter(iter)
+
+	build.addKeyWidget(combo, key, getValue)
+	return combo
 }
 
 // _add_combo_from_modele

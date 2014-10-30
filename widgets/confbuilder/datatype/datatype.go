@@ -42,6 +42,10 @@ type Source interface {
 	//
 	ListIconsMainDock() []Iconer
 
+	// ListScreens returns the list of screens (active monitors on the session).
+	//
+	ListScreens() []Field
+
 	// ListViews returns the list of views.
 	//
 	ListViews() []Field

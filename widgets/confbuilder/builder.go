@@ -363,8 +363,8 @@ func (build *Builder) BuildPage(cGroupName string) *gtk.ScrolledWindow {
 		case WidgetIconsList:
 			build.WidgetIconsList(key)
 
-		// case WidgetScreensList:
-		// 	build.WidgetScreensList(key)
+		case WidgetScreensList:
+			build.WidgetScreensList(key)
 
 		// case WidgetJumpToModuleSimple, // bouton raccourci vers un autre module
 		// 	WidgetJumpToModuleIfExists: // idem mais seulement affiche si le module existe.
@@ -486,8 +486,6 @@ func (build *Builder) Save() {
 				}
 				build.Conf.KeyFile.SetDoubleList(key.Group, key.Name, floats)
 
-			// case WidgetScreensList:
-
 			case WidgetNumberedList, // a list of numbered strings.
 				WidgetNumberedControlListSimple,    // a list of numbered strings whose current choice defines the sensitivity of the widgets below.
 				WidgetNumberedControlListSelective: // a list of numbered strings whose current choice defines the sensitivity of the widgets below given in the list.
@@ -514,6 +512,7 @@ func (build *Builder) Save() {
 				WidgetThemeList,                                      // themes list in a combo, with preview and readme.
 				WidgetViewList, WidgetAnimationList, WidgetListDocks, // other filled lists.
 				WidgetDialogDecoratorList, WidgetIconThemeList, // ...
+				WidgetScreensList,
 
 				WidgetListSimple, WidgetListWithEntry, // a list of strings.
 				WidgetDeskletDecorationListSimple,      // desklet decorations list.
