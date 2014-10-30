@@ -2,8 +2,12 @@
 package keyfile
 
 // #cgo pkg-config: glib-2.0
-// #include "glib.gen.h"
+// #include <glib.h>
 import "C"
+
+// #include "glib.gen.h"
+// #include <stdlib.h>
+// #include <stdint.h>
 
 import (
 	"errors"
@@ -41,7 +45,7 @@ const (
 )
 
 // Error is a representation of GLib's KeyFileError.
-type Error C.uint32_t
+type Error C.gint
 
 const (
 	ErrorUnknownEncoding Error = 0
@@ -53,7 +57,7 @@ const (
 )
 
 // Flags is a representation of GLib's KeyFileFlags.
-type Flags C.uint32_t
+type Flags C.gint
 
 // Keyfile loading flags.
 const (
@@ -75,19 +79,19 @@ func New() *KeyFile {
 // LoadFromFile is a wrapper around g_key_file_load_from_file().
 func (this *KeyFile) LoadFromFile(file string, flags Flags) (bool, error) {
 	var cstr *C.char = C.CString(file)
-	defer C.free(unsafe.Pointer(cstr))
+	defer C.g_free(C.gpointer(cstr))
 	var cerr *C.GError
-	c := C.g_key_file_load_from_file(this.cKey, cstr, C.GKeyFileFlags(flags), &cerr)
+	c := C.g_key_file_load_from_file(this.cKey, (*C.gchar)(cstr), C.GKeyFileFlags(flags), &cerr)
 	return c != 0, goError(cerr)
 }
 
 // ToData is a wrapper around g_key_file_to_data().
 func (this *KeyFile) ToData() (uint64, string, error) {
-	var clength C.uint64_t
+	var clength C.gsize
 	var cerr *C.GError
 	c := C.g_key_file_to_data(this.cKey, &clength, &cerr)
-	defer C.g_free(unsafe.Pointer(c))
-	return uint64(clength), C.GoString(c), goError(cerr)
+	defer C.g_free(C.gpointer(c))
+	return uint64(clength), C.GoString((*C.char)(c)), goError(cerr)
 }
 
 // ToNative returns the pointer to the underlying GKeyFile.
@@ -95,12 +99,20 @@ func (this *KeyFile) ToNative() *C.GKeyFile {
 	return this.cKey
 }
 
+func (this *KeyFile) HasKey(group string, key string) bool {
+	cGroup := (*C.gchar)(C.CString(group))
+	defer C.g_free(C.gpointer(cGroup))
+	cKey := (*C.gchar)(C.CString(key))
+	defer C.g_free(C.gpointer(cKey))
+	return goBool(C.g_key_file_has_key(this.cKey, cGroup, cKey, nil))
+}
+
 //
 //---------------------------------------------------------------------[ GET ]--
 
 // GetGroups is a wrapper around g_key_file_get_groups().
 func (this *KeyFile) GetGroups() (uint64, []string) {
-	var length C.uint64_t
+	var length C.gsize
 	c := C.g_key_file_get_groups(this.cKey, &length)
 	var list []string
 	for i := 0; i < int(length); i++ {
@@ -109,29 +121,29 @@ func (this *KeyFile) GetGroups() (uint64, []string) {
 		} else {
 			println("-----------------------------------------------dropped empty group")
 		}
-		C.g_free(unsafe.Pointer((*(*[999999]*C.char)(unsafe.Pointer(c)))[i]))
+		C.g_free(C.gpointer((*(*[999999]*C.char)(unsafe.Pointer(c)))[i]))
 	}
 	return uint64(length), list
 }
 
 // GetKeys is a wrapper around g_key_file_get_keys().
 func (this *KeyFile) GetKeys(group string) (uint64, []string, error) {
-	var cGroup *C.char = C.CString(group)
-	var length C.uint64_t
+	cGroup := (*C.gchar)(C.CString(group))
+	defer C.g_free(C.gpointer(cGroup))
+	var length C.gsize
 	var cErr *C.GError
-	defer C.free(unsafe.Pointer(cGroup))
 	c := C.g_key_file_get_keys(this.cKey, cGroup, &length, &cErr)
 	list := make([]string, uint64(length))
 	for i := range list {
 		list[i] = C.GoString((*(*[999999]*C.char)(unsafe.Pointer(c)))[i])
-		C.g_free(unsafe.Pointer((*(*[999999]*C.char)(unsafe.Pointer(c)))[i]))
+		C.g_free(C.gpointer((*(*[999999]*C.char)(unsafe.Pointer(c)))[i]))
 	}
 	return uint64(length), list, goError(cErr)
 }
 
 // GetBooleanList is a wrapper around g_key_file_get_boolean_list().
 func (this *KeyFile) GetBooleanList(group string, key string) (length uint64, list []bool, e error) {
-	var c unsafe.Pointer
+	var c C.gpointer
 	length, c, e = this.getList(group, key, "bool")
 	defer C.g_free(c)
 	list = make([]bool, length)
@@ -143,7 +155,7 @@ func (this *KeyFile) GetBooleanList(group string, key string) (length uint64, li
 
 // GetDoubleList is a wrapper around g_key_file_get_double_list().
 func (this *KeyFile) GetDoubleList(group string, key string) (length uint64, list []float64, e error) {
-	var c unsafe.Pointer
+	var c C.gpointer
 	length, c, e = this.getList(group, key, "float64")
 	defer C.g_free(c)
 	list = make([]float64, length)
@@ -155,7 +167,7 @@ func (this *KeyFile) GetDoubleList(group string, key string) (length uint64, lis
 
 // GetIntegerList is a wrapper around g_key_file_get_integer_list().
 func (this *KeyFile) GetIntegerList(group string, key string) (length uint64, list []int, e error) {
-	var c unsafe.Pointer
+	var c C.gpointer
 	length, c, e = this.getList(group, key, "int")
 	defer C.g_free(c)
 	list = make([]int, length)
@@ -167,7 +179,7 @@ func (this *KeyFile) GetIntegerList(group string, key string) (length uint64, li
 
 // GetStringList is a wrapper around g_key_file_get_string_list().
 func (this *KeyFile) GetStringList(group string, key string) (length uint64, list []string, e error) {
-	var c unsafe.Pointer
+	var c C.gpointer
 	length, c, e = this.getList(group, key, "string")
 	defer C.g_free(c)
 	list = make([]string, length)
@@ -177,52 +189,61 @@ func (this *KeyFile) GetStringList(group string, key string) (length uint64, lis
 	return length, list, e
 }
 
-func (this *KeyFile) getList(group, key, typ string) (uint64, unsafe.Pointer, error) {
-	var cGroup *C.char = C.CString(group)
-	defer C.free(unsafe.Pointer(cGroup))
-	var cKey *C.char = C.CString(key)
-	defer C.free(unsafe.Pointer(cKey))
-	var length1 C.uint64_t
+func (this *KeyFile) getList(group, key, typ string) (uint64, C.gpointer, error) {
+	cGroup := (*C.gchar)(C.CString(group))
+	defer C.g_free(C.gpointer(cGroup))
+	cKey := (*C.gchar)(C.CString(key))
+	defer C.g_free(C.gpointer(cKey))
+	var length C.gsize
 	var cErr *C.GError
-	var c unsafe.Pointer
+	var c C.gpointer
 	switch typ {
 	case "bool":
-		c = unsafe.Pointer(C.g_key_file_get_boolean_list(this.cKey, cGroup, cKey, &length1, &cErr))
+		c = C.gpointer(C.g_key_file_get_boolean_list(this.cKey, cGroup, cKey, &length, &cErr))
 	case "int":
-		c = unsafe.Pointer(C.g_key_file_get_integer_list(this.cKey, cGroup, cKey, &length1, &cErr))
+		c = C.gpointer(C.g_key_file_get_integer_list(this.cKey, cGroup, cKey, &length, &cErr))
 	case "float64":
-		c = unsafe.Pointer(C.g_key_file_get_double_list(this.cKey, cGroup, cKey, &length1, &cErr))
+		c = C.gpointer(C.g_key_file_get_double_list(this.cKey, cGroup, cKey, &length, &cErr))
 	case "string":
-		c = unsafe.Pointer(C.g_key_file_get_string_list(this.cKey, cGroup, cKey, &length1, &cErr))
+		c = C.gpointer(C.g_key_file_get_string_list(this.cKey, cGroup, cKey, &length, &cErr))
 
 	}
-	return uint64(length1), c, goError(cErr)
+	return uint64(length), c, goError(cErr)
 }
 
 func (this *KeyFile) getOne(group string, key string, typ string) (interface{}, error) {
-	var cGroup *C.char = C.CString(group)
-	defer C.free(unsafe.Pointer(cGroup))
-	var cKey *C.char = C.CString(key)
-	defer C.free(unsafe.Pointer(cKey))
+	cGroup := (*C.gchar)(C.CString(group))
+	defer C.g_free(C.gpointer(cGroup))
+	cKey := (*C.gchar)(C.CString(key))
+	defer C.g_free(C.gpointer(cKey))
 	var cErr *C.GError
 
 	var c interface{}
 	switch typ {
+	case "bool":
+		c = goBool(C.g_key_file_get_boolean(this.cKey, cGroup, cKey, &cErr))
+
 	case "int":
 		c = int(C.g_key_file_get_integer(this.cKey, cGroup, cKey, &cErr))
 
 	case "comment":
 		cstr := C.g_key_file_get_comment(this.cKey, cGroup, cKey, &cErr)
-		c = C.GoString(cstr)
-		C.g_free(unsafe.Pointer(cstr))
+		c = C.GoString((*C.char)(cstr))
+		C.g_free(C.gpointer(cstr))
 
 	case "string":
 		cstr := C.g_key_file_get_string(this.cKey, cGroup, cKey, &cErr)
-		c = C.GoString(cstr)
-		C.g_free(unsafe.Pointer(cstr))
+		c = C.GoString((*C.char)(cstr))
+		C.g_free(C.gpointer(cstr))
 
 	}
 	return c, goError(cErr)
+}
+
+// GetBoolean is a wrapper around g_key_file_get_boolean().
+func (this *KeyFile) GetBoolean(group string, key string) (bool, error) {
+	ret, e := this.getOne(group, key, "bool")
+	return ret.(bool), e
 }
 
 // GetInteger is a wrapper around g_key_file_get_integer().
@@ -248,45 +269,48 @@ func (this *KeyFile) GetString(group string, key string) (string, error) {
 
 // Set is a generic wrapper around g_key_file_set_xxx() with type assertion.
 func (this *KeyFile) Set(group string, key string, uncasted interface{}) {
-	var cGroup *C.char = C.CString(group)
-	defer C.free(unsafe.Pointer(cGroup))
-	var cKey *C.char = C.CString(key)
-	defer C.free(unsafe.Pointer(cKey))
+	cGroup := (*C.gchar)(C.CString(group))
+	defer C.g_free(C.gpointer(cGroup))
+	cKey := (*C.gchar)(C.CString(key))
+	defer C.g_free(C.gpointer(cKey))
 
 	switch value := uncasted.(type) {
 	case bool:
 		C.g_key_file_set_boolean(this.cKey, cGroup, cKey, cBool(value))
 
 	case int:
-		C.g_key_file_set_integer(this.cKey, cGroup, cKey, C.int32_t(value))
+		C.g_key_file_set_integer(this.cKey, cGroup, cKey, C.gint(value))
 
 	case float64:
-		C.g_key_file_set_double(this.cKey, cGroup, cKey, C.double(value))
+		C.g_key_file_set_double(this.cKey, cGroup, cKey, C.gdouble(value))
 
 	case string:
-		cstr := C.CString(value)
-		defer C.free(unsafe.Pointer(cstr))
+		cstr := (*C.gchar)(C.CString(value))
+		defer C.g_free(C.gpointer(cstr))
 		C.g_key_file_set_string(this.cKey, cGroup, cKey, cstr)
 
 	case []bool:
 		clist := cListBool(value)
-		defer C.free(unsafe.Pointer(clist))
-		C.g_key_file_set_boolean_list(this.cKey, cGroup, cKey, clist, C.uint64_t(len(value)))
+		defer C.g_free(C.gpointer(clist))
+		C.g_key_file_set_boolean_list(this.cKey, cGroup, cKey, clist, C.gsize(len(value)))
 
 	case []int:
 		clist := cListInt(value)
-		defer C.free(unsafe.Pointer(clist))
-		C.g_key_file_set_integer_list(this.cKey, cGroup, cKey, clist, C.uint64_t(len(value)))
+		defer C.g_free(C.gpointer(clist))
+		C.g_key_file_set_integer_list(this.cKey, cGroup, cKey, clist, C.gsize(len(value)))
 
 	case []float64:
 		clist := cListDouble(value)
-		defer C.free(unsafe.Pointer(clist))
-		C.g_key_file_set_double_list(this.cKey, cGroup, cKey, clist, C.uint64_t(len(value)))
+		defer C.g_free(C.gpointer(clist))
+		C.g_key_file_set_double_list(this.cKey, cGroup, cKey, clist, C.gsize(len(value)))
 
 	case []string:
 		clist := cListString(value)
-		defer C.free(unsafe.Pointer(clist))
-		C.g_key_file_set_string_list(this.cKey, cGroup, cKey, clist, C.uint64_t(len(value)))
+		C.g_key_file_set_string_list(this.cKey, cGroup, cKey, clist, C.gsize(len(value)))
+		for i := range value {
+			C.g_free(C.gpointer((*(*[999999]*C.gchar)(unsafe.Pointer(clist)))[i]))
+		}
+		C.g_free(C.gpointer(clist))
 	}
 }
 
@@ -337,62 +361,61 @@ func (this *KeyFile) SetStringList(group string, key string, value []string) {
 //
 //-----------------------------------------------------------------[ HELPERS ]--
 
-func goError(cErr *C.GError) error {
-	if cErr != nil {
-		defer C.g_error_free(cErr)
-		return errors.New(C.GoString(((*_GError)(unsafe.Pointer(cErr))).message))
+func goError(err *C.GError) error {
+	if err != nil {
+		defer C.g_error_free(err)
+		return errors.New(C.GoString((*C.char)(err.message)))
 	}
 	return nil
 }
 
-type _GError struct {
-	domain  uint32
-	code    int32
-	message *C.char
+func goBool(b C.gboolean) bool {
+	if b > 0 {
+		return true
+	}
+	return false
 }
 
-func cBool(x bool) C.int {
-	if x {
+func cBool(b bool) C.gboolean {
+	if b {
 		return 1
 	}
 	return 0
 }
 
-func cListBool(value []bool) *C.int {
-	var clist *C.int
-	clist = (*C.int)(C.malloc(C.size_t(int(unsafe.Sizeof(*clist)) * len(value))))
+func cListBool(value []bool) *C.gboolean {
+	var clist *C.gboolean
+	clist = (*C.gboolean)(C.malloc(C.size_t(int(unsafe.Sizeof(*clist)) * len(value))))
 	for i, e := range value {
-		(*(*[999999]C.int)(unsafe.Pointer(clist)))[i] = cBool(e)
+		(*(*[999999]C.gboolean)(unsafe.Pointer(clist)))[i] = cBool(e)
 	}
 	return clist
 }
 
-func cListInt(value []int) *C.int32_t {
-	var clist *C.int32_t
-	clist = (*C.int32_t)(C.malloc(C.size_t(int(unsafe.Sizeof(*clist)) * len(value))))
+func cListInt(value []int) *C.gint {
+	var clist *C.gint
+	clist = (*C.gint)(C.malloc(C.size_t(int(unsafe.Sizeof(*clist)) * len(value))))
 	for k, v := range value {
-		(*(*[999999]C.int32_t)(unsafe.Pointer(clist)))[k] = C.int32_t(v)
+		(*(*[999999]C.gint)(unsafe.Pointer(clist)))[k] = C.gint(v)
 	}
 	return clist
 }
 
-func cListDouble(value []float64) *C.double {
-	var clist *C.double
-	clist = (*C.double)(C.malloc(C.size_t(int(unsafe.Sizeof(*clist)) * len(value))))
+func cListDouble(value []float64) *C.gdouble {
+	var clist *C.gdouble
+	clist = (*C.gdouble)(C.malloc(C.size_t(int(unsafe.Sizeof(*clist)) * len(value))))
 	for i, e := range value {
-		(*(*[999999]C.double)(unsafe.Pointer(clist)))[i] = C.double(e)
+		(*(*[999999]C.gdouble)(unsafe.Pointer(clist)))[i] = C.gdouble(e)
 	}
 	return clist
 }
 
-func cListString(value []string) **C.char {
-	var clist **C.char
-	clist = (**C.char)(C.malloc(C.size_t(int(unsafe.Sizeof(*clist)) * (len(value) + 1))))
-	defer C.free(unsafe.Pointer(clist))
+func cListString(value []string) **C.gchar {
+	var clist **C.gchar
+	clist = (**C.gchar)(C.malloc(C.size_t(int(unsafe.Sizeof(*clist)) * (len(value) + 1))))
 	for i, e := range value {
-		(*(*[999999]*C.char)(unsafe.Pointer(clist)))[i] = C.CString(e)
-		defer C.free(unsafe.Pointer((*(*[999999]*C.char)(unsafe.Pointer(clist)))[i]))
+		(*(*[999999]*C.gchar)(unsafe.Pointer(clist)))[i] = (*C.gchar)(C.CString(e))
 	}
-	(*(*[999999]*C.char)(unsafe.Pointer(clist)))[len(value)] = nil
+	(*(*[999999]*C.gchar)(unsafe.Pointer(clist)))[len(value)] = nil
 	return clist
 }

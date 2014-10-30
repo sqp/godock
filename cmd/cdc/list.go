@@ -19,8 +19,6 @@ import (
 
 var nl = []byte{'\n'}
 
-const version = "3.3.0"
-
 var cmdList = &Command{
 	UsageLine: "list [-d] [-l] [-f format] [-json]",
 	Short:     "list external applets",
@@ -82,7 +80,7 @@ func runList(cmd *Command, args []string) {
 	var e error
 	switch {
 	case *listDistant:
-		listPackages, e = packages.ListDistant(cdtype.AppletsDirName + "/" + version)
+		listPackages, e = packages.ListDistant(cdtype.AppletsDirName + "/" + appVersion)
 		logger.Err(e, "get packages list from server")
 	case *listLocal:
 		// Get applets dir.
@@ -94,7 +92,7 @@ func runList(cmd *Command, args []string) {
 		logger.Err(e, "get packages list from external dir")
 
 	default:
-		listPackages, e = packages.ListDownload(version)
+		listPackages, e = packages.ListDownload(appVersion)
 		logger.Err(e, "get packages list from server")
 	}
 

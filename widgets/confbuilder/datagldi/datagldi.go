@@ -207,13 +207,17 @@ func (Data) ListIcons() map[string][]datatype.Iconer {
 // ListViews returns the list of views.
 //
 func (Data) ListViews() (list []datatype.Field) {
-	list = []datatype.Field{{Key: "", Name: "default"}}
 	for key, rend := range gldi.CairoDockRendererList() {
-		name := rend.GetDisplayedName()
-		if name == "" {
-			name = key
-		}
-		list = append(list, datatype.Field{Key: key, Name: name})
+		list = append(list, displayerField(key, rend))
+	}
+	return list
+}
+
+// ListAnimations returns the list of animations.
+//
+func (Data) ListAnimations() (list []datatype.Field) {
+	for key, rend := range gldi.AnimationList() {
+		list = append(list, displayerField(key, rend))
 	}
 	return list
 }
@@ -222,13 +226,30 @@ func (Data) ListViews() (list []datatype.Field) {
 //
 func (Data) ListDeskletDecorations() (list []datatype.Field) {
 	for key, rend := range gldi.CairoDeskletDecorationList() {
-		name := rend.GetDisplayedName()
-		if name == "" {
-			name = key
-		}
-		list = append(list, datatype.Field{Key: key, Name: name})
+		list = append(list, displayerField(key, rend))
 	}
 	return list
+}
+
+// ListDialogDecorator returns the list of dialog decorators.
+//
+func (Data) ListDialogDecorator() (list []datatype.Field) {
+	for key, rend := range gldi.DialogDecoratorList() {
+		list = append(list, displayerField(key, rend))
+	}
+	return list
+}
+
+type displayer interface {
+	GetDisplayedName() string
+}
+
+func displayerField(key string, data displayer) datatype.Field {
+	name := data.GetDisplayedName()
+	if name == "" {
+		name = key
+	}
+	return datatype.Field{Key: key, Name: name}
 }
 
 // ListDocks builds the list of docks with readable name.

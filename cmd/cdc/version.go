@@ -12,5 +12,5 @@ func runVersion(cmd *Command, args []string) {
 		cmd.Usage()
 	}
 
-	println(version)
+	println(cdcVersion)
 }

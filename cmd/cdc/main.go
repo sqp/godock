@@ -19,58 +19,13 @@ import (
 	"unicode/utf8"
 )
 
-// A Command is an implementation of a cdc command
-//
-type Command struct {
-	// Run runs the command.
-	// The args are the arguments after the command name.
-	Run func(cmd *Command, args []string)
-
-	// UsageLine is the one-line usage message.
-	// The first word in the line is taken to be the command name.
-	UsageLine string
-
-	// Short is the short description shown in the 'cdc help' output.
-	Short string
-
-	// Long is the long message shown in the 'cdc help <this-command>' output.
-	Long string
-
-	// Flag is a set of flags specific to this command.
-	Flag flag.FlagSet
-
-	// CustomFlags indicates that the command will do its own
-	// flag parsing.
-	CustomFlags bool
-}
-
-// Name returns the command's name: the first word in the usage line.
-func (c *Command) Name() string {
-	name := c.UsageLine
-	i := strings.Index(name, " ")
-	if i >= 0 {
-		name = name[:i]
-	}
-	return name
-}
-
-// Usage print the command usage.
-func (c *Command) Usage() {
-	fmt.Fprintf(os.Stderr, "usage: %s\n\n", c.UsageLine)
-	fmt.Fprintf(os.Stderr, "%s\n", strings.TrimSpace(c.Long))
-	os.Exit(2)
-}
-
-// Runnable reports whether the command can be run; otherwise
-// it is a documentation pseudo-command such as importpath.
-func (c *Command) Runnable() bool {
-	return c.Run != nil
-}
+const cdcVersion = "0.0.2"
+const appVersion = "3.4.0"
 
 // Commands lists the available commands and help topics.
 // The order here is the order in which they are printed by 'cdc help'.
 func Commands() []*Command {
-	list := []*Command{
+	all := []*Command{
 		cmdBuild,
 		cmdConfig,
 		cmdDebug,
@@ -91,9 +46,14 @@ func Commands() []*Command {
 		// helpTestfunc,
 	}
 
-	if list[1] == nil { // Special temp to remove optional config command (until we need more optionals).
-		list = append(list[0:1], list[2:]...)
+	// Special temp to remove optional config command.
+	var list []*Command
+	for _, cmd := range all {
+		if cmd != nil {
+			list = append(list, cmd)
+		}
 	}
+
 	return list
 }
 
@@ -171,6 +131,9 @@ func main() {
 	setExitStatus(2)
 	exit()
 }
+
+//
+//--------------------------------------------------------------------[ HELP ]--
 
 var usageTemplate = `cdc, Cairo-Dock Control, is a tool to manage a Cairo-Dock installation.
 It can also embed and manage multiple applets if compiled with their support.
@@ -270,6 +233,57 @@ func help(args []string) {
 
 	fmt.Fprintf(os.Stderr, "Unknown help topic %#q.  Run 'cdc help'.\n", arg)
 	os.Exit(2) // failed at 'cdc help cmd'
+}
+
+//
+//-----------------------------------------------------------------[ COMMAND ]--
+
+// A Command is an implementation of a cdc command
+//
+type Command struct {
+	// Run runs the command.
+	// The args are the arguments after the command name.
+	Run func(cmd *Command, args []string)
+
+	// UsageLine is the one-line usage message.
+	// The first word in the line is taken to be the command name.
+	UsageLine string
+
+	// Short is the short description shown in the 'cdc help' output.
+	Short string
+
+	// Long is the long message shown in the 'cdc help <this-command>' output.
+	Long string
+
+	// Flag is a set of flags specific to this command.
+	Flag flag.FlagSet
+
+	// CustomFlags indicates that the command will do its own
+	// flag parsing.
+	CustomFlags bool
+}
+
+// Name returns the command's name: the first word in the usage line.
+func (c *Command) Name() string {
+	name := c.UsageLine
+	i := strings.Index(name, " ")
+	if i >= 0 {
+		name = name[:i]
+	}
+	return name
+}
+
+// Usage print the command usage.
+func (c *Command) Usage() {
+	fmt.Fprintf(os.Stderr, "usage: %s\n\n", c.UsageLine)
+	fmt.Fprintf(os.Stderr, "%s\n", strings.TrimSpace(c.Long))
+	os.Exit(2)
+}
+
+// Runnable reports whether the command can be run; otherwise
+// it is a documentation pseudo-command such as importpath.
+func (c *Command) Runnable() bool {
+	return c.Run != nil
 }
 
 //

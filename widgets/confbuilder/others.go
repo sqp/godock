@@ -203,16 +203,16 @@ func fillModelWithThemeINI(model *gtk.ListStore, list packages.AppletPackages, c
 // 	}
 // }
 
-func fillModelWithAnimation(model *gtk.ListStore, list map[string]string, current string) (toSelect *gtk.TreeIter) {
-	for key, name := range list {
+func fillModelWithAnimation(model *gtk.ListStore, list []datatype.Field, current string) (toSelect *gtk.TreeIter) {
+	for _, field := range list {
 		iter := model.Append()
 		model.SetCols(iter, gtk.Cols{
-			RowKey:  key,
-			RowName: name, // GETTEXT TRANSLATE  pDecoration->cDisplayedName if available before name
+			RowKey:  field.Key,
+			RowName: field.Name,
 			// RowIcon: "none",
 			RowDesc: "none"})
 
-		if key == current {
+		if field.Key == current {
 			toSelect = iter
 		}
 	}

@@ -4,11 +4,20 @@ package datatype
 import (
 	"github.com/sqp/godock/libs/packages"
 	"github.com/sqp/godock/widgets/gtk/keyfile"
+
+	"io/ioutil"
+	"os"
+	"os/user"
+	"path/filepath"
 )
 
 // KeyMainDock is the key name of the first main dock (the one with the taskbar).
 //
-const KeyMainDock = "_MainDock_"
+const (
+	KeyMainDock    = "_MainDock_"
+	DirIconsSystem = "/usr/share/icons"
+	DirIconsUser   = ".icons" // in $HOME
+)
 
 // Source defines external data needed by the config builder.
 //
@@ -37,14 +46,26 @@ type Source interface {
 	//
 	ListViews() []Field
 
+	// ListAnimations returns the list of animations.
+	//
+	ListAnimations() []Field
+
 	// ListDeskletDecorations returns the list of desklet decorations.
 	//
 	ListDeskletDecorations() []Field
+
+	// ListDialogDecorator returns the list of dialog decorators.
+	//
+	ListDialogDecorator() []Field
 
 	// ListDocks builds the list of docks with a readable name.
 	// Both options are docks to remove from the list. Subdock childrens are removed too.
 	//
 	ListDocks(parent, subdock string) []Field
+
+	// ListIconTheme builds a list of desktop icon-themes in system and user dir.
+	//
+	ListIconTheme() []Field
 
 	Handbook(appletName string) Handbooker
 
@@ -56,6 +77,8 @@ type Source interface {
 	//
 	ListThemeINI(localSystem, localUser, distant string) packages.AppletPackages
 
+	// ManagerReload reloads the manager matching the given name.
+	//
 	ManagerReload(name string, b bool, keyf keyfile.KeyFile)
 }
 
@@ -104,6 +127,54 @@ func (SourceCommon) ListThemeINI(localSystem, localUser, distant string) package
 	if userDir, e := packages.DirTheme(localUser); e == nil {
 		dist, _ := packages.ListFromDir(userDir, packages.TypeUser, packages.SourceTheme)
 		list = append(list, dist...)
+	}
+	return list
+}
+
+// ListIconTheme builds a list of desktop icon-themes in system and user dir.
+//
+func (SourceCommon) ListIconTheme() []Field {
+
+	dirs := []string{DirIconsSystem}
+	usr, e := user.Current()
+	if e == nil {
+		dirs = append([]string{filepath.Join(usr.HomeDir, DirIconsUser)}, dirs...) // prepend ~/.icons
+	}
+
+	var list []Field
+	for _, dir := range dirs {
+
+		files, e := ioutil.ReadDir(dir) // Get all files in the given directories.
+		if e != nil {
+			continue
+		}
+
+		for _, info := range files {
+			fullpath := filepath.Join(dir, info.Name()) // and only keep dirs.
+			if !info.IsDir() {
+				continue
+			}
+
+			file := filepath.Join(fullpath, "index.theme") // Check if a theme index file exists.
+			if _, e = os.Stat(file); e != nil {
+				continue
+			}
+
+			kf := keyfile.New()
+			ok, _ := kf.LoadFromFile(file, keyfile.FlagsNone) // Keyfile required.
+			if !ok {
+				continue
+			}
+
+			hidden, _ := kf.GetBoolean("Icon Theme", "Hidden")
+			hasdirs := kf.HasKey("Icon Theme", "Directories")
+			name, _ := kf.GetString("Icon Theme", "Name")
+			if hidden || !hasdirs || name == "" { // Check theme settings.
+				continue
+			}
+
+			list = append(list, Field{Key: info.Name(), Name: name})
+		}
 	}
 	return list
 }

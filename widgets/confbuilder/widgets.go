@@ -215,10 +215,9 @@ func (build *Builder) WidgetColorSelector(key *Key) {
 // WidgetViewList adds a view list widget.
 //
 func (build *Builder) WidgetViewList(key *Key) {
-	// log.Info("views", build.data.ListViews())
-
 	model, _ := newModelSimple()
-	list := build.data.ListViews()
+	list := append([]datatype.Field{{Key: "", Name: "default"}}, build.data.ListViews()...)
+
 	current, _ := build.Conf.GetString(key.Group, key.Name)
 	index := fillModelWithViews(model, list, current)
 
@@ -315,39 +314,50 @@ func (build *Builder) WidgetListTheme(key *Key) {
 
 }
 
-// WidgetAnimationList adds an animation list widget.
-// TODO: this is only an empty widget with the current value. Need to explore original code.
+// WidgetIconThemeList adds a desktop icon-themes list widget.
 //
-func (build *Builder) WidgetAnimationList(key *Key) {
-	// log.Info("WidgetAnimationList authorized", key.AuthorizedValues)
-
+func (build *Builder) WidgetIconThemeList(key *Key) {
 	model, _ := newModelSimple()
+	list := append([]datatype.Field{
+		{},
+		{Key: "_Custom Icons_", Name: "_Custom Icons_"}}, // TODO: gettext translate
+		build.data.ListIconTheme()...)
+
 	combo, getValue := build.newComboBoxWithModel(model, false, false, false)
-
-	// if len(key.AuthorizedValues) > 1 {
-	// 	list := build.data.ListTheme(key.AuthorizedValues[0], key.AuthorizedValues[1])
-
-	combo.Set("sensitive", false)
 	current, _ := build.Conf.GetString(key.Group, key.Name)
-	if current != "" {
-		list := map[string]string{current: current}
-		iter := fillModelWithAnimation(model, list, current)
-		combo.SetActiveIter(iter)
-	}
+	iter := fillModelWithAnimation(model, list, current)
+	combo.SetActiveIter(iter)
 
 	build.addKeyWidget(combo, key, getValue)
-
-	// GtkListStore *pAnimationsListStore = _cairo_dock_build_animations_list_for_gui ();
-	// _add_combo_from_modele (pAnimationsListStore, FALSE, FALSE, FALSE);
-	// g_object_unref (pAnimationsListStore);
 }
 
-// MAIN CONF ONLY
-// func (build *Builder) WidgetDialogDecoratorList(key *Key) {
-// GtkListStore * pDialogDecoratorListStore = _cairo_dock_build_dialog_decorator_list_for_gui()
-// _add_combo_from_modele(pDialogDecoratorListStore, FALSE, FALSE, FALSE)
-// g_object_unref(pDialogDecoratorListStore)
-// }
+// WidgetAnimationList adds an animation list widget.
+//
+func (build *Builder) WidgetAnimationList(key *Key) {
+	model, _ := newModelSimple()
+	list := append([]datatype.Field{{}}, build.data.ListAnimations()...)
+
+	combo, getValue := build.newComboBoxWithModel(model, false, false, false)
+	current, _ := build.Conf.GetString(key.Group, key.Name)
+	iter := fillModelWithAnimation(model, list, current)
+	combo.SetActiveIter(iter)
+
+	build.addKeyWidget(combo, key, getValue)
+}
+
+// WidgetDialogDecoratorList adds an dialog decorator list widget.
+//
+func (build *Builder) WidgetDialogDecoratorList(key *Key) {
+	model, _ := newModelSimple()
+	list := build.data.ListDialogDecorator()
+
+	combo, getValue := build.newComboBoxWithModel(model, false, false, false)
+	current, _ := build.Conf.GetString(key.Group, key.Name)
+	iter := fillModelWithAnimation(model, list, current)
+	combo.SetActiveIter(iter)
+
+	build.addKeyWidget(combo, key, getValue)
+}
 
 // WidgetListDeskletDecoration adds a desklet decoration list widget.
 //
@@ -386,13 +396,6 @@ func (build *Builder) WidgetListDeskletDecoration(key *Key) {
 	}
 }
 
-// func (build *Builder) WidgetDeskletDecorationList(key *Key) {
-// GtkListStore *pDecorationsListStore = ( iElementType == CAIRO_DOCK_WidgetDeskletDecorationListSimple ?
-// 	_cairo_dock_build_desklet_decorations_list_for_gui () :
-// 	_cairo_dock_build_desklet_decorations_list_for_applet_gui () );
-// _add_combo_from_modele (pDecorationsListStore, FALSE, FALSE, FALSE);
-// }
-
 // WidgetDockList adds a dock list widget.
 //
 func (build *Builder) WidgetDockList(key *Key) {
@@ -424,26 +427,6 @@ func (build *Builder) WidgetDockList(key *Key) {
 	}
 	build.addKeyWidget(combo, key, getValue)
 }
-
-// MAIN CONF ONLY
-//
-// func (build *Builder) WidgetIconThemeList(key *Key) {
-// gchar *cUserPath = g_strdup_printf ("%s/.icons", g_getenv ("HOME"));
-// const gchar *path[3];
-// path[0] = (const gchar *)cUserPath;
-// path[1] = "/usr/share/icons";
-// path[2] = NULL;
-
-// GHashTable *pHashTable = _cairo_dock_build_icon_themes_list (path);
-
-// GtkListStore *pIconThemeListStore = _cairo_dock_build_icon_theme_list_for_gui (pHashTable);
-
-// _add_combo_from_modele (pIconThemeListStore, FALSE, FALSE, FALSE);
-
-// g_object_unref (pIconThemeListStore);
-// g_free (cUserPath);
-// g_hash_table_destroy (pHashTable);
-// }
 
 // WidgetIconsList adds an icon list widget.
 //
@@ -715,9 +698,6 @@ func (build *Builder) WidgetLaunchCommand(key *Key) {
 // WidgetLists adds a string list widget.
 //
 func (build *Builder) WidgetLists(key *Key) {
-
-	log.DEV("WidgetLists values", key.AuthorizedValues)
-
 	if (key.Type == WidgetNumberedControlListSimple || key.Type == WidgetNumberedControlListSelective) && len(key.AuthorizedValues) == 0 {
 		return
 	}
@@ -1199,69 +1179,55 @@ func (build *Builder) WidgetFrame(key *Key) {
 		return
 	}
 
-	cValue, cSmallIcon := "", ""
+	value, img := "", ""
 	if key.AuthorizedValues[0] == "" {
-		log.DEV("WidgetFrame, need cValue case 1")
-		// cValue = g_key_file_get_string(pKeyFile, cGroupName, cKeyName, NULL) // utile ?
+		log.DEV("WidgetFrame, need value case 1")
+		// value = g_key_file_get_string(pKeyFile, cGroupName, cKeyName, NULL) // utile ?
 	} else {
-		cValue = key.AuthorizedValues[0]
+		value = key.AuthorizedValues[0]
 		if len(key.AuthorizedValues) > 1 {
-			cSmallIcon = key.AuthorizedValues[1]
+			img = key.AuthorizedValues[1]
 		}
 	}
 
+	// Create the frame label with the optional icon.
 	build.pLabel, _ = gtk.LabelNew("")
-	build.pLabel.SetMarkup(" " + common.Bold(cValue) + " ") // cGettextDomain
-
-	if cSmallIcon != "" {
+	build.pLabel.SetMarkup(" " + common.Bold(value) + " ") // cGettextDomain
+	if img == "" {
+		build.pLabelContainer = build.pLabel
+	} else {
 		box, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, MarginIcon/2)
-		if pImage := common.ImageNewFromFile(cSmallIcon, int(gtk.ICON_SIZE_MENU)); pImage != nil {
-			box.Add(pImage)
+		if icon, e := common.ImageNewFromFile(img, 20); !log.Err(e, "Frame icon") { // TODO: fix size : int(gtk.ICON_SIZE_MENU)
+			box.Add(icon)
 		}
 		box.Add(build.pLabel)
 		build.pLabelContainer = box
 	}
 
+	// Create the box that will contain next widgets (inside the frame).
 	build.pFrameVBox, _ = gtk.BoxNew(gtk.ORIENTATION_VERTICAL, MarginGUI)
 
-	var pExternFrame gtk.IWidget
+	build.pFrame, _ = gtk.FrameNew("")
+	build.pFrame.SetBorderWidth(MarginGUI)
+	build.pFrame.SetShadowType(gtk.SHADOW_OUT)
+	build.pFrame.Add(build.pFrameVBox)
+
+	// Set label and create the expander around the frame if needed.
 	switch key.Type {
 	case WidgetFrame:
-		frame, _ := gtk.FrameNew("")
-		frame.SetBorderWidth(MarginGUI)
-		frame.SetShadowType(gtk.SHADOW_OUT)
-		if build.pLabelContainer == nil {
-			frame.SetLabelWidget(build.pLabel)
-		} else {
-			frame.SetLabelWidget(build.pLabelContainer)
-		}
-
-		frame.Add(build.pFrameVBox)
-		pExternFrame = frame
-		build.pFrame = frame
+		build.pFrame.SetLabelWidget(build.pLabelContainer)
+		build.pageBox.PackStart(build.pFrame, false, false, 0)
 
 	case WidgetExpander:
 		expand, _ := gtk.ExpanderNew("")
 		expand.SetExpanded(false)
-		if build.pLabelContainer == nil {
-			expand.SetLabelWidget(build.pLabel)
-		} else {
-			expand.SetLabelWidget(build.pLabelContainer)
-		}
+		expand.SetLabelWidget(build.pLabelContainer)
 
-		frame, _ := gtk.FrameNew("")
-		frame.SetBorderWidth(MarginGUI)
-		frame.SetShadowType(gtk.SHADOW_OUT)
-		expand.Add(frame)
-
-		frame.Add(build.pFrameVBox)
-		pExternFrame = expand
-		build.pFrame = frame
+		expand.Add(build.pFrame)
+		build.pageBox.PackStart(expand, false, false, 0)
 	}
 
-	// 	//pSubWidgetList = g_slist_append (pSubWidgetList, pExternFrame);
-
-	build.pageBox.PackStart(pExternFrame, false, false, 0)
+	// SAME AS IN builder.go
 
 	// 	if (pControlWidgets != NULL)
 	// 	{

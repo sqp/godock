@@ -61,49 +61,23 @@ static gboolean _module_is_auto_loaded(GldiModule *module) {
 	return (module->pInterface->initModule == NULL || module->pInterface->stopModule == NULL || module->pVisitCard->cInternalModule != NULL);
 }
 
-// Modules list.
-
-extern void addModule (gpointer list, gchar *name, GldiModule *module);
-
-static gboolean forward_module(gchar *name, GldiModule *module, gpointer list) {
-	addModule(list, name, module);
-	return FALSE;
-}
 
 
-static void dock_module_list (gpointer list) {
-	gldi_module_foreach((GHRFunc)forward_module, list);
-}
+//
+//---------------------------------------------------------[ LSTS FORWARDING ]--
+
+extern void addItemToList (gpointer, gchar*, gpointer);
+
+static void     fwd_one (const gchar *name, gpointer *item, gpointer p) { addItemToList(p, g_strdup(name), item); }
+static gboolean fwd_chk (      gchar *name, gpointer *item, gpointer p) { addItemToList(p, name,           item); return FALSE;}
 
 
+static void list_dock_module        (gpointer p){ gldi_module_foreach                   ((GHRFunc)fwd_chk, p); }
 
-// Desklet decorations list.
-
-extern void addDeskletDecoration (gpointer, gchar*, CairoDeskletDecoration*);
-
-
-static void desklet_decoration_forward(const gchar *name, CairoDeskletDecoration *deco, gpointer list){
-	 addDeskletDecoration(list, g_strdup(name), deco);
-}
-
-
-static void desklet_decoration_list (gpointer list){
-	cairo_dock_foreach_desklet_decoration((GHFunc)desklet_decoration_forward, list);
-}
-
-// Renderers list (views).
-
-extern void addRenderer (gpointer list, gchar *name, CairoDockRenderer *renderer);
-
-
-static void forward_renderer(const gchar *name, CairoDockRenderer *renderer, gpointer list){
-	 addRenderer(list, g_strdup(name), renderer);
-}
-
-
-static void dock_renderer_list (gpointer list){
-	cairo_dock_foreach_dock_renderer((GHFunc)forward_renderer, list);
-}
+static void list_animation          (gpointer p){ cairo_dock_foreach_animation          ((GHFunc)fwd_one, p); }
+static void list_desklet_decoration (gpointer p){ cairo_dock_foreach_desklet_decoration ((GHFunc)fwd_one, p); }
+static void list_dialog_decorator   (gpointer p){ cairo_dock_foreach_dialog_decorator   ((GHFunc)fwd_one, p); }
+static void list_dock_renderer      (gpointer p){ cairo_dock_foreach_dock_renderer      ((GHFunc)fwd_one, p); }
 
 
 
@@ -558,17 +532,8 @@ func ModuleGet(name string) *Module {
 
 func ModuleList() map[string]*Module {
 	list := make(map[string]*Module)
-	C.dock_module_list(C.gpointer(unsafe.Pointer(&list)))
+	C.list_dock_module(C.gpointer(&listForward{list}))
 	return list
-}
-
-//export addModule
-func addModule(p C.gpointer, cstr *C.gchar, cdr *C.GldiModule) {
-	list := (*map[string]*Module)(p)
-	name := C.GoString((*C.char)(cstr))
-	// C.free(unsafe.Pointer((*C.char)(cstr)))
-	r := NewModuleFromNative(unsafe.Pointer(cdr))
-	(*list)[name] = r
 }
 
 func NewModuleFromNative(p unsafe.Pointer) *Module {
@@ -692,21 +657,33 @@ func (vc *VisitCard) IsMultiInstance() bool {
 }
 
 //
+//---------------------------------------------------------------[ ANIMATION ]--
+
+func AnimationList() map[string]*Animation {
+	list := make(map[string]*Animation)
+	C.list_animation(C.gpointer(&listForward{list}))
+	return list
+}
+
+type Animation struct {
+	Ptr *C.CairoDockAnimationRecord
+}
+
+func NewAnimationFromNative(p unsafe.Pointer) *Animation {
+	return &Animation{(*C.CairoDockAnimationRecord)(p)}
+}
+
+func (dr *Animation) GetDisplayedName() string {
+	return C.GoString((*C.char)(dr.Ptr.cDisplayedName))
+}
+
+//
 //--------------------------------------------------[ CAIRODESKLETDECORATION ]--
 
 func CairoDeskletDecorationList() map[string]*CairoDeskletDecoration {
 	list := make(map[string]*CairoDeskletDecoration)
-	C.desklet_decoration_list(C.gpointer(unsafe.Pointer(&list)))
+	C.list_desklet_decoration(C.gpointer(&listForward{list}))
 	return list
-}
-
-//export addDeskletDecoration
-func addDeskletDecoration(p C.gpointer, cstr *C.gchar, cdr *C.CairoDeskletDecoration) {
-	list := (*map[string]*CairoDeskletDecoration)(p)
-	name := C.GoString((*C.char)(cstr))
-	C.free(unsafe.Pointer((*C.char)(cstr)))
-	r := NewCairoDeskletDecorationFromNative(unsafe.Pointer(cdr))
-	(*list)[name] = r
 }
 
 type CairoDeskletDecoration struct {
@@ -722,23 +699,38 @@ func (dr *CairoDeskletDecoration) GetDisplayedName() string {
 }
 
 //
+//---------------------------------------------------------[ DIALOGDECORATOR ]--
+
+func DialogDecoratorList() map[string]*DialogDecorator {
+	list := make(map[string]*DialogDecorator)
+	C.list_dialog_decorator(C.gpointer(&listForward{list}))
+	return list
+}
+
+type DialogDecorator struct {
+	Ptr *C.CairoDialogDecorator
+}
+
+func NewDialogDecoratorFromNative(p unsafe.Pointer) *DialogDecorator {
+	return &DialogDecorator{(*C.CairoDialogDecorator)(p)}
+}
+
+func (dr *DialogDecorator) GetDisplayedName() string {
+	return C.GoString((*C.char)(dr.Ptr.cDisplayedName))
+}
+
+// cairo_dock_foreach_dialog_decorator
+
+//
 //-------------------------------------------------------[ CAIRODOCKRENDERER ]--
 
 func CairoDockRendererList() map[string]*CairoDockRenderer {
 	list := make(map[string]*CairoDockRenderer)
-	C.dock_renderer_list(C.gpointer(unsafe.Pointer(&list)))
+	C.list_dock_renderer(C.gpointer(&listForward{list}))
 	return list
 }
 
-//export addRenderer
-func addRenderer(p C.gpointer, cstr *C.gchar, cdr *C.CairoDockRenderer) {
-	list := (*map[string]*CairoDockRenderer)(p)
-	name := C.GoString((*C.char)(cstr))
-	C.free(unsafe.Pointer((*C.char)(cstr)))
-	r := NewCairoDockRendererFromNative(unsafe.Pointer(cdr))
-	(*list)[name] = r
-}
-
+// AKA views.
 type CairoDockRenderer struct {
 	Ptr *C.CairoDockRenderer
 }
@@ -773,6 +765,8 @@ func ManagerGet(name string) *Manager {
 	return NewManagerFromNative(unsafe.Pointer(c))
 }
 
+// ManagerReload reloads the manager matching the given name.
+//
 func ManagerReload(name string, b bool, keyf keyfile.KeyFile) {
 	manager := ManagerGet(name)
 	if manager == nil {
@@ -799,4 +793,37 @@ func gobool(b C.gboolean) bool {
 
 func gchar(str string) *C.gchar {
 	return (*C.gchar)(C.CString(str))
+}
+
+// List forwarding from c callbacks.
+type listForward struct{ p interface{} }
+
+//export addItemToList
+func addItemToList(p C.gpointer, cstr *C.gchar, cdr C.gpointer) {
+	name := C.GoString((*C.char)(cstr))
+	free := true
+
+	list := (*listForward)(p)
+	switch v := list.p.(type) {
+	case map[string]*Animation:
+		v[name] = NewAnimationFromNative(unsafe.Pointer(cdr))
+
+	case map[string]*DialogDecorator:
+		v[name] = NewDialogDecoratorFromNative(unsafe.Pointer(cdr))
+
+	case map[string]*CairoDeskletDecoration:
+		v[name] = NewCairoDeskletDecorationFromNative(unsafe.Pointer(cdr))
+
+	case map[string]*Module:
+		v[name] = NewModuleFromNative(unsafe.Pointer(cdr))
+		free = false
+
+	case map[string]*CairoDockRenderer:
+		v[name] = NewCairoDockRendererFromNative(unsafe.Pointer(cdr))
+	}
+
+	if free {
+		C.free(unsafe.Pointer((*C.char)(cstr)))
+	}
+
 }

@@ -68,37 +68,12 @@ func PixbufAtSize(file string, maxW, maxH int) (*gdk.Pixbuf, error) {
 	return gdk.PixbufNewFromFileAtScale(file, maxW, maxH, true)
 }
 
-func ImageNewFromFile(cIcon string, iSize int) (pImage *gtk.Image) {
-	switch {
-	case len(cIcon) == 0:
-		return nil
-
-	case cIcon[0] != '/': // GTK stock icon
-		//img, e := gtk.ImageNewFromStock(gtk.Stock(cIcon), gtk.IconSize(iSize))
-		//log.Err(e, "Load image stock")
-		//return img
-
-	default: // Full path.
-
-		// if iSize == GTK_ICON_SIZE_BUTTON { /// TODO: find a way to get a correct transposition...
-		// 	iSize = CAIRO_DOCK_TAB_ICON_SIZE
-		// } else if iSize == GTK_ICON_SIZE_MENU {
-		// 	iSize = CAIRO_DOCK_FRAME_ICON_SIZE
-		// }
-
-		// if pixbuf, e := PixbufAtSize(cIcon, iSize, iSize); !log.Err(e, "Load image pixbuf") {
-		// if img, e := gtk.ImageNewFromPixbuf(pixbuf); !log.Err(e, "Create preview image widget") {
-		// 	pImage = img
-		// }
-		// }
+func ImageNewFromFile(iconName string, size int) (*gtk.Image, error) {
+	pixbuf, e := PixbufNewFromFile(iconName, size)
+	if e != nil {
+		return nil, e
 	}
-	// GdkPixbuf * pixbuf = gdk_pixbuf_new_from_file_at_size(cIcon, iSize, iSize, NULL)
-	// if pixbuf != nil {
-	// 	gtk_image_set_from_pixbuf(GTK_IMAGE(pImage), pixbuf)
-	// 	g_object_unref(pixbuf)
-	// }
-
-	return pImage
+	return gtk.ImageNewFromPixbuf(pixbuf)
 }
 
 // PixbufNewFromFile loads an icon from stock or disk as pixbuf.

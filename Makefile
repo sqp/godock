@@ -24,3 +24,20 @@ unstable:
 dock:
 	go install -tags '$(APPLETS) $(UNSTABLE) $(DOCK)' $(SOURCE)/$(TARGET)
 
+patch:
+  # Patch GTK
+  cd "$GOPATH/src/github.com/conformal/gotk3"
+  git pull --commit --no-edit https://github.com/sqp/gotk3 unstable # unstable branch is required to build a dock.
+  
+  # git pull --commit --no-edit https://github.com/sqp/gotk3 current # current branch is enough for applets.
+
+  # branches grouped in the tree:
+  # https://github.com/sqp/gotk3 nil_case file-chooser scale treestore icontheme pixbuf_at_scale gliblist others widget_set liststore_hack
+  # iconview link_font_button expander cellrendererpixbuf accelerator
+  # https://github.com/shish/gotk3 file-chooser
+  # https://github.com/shish/gotk3 paned
+
+
+  # Patch Dbus (for Notifications)
+  cd "$GOPATH/src/github.com/godbus/dbus"
+  git pull --commit --no-edit https://github.com/sqp/dbus fixeavesdrop

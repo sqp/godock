@@ -156,7 +156,7 @@ type Builder struct {
 	iNbControlledWidgets int
 
 	// FRAMES ONLY
-	pFrame          gtk.IWidget
+	pFrame          *gtk.Frame
 	pLabelContainer gtk.IWidget
 
 	keys []*Key
@@ -347,8 +347,8 @@ func (build *Builder) BuildPage(cGroupName string) *gtk.ScrolledWindow {
 		case WidgetAnimationList: // List of animations.
 			build.WidgetAnimationList(key)
 
-		// case WidgetDialogDecoratorList: // liste des decorateurs de dialogue.
-		// 	build.WidgetDialogDecoratorList(key)
+		case WidgetDialogDecoratorList: // liste des decorateurs de dialogue.
+			build.WidgetDialogDecoratorList(key)
 
 		case WidgetDeskletDecorationListSimple, // liste des decorations de desklet.
 			WidgetDeskletDecorationListWithDefault: // idem mais avec le choix "defaut" en plus.
@@ -357,8 +357,8 @@ func (build *Builder) BuildPage(cGroupName string) *gtk.ScrolledWindow {
 		case WidgetListDocks: // liste des docks existant.
 			build.WidgetDockList(key)
 
-		// case WidgetIconThemeList:
-		// 	build.WidgetIconThemeList(key)
+		case WidgetIconThemeList:
+			build.WidgetIconThemeList(key)
 
 		case WidgetIconsList:
 			build.WidgetIconsList(key)
@@ -486,10 +486,6 @@ func (build *Builder) Save() {
 				}
 				build.Conf.KeyFile.SetDoubleList(key.Group, key.Name, floats)
 
-			// case WidgetDialogDecoratorList: // liste des decorateurs de dialogue.
-
-			// case WidgetIconThemeList:
-
 			// case WidgetScreensList:
 
 			case WidgetNumberedList, // a list of numbered strings.
@@ -517,6 +513,8 @@ func (build *Builder) Save() {
 				WidgetClassSelector, WidgetFontSelector,
 				WidgetThemeList,                                      // themes list in a combo, with preview and readme.
 				WidgetViewList, WidgetAnimationList, WidgetListDocks, // other filled lists.
+				WidgetDialogDecoratorList, WidgetIconThemeList, // ...
+
 				WidgetListSimple, WidgetListWithEntry, // a list of strings.
 				WidgetDeskletDecorationListSimple,      // desklet decorations list.
 				WidgetDeskletDecorationListWithDefault, // idem mais avec le choix "defaut" en plus.
