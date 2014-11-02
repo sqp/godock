@@ -5,6 +5,7 @@ package main
 import (
 	"github.com/conformal/gotk3/gtk"
 
+	"github.com/sqp/godock/libs/appdbus"
 	"github.com/sqp/godock/libs/gldi"
 	"github.com/sqp/godock/libs/gldi/globals"
 	"github.com/sqp/godock/libs/gldi/maindock"
@@ -17,8 +18,12 @@ import (
 	"github.com/sqp/godock/services/allapps"
 
 	// web inspection.
-	// "net/http"
-	// _ "net/http/pprof"
+	"net/http"
+	_ "net/http/pprof"
+
+	// "github.com/sqp/godock/libs/gldi/maindock/views" // custom hacked view
+
+	"fmt"
 )
 
 func init() {
@@ -55,33 +60,66 @@ Options:
   -M path     Ask the dock to load additionnal modules from this directory.
               (though it is unsafe for your dock to load unnofficial modules).
 
+  -N          Don't start the applets service.
+  -H          Http debug server: http://localhost:6987/debug/pprof
+  -D          Debug mode for the go part of the code (including applets).
+
   -v          Print version.
 
 This version lacks a lot of options and may not be considered usable for
 everybody at the moment.
 .`,
 	}
-	userForceCairo = cmdDock.Flag.Bool("c", false, "")
-	userForceOpenGL = cmdDock.Flag.Bool("o", false, "")
-	userIndirectOpenGL = cmdDock.Flag.Bool("O", false, "")
-	userAskBackend = cmdDock.Flag.Bool("A", false, "")
-	userEnv = cmdDock.Flag.String("e", "", "")
 
-	userDir = cmdDock.Flag.String("d", "", "")
-	userThemeServer = cmdDock.Flag.String("S", "", "")
+	userForceCairo := cmdDock.Flag.Bool("c", false, "")
+	userForceOpenGL := cmdDock.Flag.Bool("o", false, "")
+	userIndirectOpenGL := cmdDock.Flag.Bool("O", false, "")
+	userAskBackend := cmdDock.Flag.Bool("A", false, "")
+	userEnv := cmdDock.Flag.String("e", "", "")
 
-	userDelay = cmdDock.Flag.Int("w", 0, "")
+	userDir := cmdDock.Flag.String("d", "", "")
+	userThemeServer := cmdDock.Flag.String("S", "", "")
+
+	userDelay := cmdDock.Flag.Int("w", 0, "")
 	// maintenance
-	userExclude = cmdDock.Flag.String("x", "", "")
-	userSafeMode = cmdDock.Flag.Bool("f", false, "")
-	userMetacityWorkaround = cmdDock.Flag.Bool("W", false, "")
-	userVerbosity = cmdDock.Flag.String("l", "", "")
-	userForceColor = cmdDock.Flag.Bool("F", false, "")
+	userExclude := cmdDock.Flag.String("x", "", "")
+	userSafeMode := cmdDock.Flag.Bool("f", false, "")
+	userMetacityWorkaround := cmdDock.Flag.Bool("W", false, "")
+	userVerbosity := cmdDock.Flag.String("l", "", "")
+	userForceColor := cmdDock.Flag.Bool("F", false, "")
+	userLocked := cmdDock.Flag.Bool("k", false, "")
+	userKeepAbove := cmdDock.Flag.Bool("a", false, "")
+	userNoSticky := cmdDock.Flag.Bool("s", false, "")
+	userModulesDir := cmdDock.Flag.String("M", "", "")
+
 	userVersion = cmdDock.Flag.Bool("v", false, "")
-	userLocked = cmdDock.Flag.Bool("k", false, "")
-	userKeepAbove = cmdDock.Flag.Bool("a", false, "")
-	userNoSticky = cmdDock.Flag.Bool("s", false, "")
-	userModulesDir = cmdDock.Flag.String("M", "", "")
+	srvAppletsDisable = cmdDock.Flag.Bool("N", false, "")
+	srvHttpPprof = cmdDock.Flag.Bool("H", false, "")
+	srvDebug = cmdDock.Flag.Bool("D", false, "")
+
+	dockSettings = func() maindock.DockSettings {
+		return maindock.DockSettings{
+			ForceCairo:     *userForceCairo,
+			ForceOpenGL:    *userForceOpenGL,
+			IndirectOpenGL: *userIndirectOpenGL,
+			AskBackend:     *userAskBackend,
+			Env:            *userEnv,
+
+			UserDefinedDataDir: *userDir,
+			ThemeServer:        *userThemeServer,
+
+			Delay:              *userDelay,
+			Exclude:            *userExclude,
+			SafeMode:           *userSafeMode,
+			MetacityWorkaround: *userMetacityWorkaround,
+			Verbosity:          *userVerbosity,
+			ForceColor:         *userForceColor,
+			Locked:             *userLocked,
+			KeepAbove:          *userKeepAbove,
+			NoSticky:           *userNoSticky,
+			ModulesDir:         *userModulesDir,
+		}
+	}
 }
 
 // 	{"maintenance", 'm', G_OPTION_FLAG_IN_MAIN, G_OPTION_ARG_NONE,
@@ -99,27 +137,12 @@ everybody at the moment.
 // 		_("For debugging purpose only. Some hidden and still unstable options will be activated."), NULL},
 
 var (
-	// GLDI options: cairo, opengl, indirect-opengl, env, keep-above, no-sticky
-	userForceCairo     *bool
-	userForceOpenGL    *bool
-	userIndirectOpenGL *bool
-	userAskBackend     *bool
-	userEnv            *string
+	dockSettings func() maindock.DockSettings
 
-	userDir         *string
-	userThemeServer *string
-
-	userDelay              *int
-	userExclude            *string
-	userSafeMode           *bool
-	userMetacityWorkaround *bool
-	userVerbosity          *string
-	userForceColor         *bool
-	userVersion            *bool
-	userLocked             *bool
-	userKeepAbove          *bool
-	userNoSticky           *bool
-	userModulesDir         *string
+	userVersion       *bool
+	srvAppletsDisable *bool
+	srvHttpPprof      *bool
+	srvDebug          *bool
 )
 
 func runDock(cmd *Command, args []string) {
@@ -128,43 +151,45 @@ func runDock(cmd *Command, args []string) {
 		return
 	}
 
-	settings := maindock.DockSettings{
-		ForceCairo:     *userForceCairo,
-		ForceOpenGL:    *userForceOpenGL,
-		IndirectOpenGL: *userIndirectOpenGL,
-		AskBackend:     *userAskBackend,
-		Env:            *userEnv,
-
-		UserDefinedDataDir: *userDir,
-		ThemeServer:        *userThemeServer,
-
-		Delay:              *userDelay,
-		Exclude:            *userExclude,
-		SafeMode:           *userSafeMode,
-		MetacityWorkaround: *userMetacityWorkaround,
-		Verbosity:          *userVerbosity,
-		ForceColor:         *userForceColor,
-		Locked:             *userLocked,
-		KeepAbove:          *userKeepAbove,
-		NoSticky:           *userNoSticky,
-		ModulesDir:         *userModulesDir,
+	// Applets service. Enabled by default.
+	if !*srvAppletsDisable {
+		go appletService()
 	}
 
-	maindock.GuiInstance = &GuiConnector{Source: &datagldi.Data{}}
+	// HTTP listener for the pprof debug.
+	if *srvHttpPprof {
+		go func() { http.ListenAndServe("localhost:6987", nil) }()
+	}
 
-	// go appletService()
+	// Logger debug state.
+	logger.SetDebug(*srvDebug)
 
-	// HTTP listener for the pprof debug:
-	// Access with http://localhost:6060/debug/pprof/
-	// go func() { http.ListenAndServe("localhost:6060", nil) }()
+	maindock.SetLogger(logger)
 
-	maindock.DockMore(settings)
+	settings := dockSettings()
+	settings.Init()
+
+	gtkA, gtkB, gtkC := maindock.GtkVersion()
+	logger.Info("Custom Dock", cdcVersion)
+	logger.Info("   gldi    ", globals.Version())
+	// logger.Info("Compiled date      ", C.__DATE__, C.__TIME__)
+	logger.Info("   GTK     ", fmt.Sprintf("%d.%d.%d", gtkA, gtkB, gtkC))
+	logger.Info("  OpenGL   ", gldi.GLBackendIsUsed())
+
+	maindock.RegisterGui(&GuiConnector{Source: &datagldi.Data{}})
+	maindock.RegisterEvents()
+	settings.Prepare()
+
+	// views.RegisterPanel("spanel")
+
+	settings.Start()
+
 }
 
 // Start Loader.
 //
 func appletService() {
-	srvdbus.Log = logger
+	appdbus.DbusPathDock = "/org/cdc/Cdc" // TODO: improve to autodetect.
 
 	loader := srvdbus.NewLoader(allapps.List())
 	active, e := loader.StartServer()
@@ -174,9 +199,12 @@ func appletService() {
 
 	if active {
 		// defer allapps.OnStop()
-		loader.StartLoop()
+		loader.StartLoop(true)
 	}
 }
+
+//
+//-------------------------------------------------------------[ GUI BACKEND ]--
 
 // GuiConnector connects the config window to maindock GUI callbacks.
 //
@@ -240,34 +268,49 @@ func (gc *GuiConnector) ReloadItems() {
 	if gc.Widget != nil {
 		gc.Widget.ReloadItems()
 	}
-	logger.Info("ReloadItems")
 }
 
 // func (gc *GuiConnector) // ReloadCategoryWidget(){}
-func (gc *GuiConnector) Reload() { logger.Info("Reload") }
-func (gc *GuiConnector) Close()  { logger.Info("Close") }
+func (gc *GuiConnector) Reload() {
+	logger.Info("TODO: Reload GUI")
+}
 
-func (gc *GuiConnector) UpdateModulesList() { logger.Info("UpdateModulesList") }
+func (gc *GuiConnector) Close() {
+	logger.Info("TODO: Close GUI")
+}
+
+func (gc *GuiConnector) UpdateModulesList() {
+	if gc.Widget != nil {
+		gc.Widget.UpdateModulesList()
+	}
+}
 
 func (gc *GuiConnector) UpdateModuleState(name string, active bool) {
-	logger.Info("UpdateModuleState "+name, active)
-	// cairo_dock_widget_plugins_update_module_state (PLUGINS_WIDGET (pCategory->pCdWidget), cModuleName, bActive);
+	if gc.Widget != nil {
+		gc.Widget.UpdateModuleState(name, active)
+	}
 }
 
 func (gc *GuiConnector) UpdateModuleInstanceContainer(instance *gldi.ModuleInstance, detached bool) {
-	logger.Info("UpdateModuleInstanceContainer")
+	logger.Info("TODO: UpdateModuleInstanceContainer")
 }
 
-func (gc *GuiConnector) UpdateShortkeys() { logger.Info("UpdateShortkeys") }
+func (gc *GuiConnector) UpdateShortkeys() {
+	if gc.Widget != nil {
+		gc.Widget.UpdateShortkeys()
+	}
+}
 
 // func (gc *GuiConnector) UpdateDeskletParams(*gldi.Desklet)                                          {logger.Info("UpdateDeskletParams")}
 // func (gc *GuiConnector) UpdateDeskletVisibility(*gldi.Desklet)                                      {logger.Info("UpdateDeskletVisibility")}
 
 // CORE BACKEND
-func (gc *GuiConnector) SetStatusMessage(message string) { logger.Info("SetStatusMessage", message) }
+func (gc *GuiConnector) SetStatusMessage(message string) {
+	logger.Info("TODO: SetStatusMessage", message)
+}
 
 func (gc *GuiConnector) ReloadCurrentWidget(moduleInstance *gldi.ModuleInstance, showPage int) {
-	logger.Info("ReloadCurrentWidget")
+	logger.Info("TODO: ReloadCurrentWidget")
 }
 
 func (gc *GuiConnector) ShowModuleInstanceGui(pModuleInstance *gldi.ModuleInstance, iShowPage int) {
@@ -280,6 +323,8 @@ func (gc *GuiConnector) ShowModuleInstanceGui(pModuleInstance *gldi.ModuleInstan
 // 	logger.Info("GetWidgetFromName", group, key)
 // }
 
+// Window returns the pointer to the parent window.
+//
 func (gc *GuiConnector) Window() *gtk.Window { return gc.Win }
 
 /*
@@ -292,17 +337,6 @@ static void update_modules_list (void)
 	if (pCategory->pCdWidget != NULL)  // category is built
 	{
 		cairo_dock_widget_reload (pCategory->pCdWidget);
-	}
-}
-
-static void update_shortkeys (void)
-{
-	if (s_pSimpleConfigWindow == NULL)
-		return;
-	CDCategory *pCategory = _get_category (CD_CATEGORY_CONFIG);
-	if (pCategory->pCdWidget != NULL)  // category is built
-	{
-		cairo_dock_widget_config_update_shortkeys (CONFIG_WIDGET (pCategory->pCdWidget));
 	}
 }
 

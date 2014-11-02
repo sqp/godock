@@ -9,8 +9,6 @@
 
 #include "gldi-config.h"                         // GLDI_VERSION
 
-#include "cairo-dock-gui-manager.h"              // CairoDockGuiBackend
-
 // #include <unistd.h> // sleep, execl
 // #define __USE_POSIX
 // #include <time.h>
@@ -30,7 +28,6 @@
 
 
 // local files
-#include "cairo-dock-gui-backend.h"
 #include "cairo-dock-user-menu.h"
 #include "cairo-dock-user-interaction.h"
 
@@ -68,69 +65,6 @@ gboolean g_bLocked;
 
 // static gchar *s_cLastVersion = NULL;
 // static gchar *s_cDefaulBackend = NULL;
-
-
-// GUI CALLBACK BACKEND
-
-extern GtkWidget* ShowMainGui           ();
-extern GtkWidget* ShowModuleGui         (gchar *cModuleName);
-extern GtkWidget *ShowGui               (Icon *pIcon, GldiContainer *pContainer, GldiModuleInstance *pModuleInstance, int iShowPage);
-
-extern GtkWidget * ShowAddons();
-extern void ReloadItems();
-extern void Reload();
-extern void Close();
-extern void UpdateModulesList();
-extern void UpdateModuleState(gchar*, gboolean);
-extern void UpdateModuleInstanceContainer(GldiModuleInstance*, gboolean);
-extern void UpdateShortkeys();
-
-// GUI CORE BACKEND
-extern void ShowModuleInstanceGui (GldiModuleInstance *pModuleInstance, int iShowPage);
-extern void SetStatusMessage (gchar *cMessage);
-extern void ReloadCurrentWidget (GldiModuleInstance *pInstance, int iShowPage);
-
-
-
-// WRAPPERS AROUND CALLS IMPOSSIBLE FROM C TO GO (const gchar* -> gchar*)
-
-static GtkWidget* _showModuleGui (const gchar *cModuleName) { return ShowModuleGui(g_strdup(cModuleName)); }
-static void       _updateModuleState (const gchar *cModuleName, gboolean bActive) { UpdateModuleState(g_strdup(cModuleName), bActive); }
-static void       _setStatusMessage (const gchar *message) { SetStatusMessage(g_strdup(message)); }
-
-
-static void register_gui (void)
-{
-	CairoDockMainGuiBackend *pBackend = g_new0 (CairoDockMainGuiBackend, 1);
-	cairo_dock_register_config_gui_backend (pBackend);
-
- 	pBackend->show_main_gui 					= ShowMainGui;
- 	pBackend->show_module_gui 					= _showModuleGui;
- 	pBackend->show_gui 							= ShowGui;
-
-	pBackend->close_gui 						= Close;
-	pBackend->update_module_state 				= _updateModuleState;
-	pBackend->update_module_instance_container 	= UpdateModuleInstanceContainer;
-// 	pBackend->update_desklet_params 			= update_desklet_params;
-// 	pBackend->update_desklet_visibility_params 	= update_desklet_visibility_params;
-	pBackend->update_modules_list 				= UpdateModulesList;
-	pBackend->update_shortkeys 					= UpdateShortkeys;
-	pBackend->show_addons 						= ShowAddons;
-	pBackend->reload_items 						= ReloadItems;
-	pBackend->reload 							= Reload;
-// 	pBackend->cDisplayedName 					= _("Advanced Mode");  // name of the other backend.
-// 	pBackend->cTooltip 							= _("The advanced mode lets you tweak every single parameter of the dock. It is a powerful tool to customise your current theme.");
-
-
- 	CairoDockGuiBackend *pConfigBackend = g_new0 (CairoDockGuiBackend, 1);
-
-	pConfigBackend->set_status_message_on_gui 	= _setStatusMessage;
-	pConfigBackend->reload_current_widget 		= ReloadCurrentWidget;
- 	pConfigBackend->show_module_instance_gui 	= ShowModuleInstanceGui;
-// 	pConfigBackend->get_widget_from_name 		= get_widget_from_name;
-
- 	cairo_dock_register_gui_backend (pConfigBackend);
-}
 
 
 // UNCHANGED

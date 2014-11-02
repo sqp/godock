@@ -90,6 +90,7 @@ type SubEvents struct {
 //
 type Logger interface {
 	SetDebug(debug bool)
+	GetDebug() bool
 	SetName(name string)
 	SetLogOut(LogOut)
 	Debug(msg string, more ...interface{})

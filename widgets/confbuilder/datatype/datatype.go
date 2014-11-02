@@ -11,10 +11,11 @@ import (
 	"path/filepath"
 )
 
-// KeyMainDock is the key name of the first main dock (the one with the taskbar).
-//
 const (
-	KeyMainDock    = "_MainDock_"
+	// KeyMainDock is the key name of the first main dock (the one with the taskbar).
+	//
+	KeyMainDock = "_MainDock_"
+
 	DirIconsSystem = "/usr/share/icons"
 	DirIconsUser   = ".icons" // in $HOME
 )
@@ -41,6 +42,10 @@ type Source interface {
 	// ListIconsMainDock builds the list of icons in the maindock.
 	//
 	ListIconsMainDock() []Iconer
+
+	// ListShortkeys returns the list of dock shortkeys.
+	//
+	ListShortkeys() []Shortkeyer
 
 	// ListScreens returns the list of screens (active monitors on the session).
 	//
@@ -83,7 +88,7 @@ type Source interface {
 
 	// ManagerReload reloads the manager matching the given name.
 	//
-	ManagerReload(name string, b bool, keyf keyfile.KeyFile)
+	ManagerReload(name string, b bool, keyf *keyfile.KeyFile)
 }
 
 // SourceCommon provides common methods for dock config data source.
@@ -311,7 +316,7 @@ func (icon *IconSeparator) GetClassInfo(int) string { return "" }
 // Reload is unused ATM.
 func (icon *IconSeparator) Reload() {}
 
-//--------------------------------------------------------[ HANDBOOK INTERFACE ]--
+//------------------------------------------------------[ HANDBOOK INTERFACE ]--
 
 // Handbooker defines the interface needed by handbook module data provided as config source.
 //
@@ -322,4 +327,20 @@ type Handbooker interface {
 	GetPreviewFilePath() string
 	GetGettextDomain() string
 	GetModuleVersion() string
+}
+
+//------------------------------------------------------[ SHORTKEY INTERFACE ]--
+
+// Shortkeyer defines the interface needed by shortkey data provided as config source.
+//
+type Shortkeyer interface {
+	GetDemander() string
+	GetDescription() string
+	GetKeyString() string
+	GetIconFilePath() string
+	GetConfFilePath() string
+	GetGroupName() string
+	GetKeyName() string
+	GetSuccess() bool
+	Rebind(keystring, description string) bool
 }

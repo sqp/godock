@@ -18,6 +18,7 @@ package gldi
 #include "cairo-dock-file-manager.h"             // CAIRO_DOCK_GNOME...
 #include "cairo-dock-icon-factory.h"             // Icon
 #include "cairo-dock-icon-facility.h"        // Icon
+#include "cairo-dock-keybinder.h"                // gldi_shortkeys_foreach
 #include "cairo-dock-launcher-manager.h"         // CAIRO_DOCK_ICON_TYPE_IS_LAUNCHER
 #include "cairo-dock-log.h"                      // cd_log_set_level_from_name
 #include "cairo-dock-module-instance-manager.h"  // ModuleInstance
@@ -73,18 +74,20 @@ static gboolean _module_is_auto_loaded(GldiModule *module) {
 //
 //---------------------------------------------------------[ LSTS FORWARDING ]--
 
+extern void addShortkey   (gpointer, gpointer);
 extern void addItemToList (gpointer, gchar*, gpointer);
 
 static void     fwd_one (const gchar *name, gpointer *item, gpointer p) { addItemToList(p, g_strdup(name), item); }
 static gboolean fwd_chk (      gchar *name, gpointer *item, gpointer p) { addItemToList(p, name,           item); return FALSE;}
 
-
-static void list_dock_module        (gpointer p){ gldi_module_foreach                   ((GHRFunc)fwd_chk, p); }
+static void list_shortkey           (gpointer p){ gldi_shortkeys_foreach                ((GFunc)addShortkey, p); }
 
 static void list_animation          (gpointer p){ cairo_dock_foreach_animation          ((GHFunc)fwd_one, p); }
 static void list_desklet_decoration (gpointer p){ cairo_dock_foreach_desklet_decoration ((GHFunc)fwd_one, p); }
 static void list_dialog_decorator   (gpointer p){ cairo_dock_foreach_dialog_decorator   ((GHFunc)fwd_one, p); }
 static void list_dock_renderer      (gpointer p){ cairo_dock_foreach_dock_renderer      ((GHFunc)fwd_one, p); }
+
+static void list_dock_module        (gpointer p){ gldi_module_foreach                   ((GHRFunc)fwd_chk, p); }
 
 
 
@@ -774,7 +777,7 @@ func ManagerGet(name string) *Manager {
 
 // ManagerReload reloads the manager matching the given name.
 //
-func ManagerReload(name string, b bool, keyf keyfile.KeyFile) {
+func ManagerReload(name string, b bool, keyf *keyfile.KeyFile) {
 	manager := ManagerGet(name)
 	if manager == nil {
 		return
@@ -804,6 +807,80 @@ func (dg *DesktopGeometry) ScreenPosition(i int) (int, int) {
 	x := int(C.screen_position_x(C.int(i)))
 	y := int(C.screen_position_y(C.int(i)))
 	return x, y
+}
+
+//
+//----------------------------------------------------------------[ SHORTKEY ]--
+
+// ListShortkeys returns the list of dock shortkeys.
+//
+func ShortkeyList() []*Shortkey {
+	list := &listForward{[]*Shortkey{}}
+	C.list_shortkey(C.gpointer(list))
+	return list.p.([]*Shortkey)
+}
+
+//export addShortkey
+func addShortkey(sk C.gpointer, l C.gpointer) {
+	list := (*listForward)(l)
+	list.p = append(list.p.([]*Shortkey), NewShortkeyFromNative(unsafe.Pointer(sk)))
+}
+
+type Shortkey struct {
+	Ptr *C.GldiShortkey
+}
+
+func NewShortkeyFromNative(p unsafe.Pointer) *Shortkey {
+	return &Shortkey{(*C.GldiShortkey)(p)}
+}
+
+func (dr *Shortkey) GetDemander() string {
+	return C.GoString((*C.char)(dr.Ptr.cDemander))
+}
+
+func (dr *Shortkey) GetDescription() string {
+	return C.GoString((*C.char)(dr.Ptr.cDescription))
+}
+
+// GetKeyString returns the shortkey key reference as string.
+//
+func (dr *Shortkey) GetKeyString() string {
+	return C.GoString((*C.char)(dr.Ptr.keystring))
+}
+
+func (dr *Shortkey) GetIconFilePath() string {
+	return C.GoString((*C.char)(dr.Ptr.cIconFilePath))
+}
+
+func (dr *Shortkey) GetConfFilePath() string {
+	return C.GoString((*C.char)(dr.Ptr.cConfFilePath))
+}
+
+func (dr *Shortkey) GetGroupName() string {
+	return C.GoString((*C.char)(dr.Ptr.cGroupName))
+}
+
+// GetKeyName returns the config key name.
+//
+func (dr *Shortkey) GetKeyName() string {
+	return C.GoString((*C.char)(dr.Ptr.cKeyName))
+}
+
+func (dr *Shortkey) GetSuccess() bool {
+	return gobool(dr.Ptr.bSuccess)
+}
+
+func (dr *Shortkey) Rebind(keystring, description string) bool {
+	ckey := (*C.gchar)(C.CString(keystring))
+	defer C.free(unsafe.Pointer((*C.char)(ckey)))
+	var cdesc *C.gchar
+	if description != "" {
+		cdesc := (*C.gchar)(C.CString(description))
+		defer C.free(unsafe.Pointer((*C.char)(cdesc)))
+	}
+
+	c := C.gldi_shortkey_rebind(dr.Ptr, ckey, cdesc)
+	return gobool(c)
 }
 
 //

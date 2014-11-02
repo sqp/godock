@@ -3,6 +3,7 @@ package gunvalue
 
 import (
 	"github.com/conformal/gotk3/glib"
+	"github.com/conformal/gotk3/gtk"
 
 	"errors"
 	"unsafe"
@@ -68,4 +69,29 @@ func (c Conv) String() (string, error) {
 		return "", errors.New("convert: not string type")
 	}
 	return value, nil
+}
+
+// SelectedIter returns the iter matching the selected line.
+//
+func SelectedIter(model *gtk.ListStore, selection *gtk.TreeSelection) (*gtk.TreeIter, error) {
+	if selection.CountSelectedRows() == 0 {
+		return nil, errors.New("no line selected")
+	}
+	var iter gtk.TreeIter
+	var treeModel gtk.ITreeModel = model
+	ok := selection.GetSelected(&treeModel, &iter)
+	if !ok {
+		return nil, errors.New("SelectedIter: GetSelected failed")
+	}
+	return &iter, nil
+}
+
+// SelectedValue returns the liststore row value for the selected line as converter.
+
+func SelectedValue(model *gtk.ListStore, selection *gtk.TreeSelection, row int) Conv {
+	iter, e := SelectedIter(model, selection)
+	if e != nil {
+		return Conv{err: e}
+	}
+	return New(model.GetValue(iter, row))
 }

@@ -111,11 +111,17 @@ func (l *Log) SetLogOut(out cdtype.LogOut) {
 	l.LogOut = out
 }
 
-// SetDebug change the debug state of the applet.
+// SetDebug change the debug state of the logger.
 // Only enable or disable messages send with the Debug command.
 //
 func (l *Log) SetDebug(debug bool) {
 	l.debug = debug
+}
+
+// GetDebug gets the debug state of the logger.
+//
+func (l *Log) GetDebug() bool {
+	return l.debug
 }
 
 // Debug is to be used every time a usefull step is reached in your module

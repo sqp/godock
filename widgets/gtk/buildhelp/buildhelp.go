@@ -10,21 +10,29 @@ import (
 //
 //-------------------------------------------------------------[ BUILDHELPER ]--
 
-// BuildHelper is a small wrapper around gtk.Builder to load interfaces easily.
+// BuildHelp is a small wrapper around gtk.Builder to load interfaces easily.
 //
-type BuildHelper struct {
+type BuildHelp struct {
 	gtk.Builder
 	Errors []error
 }
 
-// New creates a *BuildHelper to load gtk.Builder interfaces easily.
+// New creates a *BuildHelp to load gtk.Builder interfaces easily.
 //
-func New() *BuildHelper {
+func New() *BuildHelp {
 	builder, _ := gtk.BuilderNew()
-	return &BuildHelper{Builder: *builder}
+	return &BuildHelp{Builder: *builder}
 }
 
-func (b *BuildHelper) err(e error) bool {
+// New creates a *BuildHelp to load gtk.Builder interfaces easily from a slice of bytes.
+//
+func NewFromBytes(bytes []byte) *BuildHelp {
+	builder, _ := gtk.BuilderNew()
+	builder.AddFromString(string(bytes))
+	return &BuildHelp{Builder: *builder}
+}
+
+func (b *BuildHelp) err(e error) bool {
 	if e != nil {
 		b.Errors = append(b.Errors, e)
 		return true
@@ -32,13 +40,13 @@ func (b *BuildHelper) err(e error) bool {
 	return false
 }
 
-func (b *BuildHelper) badtype(name string, typ string) {
+func (b *BuildHelp) badtype(name string, typ string) {
 	b.Errors = append(b.Errors, errors.New("builder bad type for key "+name+" not a "+typ))
 }
 
 // GetAdjustment get the object named name as Adjustment.
 //
-func (b *BuildHelper) GetAdjustment(name string) *gtk.Adjustment {
+func (b *BuildHelp) GetAdjustment(name string) *gtk.Adjustment {
 	if obj, e := b.GetObject(name); !b.err(e) {
 		if widget, ok := obj.(*gtk.Adjustment); ok {
 			return widget
@@ -50,7 +58,7 @@ func (b *BuildHelper) GetAdjustment(name string) *gtk.Adjustment {
 
 // GetBox get the object named name as Box.
 //
-func (b *BuildHelper) GetBox(name string) *gtk.Box {
+func (b *BuildHelp) GetBox(name string) *gtk.Box {
 	if obj, e := b.GetObject(name); !b.err(e) {
 		if widget, ok := obj.(*gtk.Box); ok {
 			return widget
@@ -62,7 +70,7 @@ func (b *BuildHelper) GetBox(name string) *gtk.Box {
 
 // GetButton get the object named name as Button.
 //
-func (b *BuildHelper) GetButton(name string) *gtk.Button {
+func (b *BuildHelp) GetButton(name string) *gtk.Button {
 	if obj, e := b.GetObject(name); !b.err(e) {
 		if widget, ok := obj.(*gtk.Button); ok {
 			return widget
@@ -72,9 +80,21 @@ func (b *BuildHelper) GetButton(name string) *gtk.Button {
 	return nil
 }
 
+// GetCellRendererText get the object named name as CellRendererText.
+//
+func (b *BuildHelp) GetCellRendererText(name string) *gtk.CellRendererText {
+	if obj, e := b.GetObject(name); !b.err(e) {
+		if widget, ok := obj.(*gtk.CellRendererText); ok {
+			return widget
+		}
+		b.badtype(name, "CellRendererText")
+	}
+	return nil
+}
+
 // GetCheckButton get the object named name as CheckButton.
 //
-func (b *BuildHelper) GetCheckButton(name string) *gtk.CheckButton {
+func (b *BuildHelp) GetCheckButton(name string) *gtk.CheckButton {
 	if obj, e := b.GetObject(name); !b.err(e) {
 		if widget, ok := obj.(*gtk.CheckButton); ok {
 			return widget
@@ -86,7 +106,7 @@ func (b *BuildHelper) GetCheckButton(name string) *gtk.CheckButton {
 
 // GetComboBox get the object named name as ComboBox.
 //
-func (b *BuildHelper) GetComboBox(name string) *gtk.ComboBox {
+func (b *BuildHelp) GetComboBox(name string) *gtk.ComboBox {
 	if obj, e := b.GetObject(name); !b.err(e) {
 		if widget, ok := obj.(*gtk.ComboBox); ok {
 			return widget
@@ -98,7 +118,7 @@ func (b *BuildHelper) GetComboBox(name string) *gtk.ComboBox {
 
 // GetFrame get the object named name as Frame.
 //
-func (b *BuildHelper) GetFrame(name string) *gtk.Frame {
+func (b *BuildHelp) GetFrame(name string) *gtk.Frame {
 	if obj, e := b.GetObject(name); !b.err(e) {
 		if widget, ok := obj.(*gtk.Frame); ok {
 			return widget
@@ -108,7 +128,7 @@ func (b *BuildHelper) GetFrame(name string) *gtk.Frame {
 	return nil
 }
 
-// func (b *BuildHelper) GetIconView(name string) *gtk.IconView {
+// func (b *BuildHelp) GetIconView(name string) *gtk.IconView {
 // 	if obj, e := b.GetObject(name); !b.err(e) {
 // 		if widget, ok := obj.(*gtk.IconView); ok {
 // 			return widget
@@ -120,7 +140,7 @@ func (b *BuildHelper) GetFrame(name string) *gtk.Frame {
 
 // GetImage get the object named name as Image.
 //
-func (b *BuildHelper) GetImage(name string) *gtk.Image {
+func (b *BuildHelp) GetImage(name string) *gtk.Image {
 	if obj, e := b.GetObject(name); !b.err(e) {
 		if widget, ok := obj.(*gtk.Image); ok {
 			return widget
@@ -132,7 +152,7 @@ func (b *BuildHelper) GetImage(name string) *gtk.Image {
 
 // GetLabel get the object named name as Label.
 //
-func (b *BuildHelper) GetLabel(name string) *gtk.Label {
+func (b *BuildHelp) GetLabel(name string) *gtk.Label {
 	if obj, e := b.GetObject(name); !b.err(e) {
 		if widget, ok := obj.(*gtk.Label); ok {
 			return widget
@@ -144,7 +164,7 @@ func (b *BuildHelper) GetLabel(name string) *gtk.Label {
 
 // GetListStore get the object named name as ListStore.
 //
-func (b *BuildHelper) GetListStore(name string) *gtk.ListStore {
+func (b *BuildHelp) GetListStore(name string) *gtk.ListStore {
 	if obj, e := b.GetObject(name); !b.err(e) {
 		if widget, ok := obj.(*gtk.ListStore); ok {
 			return widget
@@ -156,7 +176,7 @@ func (b *BuildHelper) GetListStore(name string) *gtk.ListStore {
 
 // GetScrolledWindow get the object named name as ScrolledWindow.
 //
-func (b *BuildHelper) GetScrolledWindow(name string) *gtk.ScrolledWindow {
+func (b *BuildHelp) GetScrolledWindow(name string) *gtk.ScrolledWindow {
 	if obj, e := b.GetObject(name); !b.err(e) {
 		if widget, ok := obj.(*gtk.ScrolledWindow); ok {
 			return widget
@@ -168,7 +188,7 @@ func (b *BuildHelper) GetScrolledWindow(name string) *gtk.ScrolledWindow {
 
 // GetScale get the object named name as Scale.
 //
-func (b *BuildHelper) GetScale(name string) *gtk.Scale {
+func (b *BuildHelp) GetScale(name string) *gtk.Scale {
 	if obj, e := b.GetObject(name); !b.err(e) {
 		if widget, ok := obj.(*gtk.Scale); ok {
 			return widget
@@ -180,7 +200,7 @@ func (b *BuildHelper) GetScale(name string) *gtk.Scale {
 
 // GetSwitch get the object named name as Switch.
 //
-func (b *BuildHelper) GetSwitch(name string) *gtk.Switch {
+func (b *BuildHelp) GetSwitch(name string) *gtk.Switch {
 	if obj, e := b.GetObject(name); !b.err(e) {
 		if widget, ok := obj.(*gtk.Switch); ok {
 			return widget
@@ -192,7 +212,7 @@ func (b *BuildHelper) GetSwitch(name string) *gtk.Switch {
 
 // GetToggleButton get the object named name as ToggleButton.
 //
-func (b *BuildHelper) GetToggleButton(name string) *gtk.ToggleButton {
+func (b *BuildHelp) GetToggleButton(name string) *gtk.ToggleButton {
 	if obj, e := b.GetObject(name); !b.err(e) {
 		if widget, ok := obj.(*gtk.ToggleButton); ok {
 			return widget
@@ -202,7 +222,7 @@ func (b *BuildHelper) GetToggleButton(name string) *gtk.ToggleButton {
 	return nil
 }
 
-// func (b *BuildHelper) GetTreeModelFilter(name string) *gtk.TreeModelFilter {
+// func (b *BuildHelp) GetTreeModelFilter(name string) *gtk.TreeModelFilter {
 // 	if obj, e := b.GetObject(name); !b.err(e) {
 // 		if widget, ok := obj.(*gtk.TreeModelFilter); ok {
 // 			return widget
@@ -212,7 +232,7 @@ func (b *BuildHelper) GetToggleButton(name string) *gtk.ToggleButton {
 // 	return nil
 // }
 
-// func (b *BuildHelper) GetTreeModelSort(name string) *gtk.TreeModelSort {
+// func (b *BuildHelp) GetTreeModelSort(name string) *gtk.TreeModelSort {
 // 	if obj, e := b.GetObject(name); !b.err(e) {
 // 		if widget, ok := obj.(*gtk.TreeModelSort); ok {
 // 			return widget
@@ -224,7 +244,7 @@ func (b *BuildHelper) GetToggleButton(name string) *gtk.ToggleButton {
 
 // GetTreeSelection get the object named name as TreeSelection.
 //
-func (b *BuildHelper) GetTreeSelection(name string) *gtk.TreeSelection {
+func (b *BuildHelp) GetTreeSelection(name string) *gtk.TreeSelection {
 	if obj, e := b.GetObject(name); !b.err(e) {
 		if widget, ok := obj.(*gtk.TreeSelection); ok {
 			return widget
@@ -236,7 +256,7 @@ func (b *BuildHelper) GetTreeSelection(name string) *gtk.TreeSelection {
 
 // GetTreeStore get the object named name as TreeStore.
 //
-func (b *BuildHelper) GetTreeStore(name string) *gtk.TreeStore {
+func (b *BuildHelp) GetTreeStore(name string) *gtk.TreeStore {
 	if obj, e := b.GetObject(name); !b.err(e) {
 		if widget, ok := obj.(*gtk.TreeStore); ok {
 			return widget
@@ -248,7 +268,7 @@ func (b *BuildHelper) GetTreeStore(name string) *gtk.TreeStore {
 
 // GetTreeView get the object named name as TreeView.
 //
-func (b *BuildHelper) GetTreeView(name string) *gtk.TreeView {
+func (b *BuildHelp) GetTreeView(name string) *gtk.TreeView {
 	if obj, e := b.GetObject(name); !b.err(e) {
 		if widget, ok := obj.(*gtk.TreeView); ok {
 			return widget
@@ -260,7 +280,7 @@ func (b *BuildHelper) GetTreeView(name string) *gtk.TreeView {
 
 // GetTreeViewColumn get the object named name as TreeViewColumn.
 //
-func (b *BuildHelper) GetTreeViewColumn(name string) *gtk.TreeViewColumn {
+func (b *BuildHelp) GetTreeViewColumn(name string) *gtk.TreeViewColumn {
 	if obj, e := b.GetObject(name); !b.err(e) {
 		if widget, ok := obj.(*gtk.TreeViewColumn); ok {
 			return widget

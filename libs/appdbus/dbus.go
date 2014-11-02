@@ -65,11 +65,13 @@ import (
 //
 const (
 	DbusObject             = "org.cairodock.CairoDock"
-	DbusPathDock           = "/org/cairodock/CairoDock"
 	DbusInterfaceDock      = "org.cairodock.CairoDock"
 	DbusInterfaceApplet    = "org.cairodock.CairoDock.applet"
 	DbusInterfaceSubapplet = "org.cairodock.CairoDock.subapplet"
 )
+
+// DbusPathDock is the Dbus path to the dock. It depends on the name the dock was started with.
+var DbusPathDock dbus.ObjectPath = "/org/cairodock/CairoDock"
 
 // CDDbus is an applet connection to Cairo-Dock using Dbus.
 //

@@ -121,6 +121,19 @@ func (build *Grouper) BuildAll(switcher *pageswitch.Switcher) *Grouper { //(buil
 	return build
 }
 
+// KeyFiler defines the interface to recognise a grouper (provides its KeyFile).
+//
+type KeyFiler interface {
+	KeyFile() *keyfile.KeyFile
+}
+
+func (build *Grouper) KeyFile() *keyfile.KeyFile {
+	return &build.Conf.KeyFile
+}
+
+//
+//-----------------------------------------------------------------[ PARSING ]--
+
 // ParseKeyComment parse comments for a key.
 //
 func ParseKeyComment(cKeyComment string) *Key {

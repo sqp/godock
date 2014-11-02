@@ -24,18 +24,15 @@ import (
 	"github.com/conformal/gotk3/gtk"
 	"github.com/gosexy/gettext"
 
-	"github.com/sqp/godock/libs/config"
-	"github.com/sqp/godock/libs/gldi"
-	"github.com/sqp/godock/libs/gldi/globals"
-	// "github.com/sqp/godock/libs/gldi/maindock/views"
-	"github.com/sqp/godock/libs/log"
-	// "github.com/sqp/godock/libs/maindock/gui"
+	"github.com/sqp/godock/libs/cdtype"       // Logger type.
+	"github.com/sqp/godock/libs/config"       // Config parser.
+	"github.com/sqp/godock/libs/gldi"         // Gldi access.
+	"github.com/sqp/godock/libs/gldi/globals" // Global variables.
 
 	"os"
 	"os/user"
 	"path/filepath"
 	"time"
-	"unsafe"
 )
 
 const (
@@ -60,6 +57,18 @@ const (
 
 	HiddenFile = ".cairo-dock"
 )
+
+var log cdtype.Logger
+
+// SetLogger provides a common logger for the Dbus service. It must be set to start a dock.
+//
+func SetLogger(l cdtype.Logger) {
+	log = l
+}
+
+func GtkVersion() (int, int, int) {
+	return C.GTK_MAJOR_VERSION, C.GTK_MINOR_VERSION, C.GTK_MICRO_VERSION
+}
 
 //
 //----------------------------------------------------------------[ MAINDOCK ]--
@@ -88,31 +97,6 @@ type DockSettings struct {
 
 	isFirstLaunch bool
 	isNewVersion  bool
-}
-
-func DockMore(settings DockSettings) {
-	settings.Init()
-	C.register_gui()
-	C.register_events()
-
-	//\___________________ handle crashes.
-	// if (! bTesting)
-	// 	_cairo_dock_set_signal_interception ();
-
-	//\___________________ handle terminate signals to quit properly (especially when the system shuts down).
-	// signal (SIGTERM, _cairo_dock_quit);  // Term // kill -15 (system)
-	// signal (SIGHUP,  _cairo_dock_quit);  // sent to a process when its controlling terminal is closed
-
-	// MISSING
-	//\___________________ Disable modules that have crashed
-	//\___________________ maintenance mode -> show the main config panel.
-	//\___________________ load the current theme. (create if missing)
-	// The first time the Cairo-Dock session is used but not the first time the dock is launched: propose to use the Default-Panel theme
-
-	// views.RegisterPanel("spanel")
-
-	gldi.LoadCurrentTheme()
-	settings.Start()
 }
 
 func (settings *DockSettings) Init() {
@@ -217,11 +201,6 @@ func (settings *DockSettings) Init() {
 		}
 	}
 
-	log.Info("Cairo-Dock version ", globals.Version())
-	// log.Info("Compiled date      ", C.__DATE__, C.__TIME__)
-	log.Info("Built with GTK     ", C.GTK_MAJOR_VERSION, C.GTK_MINOR_VERSION)
-	log.Info("Running with OpenGL", gldi.GLBackendIsUsed())
-
 	//\___________________ load plug-ins (must be done after everything is initialized).
 	if !settings.SafeMode {
 		err := gldi.ModulesNewFromDirectory("")
@@ -234,7 +213,26 @@ func (settings *DockSettings) Init() {
 	}
 }
 
+func (settings DockSettings) Prepare() {
+
+	//\___________________ handle crashes.
+	// if (! bTesting)
+	// 	_cairo_dock_set_signal_interception ();
+
+	//\___________________ handle terminate signals to quit properly (especially when the system shuts down).
+	// signal (SIGTERM, _cairo_dock_quit);  // Term // kill -15 (system)
+	// signal (SIGHUP,  _cairo_dock_quit);  // sent to a process when its controlling terminal is closed
+
+	// MISSING
+	//\___________________ Disable modules that have crashed
+	//\___________________ maintenance mode -> show the main config panel.
+	//\___________________ load the current theme. (create if missing)
+	// The first time the Cairo-Dock session is used but not the first time the dock is launched: propose to use the Default-Panel theme
+
+}
+
 func (settings *DockSettings) Start() {
+	gldi.LoadCurrentTheme()
 
 	//\___________________ lock mode.
 
@@ -282,6 +280,13 @@ func (settings *DockSettings) Clean() {
 }
 
 //
+//------------------------------------------------------------------[ EVENTS ]--
+
+func RegisterEvents() {
+	C.register_events()
+}
+
+//
 //---------------------------------------------------------[ CONFIG SETTINGS ]--
 
 // DesktopEnvironment converts the desktop environment backend type from the string.
@@ -297,37 +302,37 @@ func DesktopEnvironment(envstr string) gldi.DesktopEnvironment {
 		env = gldi.DesktopEnvXFCE
 	default:
 		if envstr != "" {
-			log.Info("Unknown desktop environment", envstr, " (valid options: gnome, kde, xfce)")
+			log.NewWarn(envstr, "Unknown desktop environment (valid options: gnome, kde, xfce)")
 		}
 	}
 	return env
 }
 
-// ConfigDir defines the current dock theme path, according to the given user option.
+// ConfigDir returns a full path to the dock theme, according to the given user option.
 //
 func ConfigDir(dir string) string {
 	if len(dir) > 0 {
 		switch dir[0] {
 		case '/':
-			return dir
+			return dir // Full path, used as is.
 
 		case '~':
 			usr, e := user.Current()
 			if e == nil {
-				return usr.HomeDir + dir[1:]
+				return usr.HomeDir + dir[1:] // Relative path to the homedir.
 			}
 
 		default:
 			current, e := os.Getwd()
 			if e == nil {
-				return filepath.Join(current, dir)
+				return filepath.Join(current, dir) // Relative path to the current dir.
 			}
 		}
 	}
 
 	usr, e := user.Current()
 	if e == nil {
-		return filepath.Join(usr.HomeDir, ".config", CAIRO_DOCK_DATA_DIR)
+		return filepath.Join(usr.HomeDir, ".config", CAIRO_DOCK_DATA_DIR) // Default theme path in .config.
 	}
 
 	return ""
@@ -366,13 +371,13 @@ Do you want to activate OpenGL ?
 	answer := dialog.Run() // has its own main loop, so we can call it before gtk_main.
 	remember := check.GetActive()
 	dialog.Destroy()
-	log.Info("answer", answer)
 
 	if answer == int(gtk.RESPONSE_NO) {
 		gldi.GLBackendDeactivate()
 	}
 
 	if remember { // save user choice to file.
+		log.Info("answer not saved yet")
 		// 	s_cDefaulBackend = g_strdup (iAnswer == GTK_RESPONSE_NO ? "cairo" : "opengl");
 		// 	gchar *cConfFilePath = g_strdup_printf ("%s/.cairo-dock", g_cCairoDockDataDir);
 		// 	cairo_dock_update_conf_file (cConfFilePath,
@@ -408,7 +413,7 @@ type HiddenSettings struct {
 	// UseSession bool `conf:"cd session"`
 }
 
-// LoadHidden will try to load the own config data from the file.
+// LoadHidden will try to load the hidden config data from the file.
 //
 func LoadHidden(path string) *HiddenSettings {
 	file := filepath.Join(path, HiddenFile)
@@ -432,199 +437,4 @@ func LoadHidden(path string) *HiddenSettings {
 	// 	g_free (cConfFilePath);
 
 	return hidden
-}
-
-//
-//-----------------------------------------------------------[ GUI CALLBACKS ]--
-
-type GuiInterface interface {
-	ShowMainGui()                                                   //
-	ShowModuleGui(appletName string)                                //
-	ShowGui(*gldi.Icon, *gldi.Container, *gldi.ModuleInstance, int) //
-
-	ShowAddons()
-	ReloadItems()
-	// ReloadCategoryWidget()
-	Reload()
-	Close()
-
-	UpdateModulesList()
-	UpdateModuleState(name string, active bool)
-	UpdateModuleInstanceContainer(instance *gldi.ModuleInstance, detached bool)
-	UpdateShortkeys()
-	// UpdateDeskletParams(*gldi.Desklet)
-	// UpdateDeskletVisibility(*gldi.Desklet)
-
-	// CORE BACKEND
-	SetStatusMessage(message string)
-	ReloadCurrentWidget(moduleInstance *gldi.ModuleInstance, showPage int)
-	ShowModuleInstanceGui(*gldi.ModuleInstance, int) //
-	// GetWidgetFromName(moduleInstance *gldi.ModuleInstance, group string, key string)
-
-	Window() *gtk.Window
-}
-
-var GuiInstance GuiInterface
-
-//export ShowMainGui
-func ShowMainGui() *C.GtkWidget {
-	if GuiInstance == nil {
-		return nil
-	}
-	GuiInstance.ShowMainGui()
-	return toCWindow(GuiInstance.Window())
-}
-
-//export ShowModuleGui
-func ShowModuleGui(cModuleName *C.gchar) *C.GtkWidget {
-	name := C.GoString((*C.char)(cModuleName))
-	C.g_free(C.gpointer(cModuleName))
-
-	if GuiInstance == nil {
-		return nil
-	}
-	GuiInstance.ShowModuleGui(name)
-	return toCWindow(GuiInstance.Window())
-}
-
-//export ShowGui
-func ShowGui(icon *C.Icon, container *C.GldiContainer, moduleInstance *C.GldiModuleInstance, iShowPage C.int) *C.GtkWidget {
-	if GuiInstance == nil {
-		return nil
-	}
-	i := gldi.NewIconFromNative(unsafe.Pointer(icon))
-	c := gldi.NewContainerFromNative(unsafe.Pointer(container))
-	m := gldi.NewModuleInstanceFromNative(unsafe.Pointer(moduleInstance))
-
-	GuiInstance.ShowGui(i, c, m, int(iShowPage))
-	return toCWindow(GuiInstance.Window())
-}
-
-//export ShowAddons
-func ShowAddons() *C.GtkWidget {
-	if GuiInstance == nil {
-		return nil
-	}
-	GuiInstance.ShowAddons()
-	return toCWindow(GuiInstance.Window())
-}
-
-//export ReloadItems
-func ReloadItems() {
-	if GuiInstance == nil {
-		return
-	}
-	GuiInstance.ReloadItems()
-}
-
-//export Reload
-func Reload() {
-	if GuiInstance == nil {
-		return
-	}
-	GuiInstance.Reload()
-}
-
-//export Close
-func Close() {
-	if GuiInstance == nil {
-		return
-	}
-	GuiInstance.Close()
-}
-
-//export UpdateModulesList
-func UpdateModulesList() {
-	if GuiInstance == nil {
-		return
-	}
-	GuiInstance.UpdateModulesList()
-}
-
-//export UpdateModuleState
-func UpdateModuleState(cModuleName *C.gchar, active C.gboolean) {
-	name := C.GoString((*C.char)(cModuleName))
-	C.g_free(C.gpointer(cModuleName))
-
-	if GuiInstance == nil {
-		return
-	}
-	GuiInstance.UpdateModuleState(name, gobool(active))
-}
-
-//export UpdateModuleInstanceContainer
-func UpdateModuleInstanceContainer(moduleInstance *C.GldiModuleInstance, detached C.gboolean) {
-	if GuiInstance == nil {
-		return
-	}
-	m := gldi.NewModuleInstanceFromNative(unsafe.Pointer(moduleInstance))
-	GuiInstance.UpdateModuleInstanceContainer(m, gobool(detached))
-}
-
-//export UpdateShortkeys
-func UpdateShortkeys() {
-	if GuiInstance == nil {
-		return
-	}
-	GuiInstance.UpdateShortkeys()
-}
-
-// CORE BACKEND
-
-//export ShowModuleInstanceGui
-func ShowModuleInstanceGui(moduleInstance *C.GldiModuleInstance, showPage C.int) {
-	if GuiInstance == nil {
-		return
-	}
-	m := gldi.NewModuleInstanceFromNative(unsafe.Pointer(moduleInstance))
-	GuiInstance.ShowModuleInstanceGui(m, int(showPage))
-
-}
-
-//export SetStatusMessage
-func SetStatusMessage(cmessage *C.gchar) {
-	message := C.GoString((*C.char)(cmessage))
-	C.g_free(C.gpointer(cmessage))
-
-	if GuiInstance == nil {
-		return
-	}
-	GuiInstance.SetStatusMessage(message)
-}
-
-//export ReloadCurrentWidget
-func ReloadCurrentWidget(moduleInstance *C.GldiModuleInstance, showPage C.int) {
-	if GuiInstance == nil {
-		return
-	}
-	m := gldi.NewModuleInstanceFromNative(unsafe.Pointer(moduleInstance))
-	GuiInstance.ReloadCurrentWidget(m, int(showPage))
-}
-
-// //export GetWidgetFromName
-// func GetWidgetFromName(moduleInstance *C.GldiModuleInstance, cgroup *C.gchar, ckey *C.gchar) {
-// 	group := C.GoString((*C.char)(cgroup))
-// 	C.free(unsafe.Pointer((*C.char)(cgroup)))
-// 	key := C.GoString((*C.char)(ckey))
-// 	C.free(unsafe.Pointer((*C.char)(ckey)))
-
-// 	if GuiInstance == nil {
-// 		return
-// 	}
-// 	m := gldi.NewModuleInstanceFromNative(unsafe.Pointer(moduleInstance))
-// 	GuiInstance.GetWidgetFromName(m, group, key)
-// }
-
-func toCWindow(win *gtk.Window) *C.GtkWidget {
-	if win == nil {
-		return nil
-	}
-	return (*C.GtkWidget)(unsafe.Pointer(win.Native()))
-}
-
-func gobool(b C.gboolean) bool {
-	if b == 1 {
-		return true
-	}
-	return false
 }

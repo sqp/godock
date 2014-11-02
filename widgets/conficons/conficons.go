@@ -4,18 +4,17 @@ package conficons
 import (
 	"github.com/conformal/gotk3/gtk"
 
-	"github.com/sqp/godock/widgets/confbuilder"
-	"github.com/sqp/godock/widgets/pageswitch"
-
 	"github.com/sqp/godock/libs/gldi"
 	"github.com/sqp/godock/libs/log"
-	// "github.com/sqp/godock/libs/packages"
 
 	"github.com/sqp/godock/widgets/common"
+	"github.com/sqp/godock/widgets/confbuilder"
 	"github.com/sqp/godock/widgets/confbuilder/datatype"
 	"github.com/sqp/godock/widgets/gtk/buildhelp"
 	"github.com/sqp/godock/widgets/gtk/gunvalue"
+	"github.com/sqp/godock/widgets/pageswitch"
 
+	"errors"
 	"path/filepath"
 	"strings"
 )
@@ -25,9 +24,16 @@ const listIconsWidth = 200
 
 //--------------------------------------------------------[ PAGE GUI ICONS ]--
 
-// ConfigWidget defines a GtkWidget with a Save method.
+// Controller defines methods used on the main widget / data source by this widget and its sons.
 //
-type ConfigWidget interface {
+type Controller interface {
+	datatype.Source
+	GetWindow() *gtk.Window
+}
+
+// configWidget defines a GtkWidget with a Save method.
+//
+type configWidget interface {
 	gtk.IWidget
 	Save()
 }
@@ -37,18 +43,17 @@ type ConfigWidget interface {
 type GuiIcons struct {
 	gtk.Paned
 
-	icons    *List
-	config   *confbuilder.Grouper
-	page     ConfigWidget
+	icons  *List
+	config *confbuilder.Grouper
+	// page     configWidget
 	switcher *pageswitch.Switcher
 
-	window *gtk.Window
-	data   datatype.Source
+	data Controller
 }
 
 // New creates a GuiIcons widget to edit cairo-dock icons config.
 //
-func New(data datatype.Source, switcher *pageswitch.Switcher) *GuiIcons {
+func New(data Controller, switcher *pageswitch.Switcher) *GuiIcons {
 	paned, _ := gtk.PanedNew(gtk.ORIENTATION_HORIZONTAL)
 	widget := &GuiIcons{
 		Paned:    *paned,
@@ -63,13 +68,6 @@ func New(data datatype.Source, switcher *pageswitch.Switcher) *GuiIcons {
 	return widget
 }
 
-// SetWindow sets the pointer to the parent window, used for some config
-// callbacks (grab events).
-//
-func (widget *GuiIcons) SetWindow(win *gtk.Window) {
-	widget.window = win
-}
-
 // Load loads the list of icons in the iconsList.
 //
 func (widget *GuiIcons) Load() {
@@ -79,9 +77,9 @@ func (widget *GuiIcons) Load() {
 
 // Selected returns the selected icon.
 //
-func (widget *GuiIcons) Selected() datatype.Iconer {
-	return widget.icons.Selected()
-}
+// func (widget *GuiIcons) Selected() datatype.Iconer {
+// 	return widget.icons.Selected()
+// }
 
 // Select sets the selected icon based on its config file.
 //
@@ -92,11 +90,7 @@ func (widget *GuiIcons) Select(conf string) bool {
 // Clear clears the widget data.
 //
 func (widget *GuiIcons) Clear() string {
-	path := ""
-	sel := widget.Selected()
-	if sel != nil {
-		path = sel.ConfigPath()
-	}
+	path, _ := widget.icons.SelectedConf()
 	widget.switcher.Clear()
 
 	if widget.config != nil {
@@ -117,7 +111,7 @@ func (widget *GuiIcons) Save() {
 		return
 	}
 
-	icon := widget.Selected()
+	icon, e := widget.icons.SelectedIcon()
 
 	// applet
 	// 		// if the parent dock doesn't exist (new dock), add a conf file for it with a nominal name.
@@ -157,7 +151,9 @@ func (widget *GuiIcons) Save() {
 	// 			pModuleInstance->pModule->pInterface->save_custom_widget (pModuleInstance, pKeyFile, pWidgetList);
 
 	widget.config.Save()
-	icon.Reload()
+	if e != nil {
+		icon.Reload()
+	}
 
 	// 	_items_widget_reload (CD_WIDGET (pItemsWidget));  // we reload in case the items place has changed (icon's container, dock orientation, etc).
 
@@ -166,9 +162,9 @@ func (widget *GuiIcons) Save() {
 //
 //-------------------------------------------------------[ CONTROL CALLBACKS ]--
 
-// OnSelect reacts when a row is selected. Creates a new config for the icon.
+// onSelect reacts when a row is selected. Creates a new config for the icon.
 //
-func (widget *GuiIcons) OnSelect(icon datatype.Iconer) {
+func (widget *GuiIcons) onSelect(icon datatype.Iconer, ei error) {
 	widget.switcher.Clear()
 
 	if widget.config != nil {
@@ -176,11 +172,11 @@ func (widget *GuiIcons) OnSelect(icon datatype.Iconer) {
 		widget.config = nil
 	}
 
-	if icon == nil { // shouldn't match.
+	if ei != nil { // shouldn't match.
 		return
 	}
 
-	build, e := confbuilder.NewGrouper(widget.data, widget.window, icon.ConfigPath())
+	build, e := confbuilder.NewGrouper(widget.data, widget.data.GetWindow(), icon.ConfigPath())
 	if log.Err(e, "Load Keyfile "+icon.ConfigPath()) {
 		return
 	}
@@ -240,23 +236,23 @@ func launcherMagic(icon datatype.Iconer, origins string) gtk.IWidget {
 
 //-------------------------------------------------------[ WIDGET ICONS LIST ]--
 
-// Rows defines liststore rows. Must match the ListStore declaration type and order.
+// Liststore rows. Must match the ListStore declaration type and order.
 //
 const (
-	RowConf = iota
-	RowIcon
-	RowName
+	rowConf = iota
+	rowIcon
+	rowName
 )
 
-// ControlItems forwards events to other widgets.
+// controlItems forwards events to other widgets.
 //
-type ControlItems interface {
-	OnSelect(icon datatype.Iconer)
+type controlItems interface {
+	onSelect(datatype.Iconer, error)
 }
 
-// Row defines a pointer to link the icon object with its iter.
+// row defines a pointer to link the icon object with its iter.
 //
-type Row struct {
+type row struct {
 	Iter *gtk.TreeIter
 	Icon datatype.Iconer
 }
@@ -268,14 +264,14 @@ type List struct {
 	tree               *gtk.TreeView
 	model              *gtk.ListStore
 	selection          *gtk.TreeSelection
-	control            ControlItems
+	control            controlItems
 
-	rows map[string]*Row // maybe need to make if map[string] to get a ref to configfile.
+	rows map[string]*row // maybe need to make if map[string] to get a ref to configfile.
 }
 
 // NewList creates a dock icons management widget.
 //
-func NewList(control ControlItems) *List {
+func NewList(control controlItems) *List {
 	builder := buildhelp.New()
 
 	builder.AddFromString(string(conficonsXML()))
@@ -287,7 +283,7 @@ func NewList(control ControlItems) *List {
 		tree:           builder.GetTreeView("tree"),
 		selection:      builder.GetTreeSelection("selection"),
 		control:        control,
-		rows:           make(map[string]*Row),
+		rows:           make(map[string]*row),
 	}
 
 	if len(builder.Errors) > 0 {
@@ -306,8 +302,7 @@ func NewList(control ControlItems) *List {
 // Load loads icons list in the widget.
 //
 func (widget *List) Load(icons map[string][]datatype.Iconer) {
-	widget.model.Clear()
-	widget.rows = make(map[string]*Row)
+	widget.Clear()
 
 	for container, byOrder := range icons { // container, byOrder
 		if container != datatype.KeyMainDock {
@@ -318,47 +313,43 @@ func (widget *List) Load(icons map[string][]datatype.Iconer) {
 		for _, icon := range byOrder {
 			iter := widget.model.Append()
 			confPath := icon.ConfigPath()
-			widget.rows[confPath] = &Row{iter, icon} // also save local reference to icon so it's not garbage collected.
+			widget.rows[confPath] = &row{iter, icon} // also save local reference to icon so it's not garbage collected.
 
 			name, img := icon.DefaultNameIcon()
 
 			widget.model.SetCols(iter, gtk.Cols{
-				RowName: name,
-				RowConf: confPath,
+				rowName: name,
+				rowConf: confPath,
 			})
 
 			if img != "" {
 				if pix, e := common.PixbufNewFromFile(img, iconSize); !log.Err(e, "Load icon") {
-					widget.model.SetValue(iter, RowIcon, pix)
+					widget.model.SetValue(iter, rowIcon, pix)
 				}
 			}
 		}
 	}
 }
 
-// Selected returns the Iconer matching the selected line.
+// SelectedIcon returns the iconer matching the selected row.
 //
-func (widget *List) Selected() datatype.Iconer {
-	if widget.selection.CountSelectedRows() == 0 {
-		log.DEV("icons none selected")
-		return nil
+func (widget *List) SelectedIcon() (datatype.Iconer, error) {
+	key, e := widget.SelectedConf()
+	if e != nil {
+		return nil, e
 	}
-	var iter gtk.TreeIter
-	var treeModel gtk.ITreeModel = widget.model
-	widget.selection.GetSelected(&treeModel, &iter)
-
-	log.DEV("icons get selected")
-
-	conf, e := gunvalue.New(widget.model.GetValue(&iter, RowConf)).String()
-	if log.Err(e, "conficons.Selected") {
-		return nil
-	}
-	icon, ok := widget.rows[conf]
+	icon, ok := widget.rows[key]
 	if !ok {
 		// TODO:  warn
-		return nil
+		return nil, errors.New("no matching row found")
 	}
-	return icon.Icon
+	return icon.Icon, nil
+}
+
+// SelectedConf returns the path to icon config file for the selected row.
+//
+func (widget *List) SelectedConf() (string, error) {
+	return gunvalue.SelectedValue(widget.model, widget.selection, rowConf).String()
 }
 
 // Select sets the selected icon based on its config file.
@@ -377,10 +368,8 @@ func (widget *List) Select(conf string) bool {
 // Clear clears the widget data.
 //
 func (widget *List) Clear() {
-	widget.rows = make(map[string]*Row)
+	widget.rows = make(map[string]*row)
 	widget.model.Clear()
-
-	// widget.tree.ScrollToCell : lol arguments are a joke, we'll see later.
 }
 
 //-------------------------------------------------------[ ACTIONS CALLBACKS ]--
@@ -388,5 +377,5 @@ func (widget *List) Clear() {
 // Selected line has changed. Forward the call to the controler.
 //
 func (widget *List) onSelectionChanged(obj *gtk.TreeSelection) {
-	widget.control.OnSelect(widget.Selected())
+	widget.control.onSelect(widget.SelectedIcon())
 }

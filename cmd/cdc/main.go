@@ -99,7 +99,8 @@ func main() {
 
 	logger.SetLogOut(log.Logs)
 	logger.SetName(os.Args[0])
-	srvdbus.Log = logger
+
+	srvdbus.SetLogger(logger)
 
 	if args[0] == "help" {
 		help(args[1:])

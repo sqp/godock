@@ -5,12 +5,13 @@ import (
 	"github.com/godbus/dbus"
 	"github.com/godbus/dbus/introspect"
 
-	"github.com/sqp/godock/libs/appdbus"
-	"github.com/sqp/godock/libs/cdtype"
-	"github.com/sqp/godock/libs/dock" // Connection to cairo-dock.
-	"github.com/sqp/godock/libs/log/color"
+	"github.com/sqp/godock/libs/appdbus"   // Dock actions.
+	"github.com/sqp/godock/libs/cdtype"    // Logger type.
+	"github.com/sqp/godock/libs/dock"      // Connection to cairo-dock.
+	"github.com/sqp/godock/libs/log/color" // Colored text.
 
 	"errors"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -24,7 +25,6 @@ const SrvPath = "/org/cairodock/GoDock"
 const intro = `
 <node>
 	<interface name="` + SrvObj + `">
-		<signal name="ListServices"></signal>
 		<signal name="RestartDock"></signal>
 		<signal name="StopDock"></signal>
 		<signal name="LogWindow"></signal>
@@ -46,10 +46,20 @@ const intro = `
 			<arg direction="in" type="s"/>
 			<arg direction="in" type="b"/>
 		</method>
-	</interface>` + introspect.IntrospectDataString + `</node> `
+		<method name="ListServices">
+			<arg direction="out" type="s"/>
+		</method>
+	</interface>` +
+	introspect.IntrospectDataString + `
+</node> `
 
-// Log provides a common logger for the Dbus service. It must be set to use the server.
-var Log cdtype.Logger
+var log cdtype.Logger
+
+// SetLogger provides a common logger for the Dbus service. It must be set to use the server.
+//
+func SetLogger(l cdtype.Logger) {
+	log = l
+}
 
 // LogWindow provides an optional call to open the log window.
 var LogWindow func()
@@ -59,17 +69,22 @@ var LogWindow func()
 type Loader struct {
 	conn     *dbus.Conn // Dbus connection.
 	plopers  plopers
-	apps     map[string]dock.AppletInstance        // Active applets.    Key = applet name.
+	actives  map[string]*activeApp                 // Active applets.    Key = applet dbus path (/org/cairodock/CairoDock/appletName).
 	services map[string]func() dock.AppletInstance // Available applets. Key = applet name.
 	c        <-chan *dbus.Signal                   // Dbus incoming signals channel.
 	restart  chan string                           // Poller restart request channel.
+}
+
+type activeApp struct {
+	app  dock.AppletInstance
+	name string
 }
 
 // NewLoader creates a loader with the given list of applets services.
 //
 func NewLoader(services map[string]func() dock.AppletInstance) *Loader {
 	conn, c, e := appdbus.SessionBus()
-	if Log.Err(e, "DBus Connect") {
+	if log.Err(e, "DBus Connect") {
 		return nil
 	}
 
@@ -79,7 +94,7 @@ func NewLoader(services map[string]func() dock.AppletInstance) *Loader {
 		restart:  make(chan string, 1),
 		services: services,
 		plopers:  newPlopers(),
-		apps:     make(map[string]dock.AppletInstance)}
+		actives:  make(map[string]*activeApp)}
 
 	return load
 }
@@ -101,29 +116,29 @@ func (load *Loader) StartServer() (bool, error) {
 
 	// Everything OK, we can register our Dbus methods.
 	e = load.conn.Export(load, SrvPath, SrvObj)
-	Log.Err(e, "register service object")
+	log.Err(e, "register service object")
 
 	e = load.conn.Export(introspect.Introspectable(intro), SrvPath, "org.freedesktop.DBus.Introspectable")
-	Log.Err(e, "register service introspect")
+	log.Err(e, "register service introspect")
 
 	return true, nil
 }
 
 // StartLoop handle applets (and dock) until there's no nothing more to handle.
 //
-func (load *Loader) StartLoop() {
+func (load *Loader) StartLoop(withdock bool) {
 	defer load.conn.ReleaseName(SrvObj)
-	defer Log.Info("Applets service stopped")
-	Log.Info("Applets service started")
+	defer log.Debug("Applets service stopped")
+	log.Debug("Applets service started")
 
 	action := true
 	var waiter <-chan time.Time
 
 	for { // Start main loop and handle events until the End signal is received from the dock.
 		if action {
-			for name, app := range load.apps {
-				poller := app.Poller()
-				if poller != nil && load.plopers.Test(name, poller.GetInterval()) {
+			for path, ref := range load.actives {
+				poller := ref.app.Poller()
+				if poller != nil && load.plopers.Test(path, poller.GetInterval()) {
 					go poller.Action()
 				}
 			}
@@ -135,13 +150,19 @@ func (load *Loader) StartLoop() {
 		select { // Wait for events. Until the End signal is received from the dock.
 
 		case s := <-load.c: // Listen to DBus events.
-			if load.dispatchDbusSignal(s) {
-				return // signal was Stop.
+			if load.dispatchDbusSignal(s) { // true if signal was Stop.
+
+				// Keep service alive if: any app alive, or we manage the dock and launched a restart manually. => false
+				if len(load.actives) == 0 && !(withdock && isrestart) { // That's all folks. We're closing.
+					return
+				}
+
+				// return
 			}
 
-		case name := <-load.restart: // Wait for manual restart poller event. Reloop and check.
-			go load.apps[name].Poller().Action()
-			load.plopers.Add(name, 0) // reset timer for given poller.
+		case path := <-load.restart: // Wait for manual restart poller event. Reloop and check.
+			go load.actives[path].app.Poller().Action()
+			load.plopers.Add(path, 0) // reset timer for given poller.
 
 		case <-waiter: // Wait for the end of the timer. Reloop and check.
 			action = true
@@ -151,25 +172,25 @@ func (load *Loader) StartLoop() {
 
 // StopApplet close the applet instance.
 //
-func (load *Loader) StopApplet(name string) {
+func (load *Loader) StopApplet(path string) {
 
 	// unregister events?
 
-	load.plopers.Remove(name)
-
-	delete(load.apps, name)
-	Log.Info("StopApplet", name)
+	name := load.actives[path].name
+	load.plopers.Remove(path)
+	delete(load.actives, path)
+	log.Debug("StopApplet", name)
 }
 
 // Forward the Dbus signal to local manager or applet
 //
 func (load *Loader) dispatchDbusSignal(s *dbus.Signal) bool {
-	appname := pathToName(string(s.Path))
-	app, ok := load.apps[appname]
+	path := strings.TrimSuffix(string(s.Path), "/sub_icons")
 
-	// Log.Info("received", s)
+	ref, ok := load.actives[path]
 
 	switch {
+	case s.Name == "org.freedesktop.DBus.NameAcquired": // Service started confirmed.
 
 	case strings.HasPrefix(string(s.Name), SrvObj): // Signal to applet manager.
 
@@ -185,32 +206,33 @@ func (load *Loader) dispatchDbusSignal(s *dbus.Signal) bool {
 				load.StopDock()
 
 			default:
-				Log.Info("unknown service request", s.Name[len(SrvObj)+1:], s.Body)
+				log.Info("unknown service request", s.Name[len(SrvObj)+1:], s.Body)
 			}
 		}
 
 	case ok: // Signal to applet.
-		if app.OnSignal(s) {
-			load.StopApplet(appname) // Signal was stop_module.
-
-			// Keep service alive if: any app alive, or we manage the dock and launched a restart manually. => false
-			if len(load.apps) == 0 && !(withdock && isrestart) { // That's all folks. We're closing.
-				return true
-			}
+		if ref.app.OnSignal(s) {
+			load.StopApplet(path) // Signal was stop_module.
+			return true
 		}
 
 	default:
-		Log.Info("unknown signal", s)
+		log.Info("unknown signal", s)
 
 	}
 	return false
 
 }
 
-// GetApplet return an applet instance.
+// GetApplets return an applet instance.
 //
-func (load *Loader) GetApplet(name string) dock.AppletInstance {
-	return load.apps[name]
+func (load *Loader) GetApplets(name string) (list []dock.AppletInstance) {
+	for _, ref := range load.actives {
+		if ref.name == name && ref.app != nil {
+			list = append(list, ref.app)
+		}
+	}
+	return
 }
 
 //
@@ -221,7 +243,7 @@ func (load *Loader) GetApplet(name string) dock.AppletInstance {
 //
 func (load *Loader) RestartDock() *dbus.Error {
 	isrestart = true
-	Log.Err(RestartDock(), "restart dock")
+	log.Err(RestartDock(), "restart dock")
 	isrestart = false
 	return nil
 }
@@ -235,17 +257,28 @@ func (load *Loader) StopDock() *dbus.Error {
 
 // ListServices displays active services.
 //
-func (load *Loader) ListServices() *dbus.Error {
-	println("Cairo-Dock applets services: active ", len(load.apps), "/", len(load.services))
-	for name := range load.services {
-		if _, ok := load.apps[name]; ok {
-			print(color.Green(" * "))
-		} else {
-			print("   ")
-		}
-		println(name)
+func (load *Loader) ListServices() (string, *dbus.Error) {
+	list := make(map[string]int)
+	for _, ref := range load.actives {
+		list[ref.name]++
 	}
-	return nil
+
+	str := "Cairo-Dock applets services: active " + strconv.Itoa(len(list)) + "/" + strconv.Itoa(len(load.services))
+	for name := range load.services {
+		count := list[name]
+		switch {
+		case count > 1:
+			str += "\n" + color.Green(" * ") + name + ":" + color.Green(strconv.Itoa(count))
+		case count == 1:
+			str += "\n" + color.Green(" * ") + name
+		default:
+			str += "\n" + "   " + name
+		}
+	}
+	if len(load.actives) > len(list) {
+		str += "\n" + "Total applets started: " + strconv.Itoa(len(load.actives))
+	}
+	return str, nil
 }
 
 type defineEventser interface {
@@ -255,25 +288,33 @@ type defineEventser interface {
 // StartApplet creates a new applet instance with args from command line.
 //
 func (load *Loader) StartApplet(a, b, c, d, e, f, g, h string) *dbus.Error {
-	name := pathToName(c)
-	a = "./" + name
+	split := strings.Split(c, "/")
+	if len(split) < 4 {
+		log.NewErr("StartApplet: incorrect dbus path", c)
+		return nil
+	}
+	name := split[4] //path is /org/cairodock/CairoDock/appletName or  /org/cairodock/CairoDock/appletName/sub_icons
+
+	a = "./" + name // reformat the launcher name as if it was directly called from shell.
 	args := []string{a, b, c, d, e, f, g, h}
 
-	if _, ok := load.apps[name]; ok {
-		Log.NewErr("StartApplet: applet already started", name)
+	if _, ok := load.actives[c]; ok {
+		log.NewErr("StartApplet: applet already started", name)
 		return nil
 	}
 
 	fn, ok := load.services[name]
 	if !ok {
-		Log.NewErr("StartApplet: applet unknown (maybe not enabled at compile)", name)
+		log.NewErr(strings.Join(args, " "), "StartApplet: applet unknown (maybe not enabled at compile)")
 		return nil
 	}
 
 	// Create applet instance.
-	Log.Info("StartApplet", name)
+	log.Debug("StartApplet", name)
 	app := fn()
-	load.apps[name] = app
+	load.actives[c] = &activeApp{app: app, name: name}
+
+	app.(debugger).SetDebug(log.GetDebug()) // If the service debug is active, forward it to all applets.
 
 	// Define and connect applet events to the dock.
 	app.SetArgs(args)
@@ -284,7 +325,7 @@ func (load *Loader) StartApplet(a, b, c, d, e, f, g, h string) *dbus.Error {
 
 	app.SetEventReload(func(loadConf bool) { app.Init(loadConf) })
 	er := app.ConnectEvents(load.conn)
-	Log.Err(er, "ConnectEvents") // TODO: Big problem, need to handle better?
+	log.Err(er, "ConnectEvents") // TODO: Big problem, need to handle better?
 
 	app.RegisterEvents(app) // New events callback method.
 
@@ -292,9 +333,9 @@ func (load *Loader) StartApplet(a, b, c, d, e, f, g, h string) *dbus.Error {
 	app.Init(true)
 
 	if poller := app.Poller(); poller != nil {
-		poller.SetChanRestart(load.restart, name) // Restart chan for user events.
+		poller.SetChanRestart(load.restart, c) // Restart chan for user events.
 
-		load.plopers.Add(name, poller.GetInterval()) // Set current at max for a first check ASAP.
+		load.plopers.Add(c, poller.GetInterval()) // Set current at max for a first check ASAP.
 	}
 	return nil
 }
@@ -306,22 +347,25 @@ type uploader interface {
 // Upload send data (raw text or file) to a one-click hosting service.
 //
 func (load *Loader) Upload(data string) *dbus.Error {
-	if uncast := load.GetApplet("NetActivity"); uncast != nil {
-		net := uncast.(uploader)
-		net.Upload(data)
+	uncasts := load.GetApplets("NetActivity")
+	if len(uncasts) == 0 {
+		return nil
 	}
+
+	app := uncasts[0].(uploader)
+	app.Upload(data)
 	return nil
 }
 
-type debuger interface {
+type debugger interface {
 	SetDebug(bool)
 }
 
 // Debug change the debug state of an active applet.
 //
 func (load *Loader) Debug(applet string, state bool) *dbus.Error {
-	if uncast := load.GetApplet(applet); uncast != nil {
-		app := uncast.(debuger)
+	for _, uncast := range load.GetApplets(applet) {
+		app := uncast.(debugger)
 		app.SetDebug(state)
 	}
 	return nil
@@ -333,7 +377,7 @@ func (load *Loader) LogWindow() *dbus.Error {
 	if LogWindow != nil {
 		LogWindow()
 	} else {
-		Log.NewErr("no log service available", "open log window")
+		log.NewErr("no log service available", "open log window")
 	}
 	return nil
 }
@@ -342,14 +386,12 @@ func (load *Loader) LogWindow() *dbus.Error {
 //------------------------------------------------------------[ DOCK CONTROL ]--
 
 // current state.
-var withdock bool
 var isrestart bool
 
 // StartDock launch the dock.
 //
 func StartDock() error {
-	withdock = true
-	return Log.ExecAsync("cairo-dock") // TODO: create a dedicated logger to the dock when sender becomes used.
+	return log.ExecAsync("cairo-dock") // TODO: create a dedicated logger to the dock when sender becomes used.
 	// cmd := exec.Command("cairo-dock")
 	// cmd.Stdout = log.Logs
 	// cmd.Stderr = log.Logs // TODO: need to split std and err streams.
@@ -421,8 +463,14 @@ func (cl *Client) call(method string, args ...interface{}) error {
 
 // ListServices send action to displays active services.
 //
-func (cl *Client) ListServices() error {
-	return cl.call("ListServices")
+func (cl *Client) ListServices() (string, error) {
+	str := ""
+	call := cl.Call(SrvObj+"."+"ListServices", 0)
+	if call.Err != nil {
+		return "", call.Err
+	}
+	e := call.Store(&str)
+	return str, e
 }
 
 // RestartDock send action to restart the dock.
@@ -508,15 +556,3 @@ func (pl plopers) Remove(name string) {
 
 //
 //-----------------------------------------------------------------[ HELPERS ]--
-
-func pathToName(path string) string {
-	prefixSize := len(appdbus.DbusPathDock) + 1 // +1 for the trailing /
-	if len(path) <= prefixSize {
-		return ""
-	}
-	text := path[prefixSize:]
-	if i := strings.Index(text, "/"); i > 0 { // remove "/sub_icons" at the end if any.
-		return text[:i]
-	}
-	return text
-}

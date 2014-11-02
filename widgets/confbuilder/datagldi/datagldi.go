@@ -208,6 +208,15 @@ func (Data) ListIcons() map[string][]datatype.Iconer {
 	return list
 }
 
+// ListShortkeys returns the list of dock shortkeys.
+//
+func (Data) ListShortkeys() (list []datatype.Shortkeyer) {
+	for _, rend := range gldi.ShortkeyList() {
+		list = append(list, datatype.Shortkeyer(rend))
+	}
+	return list
+}
+
 // ListScreens returns the list of screens.
 //
 func (Data) ListScreens() (list []datatype.Field) {
@@ -390,6 +399,6 @@ func (Data) Handbook(name string) datatype.Handbooker {
 
 // ManagerReload reloads the manager matching the given name.
 //
-func (Data) ManagerReload(name string, b bool, keyf keyfile.KeyFile) {
+func (Data) ManagerReload(name string, b bool, keyf *keyfile.KeyFile) {
 	gldi.ManagerReload(name, b, keyf)
 }

@@ -121,20 +121,21 @@ type Clearer interface {
 	Clear() string
 }
 
-// SetWindower defines the interface to set the pointer to the main window of a config page.
+// UpdateShortkeyser defines the interface to update shortkeys of a config page.
 //
-type SetWindower interface {
-	SetWindow(*gtk.Window)
+type UpdateShortkeyser interface {
+	UpdateShortkeys()
 }
 
-//-------------------------------------------------[  ]--
+//-----------------------------------------------------------[ MAIN DOCK GUI ]--
 
 // GuiConfigure defines the main Cairo-Dock configuration widget.
 //
 type GuiConfigure struct {
 	gtk.Box
 
-	datatype.Source // embeds the data source.
+	datatype.Source             // embeds the data source.
+	window          *gtk.Window // pointer to the parent window.
 
 	Menu *confmenu.MenuBar
 
@@ -188,9 +189,9 @@ func NewGuiConfigure() *GuiConfigure {
 
 	// Add pages to the switcher. This will pack the pages widgets to the gui box.
 
-	widget.AddPage(icons, GroupIcons, widget.Menu.Save.Show, widget.Menu.Save.Hide)
-	widget.AddPage(add, GroupAdd, widget.Menu.Add.Show, widget.Menu.Add.Hide)
-	widget.AddPage(core, GroupConfig, widget.Menu.Save.Show, widget.Menu.Save.Hide)
+	widget.AddPage(icons, GroupIcons, widget.SetActionSave, widget.Menu.Save.Hide)
+	widget.AddPage(add, GroupAdd, widget.SetActionAdd, widget.Menu.Save.Hide)
+	widget.AddPage(core, GroupConfig, core.SetAction, widget.Menu.Save.Hide)
 
 	widget.stack.Connect("notify::visible-child-name", func() {
 		widget.OnSelectPage(widget.stack.GetVisibleChildName())
@@ -238,11 +239,7 @@ func (widget *GuiConfigure) Load() {
 // callbacks (grab events).
 //
 func (widget *GuiConfigure) SetWindow(win *gtk.Window) {
-	for _, page := range widget.pages {
-		if windower, ok := interface{}(page.Widget).(SetWindower); ok { // Detect if the widget can SetWindow.
-			windower.SetWindow(win)
-		}
-	}
+	widget.window = win
 }
 
 // SetWindow sets the pointer to the data source, needed for every widget.
@@ -255,6 +252,13 @@ func (widget *GuiConfigure) SetDataSource(source datatype.Source) {
 	log.Err(e, "Load ConfigSettings")
 }
 
+// GetWindow returns the pointer to the parent window.
+//
+func (widget *GuiConfigure) GetWindow() *gtk.Window {
+	return widget.window
+}
+
+//
 //-----------------------------------------------------[ INTERFACE CALLBACKS ]--
 
 // ClickedSave forwards the save event to the current widget.
@@ -269,20 +273,6 @@ func (widget *GuiConfigure) ClickedQuit() {
 	if widget.OnQuit != nil {
 		go widget.OnQuit()
 	}
-}
-
-// ReloadItems refreshes the icons page list (clear and reselect, or select cached).
-//
-func (widget *GuiConfigure) ReloadItems() {
-	// sel := widget.pages[GroupIcons].Selected()
-	icons := interface{}(widget.pages[GroupIcons].Widget).(Clearer)
-	path := icons.Clear()
-	if widget.iconToSelect != "" {
-		path = widget.iconToSelect
-		widget.iconToSelect = ""
-	}
-	icons.Load()
-	icons.Select(path)
 }
 
 // SelectIcons selects a specific icon in the Icons page (key = full path to config file).
@@ -330,6 +320,72 @@ func (widget *GuiConfigure) OnSelectPage(page string) {
 
 	if widget.current.OnShow != nil { // Show new page.
 		widget.current.OnShow()
+	}
+}
+
+// SetActionSave sets the action button with save text.
+//
+func (widget *GuiConfigure) SetActionSave() {
+	widget.Menu.Save.SetLabel("Save")
+	widget.Menu.Save.Show()
+}
+
+// SetActionAdd sets the action button with add text.
+//
+func (widget *GuiConfigure) SetActionAdd() {
+	widget.Menu.Save.SetLabel("Add")
+	widget.Menu.Save.Show()
+}
+
+// SetActionGrab sets the action button with grab text.
+//
+func (widget *GuiConfigure) SetActionGrab() {
+	widget.Menu.Save.SetLabel("Grab")
+	widget.Menu.Save.Show()
+}
+
+// SetActionCancel sets the action button with cancel text.
+//
+func (widget *GuiConfigure) SetActionCancel() {
+	widget.Menu.Save.SetLabel("Cancel")
+	widget.Menu.Save.Show()
+}
+
+//
+//------------------------------------------------------[ DOCK GUI CALLBACKS ]--
+
+// ReloadItems refreshes the icons page list (clear and reselect, or select cached).
+//
+func (widget *GuiConfigure) ReloadItems() {
+	// sel := widget.pages[GroupIcons].Selected()
+	icons := interface{}(widget.pages[GroupIcons].Widget).(Clearer)
+	path := icons.Clear()
+	if widget.iconToSelect != "" {
+		path = widget.iconToSelect
+		widget.iconToSelect = ""
+	}
+	icons.Load()
+	icons.Select(path)
+}
+
+// UpdateModulesList updates listed references of applets.
+//
+func (widget *GuiConfigure) UpdateModulesList() {
+	log.Info("TODO: UpdateModulesList")
+}
+
+// UpdateModuleState updates the state of the given applet.
+//
+func (widget *GuiConfigure) UpdateModuleState(name string, active bool) {
+	log.Info("TODO: UpdateModuleState", name, active)
+}
+
+// UpdateShortkeys updates the shortkeys widget.
+//
+func (widget *GuiConfigure) UpdateShortkeys() {
+	w, ok := widget.pages[GroupConfig].Widget.(UpdateShortkeyser)
+	if ok { // Use pages instead of current as the widget can be loaded but not visible.
+		w.UpdateShortkeys()
 	}
 }
 

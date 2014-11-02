@@ -5,16 +5,18 @@ import (
 	"github.com/conformal/gotk3/gtk"
 	// "github.com/gosexy/gettext"
 
+	"github.com/sqp/godock/libs/log"
+
 	"github.com/sqp/godock/widgets/common"
 	"github.com/sqp/godock/widgets/confbuilder"
 	"github.com/sqp/godock/widgets/confbuilder/datatype"
 	"github.com/sqp/godock/widgets/confsettings"
+	"github.com/sqp/godock/widgets/confshortkeys"
 	"github.com/sqp/godock/widgets/gtk/buildhelp"
 	"github.com/sqp/godock/widgets/gtk/gunvalue"
 	"github.com/sqp/godock/widgets/pageswitch"
 
-	"github.com/sqp/godock/libs/log"
-
+	"errors"
 	"path/filepath"
 )
 
@@ -24,93 +26,107 @@ const panedPosition = 200
 //
 //-----------------------------------------------------------[ CONFCORE DATA ]--
 
-// ConfCore defines a core config page information.
+// Item defines a core config page information.
 //
-type ConfCore struct {
+type Item struct {
 	Key      string
 	Title    string
 	Icon     string
+	Tooltip  string
 	Managers []string
 	// File string
 	// Group string // group in file.
 }
 
-var items = []*ConfCore{
+var coreItems = []*Item{
 	{
 		Key:      "Position",
 		Title:    "Position",
 		Icon:     "icons/icon-position.svg",
+		Tooltip:  "Set the position of the main dock.",
 		Managers: []string{"Docks"}},
 
 	{
 		Key:      "Accessibility",
 		Title:    "Visibility",
 		Icon:     "icons/icon-visibility.svg",
+		Tooltip:  "Do you like your dock to be always visible,\n or on the contrary unobtrusive?\nConfigure the way you access your docks and sub-docks!",
 		Managers: []string{"Docks"}},
 
 	{
 		Key:      "TaskBar",
 		Title:    "TaskBar",
 		Icon:     "icons/icon-taskbar.png",
+		Tooltip:  "Display and interact with currently open windows.",
 		Managers: []string{"Taskbar"}},
 
 	{
 		Key:      "Style",
 		Title:    "Style",
 		Icon:     "icons/icon-style.svg",
+		Tooltip:  "Configure the global style.",
 		Managers: []string{"Style"}},
 
 	{
 		Key:      "Background",
 		Title:    "Background",
 		Icon:     "icons/icon-background.svg",
-		Managers: []string{"Docks"}},
+		Tooltip:  "Configure docks appearance.",
+		Managers: []string{"Backends", "Docks"}}, // -> "dock rendering"
 
 	{
 		Key:      "Views",
 		Title:    "Views",
 		Icon:     "icons/icon-views.svg",
-		Managers: []string{"Docks", "Backends"}}, // -> "dock rendering"
+		Tooltip:  "Configure docks appearance.",  // same as background (were grouped).
+		Managers: []string{"Backends", "Docks"}}, // -> "dock rendering"
 
 	{
 		Key:      "Dialogs",
-		Title:    "Dialogs",
+		Title:    "Dialog boxes and Menus",
 		Icon:     "icons/icon-dialogs.svg",
+		Tooltip:  "Configure text bubble appearance.",
 		Managers: []string{"Dialogs"}}, // -> "dialog rendering"
 
 	{
 		Key:      "Desklets",
 		Title:    "Desklets",
 		Icon:     "icons/icon-desklets.svg",
+		Tooltip:  "Applets can be displayed on your desktop as widgets.",
 		Managers: []string{"Desklets"}}, // -> "desklet rendering"
 
 	{
 		Key:      "Icons",
 		Title:    "Icons",
 		Icon:     "icons/icon-icons.svg",
+		Tooltip:  "All about icons:\n size, reflection, icon theme,...",
 		Managers: []string{"Icons", "Indicators"}}, // indicators needed here too ?
 
 	{
 		Key:      "Labels",
-		Title:    "Labels",
+		Title:    "Captions",
 		Icon:     "icons/icon-labels.svg",
+		Tooltip:  "Define icon caption and quick-info style.",
 		Managers: []string{"Icons"}},
 
 	// {
 	// 	Key:   "Themes",
 	// 	Title: "Themes",
+	// Tooltip:"Try new themes and save your theme.",
 	// 	Icon:  "icons/icon-controler.svg"},
 
-	// {
-	// 	Key:   "Shortkeys",
-	// 	Title: "Shortkeys",
-	// 	Icon:  "icons/icon-shortkeys.svg"},
+	{
+		Key:     "Shortkeys",
+		Title:   "Shortkeys",
+		Icon:    "icons/icon-shortkeys.svg",
+		Tooltip: "Define all the keyboard shortcuts currently available."},
 
 	{
 		Key:      "System",
 		Title:    "System",
 		Icon:     "icons/icon-system.svg",
-		Managers: []string{"Docks", "Connection", "Containers", "Backends"}},
+		Tooltip:  "All of the parameters you will never want to tweak.",
+		Managers: []string{"Backends", "Containers", "Connection", "Docks"}},
 
 	{
 		Key:   confsettings.GuiGroup, // custom page for the config own settings.
@@ -125,92 +141,106 @@ var items = []*ConfCore{
 //
 //--------------------------------------------------------[ PAGE GUI ICONS ]--
 
-// ConfigWidget extends the Widget interface with a Save action.
+// Controller defines methods used on the main widget / data source by this widget and its sons.
 //
-type ConfigWidget interface {
+type Controller interface {
+	datatype.Source
+	GetWindow() *gtk.Window
+	SetActionSave()
+	SetActionGrab()
+	SetActionCancel()
+}
+
+// configWidget extends the Widget interface with common needed actions.
+//
+type configWidget interface {
 	gtk.IWidget
+	Destroy()
+	ShowAll()
+}
+
+type grabber interface {
+	configWidget
+	Load()
+	Grab()
+}
+
+type saver interface {
+	configWidget
+	confbuilder.KeyFiler // KeyFile() *KeyFile
 	Save()
 }
 
-// GuiMain provides a configuration widget for the main cairo-dock config.
+// ConfCore provides a configuration widget for the main cairo-dock config.
 //
-type GuiMain struct {
+type ConfCore struct {
 	gtk.Paned
 
-	// Applets *map[string]*packages.AppletPackage // List of applets known by the Dock.
-
-	icons    *List
-	config   *confbuilder.Grouper
-	page     ConfigWidget
+	list     *List
+	config   configWidget
 	switcher *pageswitch.Switcher
 
-	window *gtk.Window
-	data   datatype.Source
+	data Controller
 }
 
-// New creates a GuiMain widget to edit the main cairo-dock config.
+// New creates a ConfCore widget to edit the main cairo-dock config.
 //
-func New(data datatype.Source, switcher *pageswitch.Switcher) *GuiMain {
+func New(data Controller, switcher *pageswitch.Switcher) *ConfCore {
 	paned, _ := gtk.PanedNew(gtk.ORIENTATION_HORIZONTAL)
 
-	widget := &GuiMain{
+	widget := &ConfCore{
 		Paned:    *paned,
 		switcher: switcher,
 		data:     data,
 	}
-	widget.icons = NewList(widget)
-	widget.Pack1(widget.icons, true, true)
+	widget.list = NewList(widget)
+	widget.Pack1(widget.list, true, true)
 
 	widget.SetPosition(panedPosition)
 	return widget
 }
 
-// SetWindow sets the pointer to the parent window, used for some config
-// callbacks (grab events).
-//
-func (widget *GuiMain) SetWindow(win *gtk.Window) {
-	widget.window = win
-}
-
 // Load loads config items in the widget.
 //
-func (widget *GuiMain) Load() {
-	widget.icons.Load(widget.data.DirShareData())
+func (widget *ConfCore) Load() {
+	widget.list.Load(widget.data.DirShareData())
 }
 
 // Selected returns the selected page config.
 //
-func (widget *GuiMain) Selected() *ConfCore {
-	return widget.icons.Selected()
-}
+// func (widget *ConfCore) Selected() (*Item, error) {
+// 	return widget.list.Selected()
+// }
 
-// func (widget *GuiMain) Clean() {
+// func (widget *ConfCore) Clean() {
 // }
 
 //--------------------------------------------------------[ SAVE CONFIG PAGE ]--
 
 // Save saves the current page configuration
 //
-func (widget *GuiMain) Save() {
-	// log.DEV("SAVE")
+func (widget *ConfCore) Save() {
 	if widget.config == nil {
 		return
 	}
-	widget.config.Save()
 
-	item := widget.Selected()
-	for _, manager := range item.Managers {
-		widget.data.ManagerReload(manager, true, widget.config.Conf.KeyFile)
+	if grab := widget.grabber(); grab != nil {
+		grab.Grab()
+		return
 	}
 
-	// widget.data.ManagerReload("Style", true, widget.config.Conf.KeyFile)
-	// widget.data.ManagerReload("Indicators", true, widget.config.Conf.KeyFile)
-	// widget.data.ManagerReload("Dialogs", true, widget.config.Conf.KeyFile)
-	// widget.data.ManagerReload("Docks", true, widget.config.Conf.KeyFile)
-	// widget.data.ManagerReload("Taskbar", true, widget.config.Conf.KeyFile)
-	// widget.data.ManagerReload("Icons", true, widget.config.Conf.KeyFile)
-	// widget.data.ManagerReload("Backends", true, widget.config.Conf.KeyFile)
+	if saver, ok := widget.config.(saver); ok {
+		saver.Save()
 
+		item, e := widget.list.Selected()
+		if log.Err(e, "Save: selection problem") {
+			return
+		}
+
+		for _, manager := range item.Managers {
+			widget.data.ManagerReload(manager, true, saver.KeyFile())
+		}
+	}
 	// //\_____________ reload modules that are concerned by these changes
 	// GldiManager *pManager;
 	// if (bUpdateColors)
@@ -248,11 +278,24 @@ func (widget *GuiMain) Save() {
 	// }
 }
 
+func (widget *ConfCore) grabber() grabber {
+	if widget.config != nil {
+		grab, ok := widget.config.(grabber)
+		if ok {
+			return grab
+		}
+	}
+	return nil
+}
+
 //-------------------------------------------------------[ CONTROL CALLBACKS ]--
 
-// OnSelect acts as a row selected callback.
+// onSelect acts as a row selected callback.
 //
-func (widget *GuiMain) OnSelect(item *ConfCore) {
+func (widget *ConfCore) onSelect(item *Item, e error) {
+	if log.Err(e, "onSelect: selection problem") {
+		return
+	}
 	// widget.switcher.Clear() // unused yet
 
 	if widget.config != nil {
@@ -260,14 +303,25 @@ func (widget *GuiMain) OnSelect(item *ConfCore) {
 		widget.config = nil
 	}
 
+	widget.SetAction()
+
 	file := ""
-	if item.Key == confsettings.GuiGroup {
+	switch item.Key {
+	case "Shortkeys":
+		w := confshortkeys.New(widget.data)
+		w.Load()
+		widget.Pack2(w, true, true)
+		widget.config = w
+		return
+
+	case confsettings.GuiGroup: // own config has a special path.
 		file = confsettings.PathFile()
-	} else {
+
+	default:
 		file = widget.data.MainConf()
 	}
 
-	build, e := confbuilder.NewGrouper(widget.data, widget.window, file)
+	build, e := confbuilder.NewGrouper(widget.data, widget.data.GetWindow(), file)
 	if log.Err(e, "Load Keyfile "+file) {
 		return
 	}
@@ -277,48 +331,74 @@ func (widget *GuiMain) OnSelect(item *ConfCore) {
 	widget.config.ShowAll()
 }
 
-//-------------------------------------------------------[ WIDGET ICONS LIST ]--
+// SetAction sets the action button name (save or grab).
+//
+func (widget *ConfCore) SetAction() {
+	item, e := widget.list.Selected()
+	switch {
+	case e != nil: // Do nothing. Should be triggered only on load, before any user selection.
 
-// Rows defines liststore rows. Must match the ListStore declaration type and order.
+	case item.Key == "Shortkeys":
+		widget.data.SetActionGrab()
+
+	default:
+		widget.data.SetActionSave()
+	}
+}
+
+// UpdateShortkeys updates the shortkey widget if it's loaded.
+//
+func (widget *ConfCore) UpdateShortkeys() {
+	log.Info("UpdateShortkeys")
+	// conf, e := widget.list.Selected()
+	// log.Err(e, "confcore selected")
+
+	if grab := widget.grabber(); grab != nil {
+		grab.Load()
+		// if e == nil && conf.Key == "Shortkeys" {
+		// widget.config.Load()
+	}
+}
+
+//-------------------------------------------------------[ WIDGET CORE LIST ]--
+
+// Liststore rows. Must match the ListStore declaration type and order.
 const (
-	RowKey = iota
-	RowIcon
-	RowName
-	RowTooltip
+	rowKey = iota
+	rowIcon
+	rowName
+	rowTooltip
 )
 
-// ControlItems forwards events to other widgets.
+// controlItems forwards events to other widgets.
 //
-type ControlItems interface {
-	OnSelect(item *ConfCore)
+type controlItems interface {
+	onSelect(*Item, error)
 }
 
-// Row defines a pointer to link the icon name with its iter.
+// row defines a pointer to link the icon name with its iter.
 //
-type Row struct {
+type row struct {
 	Iter *gtk.TreeIter
-	Conf *ConfCore
+	Conf *Item
 }
 
-// List is a widget to select cairo-dock main config pages.
+// List is a widget to list and select cairo-dock main config pages references.
 //
 type List struct {
 	gtk.ScrolledWindow // Main widget is the container. The ScrolledWindow will handle list scrollbars.
 	tree               *gtk.TreeView
 	model              *gtk.ListStore
 	selection          *gtk.TreeSelection
-	control            ControlItems
+	control            controlItems
 
-	rows map[string]*Row // maybe need to make if map[string] to get a ref to configfile.
+	rows map[string]*row
 }
 
 // NewList creates cairo-dock main config pages list.
 //
-func NewList(control ControlItems) *List {
-	builder := buildhelp.New()
-
-	builder.AddFromString(string(confcoreXML()))
-	// builder.AddFromFile("confcore.xml")
+func NewList(control controlItems) *List {
+	builder := buildhelp.NewFromBytes(confcoreXML())
 
 	widget := &List{
 		ScrolledWindow: *builder.GetScrolledWindow("widget"),
@@ -326,7 +406,7 @@ func NewList(control ControlItems) *List {
 		tree:           builder.GetTreeView("tree"),
 		selection:      builder.GetTreeSelection("selection"),
 		control:        control,
-		rows:           make(map[string]*Row),
+		rows:           make(map[string]*row),
 	}
 
 	if len(builder.Errors) > 0 {
@@ -345,42 +425,39 @@ func NewList(control ControlItems) *List {
 // Load loads the widget fields.
 //
 func (widget *List) Load(shareData string) {
-	for _, item := range items {
+	for _, item := range coreItems {
 		iter := widget.model.Append()
-		widget.rows[item.Key] = &Row{iter, item}
+		widget.rows[item.Key] = &row{iter, item}
 
 		args := gtk.Cols{
-			RowKey:  item.Key,
-			RowName: item.Title,
+			rowKey:     item.Key,
+			rowName:    item.Title,
+			rowTooltip: item.Tooltip,
 		}
 		widget.model.SetCols(iter, args)
 
 		if item.Icon != "" {
 			path := filepath.Join(shareData, item.Icon)
 			if pix, e := common.PixbufNewFromFile(path, iconSize); !log.Err(e, "Load icon") {
-				widget.model.SetValue(iter, RowIcon, pix)
+				widget.model.SetValue(iter, rowIcon, pix)
 			}
 		}
 	}
 }
 
-// Selected returns the name of the selected item.
+// Selected returns the data about the selected item.
 //
-func (widget *List) Selected() *ConfCore {
-	var iter gtk.TreeIter
-	var treeModel gtk.ITreeModel = widget.model
-	widget.selection.GetSelected(&treeModel, &iter)
-
-	key, e := gunvalue.New(widget.model.GetValue(&iter, RowKey)).String()
-	if log.Err(e, "configMain.Selected") {
-		return nil
+func (widget *List) Selected() (*Item, error) {
+	key, e := gunvalue.SelectedValue(widget.model, widget.selection, rowKey).String()
+	if e != nil {
+		return nil, e
 	}
 	conf, ok := widget.rows[key]
 	if !ok {
 		// TODO:  warn
-		return nil
+		return nil, errors.New("no matching row found")
 	}
-	return conf.Conf
+	return conf.Conf, nil
 }
 
 //-------------------------------------------------------[ ACTIONS CALLBACKS ]--
@@ -388,129 +465,16 @@ func (widget *List) Selected() *ConfCore {
 // Selected line has changed. Forward the call to the controler.
 //
 func (widget *List) onSelectionChanged(obj *gtk.TreeSelection) {
-	widget.control.OnSelect(widget.Selected())
+	widget.control.onSelect(widget.Selected())
 }
 
 //
 
 /*
-	pGroupDescription = _add_one_main_group_button ("Position",
-		CAIRO_DOCK_SHARE_DATA_DIR"/icons/icon-position.svg",
-		CAIRO_DOCK_CATEGORY_BEHAVIOR,
-		N_("Set the position of the main dock."),
-		_("Position"));
-	_add_sub_group_to_group_button (pGroupDescription, "Position", "icon-position.svg", _("Position"));
-	pGroupDescription->pManagers = g_list_prepend (pGroupDescription->pManagers, (gchar*)"Docks");
-	pGroupDescription->build_widget = _build_config_group_widget;
-
-	pGroupDescription = _add_one_main_group_button ("Accessibility",
-		CAIRO_DOCK_SHARE_DATA_DIR"/icons/icon-visibility.svg",
-		CAIRO_DOCK_CATEGORY_BEHAVIOR,
-		N_("Do you like your dock to be always visible,\n or on the contrary unobtrusive?\nConfigure the way you access your docks and sub-docks!"),
-		_("Visibility"));
-	_add_sub_group_to_group_button (pGroupDescription, "Accessibility", "icon-visibility.svg", _("Visibility"));
-	pGroupDescription->pManagers = g_list_prepend (pGroupDescription->pManagers, (gchar*)"Docks");
-	pGroupDescription->build_widget = _build_config_group_widget;
-
-	pGroupDescription = _add_one_main_group_button ("TaskBar",
-		CAIRO_DOCK_SHARE_DATA_DIR"/icons/icon-taskbar.png",
-		CAIRO_DOCK_CATEGORY_BEHAVIOR,
-		N_("Display and interact with currently open windows."),
-		_("Taskbar"));
-	_add_sub_group_to_group_button (pGroupDescription, "TaskBar", "icon-taskbar.png", _("Taskbar"));
-	pGroupDescription->pManagers = g_list_prepend (pGroupDescription->pManagers, (gchar*)"Taskbar");
-	pGroupDescription->build_widget = _build_config_group_widget;
-
-	pGroupDescription = _add_one_main_group_button ("Shortkeys",
-		CAIRO_DOCK_SHARE_DATA_DIR"/icons/icon-shortkeys.svg",
-		CAIRO_DOCK_CATEGORY_BEHAVIOR,
-		N_("Define all the keyboard shortcuts currently available."),
-		_("Shortkeys"));
-	pGroupDescription->build_widget = _build_shortkeys_widget;
-
-	pGroupDescription = _add_one_main_group_button ("System",
-		CAIRO_DOCK_SHARE_DATA_DIR"/icons/icon-system.svg",
-		CAIRO_DOCK_CATEGORY_BEHAVIOR,
-		N_("All of the parameters you will never want to tweak."),
-		_("System"));
-	_add_sub_group_to_group_button (pGroupDescription, "System", "icon-system.svg", _("System"));
-	pGroupDescription->pManagers = g_list_prepend (pGroupDescription->pManagers, (gchar*)"Docks");
-	pGroupDescription->pManagers = g_list_prepend (pGroupDescription->pManagers, (gchar*)"Connection");
-	pGroupDescription->pManagers = g_list_prepend (pGroupDescription->pManagers, (gchar*)"Containers");
-	pGroupDescription->pManagers = g_list_prepend (pGroupDescription->pManagers, (gchar*)"Backends");
-	pGroupDescription->build_widget = _build_config_group_widget;
-
-	pGroupDescription = _add_one_main_group_button ("Style",
-		CAIRO_DOCK_SHARE_DATA_DIR"/icons/icon-style.svg",
-		CAIRO_DOCK_CATEGORY_THEME,
-		N_("Configure the global style."),
-		_("Style"));
-	_add_sub_group_to_group_button (pGroupDescription, "Style", "icon-style.svg", _("Style"));
-	pGroupDescription->pManagers = g_list_prepend (pGroupDescription->pManagers, (gchar*)"Style");
-	pGroupDescription->build_widget = _build_config_group_widget;
-
-	pGroupDescription = _add_one_main_group_button ("Background",
-		CAIRO_DOCK_SHARE_DATA_DIR"/icons/icon-docks.svg",
-		CAIRO_DOCK_CATEGORY_THEME,
-		N_("Configure docks appearance."),
-		_("Docks"));
-	_add_sub_group_to_group_button (pGroupDescription, "Background", "icon-background.svg", _("Background"));
-	_add_sub_group_to_group_button (pGroupDescription, "Views", "icon-views.svg", _("Views"));
-	pGroupDescription->pManagers = g_list_prepend (pGroupDescription->pManagers, (gchar*)"Docks");
-	pGroupDescription->pManagers = g_list_prepend (pGroupDescription->pManagers, (gchar*)"Backends");  // -> "dock rendering"
-	pGroupDescription->build_widget = _build_config_group_widget;
-
-	pGroupDescription = _add_one_main_group_button ("Dialogs",
-		CAIRO_DOCK_SHARE_DATA_DIR"/icons/icon-dialogs.svg",
-		CAIRO_DOCK_CATEGORY_THEME,
-		N_("Configure text bubble appearance."),
-		_("Dialog boxes and Menus"));
-	_add_sub_group_to_group_button (pGroupDescription, "Dialogs", "icon-dialogs.svg", _("Dialog boxes and Menus"));
-	pGroupDescription->pManagers = g_list_prepend (pGroupDescription->pManagers, (gchar*)"Dialogs");  // -> "dialog rendering"
-	pGroupDescription->build_widget = _build_config_group_widget;
-
-	pGroupDescription = _add_one_main_group_button ("Desklets",
-		CAIRO_DOCK_SHARE_DATA_DIR"/icons/icon-desklets.svg",
-		CAIRO_DOCK_CATEGORY_THEME,
-		N_("Applets can be displayed on your desktop as widgets."),
-		_("Desklets"));
-	_add_sub_group_to_group_button (pGroupDescription, "Desklets", "icon-desklets.svg", _("Desklets"));
-	pGroupDescription->pManagers = g_list_prepend (pGroupDescription->pManagers, (gchar*)"Desklets");  // -> "desklet rendering"
-	pGroupDescription->build_widget = _build_config_group_widget;
-
-	pGroupDescription = _add_one_main_group_button ("Icons",
-		CAIRO_DOCK_SHARE_DATA_DIR"/icons/icon-icons.svg",
-		CAIRO_DOCK_CATEGORY_THEME,
-		N_("All about icons:\n size, reflection, icon theme,..."),
 		_("Icons"));
 	_add_sub_group_to_group_button (pGroupDescription, "Icons", "icon-icons.svg", _("Icons"));
 	_add_sub_group_to_group_button (pGroupDescription, "Indicators", "icon-indicators.svg", _("Indicators"));
 	pGroupDescription->pManagers = g_list_prepend (pGroupDescription->pManagers, (gchar*)"Icons");
 	pGroupDescription->pManagers = g_list_prepend (pGroupDescription->pManagers, (gchar*)"Indicators");  // -> "drop indicator"
-	pGroupDescription->build_widget = _build_config_group_widget;
-
-	pGroupDescription = _add_one_main_group_button ("Labels",
-		CAIRO_DOCK_SHARE_DATA_DIR"/icons/icon-labels.svg",
-		CAIRO_DOCK_CATEGORY_THEME,
-		N_("Define icon caption and quick-info style."),
-		_("Captions"));
-	_add_sub_group_to_group_button (pGroupDescription, "Labels", "icon-labels.svg", _("Captions"));
-	pGroupDescription->pManagers = g_list_prepend (NULL, (gchar*)"Icons");
-	pGroupDescription->build_widget = _build_config_group_widget;
-
-	pGroupDescription = _add_one_main_group_button ("Themes",
-		CAIRO_DOCK_SHARE_DATA_DIR"/icons/icon-controler.svg",  /// TODO: find an icon...
-		CAIRO_DOCK_CATEGORY_THEME,
-		N_("Try new themes and save your theme."),
-		_("Themes"));
-	pGroupDescription->build_widget = _build_themes_widget;
-
-	pGroupDescription = _add_one_main_group_button ("Items",
-		CAIRO_DOCK_SHARE_DATA_DIR"/icons/icon-all.svg",  /// TODO: find an icon...
-		CAIRO_DOCK_CATEGORY_THEME,
-		N_("Current items in your dock(s)."),
-		_("Current items"));
-	pGroupDescription->build_widget = _build_items_widget;
-}
 
 */
