@@ -7,7 +7,6 @@ import (
 	"github.com/sqp/godock/libs/srvdbus"
 
 	"bytes"
-	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -285,29 +284,6 @@ func (c *Command) Usage() {
 // it is a documentation pseudo-command such as importpath.
 func (c *Command) Runnable() bool {
 	return c.Run != nil
-}
-
-//
-//-----------------------------------------------------[ DBUS CLIENT ACTIONS ]--
-
-type clientAction func(*srvdbus.Client, []string) error
-
-func clientSend(call clientAction, args []string) error {
-	srv, e := srvdbus.GetServer()
-	switch {
-	case e != nil:
-
-	case srv == nil:
-		e = errors.New("no service found")
-
-	default:
-		e = call(srv, args)
-	}
-	return e
-}
-
-func clientSendLogged(action string, call clientAction, args []string) error {
-	return logger.GetErr(clientSend(call, args), action)
 }
 
 //

@@ -1,58 +1,19 @@
 
 // #include <signal.h>
 
-#include "cairo-dock-dock-manager.h"       // myDocksParam
-#include "cairo-dock-desklet-manager.h"          // myDeskletObjectMgr
-#include "cairo-dock-keybinder.h"                // myShortkeyObjectMgr
-#include "cairo-dock-module-instance-manager.h"  // myModuleObjectMgr
-#include "cairo-dock-module-manager.h"           // myModuleObjectMgr
-
-#include "gldi-config.h"                         // GLDI_VERSION
-
-// #include <unistd.h> // sleep, execl
-// #define __USE_POSIX
-// #include <time.h>
-
-// #include <glib/gstdio.h>
-// #include "cairo-dock-icon-facility.h"  // cairo_dock_get_first_icon
-// #include "cairo-dock-themes-manager.h"
-// #include "cairo-dock-dialog-factory.h"
-// #include "cairo-dock-keyfile-utilities.h"
-// #include "cairo-dock-file-manager.h"
-// #include "cairo-dock-packages.h"
-
-// #include "cairo-dock-config.h"
-// #include "cairo-dock-log.h"
-// #include "cairo-dock-utils.h"  // cairo_dock_launch_command
-// #include "cairo-dock-core.h"
-
+#include "cairo-dock-dock-manager.h"             // myDockObjectMgr
 
 // local files
-#include "cairo-dock-user-menu.h"
 #include "cairo-dock-user-interaction.h"
-
-
-extern int g_iMajorVersion, g_iMinorVersion, g_iMicroVersion;
-
-extern gchar *g_cCairoDockDataDir;
-extern gchar *g_cCurrentThemePath;
-
-extern gchar *g_cConfFile;
-
-extern CairoDock *g_pMainDock;
-
 
 
 // extern gboolean g_bUseOpenGL;
 // extern gboolean g_bEasterEggs;
 
-// extern GldiModuleInstance *g_pCurrentModule;
 
-
-// TODO: To remove once the menu is redone:
+// TODO: To remove (1 more use in interaction):
 
 gboolean g_bLocked;
-#define CAIRO_DOCK_VERSION GLDI_VERSION  // using GLDI_VERSION instead (remove once menu is redone)
 
 
 // Those that may have to be reimplemented:
@@ -65,6 +26,7 @@ gboolean g_bLocked;
 
 // static gchar *s_cLastVersion = NULL;
 // static gchar *s_cDefaulBackend = NULL;
+
 
 
 // UNCHANGED
@@ -85,67 +47,6 @@ static void register_events() {
 	gldi_object_register_notification (&myContainerObjectMgr,
 		NOTIFICATION_SCROLL_ICON,
 		(GldiNotificationFunc) cairo_dock_notification_scroll_icon,
-		GLDI_RUN_AFTER, NULL);
-	gldi_object_register_notification (&myContainerObjectMgr,
-		NOTIFICATION_BUILD_CONTAINER_MENU,
-		(GldiNotificationFunc) cairo_dock_notification_build_container_menu,
-		GLDI_RUN_FIRST, NULL);
-	gldi_object_register_notification (&myContainerObjectMgr,
-		NOTIFICATION_BUILD_ICON_MENU,
-		(GldiNotificationFunc) cairo_dock_notification_build_icon_menu,
-		GLDI_RUN_AFTER, NULL);
-	
-	gldi_object_register_notification (&myDeskletObjectMgr,
-		NOTIFICATION_CONFIGURE_DESKLET,
-		(GldiNotificationFunc) cairo_dock_notification_configure_desklet,
-		GLDI_RUN_AFTER, NULL);
-	gldi_object_register_notification (&myDockObjectMgr,
-		NOTIFICATION_ICON_MOVED,
-		(GldiNotificationFunc) cairo_dock_notification_icon_moved,
-		GLDI_RUN_AFTER, NULL);
-	gldi_object_register_notification (&myDockObjectMgr,
-		NOTIFICATION_DESTROY,
-		(GldiNotificationFunc) cairo_dock_notification_dock_destroyed,
-		GLDI_RUN_AFTER, NULL);
-	gldi_object_register_notification (&myModuleObjectMgr,
-		NOTIFICATION_MODULE_ACTIVATED,
-		(GldiNotificationFunc) cairo_dock_notification_module_activated,
-		GLDI_RUN_AFTER, NULL);
-	gldi_object_register_notification (&myModuleObjectMgr,
-		NOTIFICATION_MODULE_REGISTERED,
-		(GldiNotificationFunc) cairo_dock_notification_module_registered,
-		GLDI_RUN_AFTER, NULL);
-	gldi_object_register_notification (&myModuleInstanceObjectMgr,
-		NOTIFICATION_MODULE_INSTANCE_DETACHED,
-		(GldiNotificationFunc) cairo_dock_notification_module_detached,
-		GLDI_RUN_AFTER, NULL);
-	gldi_object_register_notification (&myDockObjectMgr,
-		NOTIFICATION_INSERT_ICON,
-		(GldiNotificationFunc) cairo_dock_notification_icon_inserted,
-		GLDI_RUN_AFTER, NULL);
-	gldi_object_register_notification (&myDockObjectMgr,
-		NOTIFICATION_REMOVE_ICON,
-		(GldiNotificationFunc) cairo_dock_notification_icon_removed,
-		GLDI_RUN_AFTER, NULL);
-	gldi_object_register_notification (&myDeskletObjectMgr,
-		NOTIFICATION_DESTROY,
-		(GldiNotificationFunc) cairo_dock_notification_desklet_added_removed,
-		GLDI_RUN_AFTER, NULL);
-	gldi_object_register_notification (&myDeskletObjectMgr,
-		NOTIFICATION_NEW,
-		(GldiNotificationFunc) cairo_dock_notification_desklet_added_removed,
-		GLDI_RUN_AFTER, NULL);
-	gldi_object_register_notification (&myShortkeyObjectMgr,
-		NOTIFICATION_NEW,
-		(GldiNotificationFunc) cairo_dock_notification_shortkey_added_removed_changed,
-		GLDI_RUN_AFTER, NULL);
-	gldi_object_register_notification (&myShortkeyObjectMgr,
-		NOTIFICATION_DESTROY,
-		(GldiNotificationFunc) cairo_dock_notification_shortkey_added_removed_changed,
-		GLDI_RUN_AFTER, NULL);
-	gldi_object_register_notification (&myShortkeyObjectMgr,
-		NOTIFICATION_SHORTKEY_CHANGED,
-		(GldiNotificationFunc) cairo_dock_notification_shortkey_added_removed_changed,
 		GLDI_RUN_AFTER, NULL);
 }
 

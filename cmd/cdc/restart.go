@@ -20,12 +20,12 @@ Note that only external applets will benefit from a simple applet restart if you
 }
 
 func runRestart(cmd *Command, args []string) {
-	if len(args) == 0 { // Restart dock.
-		if clientSend(restartDock, args) != nil { // Try to forward to an active instance.
-			logger.Err(srvdbus.RestartDock(), "restart dock") // Nobody else wants to, I'll do it myself!
-		}
-		return
-	}
+	// if len(args) == 0 { // Restart dock.
+	// 	if clientSend(restartDock, args) != nil { // Try to forward to an active instance.
+	// 		logger.Err(srvdbus.RestartDock(), "restart dock") // Nobody else wants to, I'll do it myself!
+	// 	}
+	// 	return
+	// }
 
 	for _, name := range args { // Restart applet(s).
 		logger.Err(appdbus.AppletRemove(name+".conf"), "AppletRemove")

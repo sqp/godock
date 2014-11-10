@@ -11,23 +11,19 @@ package maindock
 // #include "maindock.h"
 /*
 
-// #define CAIRO_DOCK_SHARE_DATA_DIR   "/usr/share/cairo-dock"
 #define CAIRO_DOCK_SHARE_THEMES_DIR "/usr/share/cairo-dock/themes"
 #define CAIRO_DOCK_LOCALE_DIR       "/usr/share/locale"
-
-#define CAIRO_DOCK_ICON "cairo-dock.svg"
-#define CAIRO_DOCK_LOGO "cairo-dock-logo.png"
 
 */
 import "C"
 import (
 	"github.com/conformal/gotk3/gtk"
-	"github.com/gosexy/gettext"
 
 	"github.com/sqp/godock/libs/cdtype"       // Logger type.
 	"github.com/sqp/godock/libs/config"       // Config parser.
 	"github.com/sqp/godock/libs/gldi"         // Gldi access.
 	"github.com/sqp/godock/libs/gldi/globals" // Global variables.
+	"github.com/sqp/godock/libs/tran"         // Translate.
 
 	"os"
 	"os/user"
@@ -66,10 +62,6 @@ func SetLogger(l cdtype.Logger) {
 	log = l
 }
 
-func GtkVersion() (int, int, int) {
-	return C.GTK_MAJOR_VERSION, C.GTK_MINOR_VERSION, C.GTK_MICRO_VERSION
-}
-
 //
 //----------------------------------------------------------------[ MAINDOCK ]--
 
@@ -104,8 +96,6 @@ func (settings *DockSettings) Init() {
 	_, e := os.Stat(confdir)
 	settings.isFirstLaunch = e != nil // TODO: need test is dir.
 
-	// C._cairo_dock_get_global_config((*C.gchar)(C.CString(confdir)))
-
 	hidden := LoadHidden(confdir)
 
 	settings.isNewVersion = hidden.LastVersion == globals.Version()
@@ -124,9 +114,7 @@ func (settings *DockSettings) Init() {
 	gtk.Init(nil)
 
 	//\___________________ internationalize the app.
-	gettext.BindTextdomain(CAIRO_DOCK_GETTEXT_PACKAGE, C.CAIRO_DOCK_LOCALE_DIR)
-	gettext.BindTextdomainCodeset(CAIRO_DOCK_GETTEXT_PACKAGE, "UTF-8")
-	gettext.Textdomain(CAIRO_DOCK_GETTEXT_PACKAGE)
+	tran.Scend(CAIRO_DOCK_GETTEXT_PACKAGE, C.CAIRO_DOCK_LOCALE_DIR, "UTF-8")
 
 	if settings.Verbosity != "" {
 		gldi.LogSetLevelFromName(settings.Verbosity)
@@ -232,17 +220,16 @@ func (settings DockSettings) Prepare() {
 }
 
 func (settings *DockSettings) Start() {
-	gldi.LoadCurrentTheme()
 
 	//\___________________ lock mode.
 
 	// comme on ne pourra pas ouvrir le panneau de conf, ces 2 variables resteront tel quel.
 	if settings.Locked {
 		println("Cairo-Dock will be locked.") // was cd_warning (so it was set just before Verbosity). TODO: improve
-		C.myDocksParam.bLockIcons = C.gboolean(1)
-		C.myDocksParam.bLockAll = C.gboolean(1)
-
-		C.g_bLocked = C.gboolean(1) // forward for the menu (to remove once menu is redone)
+		globals.DocksParam.SetLockIcons(true)
+		globals.DocksParam.SetLockAll(true)
+		globals.FullLock = true
+		C.g_bLocked = C.gboolean(1) // forward for interaction
 	}
 
 	if !settings.SafeMode && gldi.ModulesGetNb() <= 1 { // 1 including Help.
@@ -398,7 +385,7 @@ But if you really want to use the dock without these plug-ins, you can launch th
 
 	icon := gldi.IconsGetAnyWithoutDialog()
 	container := globals.Maindock().ToContainer()
-	iconpath := globals.DirShareData() + "/" + C.CAIRO_DOCK_ICON
+	iconpath := globals.DirShareData(globals.CairoDockIcon)
 	gldi.DialogShowTemporaryWithIcon(str, icon, container, 0, iconpath)
 }
 

@@ -156,6 +156,13 @@ func (widget *List) Delete(key string) {
 	delete(widget.rows, key)
 }
 
+// Clear clears the widget data.
+//
+func (widget *List) Clear() {
+	widget.rows = make(map[string]*Row)
+	widget.model.Clear()
+}
+
 //
 //---------------------------------------------------------[ LIST ADD APPLET ]--
 

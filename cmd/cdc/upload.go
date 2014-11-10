@@ -20,9 +20,6 @@ func runUpload(cmd *Command, args []string) {
 	if len(args) == 0 { // Ensure we have some data.
 		cmd.Usage()
 	}
-	clientSendLogged("upload", uploadData, args)
-}
-
-func uploadData(srv *srvdbus.Client, args []string) error {
-	return srv.Upload(args[0])
+	e := srvdbus.Upload(args[0])
+	logger.Err(e, "upload data")
 }

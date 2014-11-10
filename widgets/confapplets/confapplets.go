@@ -27,7 +27,7 @@ type ListMode int
 // List widget behaviours.
 const (
 	ListCanAdd   ListMode = iota // Applets for the add page.
-	ListExternal ListMode = iota // Applets for the download page.
+	ListExternal                 // Applets for the download page.
 )
 
 //
@@ -40,6 +40,7 @@ type ListInterface interface {
 	Load(map[string]datatype.Appleter)
 	Selected() datatype.Appleter
 	Delete(string)
+	Clear()
 }
 
 // GUIControl is the interface to the main GUI and data source.
@@ -117,12 +118,18 @@ func (widget *ConfApplet) Save() {
 	}
 }
 
-// Clean resets the download widget.
+// Clean removes temporary files.
 //
 func (widget *ConfApplet) Clean() {
 	if widget.preview.TmpFile != "" {
 		os.Remove(widget.preview.TmpFile)
 	}
+}
+
+// Clear clears the widget data.
+//
+func (widget *ConfApplet) Clear() {
+	widget.applets.Clear()
 }
 
 //--------------------------------------------------[ LIST CONTROL CALLBACKS ]--

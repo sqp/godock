@@ -34,11 +34,12 @@ func (icon *IconConf) DefaultNameIcon() (name, img string) {
 	case icon.IsSeparator():
 		return "--------", ""
 
-	case icon.IsLauncher():
+	case icon.IsLauncher(), icon.IsStackIcon(), icon.IsAppli(), icon.IsClassIcon():
 		name := icon.GetClassInfo(gldi.ClassName)
 		if name != "" {
 			return name, icon.GetFileName() // icon.GetClassInfo(ClassIcon)
 		}
+		return ternary.String(icon.GetInitialName() != "", icon.GetInitialName(), icon.GetName()), icon.GetFileName()
 
 	}
 	return icon.GetName(), icon.GetFileName()

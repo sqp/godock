@@ -16,7 +16,7 @@ package confgui
 import (
 	"github.com/conformal/gotk3/gtk"
 
-	"github.com/sqp/godock/libs/log"
+	"github.com/sqp/godock/libs/cdtype" // Logger type.
 
 	"github.com/sqp/godock/widgets/confapplets"
 	"github.com/sqp/godock/widgets/confbuilder/datatype"
@@ -44,10 +44,10 @@ const (
 
 // NewStandalone creates a new config window to use as standalone application.
 //
-func NewStandalone(data datatype.Source, path ...string) {
+func NewStandalone(data datatype.Source, log cdtype.Logger, path ...string) {
 	gtk.Init(nil)
 
-	widget, win := NewConfigWindow(data)
+	widget, win := NewConfigWindow(data, log)
 	win.Connect("destroy", gtk.MainQuit)
 
 	widget.Load()
@@ -59,14 +59,14 @@ func NewStandalone(data datatype.Source, path ...string) {
 
 	gtk.Main()
 
-	log.Info("GUI QUITTED OK !!")
+	// log.Info("GUI QUITTED OK !!")
 	win.Destroy()
 }
 
 // NewConfigWindow creates a new config widget and window, ready to use.
 //
-func NewConfigWindow(data datatype.Source) (*GuiConfigure, *gtk.Window) {
-	widget := NewGuiConfigure()
+func NewConfigWindow(data datatype.Source, log cdtype.Logger) (*GuiConfigure, *gtk.Window) {
+	widget := NewGuiConfigure(data, log)
 	win, err := gtk.WindowNew(gtk.WINDOW_TOPLEVEL)
 	if err != nil {
 		// log.Fatal("Unable to create window:", err)
@@ -82,7 +82,6 @@ func NewConfigWindow(data datatype.Source) (*GuiConfigure, *gtk.Window) {
 
 	win.ShowAll()
 	widget.SetWindow(win)
-	widget.SetDataSource(data)
 	widget.OnQuit = win.Destroy
 
 	return widget, win
@@ -147,17 +146,25 @@ type GuiConfigure struct {
 
 	pages   map[string]*Page
 	current *Page
+
+	log cdtype.Logger
 }
 
 // NewGuiConfigure creates the main Cairo-Dock configuration widget.
 //
-func NewGuiConfigure() *GuiConfigure {
+func NewGuiConfigure(source datatype.Source, log cdtype.Logger) *GuiConfigure {
 	box, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
 
 	widget := &GuiConfigure{
-		Box:   *box,
-		pages: make(map[string]*Page),
+		Source: source,
+		Box:    *box,
+		pages:  make(map[string]*Page),
+		log:    log,
 	}
+
+	// Load GUI own config page settings.
+	e := confsettings.Init(source.DirAppData())
+	log.Err(e, "Load ConfigSettings")
 
 	// Create widgets.
 
@@ -242,16 +249,6 @@ func (widget *GuiConfigure) SetWindow(win *gtk.Window) {
 	widget.window = win
 }
 
-// SetWindow sets the pointer to the data source, needed for every widget.
-//
-func (widget *GuiConfigure) SetDataSource(source datatype.Source) {
-	widget.Source = source
-
-	// Load GUI own config page settings.
-	e := confsettings.Init(source.DirAppData())
-	log.Err(e, "Load ConfigSettings")
-}
-
 // GetWindow returns the pointer to the parent window.
 //
 func (widget *GuiConfigure) GetWindow() *gtk.Window {
@@ -279,7 +276,7 @@ func (widget *GuiConfigure) ClickedQuit() {
 // If the icon isn't found, the name is cached for the late ReloadItems callback.
 //
 func (widget *GuiConfigure) SelectIcons(item string) {
-	log.DEV("SelectIcons", item)
+	widget.log.Info("SelectIcons", item)
 	b := widget.Select(GroupIcons, item)
 	if b {
 		widget.iconToSelect = "" // Found, clear cache.
@@ -291,7 +288,7 @@ func (widget *GuiConfigure) SelectIcons(item string) {
 // Select selects the given group page and may also select a specific item in the page.
 //
 func (widget *GuiConfigure) Select(page string, item ...string) bool {
-	log.DEV("newpage displayed")
+	widget.log.Info("newpage displayed")
 
 	widget.stack.SetVisibleChildName(page)
 
@@ -310,7 +307,7 @@ func (widget *GuiConfigure) OnSelectPage(page string) {
 		widget.current.OnHide()
 	}
 
-	log.DEV("GuiConfigure OnSelectPage")
+	widget.log.Info("GuiConfigure OnSelectPage")
 
 	current, ok := widget.pages[page] // Set new current.
 	if !ok {
@@ -360,24 +357,38 @@ func (widget *GuiConfigure) ReloadItems() {
 	// sel := widget.pages[GroupIcons].Selected()
 	icons := interface{}(widget.pages[GroupIcons].Widget).(Clearer)
 	path := icons.Clear()
+	// widget.log.DEV("ReloadItems path to reselect", path)
 	if widget.iconToSelect != "" {
 		path = widget.iconToSelect
 		widget.iconToSelect = ""
 	}
 	icons.Load()
 	icons.Select(path)
+	// widget.log.DEV("ReloadItems finished")
 }
 
 // UpdateModulesList updates listed references of applets.
 //
 func (widget *GuiConfigure) UpdateModulesList() {
-	log.Info("TODO: UpdateModulesList")
+	widget.log.Info("UpdateModulesList test")
+	// w, ok := widget.pages[GroupAdd].Widget.(*confapplets.ConfApplet)
+	// if ok {
+	// 	w.Clear()
+	// 	w.Load()
+	// }
 }
 
 // UpdateModuleState updates the state of the given applet.
 //
 func (widget *GuiConfigure) UpdateModuleState(name string, active bool) {
-	log.Info("TODO: UpdateModuleState", name, active)
+	widget.log.Info("TODO: UpdateModuleState", name, active)
+
+	// w, ok := widget.pages[GroupAdd].Widget.(*confapplets.ConfApplet)
+	// if ok {
+	// 	w.Clear()
+	// 	w.Load()
+	// }
+
 }
 
 // UpdateShortkeys updates the shortkeys widget.
@@ -388,57 +399,3 @@ func (widget *GuiConfigure) UpdateShortkeys() {
 		w.UpdateShortkeys()
 	}
 }
-
-// iconsPage := &pageswitch.Page{
-// 	Widget: icons,
-// 	Name:   "Icons",
-// 	// icon:"",
-// 	OnLoad: func() { icons.Load() },
-// 	OnShow: func() {
-// 		icons.Show()
-// 		widget.Menu.SetSaveVisible(true)
-// 		boxIcons.Show()
-// 		widget.current = icons
-// 	},
-// 	OnHide: func() {
-// 		icons.Hide()
-// 		widget.Menu.SetSaveVisible(false)
-// 		boxIcons.Hide()
-// 	},
-// }
-
-// corePage := &pageswitch.Page{
-// 	Widget: core,
-// 	Name:   "Config",
-// 	// icon:"",
-// 	OnLoad: func() { core.Load() },
-// 	OnShow: func() { core.Show(); widget.Menu.SetSaveVisible(true); widget.current = core },
-// 	OnHide: func() { core.Hide(); widget.Menu.SetSaveVisible(false) },
-// }
-
-// addPage := &pageswitch.Page{
-// 	Widget: add,
-// 	Name:   "Add",
-// 	// icon:"",
-// 	OnLoad: func() { add.Load() },
-// 	OnShow: func() { add.Show(); widget.Menu.SetAddVisible(true); widget.current = add },
-// 	OnHide: func() { add.Hide(); widget.Menu.SetAddVisible(false) },
-// }
-
-// dlPage := &pageswitch.Page{
-// 	Widget: dl,
-// 	Name:   "Download",
-// 	// icon:"",
-// 	// OnLoad: func() { dl.Load() },
-// 	OnShow: func() { dl.Show(); menuDownload.Show() }, // need to add widget.current = dl ??
-// 	OnHide: func() { dl.Hide(); menuDownload.Hide() },
-
-// widget.addPage(iconsPage, corePage, addPage, dlPage)
-
-// func (widget *GuiConfigure) addPage(pages ...*pageswitch.Page) {
-// 	for _, page := range pages {
-// 		page.Widget.Set("no-show-all", true)
-// 		widget.Menu.Switcher.AddPage(page)
-// 		widget.PackStart(page.Widget, true, true, 0)
-// 	}
-// }

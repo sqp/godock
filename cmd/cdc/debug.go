@@ -21,15 +21,14 @@ func runDebug(cmd *Command, args []string) {
 	if len(args) == 0 { // Ensure we have some data.
 		cmd.Usage()
 	}
-	clientSendLogged("debug", debugApplet, args)
-}
 
-func debugApplet(srv *srvdbus.Client, args []string) error {
-	state := ""
+	state := true
 	if len(args) > 1 {
-		state = args[1]
+		state = parseState(args[1])
 	}
-	return srv.Debug(args[0], parseState(state))
+
+	e := srvdbus.Debug(args[0], state)
+	logger.Err(e, "send debug")
 }
 
 func parseState(state string) bool {

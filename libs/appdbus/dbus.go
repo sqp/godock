@@ -54,7 +54,8 @@ import (
 
 	"github.com/sqp/pulseaudio"
 
-	"github.com/sqp/godock/libs/cdtype"
+	"github.com/sqp/godock/libs/cdtype"             // Applets types.
+	"github.com/sqp/godock/libs/srvdbus/dbuscommon" // Dbus session.
 
 	"errors"
 	"reflect"
@@ -103,23 +104,10 @@ func New(path string) *CDDbus {
 
 //------------------------------------------------------------[ DBUS CONNECT ]--
 
-// SessionBus creates a Dbus session with a listening chan.
-//
-func SessionBus() (*dbus.Conn, chan *dbus.Signal, error) {
-	conn, e := dbus.SessionBus()
-	if e != nil {
-		return nil, nil, e
-	}
-
-	c := make(chan *dbus.Signal, 10)
-	conn.Signal(c)
-	return conn, c, nil
-}
-
 // ConnectToBus connects the applet manager to the dock and register events callbacks.
 //
 func (cda *CDDbus) ConnectToBus() (<-chan *dbus.Signal, error) {
-	conn, c, e := SessionBus()
+	conn, c, e := dbuscommon.SessionBus()
 	if e != nil {
 		close(c)
 		return nil, e
@@ -159,6 +147,8 @@ func (cda *CDDbus) OnSignal(s *dbus.Signal) (exit bool) {
 	if s == nil {
 		return false
 	}
+
+	cda.Log.Debug("signal", s)
 
 	name := strings.TrimPrefix(string(s.Name), DbusInterfaceApplet+".")
 	if name != s.Name { // dbus interface matched.
@@ -578,6 +568,9 @@ func (cda *CDDbus) receivedMainEvent(event string, data []interface{}) (exit boo
 			go cda.Events.OnMiddleClick()
 		}
 	case "on_build_menu":
+
+		// cda.Log.Info("on_build_menu")
+
 		if cda.Events.OnBuildMenu != nil {
 			go cda.Events.OnBuildMenu()
 		}

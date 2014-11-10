@@ -7,10 +7,15 @@ package gldi
 #include <dbus/dbus-glib.h>                      // dbus_g_thread_init
 #include <glib/gkeyfile.h>                       // GKeyFile
 
+
 #include "cairo-dock-core.h"
+#include "cairo-dock-animations.h"               // cairo_dock_trigger_icon_removal_from_dock
+#include "cairo-dock-applet-facility.h"      // cairo_dock_pop_up_about_applet
 #include "cairo-dock-backends-manager.h"         // cairo_dock_foreach_dock_renderer
 #include "cairo-dock-config.h"                   // cairo_dock_load_current_theme
 #include "cairo-dock-class-manager.h"            // cairo_dock_get_class_command
+#include "cairo-dock-class-icon-manager.h"       // myClassIconObjectMgr
+#include "cairo-dock-desklet-manager.h"          // myDeskletObjectMgr
 #include "cairo-dock-desktop-manager.h"          // g_desktopGeometry
 #include "cairo-dock-dock-factory.h"             // CairoDock
 #include "cairo-dock-dock-facility.h"            // cairo_dock_get_available_docks
@@ -21,13 +26,17 @@ package gldi
 #include "cairo-dock-keybinder.h"                // gldi_shortkeys_foreach
 #include "cairo-dock-launcher-manager.h"         // CAIRO_DOCK_ICON_TYPE_IS_LAUNCHER
 #include "cairo-dock-log.h"                      // cd_log_set_level_from_name
+#include "cairo-dock-menu.h"  // ModuleInstance
 #include "cairo-dock-module-instance-manager.h"  // ModuleInstance
 #include "cairo-dock-module-manager.h"           // gldi_modules_new_from_directory
 #include "cairo-dock-object.h"                   // Icon
 #include "cairo-dock-opengl.h"                   // gldi_gl_backend_force_indirect_rendering
 #include "cairo-dock-separator-manager.h"        // CAIRO_DOCK_ICON_TYPE_IS_SEPARATOR
+#include "cairo-dock-struct.h"                   // CAIRO_DOCK_LAST_ORDER
 #include "cairo-dock-stack-icon-manager.h"       // CAIRO_DOCK_ICON_TYPE_IS_CONTAINER
 #include "cairo-dock-themes-manager.h"           // cairo_dock_set_paths
+#include "cairo-dock-windows-manager.h"          // gldi_window_can_minimize_maximize_close
+
 
 extern CairoDock *g_pMainDock;
 
@@ -38,8 +47,6 @@ extern gchar *g_cCurrentLaunchersPath;
 
 extern GldiDesktopGeometry g_desktopGeometry;
 
-
-
 static int screen_position_x(int i) { return g_desktopGeometry.pScreens[i].x; }
 static int screen_position_y(int i) { return g_desktopGeometry.pScreens[i].y; }
 
@@ -48,8 +55,14 @@ static gboolean IconIsSeparatorAuto(Icon *icon) { return CAIRO_DOCK_IS_AUTOMATIC
 static gboolean IconIsLauncher     (Icon *icon) { return CAIRO_DOCK_ICON_TYPE_IS_LAUNCHER(icon); }
 static gboolean IconIsStackIcon    (Icon *icon) { return CAIRO_DOCK_ICON_TYPE_IS_CONTAINER(icon); }
 
-// static void icon_reload(Icon *icon) { gldi_object_reload (GLDI_OBJECT(ic), TRUE);}
 
+extern void onDialogAnswer (int iClickedButton, GtkWidget *pInteractiveWidget, gpointer data, CairoDialog *pDialog);
+
+
+
+static void objectNotify(GldiContainer* container, int notif,  Icon* icon,  CairoDock* dock, GdkModifierType key) {
+	gldi_object_notify(container, notif, icon, dock, key);
+}
 
 
 // from where this shit belongs.
@@ -97,7 +110,9 @@ import "C"
 
 import (
 	"github.com/bradfitz/iter"
+	"github.com/conformal/gotk3/gdk"
 	"github.com/conformal/gotk3/glib"
+	"github.com/conformal/gotk3/gtk"
 	"github.com/gosexy/gettext"
 
 	"github.com/sqp/godock/widgets/gtk/keyfile"
@@ -106,6 +121,8 @@ import (
 	"path/filepath"
 	"unsafe"
 )
+
+const IconLastOrder = -1e9 // CAIRO_DOCK_LAST_ORDER
 
 type RenderingMethod int
 
@@ -263,7 +280,7 @@ func XMLCleanupParser() {
 // need params
 // pParentDock	excluding this dock if not NULL
 // pSubDock	excluding this dock and its children if not NUL
-func GetAllAvailableDocks(parent, subdock *CairoDock) (list []*CairoDock) {
+func GetAllAvailableDocks(parent, subdock *CairoDock) []*CairoDock {
 	var cp, cs *C.CairoDock
 	if parent != nil {
 		cp = parent.Ptr
@@ -273,20 +290,30 @@ func GetAllAvailableDocks(parent, subdock *CairoDock) (list []*CairoDock) {
 	}
 
 	clist := (*glib.List)(unsafe.Pointer(C.cairo_dock_get_available_docks(cp, cs)))
-
-	for i := range iter.N(int(clist.Length())) {
-		_ = i
-		item := NewDockFromNative(unsafe.Pointer(clist.Data))
-		list = append(list, item)
-		clist = clist.Next
-	}
-	return
+	defer clist.Free()
+	return goListDocks(clist)
 }
 
 func DockGet(containerName string) *CairoDock {
 	cstr := (*C.gchar)(C.CString(containerName))
 	defer C.free(unsafe.Pointer((*C.char)(cstr)))
 	return NewDockFromNative(unsafe.Pointer(C.gldi_dock_get(cstr)))
+}
+
+func DockNew(name string) *CairoDock {
+	cstr := (*C.gchar)(C.CString(name))
+	defer C.free(unsafe.Pointer((*C.char)(cstr)))
+	return NewDockFromNative(unsafe.Pointer(C.gldi_dock_new(cstr)))
+}
+
+// DockAddConfFile adds a config file for a new root dock.
+// Does not create the dock (use gldi_dock_new for that).
+// Returns the unique name for the new dock, to be passed to gldi_dock_new.
+//
+func DockAddConfFile() string {
+	c := C.gldi_dock_add_conf_file()
+	defer C.free(unsafe.Pointer((*C.char)(c)))
+	return C.GoString((*C.char)(c))
 }
 
 type IObject interface {
@@ -297,12 +324,50 @@ func ObjectReload(obj IObject) {
 	C.gldi_object_reload((*C.GldiObject)(obj.ToNative()), C.gboolean(1))
 }
 
+func ObjectDelete(obj IObject) {
+	C.gldi_object_delete((*C.GldiObject)(obj.ToNative()))
+}
+
 func ObjectIsManagerChild(obj IObject, ptr *C.GldiObjectManager) bool {
 	return gobool(C.gldi_object_is_manager_child((*C.GldiObject)(obj.ToNative()), ptr))
 }
 
 func ObjectIsDock(obj IObject) bool {
 	return ObjectIsManagerChild(obj, &C.myDockObjectMgr)
+}
+
+func ObjectNotify(container *Container, notif int, icon *Icon, dock *CairoDock, key gdk.ModifierType) {
+	C.objectNotify(container.Ptr, C.int(notif), icon.Ptr, dock.Ptr, C.GdkModifierType(key))
+}
+
+func QuickHideAllDocks() {
+	C.cairo_dock_quick_hide_all_docks()
+}
+
+func LauncherAddNew(uri string, dock *CairoDock, order float64) *Icon {
+	var cstr *C.gchar
+	if uri != "" {
+		cstr = (*C.gchar)(C.CString(uri))
+		defer C.free(unsafe.Pointer((*C.char)(cstr)))
+	}
+	c := C.gldi_launcher_add_new(cstr, dock.Ptr, C.double(order))
+	return NewIconFromNative(unsafe.Pointer(c))
+}
+
+func SeparatorIconAddNew(dock *CairoDock, order float64) *Icon {
+	c := C.gldi_separator_icon_add_new(dock.Ptr, C.double(order))
+	return NewIconFromNative(unsafe.Pointer(c))
+}
+
+func StackIconAddNew(dock *CairoDock, order float64) *Icon {
+	c := C.gldi_stack_icon_add_new(dock.Ptr, C.double(order))
+	return NewIconFromNative(unsafe.Pointer(c))
+}
+
+func DialogShowGeneralMessage(str string, duration float64) {
+	cstr := (*C.gchar)(C.CString(str))
+	defer C.free(unsafe.Pointer((*C.char)(cstr)))
+	C.gldi_dialog_show_general_message(cstr, C.double(duration))
 }
 
 func DialogShowTemporaryWithIcon(str string, icon *Icon, container *Container, duration float64, iconPath string) {
@@ -314,6 +379,104 @@ func DialogShowTemporaryWithIcon(str string, icon *Icon, container *Container, d
 	C.gldi_dialog_show_temporary_with_icon(cstr, icon.Ptr, container.Ptr, C.double(duration), cpath)
 }
 
+func DialogShowWithQuestion(str string, icon *Icon, container *Container, iconPath string, onAnswer func(int, *gtk.Widget)) {
+	cstr := (*C.gchar)(C.CString(str))
+	defer C.free(unsafe.Pointer((*C.char)(cstr)))
+	cpath := (*C.gchar)(C.CString(iconPath))
+	defer C.free(unsafe.Pointer((*C.char)(cpath)))
+
+	answer := &listForward{onAnswer}
+
+	C.gldi_dialog_show_with_question(cstr, icon.Ptr, container.Ptr, cpath, C.CairoDockActionOnAnswerFunc(C.onDialogAnswer), C.gpointer(answer), nil)
+}
+
+//export onDialogAnswer
+func onDialogAnswer(clickedButton C.int, widget *C.GtkWidget, data C.gpointer, dialog *C.CairoDialog) {
+
+	obj := &glib.Object{glib.ToGObject(unsafe.Pointer(widget))}
+	w := &gtk.Widget{glib.InitiallyUnowned{obj}}
+
+	uncast := (*listForward)(data)
+
+	call := (uncast.p).(func(int, *gtk.Widget))
+	if call != nil {
+		call(int(clickedButton), w)
+	}
+}
+
+// CairoDialog *gldi_dialog_show_with_question (const gchar *cText, Icon *pIcon, GldiContainer *pContainer, const gchar *cIconPath, CairoDockActionOnAnswerFunc pActionFunc, gpointer data, GFreeFunc pFreeDataFunc)
+
+/** A convenient function to add a sub-menu to a given menu.
+ * @param pMenu the menu
+ * @param cLabel the label, or NULL
+ * @param cImage the image path or name, or NULL
+ * @param pMenuItemPtr pointer that will contain the new menu-item, or NULL
+ * @return the new sub-menu that has been added.
+ */
+// TODO: add last option for GtkWidget **pMenuItemPtr
+func MenuAddSubMenu(menu *gtk.Menu, label, iconPath string) (*gtk.Menu, *MenuItem) {
+	cstr := (*C.gchar)(C.CString(label))
+	defer C.free(unsafe.Pointer((*C.char)(cstr)))
+	var cpath *C.gchar
+	if iconPath != "" {
+		cpath = (*C.gchar)(C.CString(iconPath))
+		defer C.free(unsafe.Pointer((*C.char)(cpath)))
+	}
+	var cmenuitem *C.GtkWidget
+	c := C.gldi_menu_add_sub_menu_full((*C.GtkWidget)(unsafe.Pointer(menu.Native())), cstr, cpath, &cmenuitem)
+
+	if c == nil {
+		return nil, nil
+	}
+	obj := &glib.Object{glib.ToGObject(unsafe.Pointer(c))}
+	submenu := &gtk.Menu{gtk.MenuShell{gtk.Container{gtk.Widget{glib.InitiallyUnowned{obj}}}}}
+
+	obj = &glib.Object{glib.ToGObject(unsafe.Pointer(cmenuitem))}
+	item := &gtk.MenuItem{gtk.Bin{gtk.Container{gtk.Widget{glib.InitiallyUnowned{obj}}}}}
+
+	return submenu, &MenuItem{*item}
+}
+
+/** A convenient function to add an item to a given menu.
+ * @param pMenu the menu
+ * @param cLabel the label, or NULL
+ * @param cImage the image path or name, or NULL
+ * @param pFunction the callback
+ * @param pData the data passed to the callback
+ * @return the new menu-entry that has been added.
+ */
+
+// f must be
+// a function with a signaure matching the callback signature for
+// detailedSignal.  userData must either 0 or 1 elements which can
+// be optionally passed to f.
+func MenuAddItem(menu *gtk.Menu, label, iconPath string) *gtk.MenuItem {
+	cstr := (*C.gchar)(C.CString(label))
+	defer C.free(unsafe.Pointer((*C.char)(cstr)))
+	var cpath *C.gchar
+	if iconPath != "" {
+		cpath = (*C.gchar)(C.CString(iconPath))
+		defer C.free(unsafe.Pointer((*C.char)(cpath)))
+	}
+	c := C.gldi_menu_add_item((*C.GtkWidget)(unsafe.Pointer(menu.Native())), cstr, cpath, nil, nil)
+	if c == nil {
+		return nil
+	}
+	obj := &glib.Object{glib.ToGObject(unsafe.Pointer(c))}
+	item := &gtk.MenuItem{gtk.Bin{gtk.Container{gtk.Widget{glib.InitiallyUnowned{obj}}}}}
+
+	return item
+}
+
+type MenuItem struct {
+	gtk.MenuItem
+}
+
+func PopupAboutApplet(mi *ModuleInstance) {
+	C.cairo_dock_pop_up_about_applet(nil, mi.Ptr)
+	// C.cairo_dock_pop_up_about_applet(nil, (*C.GldiModuleInstance)(unsafe.Pointer(icon.ModuleInstance().Ptr)))
+}
+
 //
 //---------------------------------------------------------------[ CAIRODOCK ]--
 
@@ -322,6 +485,9 @@ type CairoDock struct {
 }
 
 func NewDockFromNative(p unsafe.Pointer) *CairoDock {
+	if p == nil {
+		return nil
+	}
 	return &CairoDock{(*C.CairoDock)(p)}
 }
 
@@ -335,14 +501,7 @@ func (o *CairoDock) ToContainer() *Container {
 
 func (dock *CairoDock) Icons() (list []*Icon) {
 	clist := (*glib.List)(unsafe.Pointer(dock.Ptr.icons))
-
-	for i := range iter.N(int(clist.Length())) {
-		_ = i
-		item := NewIconFromNative(unsafe.Pointer(clist.Data))
-		list = append(list, item)
-		clist = clist.Next
-	}
-	return
+	return goListIcons(clist)
 }
 
 func (dock *CairoDock) GetDockName() string {
@@ -353,8 +512,40 @@ func (dock *CairoDock) GetReadableName() string {
 	return C.GoString((*C.char)(C.gldi_dock_get_readable_name(dock.Ptr)))
 }
 
+func (dock *CairoDock) GetRefCount() int {
+	return int(dock.Ptr.iRefCount)
+}
+
 func (dock *CairoDock) IsMainDock() bool {
 	return gobool(dock.Ptr.bIsMainDock)
+}
+
+func (dock *CairoDock) IsAutoHide() bool {
+	return gobool(dock.Ptr.bAutoHide)
+}
+
+func (dock *CairoDock) SearchIconPointingOnDock(unknown interface{}) *Icon { // TODO: add param CairoDock **pParentDock
+	c := C.cairo_dock_search_icon_pointing_on_dock(dock.Ptr, nil)
+	return NewIconFromNative(unsafe.Pointer(c))
+}
+
+func (dock *CairoDock) GetPointedIcon() *Icon {
+	c := C.cairo_dock_get_pointed_icon(dock.Ptr.icons)
+	return NewIconFromNative(unsafe.Pointer(c))
+}
+
+func (dock *CairoDock) Container() *Container {
+	return NewContainerFromNative(unsafe.Pointer(&dock.Ptr.container))
+}
+
+func (o *CairoDock) GetNextIcon(icon *Icon) *Icon {
+	c := C.cairo_dock_get_next_icon(o.Ptr.icons, icon.Ptr)
+	return NewIconFromNative(unsafe.Pointer(c))
+}
+
+func (o *CairoDock) GetPreviousIcon(icon *Icon) *Icon {
+	c := C.cairo_dock_get_previous_icon(o.Ptr.icons, icon.Ptr)
+	return NewIconFromNative(unsafe.Pointer(c))
 }
 
 //
@@ -376,6 +567,57 @@ func (o *Container) ToCairoDock() *CairoDock {
 	return NewDockFromNative(unsafe.Pointer(o.Ptr))
 }
 
+func (o *Container) ToDesklet() *Desklet {
+	return NewDeskletFromNative(unsafe.Pointer(o.Ptr))
+}
+
+func (o *Container) IsDesklet() bool {
+	return ObjectIsManagerChild(o, &C.myDeskletObjectMgr)
+}
+
+func (o *Container) MouseX() int {
+	return int(o.Ptr.iMouseX)
+}
+
+func (o *Container) MouseY() int {
+	return int(o.Ptr.iMouseY)
+}
+
+//
+//-----------------------------------------------------------------[ DESKLET ]--
+
+type Desklet struct {
+	Ptr *C.CairoDesklet
+}
+
+func NewDeskletFromNative(p unsafe.Pointer) *Desklet {
+	return &Desklet{(*C.CairoDesklet)(p)}
+}
+
+func (o *Desklet) ToNative() unsafe.Pointer {
+	return unsafe.Pointer(o.Ptr)
+}
+
+func (o *Desklet) IsSticky() bool {
+	return gobool(C.gldi_desklet_is_sticky(o.Ptr))
+}
+
+func (o *Desklet) PositionLocked() bool {
+	return gobool(o.Ptr.bPositionLocked)
+}
+
+func (o *Desklet) GetIcon() *Icon {
+	return NewIconFromNative(unsafe.Pointer(o.Ptr.pIcon))
+}
+
+func (o *Desklet) SetSticky(b bool) {
+	C.gldi_desklet_set_sticky(o.Ptr, cbool(b))
+}
+
+func (o *Desklet) LockPosition(b bool) {
+	C.gldi_desklet_lock_position(o.Ptr, cbool(b))
+}
+
 //
 //--------------------------------------------------------------------[ ICON ]--
 
@@ -384,6 +626,9 @@ type Icon struct {
 }
 
 func NewIconFromNative(p unsafe.Pointer) *Icon {
+	if p == nil {
+		return nil
+	}
 	return &Icon{(*C.Icon)(p)}
 }
 
@@ -401,6 +646,10 @@ func (icon *Icon) GetClass() string {
 
 func (icon *Icon) GetName() string {
 	return C.GoString((*C.char)(icon.Ptr.cName))
+}
+
+func (icon *Icon) GetInitialName() string {
+	return C.GoString((*C.char)(icon.Ptr.cInitialName))
 }
 
 func (icon *Icon) GetFileName() string {
@@ -441,6 +690,33 @@ func (icon *Icon) ConfigPath() string {
 	return ""
 }
 
+func (icon *Icon) GetIgnoreQuickList() bool {
+	return gobool(icon.Ptr.bIgnoreQuicklist)
+}
+
+func (o *Icon) DrawX() float64 {
+	return float64(o.Ptr.fDrawX)
+}
+
+func (o *Icon) DrawY() float64 {
+	return float64(o.Ptr.fDrawY)
+}
+
+func (o *Icon) Width() float64 {
+	return float64(o.Ptr.fWidth)
+}
+
+func (o *Icon) Height() float64 {
+	return float64(o.Ptr.fHeight)
+}
+
+func (o *Icon) Scale() float64 {
+	return float64(o.Ptr.fScale)
+}
+func (o *Icon) Order() float64 {
+	return float64(o.Ptr.fOrder)
+}
+
 // func (icon *Icon) GetIconType() int {
 // 	return int(C.cairo_dock_get_icon_type(icon.Ptr))
 // }
@@ -449,14 +725,39 @@ func (icon *Icon) IsApplet() bool {
 	return icon.Ptr != nil && icon.Ptr.pModuleInstance != nil
 }
 
-// IsTaskbar returns whether the icon belongs to the taskbar or not.
+// IsAppli returns whether the icon manages an application. CAIRO_DOCK_IS_APPLI
 //
-func (icon *Icon) IsTaskbar() bool { // IS_APPLI
-	return icon.Ptr != nil && !icon.IsLauncher() && icon.Ptr.pAppli != nil
+func (icon *Icon) IsAppli() bool {
+	return icon.Ptr != nil && icon.Ptr.pAppli != nil
 }
 
-// #define CAIRO_DOCK_IS_APPLI(icon) (icon != NULL && (icon)->pAppli != NULL)
-// ./../Cairo-Dock/cairo-dock-core/src/gldit/cairo-dock-icon-factory.h:#define CAIRO_DOCK_IS_APPLI(icon) (icon != NULL && (icon)->pAppli != NULL)
+// IsClassIcon returns whether the icon .
+// GLDI_OBJECT_IS_CLASS_ICON / CAIRO_DOCK_ICON_TYPE_IS_CLASS_CONTAINER
+//
+func (o *Icon) IsClassIcon() bool {
+	return ObjectIsManagerChild(o, &C.myClassIconObjectMgr)
+}
+
+//
+func (o *Icon) IsDetachableApplet() bool {
+	return o.IsApplet() &&
+		o.ModuleInstance().Module().VisitCard().GetContainerType()&C.CAIRO_DOCK_MODULE_CAN_DESKLET > 0
+}
+
+// IsMultiAppli returns whether the icon manages multiple applications. CAIRO_DOCK_IS_MULTI_APPLI
+//
+func (icon *Icon) IsMultiAppli() bool {
+	return icon.Ptr.pSubDock != nil &&
+		(icon.IsLauncher() ||
+			icon.IsClassIcon() ||
+			(icon.IsApplet() && icon.GetClass() != ""))
+}
+
+// IsTaskbar returns whether the icon belongs to the taskbar or not.
+//
+func (icon *Icon) IsTaskbar() bool {
+	return icon.IsAppli() && !icon.IsLauncher()
+}
 
 func (icon *Icon) IsSeparator() bool {
 	return gobool(C.IconIsSeparator(icon.Ptr))
@@ -469,7 +770,7 @@ func (icon *Icon) IsLauncher() bool {
 	return gobool(C.IconIsLauncher(icon.Ptr))
 }
 
-func (icon *Icon) IsStackIcon() bool {
+func (icon *Icon) IsStackIcon() bool { // CAIRO_DOCK_ICON_TYPE_IS_CONTAINER
 	return gobool(C.IconIsStackIcon(icon.Ptr))
 }
 
@@ -477,11 +778,29 @@ func (icon *Icon) IsStackIcon() bool {
 // #define CAIRO_DOCK_IS_AUTOMATIC_SEPARATOR(icon) (CAIRO_DOCK_ICON_TYPE_IS_SEPARATOR (icon) && (icon)->cDesktopFileName == NULL)
 // #define CAIRO_DOCK_IS_USER_SEPARATOR(icon) (CAIRO_DOCK_ICON_TYPE_IS_SEPARATOR (icon) && (icon)->cDesktopFileName != NULL)
 
+func (icon *Icon) RemoveFromDock() {
+	C.cairo_dock_trigger_icon_removal_from_dock(icon.Ptr)
+}
+
+func (icon *Icon) WriteContainerNameInConfFile(newdock string) {
+	cstr := (*C.gchar)(C.CString(newdock))
+	defer C.free(unsafe.Pointer((*C.char)(cstr)))
+	C.gldi_theme_icon_write_container_name_in_conf_file(icon.Ptr, cstr)
+}
+
 func (icon *Icon) ModuleInstance() *ModuleInstance {
 	if !icon.IsApplet() {
 		return nil
 	}
 	return &ModuleInstance{icon.Ptr.pModuleInstance}
+}
+
+func (icon *Icon) GetSubDock() *CairoDock {
+	return NewDockFromNative(unsafe.Pointer(icon.Ptr.pSubDock))
+}
+
+func (o *Icon) Window() *WindowActor {
+	return NewWindowActorFromNative(unsafe.Pointer(o.Ptr.pAppli))
 }
 
 const (
@@ -521,6 +840,23 @@ func (icon *Icon) GetClassInfo(typ int) string {
 	}
 	// defer C.free(unsafe.Pointer((*C.char)(c)))
 	return C.GoString((*C.char)(c))
+}
+
+func (icon *Icon) ClassIsInhibited() bool {
+	return gobool(C.cairo_dock_class_is_inhibited(icon.Ptr.cClass))
+}
+
+func (o *Icon) RemoveIconsFromSubdock(dest *CairoDock) {
+	C.cairo_dock_remove_icons_from_dock(o.Ptr.pSubDock, dest.Ptr)
+}
+
+// TODO: may have to move.
+func (icon *Icon) SubDockIcons() []*Icon {
+	if icon.Ptr == nil || icon.Ptr.pSubDock == nil {
+		return nil
+	}
+	clist := (*glib.List)(unsafe.Pointer(icon.Ptr.pSubDock.icons))
+	return goListIcons(clist)
 }
 
 //
@@ -564,14 +900,7 @@ func (m *Module) VisitCard() *VisitCard {
 
 func (m *Module) InstancesList() (list []*ModuleInstance) {
 	clist := (*glib.List)(unsafe.Pointer(m.Ptr.pInstancesList))
-
-	for i := range iter.N(int(clist.Length())) {
-		_ = i
-		item := NewModuleInstanceFromNative(unsafe.Pointer(clist.Data))
-		list = append(list, item)
-		clist = clist.Next
-	}
-	return
+	return goListModuleInstance(clist)
 }
 
 func (m *Module) Activate() {
@@ -603,6 +932,10 @@ func (mi *ModuleInstance) GetConfFilePath() string {
 
 func (mi *ModuleInstance) Module() *Module {
 	return &Module{(*C.GldiModule)(mi.Ptr.pModule)}
+}
+
+func (mi *ModuleInstance) Detach() {
+	C.gldi_module_instance_detach(mi.Ptr)
 }
 
 //
@@ -664,6 +997,101 @@ func (vc *VisitCard) GetCategory() ModuleCategory {
 //
 func (vc *VisitCard) IsMultiInstance() bool {
 	return gobool(vc.Ptr.bMultiInstance)
+}
+
+func (vc *VisitCard) GetContainerType() int {
+	return int(vc.Ptr.iContainerType)
+}
+
+//
+//---------------------------------------------------------------[ WINDOWACTOR ]--
+
+type WindowActor struct {
+	Ptr *C.GldiWindowActor
+}
+
+func NewWindowActorFromNative(p unsafe.Pointer) *WindowActor {
+	return &WindowActor{(*C.GldiWindowActor)(p)}
+}
+
+func (o *WindowActor) ToNative() unsafe.Pointer {
+	return unsafe.Pointer(o.Ptr)
+}
+
+func (o *WindowActor) CanMinMaxClose() (bool, bool, bool) {
+	var bCanMinimize, bCanMaximize, bCanClose C.gboolean
+	C.gldi_window_can_minimize_maximize_close(o.Ptr, &bCanMinimize, &bCanMaximize, &bCanClose)
+	return gobool(bCanMinimize), gobool(bCanMaximize), gobool(bCanClose)
+}
+
+func (o *WindowActor) IsActive() bool {
+	return o.Ptr == C.gldi_windows_get_active()
+}
+
+func (o *WindowActor) IsAbove() bool { // could split OrBelow but seem unused.
+	var isAbove, isBelow C.gboolean
+	C.gldi_window_is_above_or_below(o.Ptr, &isAbove, &isBelow)
+	return gobool(isAbove)
+}
+
+func (o *WindowActor) IsFullScreen() bool {
+	return gobool(o.Ptr.bIsFullScreen)
+}
+
+func (o *WindowActor) IsHidden() bool {
+	return gobool(o.Ptr.bIsHidden)
+}
+
+func (o *WindowActor) IsMaximized() bool {
+	return gobool(o.Ptr.bIsMaximized)
+}
+
+func (o *WindowActor) IsOnCurrentDesktop() bool {
+	return gobool(C.gldi_window_is_on_current_desktop(o.Ptr))
+}
+
+func (o *WindowActor) IsSticky() bool {
+	return gobool(C.gldi_window_is_sticky(o.Ptr))
+}
+
+func (o *WindowActor) Close() {
+	C.gldi_window_close(o.Ptr)
+}
+
+func (o *WindowActor) Kill() {
+	C.gldi_window_kill(o.Ptr)
+}
+
+func (o *WindowActor) Lower() {
+	C.gldi_window_lower(o.Ptr)
+}
+
+func (o *WindowActor) Minimize() {
+	C.gldi_window_minimize(o.Ptr)
+}
+
+func (o *WindowActor) Maximize(full bool) {
+	C.gldi_window_maximize(o.Ptr, cbool(full))
+}
+
+func (o *WindowActor) MoveToCurrentDesktop() {
+	C.gldi_window_move_to_current_desktop(o.Ptr)
+}
+
+func (o *WindowActor) SetAbove(above bool) {
+	C.gldi_window_set_above(o.Ptr, cbool(above))
+}
+
+func (o *WindowActor) SetFullScreen(full bool) {
+	C.gldi_window_set_fullscreen(o.Ptr, cbool(full))
+}
+
+func (o *WindowActor) SetSticky(sticky bool) {
+	C.gldi_window_set_sticky(o.Ptr, cbool(sticky))
+}
+
+func (o *WindowActor) Show() {
+	C.gldi_window_show(o.Ptr)
 }
 
 //
@@ -934,4 +1362,31 @@ func addItemToList(p C.gpointer, cstr *C.gchar, cdr C.gpointer) {
 		C.free(unsafe.Pointer((*C.char)(cstr)))
 	}
 
+}
+
+func goListDocks(clist *glib.List) (list []*CairoDock) {
+	for _ = range iter.N(int(clist.Length())) {
+		item := NewDockFromNative(unsafe.Pointer(clist.Data))
+		list = append(list, item)
+		clist = clist.Next
+	}
+	return
+}
+
+func goListIcons(clist *glib.List) (list []*Icon) {
+	for _ = range iter.N(int(clist.Length())) {
+		item := NewIconFromNative(unsafe.Pointer(clist.Data))
+		list = append(list, item)
+		clist = clist.Next
+	}
+	return
+}
+
+func goListModuleInstance(clist *glib.List) (list []*ModuleInstance) {
+	for _ = range iter.N(int(clist.Length())) {
+		item := NewModuleInstanceFromNative(unsafe.Pointer(clist.Data))
+		list = append(list, item)
+		clist = clist.Next
+	}
+	return
 }

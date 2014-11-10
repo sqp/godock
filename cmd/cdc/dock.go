@@ -3,15 +3,14 @@
 package main
 
 import (
-	"github.com/conformal/gotk3/gtk"
-
 	"github.com/sqp/godock/libs/appdbus"
 	"github.com/sqp/godock/libs/gldi"
+	"github.com/sqp/godock/libs/gldi/backendgui"
+	"github.com/sqp/godock/libs/gldi/backendmenu"
 	"github.com/sqp/godock/libs/gldi/globals"
+	"github.com/sqp/godock/libs/gldi/gui"
 	"github.com/sqp/godock/libs/gldi/maindock"
-	"github.com/sqp/godock/widgets/confbuilder/datagldi"
-	"github.com/sqp/godock/widgets/confbuilder/datatype"
-	"github.com/sqp/godock/widgets/confgui"
+	"github.com/sqp/godock/libs/gldi/menu"
 
 	// loader
 	"github.com/sqp/godock/libs/srvdbus"
@@ -137,6 +136,7 @@ everybody at the moment.
 // 		_("For debugging purpose only. Some hidden and still unstable options will be activated."), NULL},
 
 var (
+	// dockSettings returns maindock settings parsed from the command line.
 	dockSettings func() maindock.DockSettings
 
 	userVersion       *bool
@@ -169,15 +169,19 @@ func runDock(cmd *Command, args []string) {
 	settings := dockSettings()
 	settings.Init()
 
-	gtkA, gtkB, gtkC := maindock.GtkVersion()
+	gtkA, gtkB, gtkC := globals.GtkVersion()
 	logger.Info("Custom Dock", cdcVersion)
 	logger.Info("   gldi    ", globals.Version())
 	// logger.Info("Compiled date      ", C.__DATE__, C.__TIME__)
 	logger.Info("   GTK     ", fmt.Sprintf("%d.%d.%d", gtkA, gtkB, gtkC))
 	logger.Info("  OpenGL   ", gldi.GLBackendIsUsed())
 
-	maindock.RegisterGui(&GuiConnector{Source: &datagldi.Data{}})
+	gldi.LoadCurrentTheme() // was after registration but caused some problems with refresh on start.
+
+	backendgui.Register(gui.NewConnector(logger))
+	backendmenu.Register("dock", menu.BuildMenuContainer, menu.BuildMenuIcon)
 	maindock.RegisterEvents()
+
 	settings.Prepare()
 
 	// views.RegisterPanel("spanel")
@@ -191,261 +195,20 @@ func runDock(cmd *Command, args []string) {
 func appletService() {
 	appdbus.DbusPathDock = "/org/cdc/Cdc" // TODO: improve to autodetect.
 
-	loader := srvdbus.NewLoader(allapps.List())
-	active, e := loader.StartServer()
+	loader := srvdbus.NewLoader(allapps.List(), logger)
+	if loader == nil {
+		return
+	}
+
+	active, e := loader.Start(loader, srvdbus.Introspec)
 	if logger.Err(e, "Start Applets service") {
 		return
 	}
+
+	logger.Info("appletService active", active)
 
 	if active {
 		// defer allapps.OnStop()
 		loader.StartLoop(true)
 	}
 }
-
-//
-//-------------------------------------------------------------[ GUI BACKEND ]--
-
-// GuiConnector connects the config window to maindock GUI callbacks.
-//
-type GuiConnector struct {
-	Widget *confgui.GuiConfigure
-	Win    *gtk.Window
-	Source datatype.Source
-}
-
-// Create creates the config window.
-//
-func (gc *GuiConnector) Create() {
-	if gc.Widget != nil || gc.Win != nil {
-		logger.Info("create GUI, found: widget", gc.Widget != nil, " window", gc.Win != nil)
-		return
-	}
-	gc.Widget, gc.Win = confgui.NewConfigWindow(gc.Source)
-
-	gc.Win.Connect("destroy", func() { // OnQuit is already connected to emit this.
-		gc.Widget.Destroy()
-		gc.Widget = nil
-		gc.Win.Destroy()
-		gc.Win = nil
-	})
-
-	gc.Widget.Load()
-}
-
-// GUI interface
-
-func (gc *GuiConnector) ShowMainGui() {
-	gc.Create()
-	gc.Widget.Select(confgui.GroupConfig)
-}
-
-func (gc *GuiConnector) ShowModuleGui(appletName string) {
-	logger.Info("ShowModuleGui", appletName)
-
-	gc.Create()
-	gc.Widget.Select(confgui.GroupIcons)
-}
-
-func (gc *GuiConnector) ShowGui(icon *gldi.Icon, container *gldi.Container, moduleInstance *gldi.ModuleInstance, showPage int) {
-	logger.Info("ShowGui", "icon", icon != nil, "- container", container != nil, "- moduleInstance", moduleInstance != nil, "- page", showPage)
-
-	gc.Create()
-
-	if icon != nil {
-		confPath := icon.ConfigPath()
-		gc.Widget.SelectIcons(confPath)
-	}
-	// cairo_dock_items_widget_select_item (ITEMS_WIDGET (pCategory->pCdWidget), pIcon, pContainer, pModuleInstance, iShowPage);
-}
-
-func (gc *GuiConnector) ShowAddons() {
-	gc.Create()
-	gc.Widget.Select(confgui.GroupAdd)
-}
-
-func (gc *GuiConnector) ReloadItems() {
-	if gc.Widget != nil {
-		gc.Widget.ReloadItems()
-	}
-}
-
-// func (gc *GuiConnector) // ReloadCategoryWidget(){}
-func (gc *GuiConnector) Reload() {
-	logger.Info("TODO: Reload GUI")
-}
-
-func (gc *GuiConnector) Close() {
-	logger.Info("TODO: Close GUI")
-}
-
-func (gc *GuiConnector) UpdateModulesList() {
-	if gc.Widget != nil {
-		gc.Widget.UpdateModulesList()
-	}
-}
-
-func (gc *GuiConnector) UpdateModuleState(name string, active bool) {
-	if gc.Widget != nil {
-		gc.Widget.UpdateModuleState(name, active)
-	}
-}
-
-func (gc *GuiConnector) UpdateModuleInstanceContainer(instance *gldi.ModuleInstance, detached bool) {
-	logger.Info("TODO: UpdateModuleInstanceContainer")
-}
-
-func (gc *GuiConnector) UpdateShortkeys() {
-	if gc.Widget != nil {
-		gc.Widget.UpdateShortkeys()
-	}
-}
-
-// func (gc *GuiConnector) UpdateDeskletParams(*gldi.Desklet)                                          {logger.Info("UpdateDeskletParams")}
-// func (gc *GuiConnector) UpdateDeskletVisibility(*gldi.Desklet)                                      {logger.Info("UpdateDeskletVisibility")}
-
-// CORE BACKEND
-func (gc *GuiConnector) SetStatusMessage(message string) {
-	logger.Info("TODO: SetStatusMessage", message)
-}
-
-func (gc *GuiConnector) ReloadCurrentWidget(moduleInstance *gldi.ModuleInstance, showPage int) {
-	logger.Info("TODO: ReloadCurrentWidget")
-}
-
-func (gc *GuiConnector) ShowModuleInstanceGui(pModuleInstance *gldi.ModuleInstance, iShowPage int) {
-	gc.Create()
-	gc.Widget.Select(confgui.GroupIcons)
-	// show_gui (pModuleInstance->pIcon, NULL, pModuleInstance, iShowPage);
-}
-
-// func (gc *GuiConnector) GetWidgetFromName(moduleInstance *gldi.ModuleInstance, group string, key string) {
-// 	logger.Info("GetWidgetFromName", group, key)
-// }
-
-// Window returns the pointer to the parent window.
-//
-func (gc *GuiConnector) Window() *gtk.Window { return gc.Win }
-
-/*
-
-static void update_modules_list (void)
-{
-	if (s_pSimpleConfigWindow == NULL)
-		return;
-	CDCategory *pCategory = _get_category (CD_CATEGORY_PLUGINS);
-	if (pCategory->pCdWidget != NULL)  // category is built
-	{
-		cairo_dock_widget_reload (pCategory->pCdWidget);
-	}
-}
-
-static void update_desklet_params (CairoDesklet *pDesklet)
-{
-	if (s_pSimpleConfigWindow == NULL || pDesklet == NULL || pDesklet->pIcon == NULL)
-		return;
-
-	CDCategory *pCategory = _get_category (CD_CATEGORY_ITEMS);
-	if (pCategory->pCdWidget != NULL)  // category is built
-	{
-		cairo_dock_items_widget_update_desklet_params (ITEMS_WIDGET (pCategory->pCdWidget), pDesklet);
-	}
-}
-
-static void update_desklet_visibility_params (CairoDesklet *pDesklet)
-{
-	if (s_pSimpleConfigWindow == NULL || pDesklet == NULL || pDesklet->pIcon == NULL)
-		return;
-
-	CDCategory *pCategory = _get_category (CD_CATEGORY_ITEMS);
-	if (pCategory->pCdWidget != NULL)  // category is built
-	{
-		cairo_dock_items_widget_update_desklet_visibility_params (ITEMS_WIDGET (pCategory->pCdWidget), pDesklet);
-	}
-}
-
-static void update_module_instance_container (GldiModuleInstance *pInstance, gboolean bDetached)
-{
-	if (s_pSimpleConfigWindow == NULL || pInstance == NULL)
-		return;
-
-	CDCategory *pCategory = _get_category (CD_CATEGORY_ITEMS);
-	if (pCategory->pCdWidget != NULL)  // category is built
-	{
-		cairo_dock_items_widget_update_module_instance_container (ITEMS_WIDGET (pCategory->pCdWidget), pInstance, bDetached);
-	}
-}
-
-
-static void _reload_category_widget (CDCategoryEnum iCategory)
-{
-	CDCategory *pCategory = _get_category (iCategory);
-	g_return_if_fail (pCategory != NULL);
-	if (pCategory->pCdWidget != NULL)  // the category is built, reload it
-	{
-		GtkWidget *pPrevWidget = pCategory->pCdWidget->pWidget;
-		cairo_dock_widget_reload (pCategory->pCdWidget);
-		cd_debug ("%s (%p -> %p)", __func__, pPrevWidget, pCategory->pCdWidget->pWidget);
-
-		if (pPrevWidget != pCategory->pCdWidget->pWidget)  // the widget has been rebuilt, let's re-pack it in its container
-		{
-			GtkWidget *pNoteBook = g_object_get_data (G_OBJECT (s_pSimpleConfigWindow), "notebook");
-			GtkWidget *page = gtk_notebook_get_nth_page (GTK_NOTEBOOK (pNoteBook), iCategory);
-			gtk_box_pack_start (GTK_BOX (page), pCategory->pCdWidget->pWidget, TRUE, TRUE, 0);
-			gtk_widget_show_all (pCategory->pCdWidget->pWidget);
-		}
-	}
-}
-
-static void reload (void)
-{
-	if (s_pSimpleConfigWindow == NULL)
-		return;
-
-	_reload_category_widget (CD_CATEGORY_ITEMS);
-
-	_reload_category_widget (CD_CATEGORY_CONFIG);
-
-	_reload_category_widget (CD_CATEGORY_PLUGINS);
-}
-
-////////////////////
-/// CORE BACKEND ///
-////////////////////
-
-static void set_status_message_on_gui (const gchar *cMessage)
-{
-	if (s_pSimpleConfigWindow == NULL)
-		return;
-	GtkWidget *pStatusBar = g_object_get_data (G_OBJECT (s_pSimpleConfigWindow), "status-bar");
-	gtk_statusbar_pop (GTK_STATUSBAR (pStatusBar), 0);  // clear any previous message, underflow is allowed.
-	gtk_statusbar_push (GTK_STATUSBAR (pStatusBar), 0, cMessage);
-}
-
-static void reload_current_widget (GldiModuleInstance *pInstance, int iShowPage)
-{
-	g_return_if_fail (s_pSimpleConfigWindow != NULL);
-
-	CDCategory *pCategory = _get_category (CD_CATEGORY_ITEMS);
-	if (pCategory->pCdWidget != NULL)  // category is built
-	{
-		cairo_dock_items_widget_reload_current_widget (ITEMS_WIDGET (pCategory->pCdWidget), pInstance, iShowPage);
-	}
-}
-
-
-static CairoDockGroupKeyWidget *get_widget_from_name (G_GNUC_UNUSED GldiModuleInstance *pInstance, const gchar *cGroupName, const gchar *cKeyName)
-{
-	g_return_val_if_fail (s_pSimpleConfigWindow != NULL, NULL);
-	cd_debug ("%s (%s, %s)", __func__, cGroupName, cKeyName);
-	CDCategory *pCategory = _get_current_category ();
-	CDWidget *pCdWidget = pCategory->pCdWidget;
-	if (pCdWidget)  /// check that the widget represents the given instance...
-		return cairo_dock_gui_find_group_key_widget_in_list (pCdWidget->pWidgetList, cGroupName, cKeyName);
-	else
-		return NULL;
-}
-
-
-
-*/

@@ -237,7 +237,14 @@ func (cda *CDApplet) SetDefaults(def Defaults) {
 	cda.SetIcon(icon)
 	cda.SetQuickInfo(def.QuickInfo)
 	cda.SetLabel(def.Label)
-	cda.BindShortkey(def.Shortkeys...)
+
+	var list []string
+	for _, sk := range def.Shortkeys {
+		if sk != "" {
+			list = append(list, sk)
+		}
+	}
+	cda.BindShortkey(list...)
 
 	cda.commands = def.Commands
 	cda.ControlAppli(cda.commands.FindMonitor())
@@ -247,7 +254,6 @@ func (cda *CDApplet) SetDefaults(def Defaults) {
 	}
 
 	cda.LoadTemplate(def.Templates...)
-	// log.SetDebug(def.Debug)
 
 	cda.Log.SetDebug(def.Debug)
 }
