@@ -1,28 +1,39 @@
 TARGET=cdc
-SOURCE=github.com/sqp/godock/cmd
+SOURCE=github.com/sqp/godock
 VERSION=0.0.1-2
 APPLETS=Audio Cpu DiskActivity DiskFree GoGmail Mem NetActivity Update
 
 # unstable applets requires uncommited patches to build.
-UNSTABLE=Notifications TVPlay log gtk
-DOCK=dock
+UNSTABLE=Notifications TVPlay
+UNSTABLE_TAGS=gtk
+# unused ATM: log
+
+# and dock even more, plus gldi installed.
+DOCK=dock all
+
+# Install prefix if any.
+PKGDIR=
+
+APPDIR=usr/share/cairo-dock/plug-ins/goapplets/
+# APPDIR=usr/share/cairo-dock/plug-ins/Dbus/third-party/
+
 
 %: build
 
 archive-%:
-	go build -tags '$(APPLETS)'  -o applets/$(TARGET) $(SOURCE)/$(TARGET)
+	go build -tags '$(APPLETS)'  -o applets/$(TARGET) $(SOURCE)/cmd/$(TARGET)
 	@echo "Make archive $(TARGET)-$(VERSION)-$*.tar.xz"
 	tar cJfv $(TARGET)-$(VERSION)-$*.tar.xz applets  --exclude-vcs
 	rm applets/$(TARGET)
 
 build:
-	go install -tags '$(APPLETS)' $(SOURCE)/$(TARGET)
+	go install -tags '$(APPLETS)' $(SOURCE)/cmd/$(TARGET)
 
 unstable:
-	go install -tags '$(APPLETS) $(UNSTABLE)' $(SOURCE)/$(TARGET)
+	go install -tags '$(APPLETS) $(UNSTABLE) $(UNSTABLE_TAGS)' $(SOURCE)/cmd/$(TARGET)
 
 dock:
-	go install -tags '$(APPLETS) $(UNSTABLE) $(DOCK)' $(SOURCE)/$(TARGET)
+	go install -tags '$(DOCK)' $(SOURCE)/cmd/$(TARGET)
 
 patch:
 	# Patch GTK - unstable branch is required to build a dock.
@@ -38,3 +49,26 @@ patch:
 
 	# Patch Dbus (for Notifications)
 	cd "$(GOPATH)/src/github.com/godbus/dbus" && git pull --commit --no-edit https://github.com/sqp/dbus fixeavesdrop
+
+install:
+	mkdir -p "$(PKGDIR)/usr/bin"
+	install -p -m755 "../../../../bin/cdc" "$(PKGDIR)/usr/bin"
+
+	mkdir -p "$(PKGDIR)/$(APPDIR)"
+	for f in $(APPLETS) $(UNSTABLE); do	\
+		cp -Rv --preserve=timestamps "applets/$$f" "$(PKGDIR)/$(APPDIR)" ;\
+		rm $(PKGDIR)/$(APPDIR)/$$f/$$f ;\
+		rm $(PKGDIR)/$(APPDIR)/$$f/applet.go ;\
+		rm $(PKGDIR)/$(APPDIR)/$$f/last-modif ;\
+		rm $(PKGDIR)/$(APPDIR)/$$f/Makefile ;\
+		rm $(PKGDIR)/$(APPDIR)/$$f/tocdc ;\
+	done
+
+
+	# Package license (if available)
+	# for f in LICENSE COPYING LICENSE.* COPYING.*; do
+	# 	if [ -e "$(GOPATH)/src/$(SOURCE)/$f" ]; then
+	# 		install -Dm644 "$(GOPATH)/src/$(SOURCE)/$f" "$(PKGDIR)/usr/share/licenses/$(TARGET)/$f"
+	# 	fi
+	# done
+

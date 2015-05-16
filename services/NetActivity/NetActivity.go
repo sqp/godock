@@ -1,4 +1,4 @@
-// Package NetActivity is a monitoring and upload applet for the Cairo-Dock project.
+// Package NetActivity is a monitoring and upload applet for Cairo-Dock.
 /*
 
 Benefit from original version:
@@ -39,13 +39,11 @@ import (
 
 	"github.com/sqp/godock/libs/cdtype"
 	"github.com/sqp/godock/libs/cdtype/bytesize"
-	"github.com/sqp/godock/libs/dock" // Connection to cairo-dock.
-	"github.com/sqp/godock/libs/sysinfo"
-	"github.com/sqp/godock/libs/ternary" // Ternary operators.
-	"github.com/sqp/godock/libs/uptoshare"
+	"github.com/sqp/godock/libs/dock"      // Connection to cairo-dock.
+	"github.com/sqp/godock/libs/sysinfo"   // IOActivity.
+	"github.com/sqp/godock/libs/uptoshare" // Uploader service.
 
 	"fmt"
-	"path"
 )
 
 // EmblemAction is the position of the "upload in progress" emblem.
@@ -57,28 +55,28 @@ const EmblemAction = cdtype.EmblemTopRight
 // Applet data and controlers.
 //
 type Applet struct {
-	*dock.CDApplet
-	conf        *appletConf
-	service     *sysinfo.IOActivity
-	up          *uptoshare.Uploader
-	menuActions []func() // Menu callbacks are saved to be sure we launch the good action (history can change).
+	cdtype.AppBase // Applet base and dock connection.
+
+	conf    *appletConf
+	service *sysinfo.IOActivity
+	up      *uptoshare.Uploader
 }
 
 // NewApplet create a new applet instance.
 //
-func NewApplet() dock.AppletInstance {
-	app := &Applet{CDApplet: dock.NewCDApplet()} // Icon controler and interface to cairo-dock.
+func NewApplet() cdtype.AppInstance {
+	app := &Applet{AppBase: dock.NewCDApplet()} // Icon controler and interface to cairo-dock.
 
 	// Uptoshare actions
 	app.up = uptoshare.New()
-	app.up.Log = app.Log
+	app.up.Log = app.Log()
 	app.up.SetPreCheck(func() { app.SetEmblem(app.FileLocation("icon"), EmblemAction) })
 	app.up.SetPostCheck(func() { app.SetEmblem("none", EmblemAction) })
 	app.up.SetOnResult(app.onUpload)
 
 	// Network activity actions.
 	app.service = sysinfo.NewIOActivity(app)
-	app.service.Log = app.Log
+	app.service.Log = app.Log()
 	app.service.FormatIcon = sysinfo.FormatIcon
 	app.service.FormatLabel = formatLabel
 	app.service.GetData = sysinfo.GetNetActivity
@@ -94,7 +92,7 @@ func (app *Applet) Init(loadConf bool) {
 	app.LoadConfig(loadConf, &app.conf) // Load config will crash if fail. Expected.
 
 	// Uptoshare settings.
-	app.up.SetHistoryFile(path.Join(app.RootDataDir, historyFile))
+	app.up.SetHistoryFile(app.FileDataDir(historyFile))
 	app.up.SetHistorySize(app.conf.UploadHistory)
 	app.up.LimitRate = app.conf.UploadRateLimit
 	app.up.PostAnonymous = app.conf.PostAnonymous
@@ -105,79 +103,68 @@ func (app *Applet) Init(loadConf bool) {
 	app.up.SiteFile(app.conf.SiteFile)
 
 	// Settings for poller and IOActivity (force renderer reset in case of reload).
-	app.conf.UpdateDelay = dock.PollerInterval(app.conf.UpdateDelay, defaultUpdateDelay)
+	app.conf.UpdateDelay = cdtype.PollerInterval(app.conf.UpdateDelay, defaultUpdateDelay)
 	app.service.Settings(uint64(app.conf.UpdateDelay), cdtype.InfoPosition(app.conf.DisplayText), app.conf.DisplayValues, app.conf.GraphType, app.conf.GaugeName, app.conf.Devices...)
 
 	// Set defaults to dock icon: display and controls.
-	app.SetDefaults(dock.Defaults{
-		Label:          ternary.String(app.conf.Name != "", app.conf.Name, app.AppletName),
+	app.SetDefaults(cdtype.Defaults{
+		Label:          app.conf.Name,
 		PollerInterval: app.conf.UpdateDelay,
-		Commands: dock.Commands{
-			"left":   dock.NewCommandStd(app.conf.LeftAction, app.conf.LeftCommand, app.conf.LeftClass),
-			"middle": dock.NewCommandStd(app.conf.MiddleAction, app.conf.MiddleCommand)},
+		Commands: cdtype.Commands{
+			"left":   cdtype.NewCommandStd(app.conf.LeftAction, app.conf.LeftCommand, app.conf.LeftClass),
+			"middle": cdtype.NewCommandStd(app.conf.MiddleAction, app.conf.MiddleCommand)},
 		Debug: app.conf.Debug})
 }
 
 //
 //------------------------------------------------------------------[ EVENTS ]--
 
-// DefineEvents set applet events callbacks.
+// OnClick launch the configured action on user click.
 //
-func (app *Applet) DefineEvents() {
-	app.Events.OnClick = app.LaunchFunc("left")
-	app.Events.OnMiddleClick = app.LaunchFunc("middle")
+func (app *Applet) OnClick() {
+	app.CommandLaunch("left")
+}
 
-	app.Events.OnDropData = app.Upload
+// OnMiddleClick launch the configured action on user middle click.
+//
+func (app *Applet) OnMiddleClick() {
+	app.CommandLaunch("middle")
+}
 
-	app.Events.OnBuildMenu = app.buildMenu
-	app.Events.OnMenuSelect = app.clickedMenu
+// OnBuildMenu fills the menu with left and middle click actions if they're set.
+//
+func (app *Applet) OnBuildMenu(menu cdtype.Menuer) {
+	needSep := false
+	if app.conf.LeftAction > 0 && app.conf.LeftCommand != "" {
+		menu.AddEntry("Action left click", "gtk-execute", app.OnClick)
+		needSep = true
+	}
+	if app.conf.MiddleAction > 0 && app.conf.MiddleCommand != "" {
+		menu.AddEntry("Action middle click", "gtk-execute", app.OnMiddleClick)
+		needSep = true
+	}
+	if needSep {
+		menu.Separator()
+	}
+	for _, hist := range app.up.ListHistory() {
+		hist := hist
+		menu.AddEntry(hist["file"], "", func() {
+			app.Log().Info(hist["link"])
+			clipboard.WriteAll(hist["link"])
+			// app.ShowDialog(link, 5)
+		})
+	}
+
+}
+
+func (app *Applet) OnDropData(data string) {
+	app.Upload(data)
 }
 
 // Upload data to a one-click site: file location or text.
 //
 func (app *Applet) Upload(data string) {
 	app.up.Upload(data)
-}
-
-//
-//--------------------------------------------------------------------[ MENU ]--
-
-func (app *Applet) buildMenu() {
-	menu := []string{}
-	app.menuActions = nil
-
-	if app.conf.LeftAction > 0 {
-		menu = append(menu, "Action left click")
-		app.menuActions = append(app.menuActions, func() { app.LaunchCommand("left") })
-	}
-	if app.conf.MiddleAction > 0 {
-		menu = append(menu, "Action middle click")
-		app.menuActions = append(app.menuActions, func() { app.LaunchCommand("middle") })
-	}
-
-	if len(menu) > 0 { // Add separator.
-		menu = append(menu, "")
-		app.menuActions = append(app.menuActions, nil)
-	}
-
-	for _, hist := range app.up.ListHistory() {
-		menu = append(menu, path.Base(hist["file"]))
-		app.addMenuPaste(hist["link"])
-	}
-
-	app.PopulateMenu(menu...)
-}
-
-func (app *Applet) clickedMenu(i int32) {
-	app.menuActions[i]()
-}
-
-func (app *Applet) addMenuPaste(link string) {
-	app.menuActions = append(app.menuActions, func() {
-		app.Log.Info(link)
-		clipboard.WriteAll(link)
-		// app.ShowDialog(link, 5)
-	})
 }
 
 //
@@ -199,7 +186,7 @@ func (app *Applet) onUpload(links uptoshare.Links) {
 	}
 
 	for k, v := range links { // TMP TO DEL
-		app.Log.Info(k, v)
+		app.Log().Info(k, v)
 	}
 }
 

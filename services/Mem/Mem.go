@@ -1,4 +1,4 @@
-// Package Mem is a memory monitoring applet for the Cairo-Dock project.
+// Package Mem is a memory monitoring applet for Cairo-Dock.
 package Mem
 
 import (
@@ -7,21 +7,21 @@ import (
 	"github.com/sqp/godock/libs/cdtype"
 	"github.com/sqp/godock/libs/dock" // Connection to cairo-dock.
 	"github.com/sqp/godock/libs/sysinfo"
-	"github.com/sqp/godock/libs/ternary" // Ternary operators.
 )
 
 // Applet data and controlers.
 //
 type Applet struct {
-	*dock.CDApplet
+	cdtype.AppBase // Applet base and dock connection.
+
 	conf    *appletConf
 	service sysinfo.RenderPercent
 }
 
 // NewApplet create a new Mem applet instance.
 //
-func NewApplet() dock.AppletInstance {
-	app := &Applet{CDApplet: dock.NewCDApplet()} // Icon controler and interface to cairo-dock.
+func NewApplet() cdtype.AppInstance {
+	app := &Applet{AppBase: dock.NewCDApplet()} // Icon controler and interface to cairo-dock.
 	app.AddPoller(app.GetMemActivity)
 
 	app.service.App = app
@@ -40,50 +40,48 @@ func (app *Applet) Init(loadConf bool) {
 
 	// Settings for service.
 	app.service.Settings(app.conf.DisplayText, app.conf.DisplayValues, app.conf.GraphType, app.conf.GaugeName)
-	app.service.SetSize(boolToInt(app.conf.ShowRam) + boolToInt(app.conf.ShowSwap))
+	app.service.SetSize(countTrue(app.conf.ShowRam, app.conf.ShowSwap))
 
 	// Set defaults to dock icon: display and controls.
-	app.SetDefaults(dock.Defaults{
-		Label:          ternary.String(app.conf.Name != "", app.conf.Name, app.AppletName),
-		PollerInterval: dock.PollerInterval(app.conf.UpdateDelay, defaultUpdateDelay),
-		Commands: dock.Commands{
-			"left":   dock.NewCommandStd(app.conf.LeftAction, app.conf.LeftCommand, app.conf.LeftClass),
-			"middle": dock.NewCommandStd(app.conf.MiddleAction, app.conf.MiddleCommand)},
+	app.SetDefaults(cdtype.Defaults{
+		Label:          app.conf.Name,
+		PollerInterval: cdtype.PollerInterval(app.conf.UpdateDelay, defaultUpdateDelay),
+		Commands: cdtype.Commands{
+			"left":   cdtype.NewCommandStd(app.conf.LeftAction, app.conf.LeftCommand, app.conf.LeftClass),
+			"middle": cdtype.NewCommandStd(app.conf.MiddleAction, app.conf.MiddleCommand)},
 		Debug: app.conf.Debug})
 }
 
 //
 //------------------------------------------------------------------[ EVENTS ]--
 
-// DefineEvents set applet events callbacks.
+// OnClick launch the configured action on user click.
 //
-func (app *Applet) DefineEvents() {
+func (app *Applet) OnClick() {
+	app.CommandLaunch("left")
+}
 
-	// Left and middle clicks: launch configured command.
-	app.Events.OnClick = app.LaunchFunc("left")
-	app.Events.OnMiddleClick = app.LaunchFunc("middle")
+// OnMiddleClick launch the configured action on user middle click.
+//
+func (app *Applet) OnMiddleClick() {
+	app.CommandLaunch("middle")
+}
 
-	app.Events.OnBuildMenu = func() {
-		menu := []string{}
-		if app.conf.LeftAction > 0 && app.conf.LeftCommand != "" {
-			menu = append(menu, "Action left click")
-		}
-		if app.conf.MiddleAction > 0 && app.conf.MiddleCommand != "" {
-			menu = append(menu, "Action middle click")
-		}
-		app.PopulateMenu(menu...)
+// OnBuildMenu fills the menu with left and middle click actions if they're set.
+//
+func (app *Applet) OnBuildMenu(menu cdtype.Menuer) {
+	if app.conf.LeftAction > 0 && app.conf.LeftCommand != "" {
+		menu.AddEntry("Action left click", "gtk-execute", app.OnClick)
 	}
-
-	app.Events.OnMenuSelect = func(i int32) {
-		list := []string{"left", "middle"}
-		app.LaunchCommand(list[i])
+	if app.conf.MiddleAction > 0 && app.conf.MiddleCommand != "" {
+		menu.AddEntry("Action middle click", "gtk-execute", app.OnMiddleClick)
 	}
 }
 
 //
 //---------------------------------------------------------------------[ MEM ]--
 
-// GetMemActivity displays memory activity.
+// GetMemActivity displays current memory usage.
 //
 func (app *Applet) GetMemActivity() {
 	app.service.Clear()
@@ -105,9 +103,11 @@ func (app *Applet) GetMemActivity() {
 	app.service.Display()
 }
 
-func boolToInt(b bool) int32 {
-	if b {
-		return 1
+func countTrue(bools ...bool) (count int32) {
+	for _, b := range bools {
+		if b {
+			count++
+		}
 	}
-	return 0
+	return count
 }

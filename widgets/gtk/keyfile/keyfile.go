@@ -76,6 +76,14 @@ func New() *KeyFile {
 	return &KeyFile{C.g_key_file_new()}
 }
 
+// NewFromNative wraps a pointer to a C keyfile.
+func NewFromNative(p unsafe.Pointer) *KeyFile {
+	if p == nil {
+		return nil
+	}
+	return &KeyFile{(*C.GKeyFile)(p)}
+}
+
 // LoadFromFile is a wrapper around g_key_file_load_from_file().
 func (this *KeyFile) LoadFromFile(file string, flags Flags) (bool, error) {
 	var cstr *C.char = C.CString(file)

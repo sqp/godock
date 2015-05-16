@@ -34,6 +34,8 @@ type Poller struct {
 	callCheck func() // Action data polling.
 	finished  func() // Action to execute after data polling.
 
+	plop int // current plopper counter.
+
 	// Ticker settings.
 	delay   int  // Interval between checks in second.
 	enabled bool // true if the poller should be active.
@@ -125,24 +127,26 @@ func (poller *Poller) Wait() <-chan time.Time {
 	return nil
 }
 
-// Restart polling ticker. This will send an event on the restart channel.
+// Restart resets the counter and launch Action in a goroutine.
+// Safe to use on nil poller.
 //
 func (poller *Poller) Restart() {
-	if poller.enabled {
-		// poller.Stop()
-		poller.restart <- poller.name // send our restart event.
-		// poller.enabled = true
-		// poller.active = true
+	if poller == nil || !poller.enabled {
+		return
 	}
+	poller.plop = 0
+	go poller.Action()
+
+	// poller.restart <- poller.name // send our restart event. This will send an event on the restart channel.
 }
 
 // Stop the polling ticker.
 //
 func (poller *Poller) Stop() {
-	if poller.active {
-		poller.enabled = false
-		poller.active = false
-	}
+	// if poller.active {
+	poller.enabled = false
+	// poller.active = false
+	// }
 }
 
 // Action launch the check action. Triggers PreCheck, OnCheck and PostCheck
@@ -158,4 +162,21 @@ func (poller *Poller) Action() {
 	if poller.finished != nil { // Post check call.
 		poller.finished()
 	}
+}
+
+// Plop increase the counter and launch the action if it reached the interval.
+// The counter is also reset if the action is launched.
+// Safe to use on nil poller.
+//
+func (poller *Poller) Plop() bool {
+	if poller == nil || poller.delay <= 0 {
+		return false
+	}
+	poller.plop++
+	if poller.plop < poller.delay {
+		return false
+	}
+	poller.plop = 0
+	go poller.Action()
+	return true
 }

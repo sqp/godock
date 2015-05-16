@@ -22,6 +22,7 @@ import (
 	"github.com/sqp/godock/libs/cdtype"       // Logger type.
 	"github.com/sqp/godock/libs/config"       // Config parser.
 	"github.com/sqp/godock/libs/gldi"         // Gldi access.
+	"github.com/sqp/godock/libs/gldi/dialog"  // Popup dialog.
 	"github.com/sqp/godock/libs/gldi/globals" // Global variables.
 	"github.com/sqp/godock/libs/tran"         // Translate.
 
@@ -243,10 +244,6 @@ func (settings *DockSettings) Start() {
 
 	// MISSING end of
 	//\___________________ display the changelog in case of a new version.
-
-	// Start Mainloop
-	defer settings.Clean()
-	gtk.Main()
 }
 
 func (settings *DockSettings) Clean() {
@@ -386,7 +383,7 @@ But if you really want to use the dock without these plug-ins, you can launch th
 	icon := gldi.IconsGetAnyWithoutDialog()
 	container := globals.Maindock().ToContainer()
 	iconpath := globals.DirShareData(globals.CairoDockIcon)
-	gldi.DialogShowTemporaryWithIcon(str, icon, container, 0, iconpath)
+	dialog.DialogShowTemporaryWithIcon(str, icon, container, 0, iconpath)
 }
 
 //

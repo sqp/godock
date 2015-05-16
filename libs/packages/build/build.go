@@ -4,20 +4,22 @@ import (
 	"github.com/sqp/godock/libs/appdbus"
 	"github.com/sqp/godock/libs/cdtype"
 	"github.com/sqp/godock/libs/log/color"
-	// "github.com/sqp/godock/libs/ternary"
+	"github.com/sqp/godock/libs/srvdbus/dlogbus"
 
 	"bufio"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
-	"path"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
-	// "text/template"
 	"time"
 )
+
+var cdcpath = []string{"src", "github.com", "sqp", "godock"}
 
 var Log cdtype.Logger
 
@@ -40,6 +42,7 @@ const (
 	AppletInternal                  // Dock one internal applet (C).
 	AppletScript                    // Dock one external applet script (bash, python, ruby).
 	AppletCompiled                  // Dock one external applet compiled (go, mono, vala).
+	Godock                          // New dock.
 )
 
 // GetBuildType try to detect an applet type based on its location and content.
@@ -51,17 +54,20 @@ func GetBuildType(name string) BuildType {
 		return Core
 	case "applets", "plug-ins":
 		return Applets
+	case "cdc":
+		return Godock
+
 	}
 
 	pack := appdbus.InfoApplet(name)
 	if pack != nil {
 		dir := pack.Dir()
 
-		if path.Base(path.Dir(dir)) != cdtype.AppletsDirName { // != "third-party" sounds hacky... (but work for current system and user external dirs)
+		if filepath.Base(filepath.Dir(dir)) != cdtype.AppletsDirName { // != "third-party" sounds hacky... (but work for current system and user external dirs)
 			return AppletInternal
 		}
 
-		if _, e := os.Stat(path.Join(dir, "Makefile")); e == nil { // Got makefile => can build.
+		if _, e := os.Stat(filepath.Join(dir, "Makefile")); e == nil { // Got makefile => can build.
 			return AppletCompiled
 		}
 		return AppletScript // An external without makefile, nothing to do so consider it as a scripted applet.
@@ -139,13 +145,38 @@ func (build *BuilderNull) SourceDir() string           { return "" }
 func (build *BuilderNull) Build() error                { return inProgress }
 func (build *BuilderNull) SetProgress(f func(float64)) {}
 
+// BuilderGodock is the new dock sources builder.
+//
+type BuilderGodock struct {
+	BuilderBase
+	BuilderProgress
+	MakeFlags string
+}
+
+func (build *BuilderGodock) Icon() string {
+	return "/usr/share/cairo-dock/cairo-dock.svg"
+}
+
+func (build *BuilderGodock) Label() string {
+	return "cdc"
+}
+
+func (build BuilderGodock) SourceDir() string {
+	path := append([]string{os.Getenv("GOPATH")}, cdcpath...)
+	return filepath.Join(path...)
+}
+
+func (build *BuilderGodock) Build() error {
+	go dlogbus.Action((*dlogbus.Client).Restart) // No need to wait an answer, it blocks.
+	return nil
+}
+
 // BuilderCore is the dock core sources builder.
 //
 type BuilderCore struct {
 	BuilderBase
 	BuilderProgress
-	// Dir string
-	// app *AppletUpdate
+	MakeFlags string
 }
 
 func (build *BuilderCore) Icon() string {
@@ -157,11 +188,11 @@ func (build *BuilderCore) Label() string {
 }
 
 func (build BuilderCore) SourceDir() string {
-	return path.Join(build.dir, "cairo-dock-core")
+	return filepath.Join(build.dir, "cairo-dock-core")
 }
 
 func (build *BuilderCore) Build() error {
-	return buildCmake(build.SourceDir(), build.BuilderProgress.f)
+	return buildCmake(build.SourceDir(), build.BuilderProgress.f, build.MakeFlags)
 }
 
 // Build all Cairo-Dock plug-ins.
@@ -169,7 +200,7 @@ func (build *BuilderCore) Build() error {
 type BuilderApplets struct {
 	BuilderBase
 	BuilderProgress
-	// Dir string
+	MakeFlags string
 }
 
 func (build *BuilderApplets) Icon() string {
@@ -181,11 +212,11 @@ func (build *BuilderApplets) Label() string {
 }
 
 func (build BuilderApplets) SourceDir() string {
-	return path.Join(build.dir, "cairo-dock-plug-ins")
+	return filepath.Join(build.dir, "cairo-dock-plug-ins")
 }
 
 func (build *BuilderApplets) Build() error {
-	return buildCmake(build.SourceDir(), build.BuilderProgress.f)
+	return buildCmake(build.SourceDir(), build.BuilderProgress.f, build.MakeFlags)
 }
 
 // Internal applet = C applet provided by the plug-ins package.
@@ -194,8 +225,6 @@ type BuilderInternal struct {
 	BuilderBase
 	BuilderProgress
 	Module string
-	// Icon   string
-	// Dir    string
 }
 
 func (build *BuilderInternal) Label() string {
@@ -203,7 +232,7 @@ func (build *BuilderInternal) Label() string {
 }
 
 func (build *BuilderInternal) Build() error {
-	dir := path.Join(build.dir, "build", build.Module)
+	dir := filepath.Join(build.dir, "build", build.Module)
 	if e := os.Chdir(dir); e != nil {
 		return e
 	}
@@ -216,8 +245,6 @@ type BuilderCompiled struct {
 	BuilderBase
 	BuilderProgress
 	Module string
-	// Icon   string
-	// Dir    string
 }
 
 func (build *BuilderCompiled) Label() string {
@@ -245,7 +272,7 @@ func (build *BuilderCompiled) Build() error {
 //
 //----------------------------------------------------[ BUILD FROM C SOURCES ]--
 
-func buildCmake(dir string, progress func(float64)) error {
+func buildCmake(dir string, progress func(float64), makeFlags string) error {
 
 	if _, e := os.Stat(dir); e != nil { // No basedir.
 		return e
@@ -266,7 +293,16 @@ func buildCmake(dir string, progress func(float64)) error {
 		if e = os.Chdir(dir); e != nil {
 			return e
 		}
-		Log.ExecShow("cmake", "..", "-DCMAKE_INSTALL_PREFIX=/usr", "-Denable-gmenu=no")
+
+		args := []string{"..", "-DCMAKE_INSTALL_PREFIX=/usr"}
+		if makeFlags != "" {
+			args = append(args, strings.Fields(makeFlags)...)
+		}
+		Log.Info("buildCmake args", args)
+		e = Log.ExecShow("cmake", args...)
+		if e != nil {
+			return e
+		}
 	}
 
 	return actionMakeAndInstall(progress)
@@ -305,13 +341,26 @@ func actionMakeAndInstall(progress func(float64)) error {
 			current, e := TrimInt(line[1:4])
 			if e == nil {
 				progress(float64(current) / 100)
-				fmt.Printf("[%3d%%] %s", progress, color.Green(line[7:]))
+				fmt.Printf("%s %s", line[:6], color.Green(line[7:]))
+
+				// Log.Info(line[1:4], current)
+
 			}
 		} else {
 			fmt.Fprint(os.Stdout, line)
 		}
 
 		line, err = r.ReadString('\n')
+	}
+
+	cmd.Wait()
+
+	if !cmd.ProcessState.Success() {
+		if err != io.EOF {
+			Log.Err(err, "make error ?")
+			return err
+		}
+		return errors.New("build fail")
 	}
 
 	return Log.ExecShow(CmdSudo, "make", "install")
@@ -340,5 +389,5 @@ func activityBar(quit chan struct{}, c <-chan time.Time, render func(float64)) {
 //
 
 func TrimInt(str string) (int, error) {
-	return strconv.Atoi(strings.Trim(str, "  \n"))
+	return strconv.Atoi(strings.Trim(str, " \n"))
 }

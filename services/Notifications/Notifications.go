@@ -1,4 +1,4 @@
-// Package Notifications is a desktop notifications history applet for the Cairo-Dock project.
+// Package Notifications is a desktop notifications history applet for Cairo-Dock.
 //
 // requires a hacked version of the dbus api (that wont stop after eavesdropping a message).
 //
@@ -10,6 +10,7 @@ import (
 	"github.com/godbus/dbus"
 
 	"github.com/sqp/godock/libs/appdbus"
+	"github.com/sqp/godock/libs/cdtype"
 	"github.com/sqp/godock/libs/dock" // Connection to cairo-dock.
 
 	"strconv"
@@ -19,19 +20,23 @@ import (
 // Applet data.
 //
 type Applet struct {
-	*dock.CDApplet
+	cdtype.AppBase // Applet base and dock connection.
+
 	conf   *appletConf
 	notifs *Notifs
 }
 
 // NewApplet creates a new Notifications applet instance.
 //
-func NewApplet() dock.AppletInstance {
-	app := &Applet{CDApplet: dock.NewCDApplet()} // Icon controler and interface to cairo-dock.
+func NewApplet() cdtype.AppInstance {
+	app := &Applet{AppBase: dock.NewCDApplet()} // Icon controler and interface to cairo-dock.
 
 	app.notifs = &Notifs{}
 	app.notifs.SetOnCount(app.UpdateCount)
-	app.Log.Err(app.notifs.Start(), "notifications listener")
+	app.Log().Err(app.notifs.Start(), "notifications listener")
+
+	app.defineActions()
+
 	return app
 }
 
@@ -52,10 +57,9 @@ func (app *Applet) Init(loadConf bool) {
 	}
 
 	// Set defaults to dock icon: display and controls.
-	app.SetDefaults(dock.Defaults{
-		// Shortkeys: []string{app.conf.ShortkeyOpen, app.conf.ShortkeyCheck},
-		// Label:       "",
+	app.SetDefaults(cdtype.Defaults{
 		Icon:      app.conf.Icon,
+		Label:     app.conf.Name,
 		Templates: []string{"notif"},
 		Debug:     app.conf.Debug})
 }
@@ -64,30 +68,53 @@ func (app *Applet) Init(loadConf bool) {
 
 // DefineEvents sets applet events callbacks.
 //
-func (app *Applet) DefineEvents() {
+func (app *Applet) DefineEvents(events *cdtype.Events) {
 
-	app.Events.OnClick = app.displayAll
+	events.OnClick = app.ActionCallback(ActionShowAll)
 
-	app.Events.OnMiddleClick = func() {
-		app.notifs.Clear()
-	}
+	events.OnMiddleClick = app.ActionCallback(ActionClear)
 
-	app.Events.OnBuildMenu = func() {
-		menu := []string{"", "ok"} // First entry is a separator.
-		app.PopulateMenu(menu...)
-	}
+	events.OnBuildMenu = app.BuildMenuCallback(menuUser)
 
-	app.Events.OnShortkey = func(key string) {
+	events.OnShortkey = func(key string) {
 		// if key == app.conf.ShortkeyOpen {
 		// }
 		// if key == app.conf.ShortkeyCheck {
 		// }
 	}
 
-	app.Events.OnDropData = func(data string) {
-		// app.Log.Info("Grep " + data)
+	events.OnDropData = func(data string) {
+		app.Log().Info("Grep " + data)
 		// stream(data)
 	}
+
+}
+
+//-----------------------------------------------------------------[ ACTIONS ]--
+
+// Define applet actions. Order must match actions const declaration order.
+//
+func (app *Applet) defineActions() {
+	app.ActionAdd(
+		&cdtype.Action{
+			ID:   ActionNone,
+			Menu: cdtype.MenuSeparator,
+		},
+		&cdtype.Action{
+			ID:       ActionShowAll,
+			Name:     "Show messages",
+			Icon:     "gtk-media-forward",
+			Call:     app.displayAll,
+			Threaded: true,
+		},
+		&cdtype.Action{
+			ID:       ActionClear,
+			Name:     "Clear all",
+			Icon:     "gtk-clear",
+			Call:     app.notifs.Clear,
+			Threaded: true,
+		},
+	)
 }
 
 // UpdateCount shows the number of messages on the icon, and displays the
@@ -115,15 +142,18 @@ func (app *Applet) displayAll() {
 		msg = "No recent notifications"
 	} else {
 		text, e := app.ExecuteTemplate("notif", "ListNotif", messages)
-		app.Log.Err(e, "template")
+		app.Log().Err(e, "template")
 		msg = strings.TrimRight(text, "\n")
 	}
-	dialogAttributes := map[string]interface{}{
-		"message":     msg,
-		"use-markup":  true,
-		"time-length": uint32(0)}
+
+	app.PopupDialog(cdtype.DialogData{
+		Message:   msg,
+		UseMarkup: true,
+		Buttons:   "gtk-clear;cancel",
+		Callback:  cdtype.DialogCallbackIsOK(app.ActionCallback(ActionClear)), // Clear notifs if the user press the 1st button.
+	})
+
 	// if self.config['clear'] else 4 + len(msg)/40 }  // if we're going to clear the history, show the dialog until the user closes it
-	app.PopupDialog(dialogAttributes, nil)
 }
 
 //

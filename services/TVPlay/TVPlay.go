@@ -1,4 +1,4 @@
-// Package TVPlay is a UPnP control point for the Cairo-Dock project.
+// Package TVPlay is a UPnP control point for Cairo-Dock.
 package TVPlay
 
 import (
@@ -8,6 +8,7 @@ import (
 	"github.com/sqp/gupnp/mediacp/guigtk" // upnp gui.
 	"github.com/sqp/gupnp/upnpcp"
 
+	"github.com/sqp/godock/libs/cdtype"
 	"github.com/sqp/godock/libs/dock" // Connection to cairo-dock.
 	"github.com/sqp/godock/libs/ternary"
 )
@@ -15,7 +16,8 @@ import (
 // Applet data and controlers.
 //
 type Applet struct {
-	*dock.CDApplet
+	cdtype.AppBase // Applet base and dock connection.
+
 	conf *appletConf
 	cp   *mediacp.MediaControl
 	gui  *guigtk.TVGui
@@ -24,20 +26,19 @@ type Applet struct {
 
 // NewApplet creates a new TVPlay applet instance.
 //
-func NewApplet() dock.AppletInstance {
-	app := &Applet{CDApplet: dock.NewCDApplet()} // Icon controler and interface to cairo-dock.
+func NewApplet() cdtype.AppInstance {
+	app := &Applet{AppBase: dock.NewCDApplet()} // Icon controler and interface to cairo-dock.
 	app.defineActions()
 
 	var e error
 	app.cp, e = mediacp.New()
-	app.Log.Err(e, "temp Dir")
+	app.Log().Err(e, "temp Dir")
 
 	app.gui, app.win = guigtk.NewGui(app.cp, false)
 	if app.gui != nil {
 		app.gui.Load()
 	}
 
-	// func (gui *TVGui) ConnectControl() {
 	hook := app.cp.SubscribeHook("applet")
 	hook.OnRendererFound = app.onMediaRendererFound
 	hook.OnServerFound = app.onMediaServerFound
@@ -69,15 +70,18 @@ func (app *Applet) Init(loadConf bool) {
 	}
 
 	// Set defaults to dock icon: display and controls.
-	app.SetDefaults(dock.Defaults{
-		// Label: "",
+	app.SetDefaults(cdtype.Defaults{
 		Icon: app.conf.Icon,
-		Shortkeys: []string{app.conf.ShortkeyMute, app.conf.ShortkeyVolumeDown, app.conf.ShortkeyVolumeUp,
-			app.conf.ShortkeyPlayPause, app.conf.ShortkeyStop,
-			app.conf.ShortkeySeekBackward, app.conf.ShortkeySeekForward},
-		// Templates:      []string{"default"},
-		Commands: dock.Commands{
-			"left": dock.NewCommand(true, "", app.AppletName)},
+		Commands: cdtype.Commands{
+			"left": cdtype.NewCommand(true, "", app.Name())},
+		Shortkeys: []cdtype.Shortkey{
+			{"Actions", "ShortkeyMute", "Mute volume", app.conf.ShortkeyMute},
+			{"Actions", "ShortkeyVolumeDown", "Lower volume", app.conf.ShortkeyVolumeDown},
+			{"Actions", "ShortkeyVolumeUp", "Increase volume", app.conf.ShortkeyVolumeUp},
+			{"Actions", "ShortkeyPlayPause", "Play / Pause", app.conf.ShortkeyPlayPause},
+			{"Actions", "ShortkeyStop", "Stop", app.conf.ShortkeyStop},
+			{"Actions", "ShortkeySeekBackward", "Seek backward", app.conf.ShortkeySeekBackward},
+			{"Actions", "ShortkeySeekForward", "Seek forward", app.conf.ShortkeySeekForward}},
 		Debug: app.conf.Debug})
 
 	app.cpInit()
@@ -93,19 +97,19 @@ func (app *Applet) cpInit() {
 }
 
 func (app *Applet) onMediaRendererFound(r *upnpcp.Renderer) {
-	app.Log.Info("Renderer Found", r.Name, "", r.Udn)
+	app.Log().Info("Renderer Found", r.Name, "", r.Udn)
 }
 
 func (app *Applet) onMediaServerFound(srv *upnpcp.Server) {
-	app.Log.Info("Server Found", srv.Name, "", srv.Udn)
+	app.Log().Info("Server Found", srv.Name, "", srv.Udn)
 }
 
 func (app *Applet) onMediaRendererLost(r *upnpcp.Renderer) {
-	app.Log.Info("Renderer Lost", r.Name, "", r.Udn)
+	app.Log().Info("Renderer Lost", r.Name, "", r.Udn)
 }
 
 func (app *Applet) onMediaServerLost(srv *upnpcp.Server) {
-	app.Log.Info("Server Lost", srv.Name, "", srv.Udn)
+	app.Log().Info("Server Lost", srv.Name, "", srv.Udn)
 }
 
 //
@@ -113,11 +117,11 @@ func (app *Applet) onMediaServerLost(srv *upnpcp.Server) {
 
 // DefineEvents set applet events callbacks.
 //
-func (app *Applet) DefineEvents() {
+func (app *Applet) DefineEvents(events *cdtype.Events) {
 
 	// Left click: open and manage the gui window.
 	//
-	app.Events.OnClick = func() {
+	events.OnClick = func() {
 		haveMonitor, hasFocus := app.HaveMonitor()
 		if haveMonitor { // Window opened.
 			app.ShowAppli(!hasFocus)
@@ -129,11 +133,11 @@ func (app *Applet) DefineEvents() {
 
 	// Middle click: launch configured action.
 	//
-	app.Events.OnMiddleClick = func() {
-		app.Actions.Launch(app.Actions.ID(app.conf.ActionClickMiddle))
+	events.OnMiddleClick = func() {
+		app.ActionLaunch(app.ActionID(app.conf.ActionClickMiddle))
 	}
 
-	app.Events.OnScroll = func(scrollUp bool) {
+	events.OnScroll = func(scrollUp bool) {
 		var key int
 		switch app.conf.ActionMouseWheel {
 		case "Change volume":
@@ -143,41 +147,35 @@ func (app *Applet) DefineEvents() {
 			key = ternary.Int(scrollUp, mediacp.ActionSeekForward, mediacp.ActionSeekBackward)
 		}
 
-		app.Actions.Launch(key)
+		app.ActionLaunch(key)
 	}
 
-	app.Events.OnBuildMenu = func() {
-		app.BuildMenu(dockMenu)
+	events.OnBuildMenu = func(menu cdtype.Menuer) {
+		app.BuildMenu(menu, dockMenu)
 	}
 
-	// Menu entry selected. Launch the expected action.
-	//
-	app.Events.OnMenuSelect = func(numEntry int32) {
-		app.Actions.Launch(dockMenu[numEntry])
-	}
-
-	app.Events.OnShortkey = func(key string) {
+	events.OnShortkey = func(key string) {
 		switch key {
 		case app.conf.ShortkeyMute:
-			app.Actions.Launch(mediacp.ActionToggleMute)
+			app.ActionLaunch(mediacp.ActionToggleMute)
 
 		case app.conf.ShortkeyVolumeDown:
-			app.Actions.Launch(mediacp.ActionVolumeDown)
+			app.ActionLaunch(mediacp.ActionVolumeDown)
 
 		case app.conf.ShortkeyVolumeUp:
-			app.Actions.Launch(mediacp.ActionVolumeUp)
+			app.ActionLaunch(mediacp.ActionVolumeUp)
 
 		case app.conf.ShortkeyPlayPause:
-			app.Actions.Launch(mediacp.ActionPlayPause)
+			app.ActionLaunch(mediacp.ActionPlayPause)
 
 		case app.conf.ShortkeyStop:
-			app.Actions.Launch(mediacp.ActionStop)
+			app.ActionLaunch(mediacp.ActionStop)
 
 		case app.conf.ShortkeySeekBackward:
-			app.Actions.Launch(mediacp.ActionSeekBackward)
+			app.ActionLaunch(mediacp.ActionSeekBackward)
 
 		case app.conf.ShortkeySeekForward:
-			app.Actions.Launch(mediacp.ActionSeekForward)
+			app.ActionLaunch(mediacp.ActionSeekForward)
 		}
 	}
 }
@@ -188,49 +186,49 @@ func (app *Applet) DefineEvents() {
 // Define applet actions.
 //
 func (app *Applet) defineActions() {
-	app.Actions.Add(
-		&dock.Action{
-			ID: mediacp.ActionNone,
-			// Icontype: 2,
+	app.ActionAdd(
+		&cdtype.Action{
+			ID:   mediacp.ActionNone,
+			Menu: cdtype.MenuSeparator,
 		},
-		&dock.Action{
+		&cdtype.Action{
 			ID:   mediacp.ActionToggleMute,
 			Name: "Mute volume",
 			Icon: "gtk-dialog-info",
 			Call: func() { app.cp.Action(mediacp.ActionToggleMute) },
 		},
-		&dock.Action{
+		&cdtype.Action{
 			ID:   mediacp.ActionVolumeDown,
 			Name: "Volume down",
 			Icon: "gtk-go-down",
 			Call: func() { app.cp.Action(mediacp.ActionVolumeDown) },
 		},
-		&dock.Action{
+		&cdtype.Action{
 			ID:   mediacp.ActionVolumeUp,
 			Name: "Volume up",
 			Icon: "gtk-go-up",
 			Call: func() { app.cp.Action(mediacp.ActionVolumeUp) },
 		},
-		&dock.Action{
+		&cdtype.Action{
 			ID:   mediacp.ActionPlayPause,
 			Name: "Play / pause",
 			Icon: "gtk-media-play",
 			Call: func() { app.cp.Action(mediacp.ActionPlayPause) },
 		},
-		&dock.Action{
+		&cdtype.Action{
 			ID:   mediacp.ActionStop,
 			Name: "Stop",
 			Icon: "gtk-media-stop",
 			Call: func() { app.cp.Action(mediacp.ActionStop) },
 		},
-		&dock.Action{
+		&cdtype.Action{
 			ID:       mediacp.ActionSeekBackward,
 			Name:     "Seek backward",
 			Icon:     "gtk-go-backward",
 			Call:     func() { app.cp.Action(mediacp.ActionSeekBackward) },
 			Threaded: true,
 		},
-		&dock.Action{
+		&cdtype.Action{
 			ID:       mediacp.ActionSeekForward,
 			Name:     "Seek forward",
 			Icon:     "gtk-go-forward",

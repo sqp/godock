@@ -1,4 +1,4 @@
-// +build Notifications
+// +build Notifications || all
 
 package allapps
 

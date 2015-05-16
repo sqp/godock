@@ -1,7 +1,7 @@
 # Maintainer: SQP <sqp@glx-dock.org>
 
 pkgname=cairo-dock-control
-pkgver=20140920
+pkgver=20141030
 pkgrel=1
 pkgdesc="Cairo-Dock control tool and go applets."
 arch=('x86_64' 'i686')
@@ -16,7 +16,7 @@ optdepends=(
 options=('!strip' '!emptydirs')
 srcpath=github.com/sqp/godock
 applets="Audio Cpu DiskActivity DiskFree GoGmail Mem NetActivity Notifications TVPlay Update"
-cdctags="log gtk"
+cdctags="log gtk dock"
 appdir=usr/share/cairo-dock/plug-ins/Dbus/third-party/
 
 build() {
@@ -25,11 +25,13 @@ build() {
 
   # Patch GTK
   cd "$srcdir/src/github.com/conformal/gotk3"
-  git pull --commit --no-edit https://github.com/sqp/gotk3 current
+  git pull --commit --no-edit https://github.com/sqp/gotk3 unstable # unstable branch is required to build a dock.
+  
+  # git pull --commit --no-edit https://github.com/sqp/gotk3 current # current branch is enough for applets.
 
-  # branches grouped in this tree:
+  # branches grouped in the tree:
   # https://github.com/sqp/gotk3 nil_case file-chooser scale treestore icontheme pixbuf_at_scale gliblist others widget_set liststore_hack
-  # iconview link_font_button
+  # iconview link_font_button expander cellrendererpixbuf accelerator
   # https://github.com/shish/gotk3 file-chooser
   # https://github.com/shish/gotk3 paned
 

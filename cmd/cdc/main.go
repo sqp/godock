@@ -25,7 +25,6 @@ const appVersion = "3.4.0"
 // The order here is the order in which they are printed by 'cdc help'.
 func Commands() []*Command {
 	all := []*Command{
-		cmdBuild,
 		cmdConfig,
 		cmdDebug,
 		cmdDock,
@@ -36,6 +35,7 @@ func Commands() []*Command {
 		cmdRestart,
 		cmdService,
 		cmdUpload,
+		cmdBuild,
 		cmdVersion,
 
 		// helpGopath,
@@ -59,8 +59,10 @@ func Commands() []*Command {
 var (
 
 	// Global variables for optional actions.
-	cmdConfig *Command
-	cmdDock   *Command
+	cmdConfig  *Command
+	cmdDock    *Command
+	cmdService *Command
+	cmdRestart *Command
 
 	cmdShortcuts = map[byte]string{
 		'c': "config",
@@ -93,7 +95,11 @@ func main() {
 
 	args := flag.Args()
 	if len(args) < 1 {
-		usage()
+		if cmdDock != nil {
+			args = []string{"dock"}
+		} else {
+			usage()
+		}
 	}
 
 	logger.SetLogOut(log.Logs)

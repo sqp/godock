@@ -1,4 +1,4 @@
-// Package DiskFree is a monitoring applet for the Cairo-Dock project.
+// Package DiskFree is a monitoring applet for Cairo-Dock.
 /*
 Show disk usage for mounted partitions.
 Partitions can be autodetected or you can provide a list of partitions.
@@ -15,25 +15,25 @@ import (
 	"github.com/sqp/godock/libs/cdtype"
 	"github.com/sqp/godock/libs/dock" // Connection to cairo-dock.
 	"github.com/sqp/godock/libs/sysinfo"
-	"github.com/sqp/godock/libs/ternary" // Ternary operators.
 )
 
 // Applet data and controlers.
 //
 type Applet struct {
-	*dock.CDApplet
+	cdtype.AppBase // Applet base and dock connection.
+
 	conf    *appletConf
 	service DiskFree
 }
 
 // NewApplet creates a new DiskFree applet instance.
 //
-func NewApplet() dock.AppletInstance {
-	app := &Applet{CDApplet: dock.NewCDApplet()} // Icon controler and interface to cairo-dock.
+func NewApplet() cdtype.AppInstance {
+	app := &Applet{AppBase: dock.NewCDApplet()} // Icon controler and interface to cairo-dock.
 	app.AddPoller(app.service.Check)
 
 	app.service.App = app
-	app.service.log = app.Log
+	app.service.log = app.Log()
 	app.service.Texts = map[cdtype.InfoPosition]sysinfo.RenderOne{
 		cdtype.InfoNone:    {},
 		cdtype.InfoOnIcon:  {Sep: "\n", ShowPost: false},
@@ -53,40 +53,38 @@ func (app *Applet) Init(loadConf bool) {
 	app.service.SetParts(app.conf.Partitions, app.conf.AutoDetect)
 
 	// Set defaults to dock icon: display and controls.
-	app.SetDefaults(dock.Defaults{
-		Label:          ternary.String(app.conf.Name != "", app.conf.Name, app.AppletName),
-		PollerInterval: dock.PollerInterval(app.conf.UpdateDelay, defaultUpdateDelay),
-		Commands: dock.Commands{
-			"left":   dock.NewCommandStd(app.conf.LeftAction, app.conf.LeftCommand, app.conf.LeftClass),
-			"middle": dock.NewCommandStd(app.conf.MiddleAction, app.conf.MiddleCommand)},
+	app.SetDefaults(cdtype.Defaults{
+		Label:          app.conf.Name,
+		PollerInterval: cdtype.PollerInterval(app.conf.UpdateDelay, defaultUpdateDelay),
+		Commands: cdtype.Commands{
+			"left":   cdtype.NewCommandStd(app.conf.LeftAction, app.conf.LeftCommand, app.conf.LeftClass),
+			"middle": cdtype.NewCommandStd(app.conf.MiddleAction, app.conf.MiddleCommand)},
 		Debug: app.conf.Debug})
 }
 
 //
 //------------------------------------------------------------------[ EVENTS ]--
 
-// DefineEvents sets applet events callbacks.
+// OnClick launch the configured action on user click.
 //
-func (app *Applet) DefineEvents() {
+func (app *Applet) OnClick() {
+	app.CommandLaunch("left")
+}
 
-	// Left and middle clicks: launch configured command.
-	app.Events.OnClick = app.LaunchFunc("left")
-	app.Events.OnMiddleClick = app.LaunchFunc("middle")
+// OnMiddleClick launch the configured action on user middle click.
+//
+func (app *Applet) OnMiddleClick() {
+	app.CommandLaunch("middle")
+}
 
-	app.Events.OnBuildMenu = func() {
-		menu := []string{}
-		if app.conf.LeftAction > 0 {
-			menu = append(menu, "Action left click")
-		}
-		if app.conf.MiddleAction > 0 {
-			menu = append(menu, "Action middle click")
-		}
-		app.PopulateMenu(menu...)
+// OnBuildMenu fills the menu with left and middle click actions if they're set.
+//
+func (app *Applet) OnBuildMenu(menu cdtype.Menuer) {
+	if app.conf.LeftAction > 0 && app.conf.LeftCommand != "" {
+		menu.AddEntry("Action left click", "gtk-execute", app.OnClick)
 	}
-
-	app.Events.OnMenuSelect = func(i int32) {
-		list := []string{"left", "middle"}
-		app.LaunchCommand(list[i])
+	if app.conf.MiddleAction > 0 && app.conf.MiddleCommand != "" {
+		menu.AddEntry("Action middle click", "gtk-execute", app.OnMiddleClick)
 	}
 }
 

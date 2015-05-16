@@ -1,4 +1,4 @@
-// +build Audio
+// +build Audio || all
 
 package allapps
 

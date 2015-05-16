@@ -1,4 +1,4 @@
-// Package GoGmail is a mail checker applet for the Cairo-Dock project.
+// Package GoGmail is a mail checker applet for Cairo-Dock.
 package GoGmail
 
 import (
@@ -14,21 +14,17 @@ import (
 	"time"
 )
 
-var logger cdtype.Logger
+var log cdtype.Logger
 
 // Applet data and controlers.
 //
 type Applet struct {
-	*dock.CDApplet
+	cdtype.AppBase // Applet base and dock connection.
 
 	// Main interfaces.
 	render RendererMail
 	data   Mailbox
 	conf   *mailConf
-
-	// Only one menu can be opened, and we want to be sure we end up on the good
-	// action in case a few settings might have changed (ex: monitor closed)
-	menuOpened []int
 
 	// Local variables.
 	err error // Buffer for last error to prevent displaying it twice.
@@ -36,22 +32,20 @@ type Applet struct {
 
 // NewApplet create a new applet instance.
 //
-func NewApplet() dock.AppletInstance {
-	app := &Applet{CDApplet: dock.NewCDApplet()} // Icon controler and interface to cairo-dock.
+func NewApplet() cdtype.AppInstance {
+	app := &Applet{AppBase: dock.NewCDApplet()} // Icon controler and interface to cairo-dock.
+	log = app.Log()
 
 	app.defineActions()
 
 	// Prepare mailbox with the display callback that will receive update info.
 	app.data = NewFeed(app.updateDisplay)
 
-	// The poller will check for new mails on a timer.
+	// The poller will check for new mails on a timer, with a small emblem during the polling.
 	poller := app.AddPoller(app.data.Check)
-
-	// Display a small emblem during the polling, and clear it after.
 	poller.SetPreCheck(func() { app.SetEmblem(app.FileLocation("img", "go-down.svg"), cdtype.EmblemTopLeft) })
 	poller.SetPostCheck(func() { app.SetEmblem("none", cdtype.EmblemTopLeft) })
 
-	logger = app.Log
 	return app
 }
 
@@ -62,7 +56,7 @@ func (app *Applet) Init(loadConf bool) {
 
 	// Reset data to be sure our display will be refreshed.
 	app.data.Clear()
-	app.data.LoadLogin(filepath.Join(app.RootDataDir, loginLocation))
+	app.data.LoadLogin(app.FileDataDir(loginLocation))
 	app.err = nil
 
 	// Define the mail client action.
@@ -81,25 +75,27 @@ func (app *Applet) Init(loadConf bool) {
 	}
 
 	// Set defaults to dock icon: display and controls.
-	app.SetDefaults(dock.Defaults{
-		Shortkeys:      []string{app.conf.ShortkeyOpen, app.conf.ShortkeyCheck},
+	app.SetDefaults(cdtype.Defaults{
 		Label:          "Mail unchecked",
 		Icon:           icon,
 		Templates:      []string{DialogTemplate},
-		PollerInterval: dock.PollerInterval(app.conf.UpdateDelay*60, defaultUpdateDelay),
-		Commands: dock.Commands{
-			"mailClient": dock.NewCommandStd(app.conf.MailClientAction+1, app.conf.MailClientName, app.conf.MailClientClass)}, // Add 1 to action as we don't provide the none option.
+		PollerInterval: cdtype.PollerInterval(app.conf.UpdateDelay*60, defaultUpdateDelay),
+		Commands: cdtype.Commands{
+			"mailClient": cdtype.NewCommandStd(app.conf.MailClientAction+1, app.conf.MailClientName, app.conf.MailClientClass)}, // Add 1 to action as we don't provide the none option.
+		Shortkeys: []cdtype.Shortkey{
+			{"Actions", "ShortkeyOpen", "Open mail client", app.conf.ShortkeyOpen},
+			{"Actions", "ShortkeyCheck", "Check mails now", app.conf.ShortkeyCheck}},
 		Debug: app.conf.Debug})
 
 	// Create the renderer.
 	switch app.conf.Renderer {
 	case QuickInfo:
-		app.render = NewRenderedQuick(app.CDApplet)
+		app.render = NewRenderedQuick(app)
 
 	case EmblemSmall, EmblemLarge:
 		var e error
-		app.render, e = NewRenderedSVG(app.CDApplet, app.conf.Renderer)
-		app.Log.Err(e, "renderer svg")
+		app.render, e = NewRenderedSVG(app, app.conf.Renderer)
+		log.Err(e, "renderer svg")
 
 	default: // NoDisplay case, but using default to be sure we have a valid renderer.
 		app.render = NewRenderedNone()
@@ -111,54 +107,39 @@ func (app *Applet) Init(loadConf bool) {
 
 // DefineEvents set applet events callbacks.
 //
-func (app *Applet) DefineEvents() {
+func (app *Applet) DefineEvents(events *cdtype.Events) {
 
 	// Left click: try to launch configured action.
 	//
-	app.Events.OnClick = func() {
-		app.testAction(app.Actions.ID(app.conf.ActionClickLeft))
+	events.OnClick = func() {
+		app.testAction(app.ActionID(app.conf.ActionClickLeft))
 	}
 
 	// Middle click: try to launch configured action.
 	//
-	app.Events.OnMiddleClick = func() {
-		app.testAction(app.Actions.ID(app.conf.ActionClickMiddle))
+	events.OnMiddleClick = func() {
+		app.testAction(app.ActionID(app.conf.ActionClickMiddle))
 	}
 
 	// Right click menu. Provide actions list or registration request.
 	//
-	app.Events.OnBuildMenu = func() {
+	events.OnBuildMenu = func(menu cdtype.Menuer) {
 		haveApp, _ := app.HaveMonitor()
 		switch {
 		case !app.data.IsValid(): // No running loop =  no registration. User will do as expected !
-			app.menuOpened = menuRegister
+			app.BuildMenu(menu, menuRegister)
 
 		case haveApp: // Monitored application opened.
-			app.menuOpened = menuFull[1:] // Drop "Open client" option, already provided by the dock.
+			app.BuildMenu(menu, menuFull[1:]) // Drop "Open client" option, already provided as window action by the dock.
 
 		default:
-			app.menuOpened = menuFull
+			app.BuildMenu(menu, menuFull)
 		}
-
-		app.BuildMenu(app.menuOpened)
-	}
-
-	// Menu entry selected. Launch the expected action.
-	//
-	app.Events.OnMenuSelect = func(numEntry int32) {
-		app.Actions.Launch(app.menuOpened[numEntry])
-	}
-
-	// User is providing his login informations, save to disk.
-	//
-	app.Events.OnAnswerDialog = func(button int32, data interface{}) {
-		app.data.SaveLogin(data.(string))
-		app.Actions.Launch(ActionCheckMail) // CheckMail will launch a check and reset the timer.
 	}
 
 	// Launch action configured for given shortkey.
 	//
-	app.Events.OnShortkey = func(key string) {
+	events.OnShortkey = func(key string) {
 		if key == app.conf.ShortkeyOpen {
 			app.testAction(ActionOpenClient)
 		}
@@ -174,37 +155,36 @@ func (app *Applet) DefineEvents() {
 // Define applet actions. Order must match actions const declaration order.
 //
 func (app *Applet) defineActions() {
-	app.Actions.Add(
-		&dock.Action{
-			ID: ActionNone,
-			// Icontype: 2,
+	app.ActionAdd(
+		&cdtype.Action{
+			ID:   ActionNone,
 			Menu: cdtype.MenuSeparator,
 		},
-		&dock.Action{
+		&cdtype.Action{
 			ID:   ActionOpenClient,
 			Name: "Open mail client",
 			Icon: "gtk-open",
-			Call: func() { app.actionOpenClient() },
+			Call: app.actionOpenClient,
 		},
-		&dock.Action{
+		&cdtype.Action{
 			ID:       ActionCheckMail,
 			Name:     "Check now",
 			Icon:     "gtk-refresh",
-			Call:     func() { app.actionCheckMail() },
+			Call:     app.actionCheckMail,
 			Threaded: true,
 		},
-		&dock.Action{
+		&cdtype.Action{
 			ID:       ActionShowMails,
 			Name:     "Show mail dialog",
 			Icon:     "gtk-media-forward",
-			Call:     func() { app.actionShowMails() },
+			Call:     app.actionShowMails,
 			Threaded: true,
 		},
-		&dock.Action{
+		&cdtype.Action{
 			ID:       ActionRegister,
 			Name:     "Set account",
 			Icon:     "gtk-media-forward",
-			Call:     func() { app.actionRegister() },
+			Call:     app.actionRegister,
 			Threaded: true,
 		},
 	)
@@ -215,9 +195,9 @@ func (app *Applet) defineActions() {
 //
 func (app *Applet) testAction(id int) {
 	if app.data.IsValid() {
-		app.Actions.Launch(id)
+		app.ActionLaunch(id)
 	} else {
-		app.Actions.Launch(ActionRegister) // No running loop = no registration. User must comply !
+		app.ActionLaunch(ActionRegister) // No running loop = no registration. User must comply !
 	}
 }
 
@@ -225,7 +205,7 @@ func (app *Applet) testAction(id int) {
 // the user activated the application monitoring option.
 //
 func (app *Applet) actionOpenClient() {
-	app.LaunchCommand("mailClient")
+	app.CommandLaunch("mailClient")
 }
 
 // Send the refresh event to the poller. It will reset our timer and
@@ -236,19 +216,35 @@ func (app *Applet) actionCheckMail() {
 }
 
 // Show dialog with informations on last mails.
+// Infinite duration as it's from a user request.
 //
 func (app *Applet) actionShowMails() {
-	app.mailPopup(app.conf.DialogNbMail, "ListMailsManual")
+	app.mailPopup(app.conf.DialogNbMail, 0, "ListMailsManual")
 }
 
 // Request login informations from user. Popup an AskText dialog.
+// Save to disk and try to get new data if confirmed.
 //
 func (app *Applet) actionRegister() {
-	text := ""
-	if !app.data.IsValid() {
-		text = "No account configured.\n\n"
-	}
-	app.AskText(text+"Please enter your login in the format username:password", "")
+	text := ternary.String(app.data.IsValid(), "", "No account configured.\n\n")
+	e := app.PopupDialog(cdtype.DialogData{
+		Message: text + "Please enter your login in the format username:password",
+		Buttons: "ok;cancel",
+		Widget: cdtype.DialogWidgetText{
+			Editable: true,
+			Visible:  true,
+		},
+		Callback: func(button int, data interface{}) {
+			str, ok := data.(string)
+			if !ok || (button != cdtype.DialogButtonFirst && button != cdtype.DialogKeyEnter) {
+				return
+			}
+			app.data.SaveLogin(str)
+			app.ActionLaunch(ActionCheckMail) // CheckMail will launch a check and reset the timer.
+		},
+	})
+
+	log.Err(e, "popup")
 }
 
 //
@@ -266,7 +262,7 @@ func (app *Applet) updateDisplay(delta int, first bool, e error) {
 	switch {
 	case e != nil:
 		label = "Update Error: " + eventTime + "\n" + e.Error() // Error time is refreshed.
-		app.Log.Err(e, "Check mail")
+		log.Err(e, "Check mail")
 		if app.err == nil || e.Error() != app.err.Error() { // Error buffer, dont warn twice the same information.
 			app.render.Error(e)
 			app.ShowDialog("Mail check error"+e.Error(), int32(app.conf.DialogTimer))
@@ -275,14 +271,14 @@ func (app *Applet) updateDisplay(delta int, first bool, e error) {
 		}
 
 	case first:
-		app.Log.Debug("  * First check", delta)
+		log.Debug("  * First check", delta)
 
 	case delta > 0:
-		app.Log.Debug("  * Count changed", delta)
+		log.Debug("  * Count changed", delta)
 		app.sendAlert(delta)
 
 	case delta == 0:
-		app.Log.Debug("  * ", "no change")
+		log.Debug("  * ", "no change")
 	}
 
 	switch {
@@ -300,7 +296,8 @@ func (app *Applet) updateDisplay(delta int, first bool, e error) {
 //
 func (app *Applet) sendAlert(delta int) {
 	if app.conf.AlertDialogEnabled {
-		app.mailPopup(ternary.Min(delta, app.conf.DialogNbMail), "ListMailsNew")
+		nb := ternary.Min(delta, app.conf.DialogNbMail)
+		app.mailPopup(nb, app.conf.DialogTimer, "ListMailsNew")
 	}
 	if app.conf.AlertAnimName != "" {
 		app.Animate(app.conf.AlertAnimName, int32(app.conf.AlertAnimDuration))
@@ -308,14 +305,14 @@ func (app *Applet) sendAlert(delta int) {
 	if app.conf.AlertSoundEnabled {
 		sound := app.conf.AlertSoundFile
 		if len(sound) == 0 {
-			app.Log.Info("No sound file configured")
+			log.Info("No sound file configured")
 			return
 		}
 		if !filepath.IsAbs(sound) && sound[0] != []byte("~")[0] { // Check for relative path.
 			sound = app.FileLocation(sound)
 		}
 
-		app.Log.ExecAsync("paplay", sound)
+		log.ExecAsync("paplay", sound)
 		// if e := exec.Command("paplay", sound).Start(); e != nil {
 		//~ exec.Command("aplay", sound).Start()
 		// }
@@ -325,7 +322,7 @@ func (app *Applet) sendAlert(delta int) {
 // Show dialog with information for the given number of mails. Can display an
 // additional comment about mails being new if the second param is set to true.
 //
-func (app *Applet) mailPopup(nb int, template string) {
+func (app *Applet) mailPopup(nb, duration int, template string) {
 	// feed := app.data.Data().(*Feed)
 	feed := app.data.(*Feed)
 
@@ -340,24 +337,29 @@ func (app *Applet) mailPopup(nb int, template string) {
 
 	// if app.conf.DialogType == dialogInternal {
 	text, e := app.ExecuteTemplate(DialogTemplate, template, feed)
-	if !app.Log.Err(e, "Template ListMailsNew") {
-		dialog := map[string]interface{}{
-			"message":     strings.TrimRight(text, "\n"), // Remove last EOL if any (from template range).
-			"use-markup":  true,
-			"time-length": int32(app.conf.DialogTimer),
-		}
-		app.Log.Err(app.PopupDialog(dialog, nil), "popup")
-		// app.ShowDialog(text, int32(app.conf.DialogTimer))
+	if log.Err(e, "Template ListMailsNew") {
+		return
 	}
+
+	e = app.PopupDialog(cdtype.DialogData{
+		Message:    strings.TrimRight(text, "\n"), // Remove last EOL if any (from template range).
+		TimeLength: duration,
+		UseMarkup:  true,
+		Buttons:    "gtk-open;cancel",
+		Callback:   cdtype.DialogCallbackIsOK(app.ActionCallback(ActionOpenClient)), // Open mail client if the user press the 1st button.
+		// Widget:     interface{} ,
+	})
+	log.Err(e, "popup")
+
 	// } else {
 	// 	if nb == 1 {
-	// 		app.Log.Err(popUp(feed.Mail[0].AuthorName, feed.Mail[0].Title, app.FileLocation("icon"), app.conf.DialogTimer*1000), "libnotify")
+	// 		log.Err(popUp(feed.Mail[0].AuthorName, feed.Mail[0].Title, app.FileLocation("icon"), app.conf.DialogTimer*1000), "libnotify")
 	// 	} else {
 	// 		title, eTit := app.ExecuteTemplate(DialogTemplate, "TitleCount", feed)
-	// 		app.Log.Err(eTit, "Template TitleCount")
+	// 		log.Err(eTit, "Template TitleCount")
 	// 		text, eTxt := app.ExecuteTemplate(DialogTemplate, "ListMails", feed)
-	// 		app.Log.Err(eTxt, "Template ListMails")
-	// 		app.Log.Err(popUp(title, text, app.FileLocation("icon"), app.conf.DialogTimer*1000), "Libnotify")
+	// 		log.Err(eTxt, "Template ListMails")
+	// 		log.Err(popUp(title, text, app.FileLocation("icon"), app.conf.DialogTimer*1000), "Libnotify")
 	// 	}
 	// }
 

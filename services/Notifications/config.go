@@ -10,9 +10,8 @@ const (
 // 	dialogNotify   = "Desktop notifications"
 // )
 
-//------------------------------------------------------------------------------
-// Config
-//------------------------------------------------------------------------------
+//
+//------------------------------------------------------------------[ CONFIG ]--
 
 type appletConf struct {
 	groupIcon   `group:"Icon"`
@@ -22,6 +21,7 @@ type appletConf struct {
 
 type groupIcon struct {
 	Icon string `conf:"icon"`
+	Name string `conf:"name"`
 }
 
 type groupConfig struct {
@@ -41,4 +41,23 @@ type groupConfig struct {
 	NotifAltIcon string
 
 	Debug bool
+}
+
+//
+//----------------------------------------------------------[ ACTIONS & MENU ]--
+
+// List of actions defined in this applet. Order must match defineActions
+// declaration order.
+//
+const (
+	ActionNone = iota
+	ActionShowAll
+	ActionClear
+)
+
+// Actions available in the menu.
+//
+var menuUser = []int{
+	ActionShowAll,
+	ActionClear,
 }

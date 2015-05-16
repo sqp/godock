@@ -42,6 +42,10 @@ func (app *Applet) setBuildTarget() {
 		target := list[app.targetID]
 		switch build.GetBuildType(target) {
 
+		case build.Godock:
+			app.target = &build.BuilderGodock{}
+			// app.target.SetDir(app.conf.SourceDir)
+
 		case build.Core:
 			app.target = &build.BuilderCore{}
 			app.target.SetDir(app.conf.SourceDir)
@@ -58,7 +62,7 @@ func (app *Applet) setBuildTarget() {
 				app.target.SetDir(pack.Dir())
 
 			} else {
-				app.Log.NewErr("applet not found: "+target, "set build target")
+				log.NewErr("applet not found: "+target, "set build target")
 				app.target = &build.BuilderNull{}
 
 				// app.target = &BuildCompiled{
@@ -104,11 +108,11 @@ func (app *Applet) restartTarget() {
 		return
 	}
 	target := app.conf.BuildTargets[app.targetID]
-	app.Log.Info("restart", target)
+	log.Info("restart", target)
 	switch build.GetBuildType(target) {
 	case build.AppletScript, build.AppletCompiled:
-		if target == app.AppletName { // Don't eat the chicken, or you won't have any more eggs.
-			logger.ExecAsync("make", "reload")
+		if target == app.Name() { // Don't eat the chicken, or you won't have any more eggs.
+			log.ExecAsync("make", "reload")
 		} else {
 			appdbus.AppletRemove(target + ".conf")
 			appdbus.AppletAdd(target)
@@ -116,9 +120,11 @@ func (app *Applet) restartTarget() {
 			// app.ActivateModule(target, true)
 		}
 
+	case build.Godock:
+
 	default:
 		func() {
-			logger.ExecAsync("cdc", "restart")
+			log.ExecAsync("cdc", "restart")
 		}()
 
 	}
@@ -191,9 +197,9 @@ func NewBranch(branch, dir string) *Branch {
 // Get revisions informations.
 //
 func (branch *Branch) findNew() (new int, e error) {
-	logger.Debug("Get version", branch.Branch)
+	log.Debug("Get version", branch.Branch)
 	branch.GotData = false
-	if logger.Err(os.Chdir(branch.Dir), "findNew Chdir") {
+	if log.Err(os.Chdir(branch.Dir), "findNew Chdir") {
 		return
 	}
 
@@ -214,17 +220,17 @@ func (branch *Branch) findNew() (new int, e error) {
 	lastKnown := branch.Delta
 	branch.Delta = server - current
 
-	logger.Debug("", "local=", current, "server=", server, "delta=", branch.Delta, "new=", branch.Delta-lastKnown)
+	log.Debug("", "local=", current, "server=", server, "delta=", branch.Delta, "new=", branch.Delta-lastKnown)
 
-	// logger.Info("versions", lastKnown, branch.Delta)
+	// log.Info("versions", lastKnown, branch.Delta)
 
 	// Get log info for new commits.
 	logInfo := ""
 	if branch.Delta-lastKnown > 0 {
 		nb := ternary.Min(branch.Delta, 5)
-		logInfo, e = logger.ExecSync(CmdBzr, "log", LocationLaunchpad+branch.Branch, "--line", "-l"+strconv.Itoa(nb))
-		logger.Warn(e, "bzr log "+branch.Branch)
-		// logger.Info("Cairo-Dock Commit", logInfo)
+		logInfo, e = log.ExecSync(CmdBzr, "log", LocationLaunchpad+branch.Branch, "--line", "-l"+strconv.Itoa(nb))
+		log.Warn(e, "bzr log "+branch.Branch)
+		// log.Info("Cairo-Dock Commit", logInfo)
 	}
 	branch.Log = logInfo
 
@@ -242,26 +248,28 @@ func (branch *Branch) findNew() (new int, e error) {
 
 func getRevision(args ...string) int {
 	args = append([]string{"revno"}, args...)
-	rev, e := logger.ExecSync(CmdBzr, args...)
+	rev, e := log.ExecSync(CmdBzr, args...)
 
-	if len(args) == 1 { // no args, adding local for error display.
-		args = append(args, "local")
-	}
-	if !logger.Err(e, "Check revision: "+CmdBzr+" "+strings.Join(args, " ")) {
+	// if len(args) == 1 { // no args, adding local for error display.
+	// 	args = append(args, "local")
+	// }
+	if e != nil { // ignore the returned error to provide something more useful "than exit status 3"
+		log.NewErr(strings.TrimRight(rev, "\n"), "Check revision")
+	} else {
 		version, e := trimInt(string(rev))
-		if !logger.Err(e, "Check revision: type mismatch: "+string(rev)) {
+		if !log.Err(e, "Check revision: type mismatch: "+string(rev)) {
 			return version
 		}
 	}
 	return 0
 }
 
-func (branch *Branch) update(dir string, progress func(float64)) (new int, e error) {
-	if e = os.Chdir(dir); e != nil {
+func (branch *Branch) update() (new int, e error) { // , progress func(float64)
+	if e = os.Chdir(branch.Dir); e != nil {
 		return 0, e
 	}
-	ret, e := logger.ExecSync(CmdBzr, "up") // "pull", LocationLaunchpad+branch.Branch)
-	logger.Info("PULL", ret)
+	e = log.ExecShow(CmdBzr, "up") // "pull", LocationLaunchpad+branch.Branch)
+	// log.Info("PULL", ret)
 	return 0, e
 }
 
@@ -280,7 +288,7 @@ if _, e := os.Stat(app.conf.ScriptName); e != nil { // script missing ?.
 		//~ logE("Download script failed", errors.New("Check the wget log"))
 		return
 	}
-	logger.Println("Saved", path.Join(app.conf.ScriptLocation, app.conf.ScriptName))
+	log.Println("Saved", path.Join(app.conf.ScriptLocation, app.conf.ScriptName))
 		if logE("Can't chmod", execShow("chmod", "a+x", app.conf.ScriptName)) { // allow execute.
 			return
 		}

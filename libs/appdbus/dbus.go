@@ -40,9 +40,9 @@ Some of the actions to play with SubIcons:
 	)
 	app.RemoveSubIcon("id1")
 
-	app.Icons["id3"].SetQuickInfo("OK")
-	app.Icons["id2"].SetLabel("label changed")
-	app.Icons["id3"].Animate("fire", 3)
+	app.SubIcon("id3").SetQuickInfo("OK")
+	app.SubIcon("id2").SetLabel("label changed")
+	app.SubIcon("id3").Animate("fire", 3)
 
 Still to do;
 	* Icon Actions missing: PopupDialog, AddMenuItems
@@ -52,14 +52,13 @@ package appdbus
 import (
 	"github.com/godbus/dbus"
 
-	"github.com/sqp/pulseaudio"
-
 	"github.com/sqp/godock/libs/cdtype"             // Applets types.
 	"github.com/sqp/godock/libs/srvdbus/dbuscommon" // Dbus session.
 
 	"errors"
-	"reflect"
+	"os"
 	"strings"
+	"time"
 )
 
 // Dbus dock paths.
@@ -74,34 +73,146 @@ const (
 // DbusPathDock is the Dbus path to the dock. It depends on the name the dock was started with.
 var DbusPathDock dbus.ObjectPath = "/org/cairodock/CairoDock"
 
+//
+//------------------------------------------------------------[ START APPLET ]--
+
+// StartApplet will prepare and launch a standalone cairo-dock applet.
+// If you have provided events, they will respond when needed, and you have
+// nothing more to worry about your applet management.
+// It can handle only one poller for now.
+//
+// List of the steps, and their effect:
+//   * Load applet events definition = DefineEvents().
+//   * Connect the applet to cairo-dock with DBus. This also activate events callbacks.
+//   * Initialise applet with option load config activated = Init(true).
+//   * Start and run the polling loop if needed. This start a instant check, and
+//     manage regular and manual timer refresh.
+//   * Wait for the dock End signal to close the applet.
+//
+func StartApplet(app cdtype.AppInstance) {
+	if app == nil {
+		println("dock applet failed to create")
+		os.Exit(1)
+	}
+
+	// Define and connect events to the dock.
+	args := os.Args
+	appDir, _ := os.Getwd() // standalone applet, using current dir.
+	backend := NewWithApp(app, args, appDir)
+
+	dbusEvent, e := backend.ConnectToBus()
+	log := app.Log()
+	if log.Err(e, "ConnectToBus") { // Mandatory.
+		os.Exit(1)
+	}
+
+	// Initialise applet: Load config and apply user settings.
+	app.Init(true)
+
+	log.Debug("Applet started")
+	defer log.Debug("Applet stopped")
+
+	var waiter <-chan time.Time
+	poller := app.Poller()
+	if poller != nil {
+		poller.Restart() // Check poller directly on start.
+		waiter = poller.Wait()
+	}
+
+	// Start main loop and handle events until the End signal is received from the dock.
+	for {
+		select { // Wait for events. Until the End signal is received from the dock.
+
+		case s := <-dbusEvent: // Listen to DBus events.
+			if backend.OnSignal(s) {
+				return // Signal was stop_module. That's all folks. We're closing.
+			}
+
+		case <-waiter: // Wait for the end of the timer. Reloop and check.
+			poller.Restart() // recheck poller.
+			waiter = poller.Wait()
+		}
+	}
+}
+
+//
+//------------------------------------------------------------------[ CDDBUS ]--
+
 // CDDbus is an applet connection to Cairo-Dock using Dbus.
 //
 type CDDbus struct {
-	Icons     map[string]*SubIcon // SubIcons index (by ID).
-	Events    cdtype.Events       // Dock events for the icon.
-	SubEvents cdtype.SubEvents    // Dock events for subicons.
+	log cdtype.Logger // Applet logger.
 
-	Log cdtype.Logger // Applet logger.
-
-	busPath dbus.ObjectPath
-
-	// private data
-	dbusIcon *dbus.Object
-	dbusSub  *dbus.Object
-
-	hooker *pulseaudio.Hooker
+	busPath    dbus.ObjectPath                   // Dbus path to the dock (depends on the program name at launch).
+	dbusIcon   *dbus.Object                      // Icon remote actions object.
+	dbusSub    *dbus.Object                      // Subicon remote actions object.
+	icons      map[string]*SubIcon               // SubIcons index (by ID).
+	onEvent    func(string, ...interface{}) bool // Callback to dock.OnEvent to forward.
+	dialogCall func(int, interface{})            // Dialog callback action.
+	menu       *Menu                             // Opened menu titles and callbacks.
 }
 
 // New creates a CDDbus connection.
 //
 func New(path string) *CDDbus {
 	return &CDDbus{
-		Icons:   make(map[string]*SubIcon),
+		icons:   make(map[string]*SubIcon),
 		busPath: dbus.ObjectPath(path),
-		hooker:  pulseaudio.NewHooker(),
+		menu:    &Menu{},
 	}
 }
 
+// New creates a CDDbus connection and binds it to an applet instance.
+//
+func NewWithApp(app cdtype.AppInstance, args []string, dir string) *CDDbus {
+	name := args[0][2:] // Strip ./ in the beginning.
+
+	app.SetBase(name, args[3], args[4], dir)
+	// app.ParentAppName = args[5]
+
+	backend := New(args[2])
+	app.SetBackend(backend)
+	app.SetEvents(app)
+
+	backend.log = app.Log()
+	return backend
+}
+
+// SetOnEvent sets the OnEvent callback to forwards events.
+//
+func (o *CDDbus) SetOnEvent(onEvent func(string, ...interface{}) bool) {
+	o.onEvent = onEvent
+}
+
+// SubIcon returns the subicon object matching the given key.
+//
+func (o *CDDbus) SubIcon(key string) cdtype.IconBase {
+	return o.icons[key]
+}
+
+// RemoveSubIcons removes all subicons from the applet. (To be called in init).
+//
+func (o *CDDbus) RemoveSubIcons() {
+	for icon := range o.icons { // Remove old subicons.
+		o.RemoveSubIcon(icon)
+	}
+}
+
+// HaveMonitor gives the state of the monitored application. See cdtype.AppIcon.
+//
+func (o *CDDbus) HaveMonitor() (haveApp bool, haveFocus bool) {
+	Xid, e := o.Get("Xid")
+	o.log.Err(e, "Xid")
+
+	if id, ok := Xid.(uint64); ok {
+		haveApp = id > 0
+	}
+
+	HasFocus, _ := o.Get("has_focus")
+	return haveApp, HasFocus.(bool)
+}
+
+//
 //------------------------------------------------------------[ DBUS CONNECT ]--
 
 // ConnectToBus connects the applet manager to the dock and register events callbacks.
@@ -119,9 +230,6 @@ func (cda *CDDbus) ConnectToBus() (<-chan *dbus.Signal, error) {
 //
 func (cda *CDDbus) ConnectEvents(conn *dbus.Conn) error {
 
-	cda.hooker.AddCalls(DockCalls)
-	cda.hooker.AddTypes(DockTests)
-
 	cda.dbusIcon = conn.Object(DbusObject, cda.busPath)
 	cda.dbusSub = conn.Object(DbusObject, cda.busPath+"/sub_icons")
 	if cda.dbusIcon == nil || cda.dbusSub == nil {
@@ -133,9 +241,9 @@ func (cda *CDDbus) ConnectEvents(conn *dbus.Conn) error {
 	matchSubs := "type='signal',path='" + string(cda.busPath) + "/sub_icons',interface='" + DbusInterfaceSubapplet + "',sender='" + DbusObject + "'"
 
 	e := conn.BusObject().Call("org.freedesktop.DBus.AddMatch", 0, matchIcon).Err
-	cda.Log.Err(e, "connect to icon DBus events")
+	cda.log.Err(e, "connect to icon DBus events")
 	e = conn.BusObject().Call("org.freedesktop.DBus.AddMatch", 0, matchSubs).Err
-	cda.Log.Err(e, "connect to subicons DBus events")
+	cda.log.Err(e, "connect to subicons DBus events")
 
 	return e
 }
@@ -148,24 +256,44 @@ func (cda *CDDbus) OnSignal(s *dbus.Signal) (exit bool) {
 		return false
 	}
 
-	cda.Log.Debug("signal", s)
-
 	name := strings.TrimPrefix(string(s.Name), DbusInterfaceApplet+".")
 	if name != s.Name { // dbus interface matched.
-		if cda.hooker.Call(name, s) { // New method with auto register.
-			// return // signal was defined (even if no clients are connected).
+		switch name {
+		case "on_answer_dialog": // Callback is already provided.
+			if cda.dialogCall != nil && len(s.Body) > 1 {
+				value := s.Body[1].(dbus.Variant).Value()
+				cda.dialogCall(int(s.Body[0].(int32)), value)
+			}
+			return false
+
+		case "on_build_menu": // Provide the simple menu builder.
+			cda.menu.Clear()
+			cda.onEvent(name, cdtype.Menuer(cda.menu))
+			cda.PopulateMenu(cda.menu.Names...)
+			return false
+
+		case "on_menu_select": // Callback is already provided.
+			cda.menu.Launch(s.Body[0].(int32))
+			return false
 		}
-		return cda.receivedMainEvent(name, s.Body)
+
+		return cda.onEvent(name, s.Body...) // New and old callbacks methods.
 	}
 
 	name = strings.TrimPrefix(string(s.Name), DbusInterfaceSubapplet+".")
 	if name != s.Name { // dbus interface matched.
-		cda.hooker.Call(name, s)
-		cda.receivedSubEvent(name, s.Body)
+		if name == "on_build_menu_sub_icon" { // Provide the simple menu builder.
+			cda.menu.Clear()
+			cda.onEvent(name, cdtype.Menuer(cda.menu), s.Body[0].(string))
+			cda.PopulateMenu(cda.menu.Names...)
+			return false
+		}
+
+		cda.onEvent(name, s.Body...)
 		return false
 	}
 
-	cda.Log.Info("unknown signal", s)
+	cda.log.Info("unknown signal", s)
 	return false
 }
 
@@ -254,46 +382,48 @@ func (cda *CDDbus) ShowDialog(message string, duration int32) error {
 	return cda.dbusIcon.Go(DbusInterfaceApplet+".ShowDialog", 0, nil, message, duration).Err
 }
 
-// PopupDialog open a dialog box . The dialog can contain a message, an icon,
-// some buttons, and a widget the user can act on.
+// PopupDialog open a dialog box . See cdtype.AppIcon.
 //
-// Adding buttons will trigger an on_answer_dialog signal when the user press
-// one of them. "ok" and "cancel" are used as keywords defined by the dock.
-//
-// Dialog attributes:
-//   message        string    dialog box text (default=empty).
-//   icon           string    icon displayed next to the message (default=applet icon).
-//   time-length    bool      duration of the dialog, in second (default=unlimited).
-//   force-above    bool      true to force the dialog above. Use it with parcimony (default=false)
-//   use-markup     bool      true to use Pango markup to add text decorations (default=false).
-//   buttons        string    images of the buttons, separated by comma ";" (default=none).
-//
-// Widget attributes:
-//   type          string    type of the widget: "text-entry" or "scale" or "list".
-//
-// Widget text-entry attributes:
-//   multi-lines    bool      true to have a multi-lines text-entry, ie a text-view (default=false).
-//   editable       bool      whether the user can modify the text or not (default=true).
-//   visible        bool      whether the text will be visible or not (useful to type passwords) (default=true).
-//   nb-chars       int32     maximum number of chars (the current number of chars will be displayed next to the entry) (default=infinite).
-//   initial-value  string    text initially contained in the entry (default=empty).
-//
-// Widget scale attributes:
-//   min-value      double    lower value (default=0).
-//   max-value      double    upper value (default=100).
-//   nb-digit       int32     number of digits after the dot (default=2).
-//   initial-value  double    value initially set to the scale (default=0).
-//   min-label      string    label displayed on the left of the scale (default=empty).
-//   max-label      string    label displayed on the right of the scale (default=empty).
-//
-// Widget list attributes:
-//   editable       bool      true if a non-existing choice can be entered by the user (in this case, the content of the widget will be the selected text, and not the number of the selected line) (false by default)
-//   values         string    a list of values, separated by comma ";", used to fill the combo list.
-//   initial-value  string or int32 depending on the "editable" attribute :
-//        case editable=true:   string with the default text for the user entry of the widget (default=empty).
-//        case editable=false:  int with the selected line number (default=0).
-//
-func (cda *CDDbus) PopupDialog(dialog map[string]interface{}, widget map[string]interface{}) error {
+// func (cda *CDDbus) PopupDialog(dialog map[string]interface{}, widget map[string]interface{}) error {
+func (cda *CDDbus) PopupDialog(data cdtype.DialogData) error {
+	dialog := map[string]interface{}{
+		"message":     data.Message,
+		"icon":        data.Icon,
+		"time-length": int32(data.TimeLength),
+		"force-above": data.ForceAbove,
+		"use-markup":  data.UseMarkup,
+		"buttons":     data.Buttons,
+	}
+
+	var widget map[string]interface{}
+	switch dw := data.Widget.(type) {
+
+	case cdtype.DialogWidgetText:
+		widget = map[string]interface{}{
+			"widget-type":   "text-entry",
+			"multi-lines":   dw.MultiLines,
+			"editable":      dw.Editable,
+			"visible":       dw.Visible,
+			"nb-chars":      int32(dw.NbChars),
+			"initial-value": dw.InitialValue,
+		}
+
+	case cdtype.DialogWidgetScale:
+		widget = map[string]interface{}{
+			"widget-type":   "scale",
+			"min-value":     dw.MinValue,
+			"max-value":     dw.MaxValue,
+			"nb-digit":      int32(dw.NbDigit),
+			"initial-value": dw.InitialValue,
+			"min-label":     dw.MinLabel,
+			"max-label":     dw.MaxLabel,
+		}
+
+	default:
+		widget = make(map[string]interface{})
+	}
+	cda.dialogCall = data.Callback
+
 	return cda.launch(cda.dbusIcon, DbusInterfaceApplet+".PopupDialog", toMapVariant(dialog), toMapVariant(widget))
 }
 
@@ -362,7 +492,6 @@ func (cda *CDDbus) AddMenuItems() error {
 			"id":   int32(1),
 			// "tooltip": "this is the tooltip that will appear when you hover this entry",
 		},
-		{},
 	}
 
 	var data []map[string]dbus.Variant
@@ -380,10 +509,10 @@ func (cda *CDDbus) AddMenuItems() error {
 	// "tooltip": "this is the tooltip that will appear when you hover this entry",
 	// }
 
-	// cda.Log.Info("struct", data)
-	// cda.Log.Err(cda.launch(cda.dbusIcon, DbusInterfaceApplet+".AddMenuItems", data), "AddMenuItems")
-	// cda.Log.Err(cda.dbusIcon.Call(DbusInterfaceApplet+".AddMenuItems", 0, data).Err, "additems")
-	cda.Log.NewErr("Disabled, prevent a crash")
+	// cda.log.Info("struct", data)
+	// cda.log.Err(cda.launch(cda.dbusIcon, DbusInterfaceApplet+".AddMenuItems", data), "AddMenuItems")
+	// cda.log.Err(cda.dbusIcon.Call(DbusInterfaceApplet+".AddMenuItems", 0, data).Err, "additems")
+	cda.log.NewErr("Disabled, prevent a crash")
 	return nil
 }
 
@@ -394,32 +523,16 @@ func (cda *CDDbus) PopulateMenu(items ...string) error {
 	return cda.launch(cda.dbusIcon, DbusInterfaceApplet+".PopulateMenu", items)
 }
 
-// BindShortkey binds one or more keyboard shortcuts to your applet. Only non
-// empty shortkeys will be sent to the dock so you can use this method to
-// directly add them from config.
+// BindShortkey binds one or more keyboard shortcuts to your applet.
 //
-func (cda *CDDbus) BindShortkey(shortkeys ...string) error {
-	return cda.launch(cda.dbusIcon, DbusInterfaceApplet+".BindShortkey", shortkeys)
-}
-
-// AskText pops up a dialog with a text entry to ask user feedback.
-// The answer will be forwarded with the OnAnswerDialog callback.
-//
-func (cda *CDDbus) AskText(message, initialText string) error {
-	return cda.dbusIcon.Call("AskText", 0, message, initialText).Err
-}
-
-// AskValue pops up a dialog with a slider to get user feedback.
-// The answer will be forwarded with the OnAnswerDialog callback.
-//
-func (cda *CDDbus) AskValue(message string, initialValue, maxValue float64) error {
-	return cda.dbusIcon.Call("AskValue", 0, message, initialValue, maxValue).Err
-}
-
-// AskQuestion need more documentation TODO.
-//
-func (cda *CDDbus) AskQuestion(message string) error {
-	return cda.dbusIcon.Call("AskQuestion", 0, message).Err
+func (cda *CDDbus) BindShortkey(shortkeys ...cdtype.Shortkey) error {
+	var list []string
+	for _, sk := range shortkeys {
+		// if sk != "" {
+		list = append(list, sk.Shortkey)
+		// }
+	}
+	return cda.launch(cda.dbusIcon, DbusInterfaceApplet+".BindShortkey", list)
 }
 
 // Get a property of the icon of your applet. Current available properties are :
@@ -442,7 +555,7 @@ func (cda *CDDbus) Get(property string) (interface{}, error) {
 //
 func (cda *CDDbus) GetAll() *cdtype.DockProperties {
 	vars := make(map[string]dbus.Variant)
-	if cda.Log.Err(cda.dbusIcon.Call("GetAll", 0).Store(&vars), "dbus GetAll") {
+	if cda.log.Err(cda.dbusIcon.Call("GetAll", 0).Store(&vars), "dbus GetAll") {
 		return nil
 	}
 
@@ -478,7 +591,7 @@ func (cda *CDDbus) GetAll() *cdtype.DockProperties {
 func (cda *CDDbus) AddSubIcon(fields ...string) error {
 	for i := 0; i < len(fields)/3; i++ {
 		id := fields[3*i+2]
-		cda.Icons[id] = &SubIcon{cda.dbusSub, id}
+		cda.icons[id] = &SubIcon{cda.dbusSub, id}
 	}
 	return cda.launch(cda.dbusSub, DbusInterfaceSubapplet+".AddSubIcons", fields)
 }
@@ -486,13 +599,13 @@ func (cda *CDDbus) AddSubIcon(fields ...string) error {
 // RemoveSubIcon only need the ID to remove the SubIcon.
 //
 func (cda *CDDbus) RemoveSubIcon(id string) error {
-	if _, ok := cda.Icons[id]; !ok {
+	if _, ok := cda.icons[id]; !ok {
 		return errors.New("RemoveSubIcon Icon missing: " + id)
 	}
 
 	e := cda.launch(cda.dbusSub, DbusInterfaceSubapplet+".RemoveSubIcon", id)
 	if e == nil {
-		delete(cda.Icons, id)
+		delete(cda.icons, id)
 	}
 	return e
 }
@@ -542,100 +655,6 @@ func (cdi *SubIcon) ShowDialog(message string, duration int32) error {
 }
 
 //
-//----------------------------------------------------------[ EVENT CALLBACK ]--
-
-// Event receiver, dispatch it to the configured callback.
-//
-func (cda *CDDbus) receivedMainEvent(event string, data []interface{}) (exit bool) {
-	switch event {
-	case "on_stop_module":
-		cda.Log.Debug("Received from dock", event)
-		if cda.Events.End != nil {
-			cda.Events.End()
-		}
-		return true
-
-	case "on_reload_module":
-		if cda.Events.Reload != nil {
-			go cda.Events.Reload(data[0].(bool))
-		}
-	case "on_click":
-		if cda.Events.OnClick != nil {
-			go cda.Events.OnClick()
-		}
-	case "on_middle_click":
-		if cda.Events.OnMiddleClick != nil {
-			go cda.Events.OnMiddleClick()
-		}
-	case "on_build_menu":
-
-		// cda.Log.Info("on_build_menu")
-
-		if cda.Events.OnBuildMenu != nil {
-			go cda.Events.OnBuildMenu()
-		}
-	case "on_menu_select":
-		if cda.Events.OnMenuSelect != nil {
-			go cda.Events.OnMenuSelect(data[0].(int32))
-		}
-	case "on_scroll":
-		if cda.Events.OnScroll != nil {
-			go cda.Events.OnScroll(data[0].(bool))
-		}
-	case "on_drop_data":
-		if cda.Events.OnDropData != nil {
-			go cda.Events.OnDropData(data[0].(string))
-		}
-	case "on_answer":
-		if cda.Events.OnAnswer != nil {
-			go cda.Events.OnAnswer(data[0])
-		}
-	case "on_answer_dialog":
-		if cda.Events.OnAnswerDialog != nil {
-			go cda.Events.OnAnswerDialog(data[0].(int32), data[1])
-		}
-	case "on_shortkey":
-		if cda.Events.OnShortkey != nil {
-			go cda.Events.OnShortkey(data[0].(string))
-		}
-	case "on_change_focus":
-		if cda.Events.OnChangeFocus != nil {
-			go cda.Events.OnChangeFocus(data[0].(bool))
-		}
-	default:
-		cda.Log.Info("unknown icon event", event, data)
-	}
-	return false
-}
-
-func (cda *CDDbus) receivedSubEvent(event string, data []interface{}) {
-	switch event {
-	case "on_click_sub_icon":
-		if cda.SubEvents.OnSubClick != nil {
-			go cda.SubEvents.OnSubClick(data[0].(int32), data[1].(string))
-		}
-	case "on_middle_click_sub_icon":
-		if cda.SubEvents.OnSubMiddleClick != nil {
-			go cda.SubEvents.OnSubMiddleClick(data[0].(string))
-		}
-	case "on_scroll_sub_icon":
-		if cda.SubEvents.OnSubScroll != nil {
-			go cda.SubEvents.OnSubScroll(data[0].(bool), data[1].(string))
-		}
-	case "on_drop_data_sub_icon":
-		if cda.SubEvents.OnSubDropData != nil {
-			go cda.SubEvents.OnSubDropData(data[0].(string), data[1].(string))
-		}
-	case "on_build_menu_sub_icon":
-		if cda.SubEvents.OnSubBuildMenu != nil {
-			go cda.SubEvents.OnSubBuildMenu(data[0].(string))
-		}
-	default:
-		cda.Log.Info("unknown subicon event", event, data)
-	}
-}
-
-//
 //------------------------------------------------------------------[ COMMON ]--
 
 // Recast list of args to map[string]dbus.Variant as requested by the DBus API.
@@ -649,250 +668,59 @@ func toMapVariant(input map[string]interface{}) map[string]dbus.Variant {
 }
 
 //
-//-----------------------------------------------------------[ NEW CALLBACKS ]--
+//-------------------------------------------------------------[ MENU SIMPLE ]--
 
-// RegisterEvents connects an object to the dock events hooks it implements.
-// If the object declares any of the method in the Define... interfaces list, it
-// will be registered to receive those events.
+// Menu is a really simple menu to store callbacks at creation to be sure the
+// answer match the user request.
+// It's gonna evolve when we'll have access to the better menu build method, but
+// its goal will stay the same.
 //
-func (cda *CDDbus) RegisterEvents(obj interface{}) (errs []error) {
-	tolisten := cda.hooker.Register(obj)
-	cda.Log.Debug("listened events", tolisten)
-	return errs
+type Menu struct {
+	Actions []interface{} // Menu callbacks are saved to be sure we launch the good action (options can change).
+	Names   []string
 }
 
-// UnregisterEvents disconnects an object from the dock events hooks.
+// Append an item to the menu with its callback.
 //
-func (cda *CDDbus) UnregisterEvents(obj interface{}) (errs []error) {
-	// tolisten := cda.hooker.Unregister(obj)
-	// cda.Log.Info("toliste", tolisten)
-	// _ = tolisten
-	return errs
+func (menu *Menu) AddEntry(label, iconPath string, call interface{}, userData ...interface{}) cdtype.MenuWidgeter {
+	menu.Names = append(menu.Names, label)
+	menu.Actions = append(menu.Actions, call)
+	return nil
 }
 
-// DefineOnClick is an interface to the OnClick method.
-type DefineOnClick interface {
-	OnClick()
-}
-
-// DefineOnMiddleClick is an interface to the OnMiddleClick method.
-type DefineOnMiddleClick interface {
-	OnMiddleClick()
-}
-
-// DefineOnBuildMenu is an interface to the OnBuildMenu method.
-type DefineOnBuildMenu interface {
-	OnBuildMenu()
-}
-
-// DefineOnMenuSelect is an interface to the OnMenuSelect method.
-type DefineOnMenuSelect interface {
-	OnMenuSelect(int32)
-}
-
-// DefineOnScroll is an interface to the OnScroll method.
-type DefineOnScroll interface {
-	OnScroll(up bool)
-}
-
-// DefineOnDropData is an interface to the OnDropData method.
-type DefineOnDropData interface {
-	OnDropData(string)
-}
-
-// DefineOnAnswer is an interface to the OnAnswer method.
-type DefineOnAnswer interface {
-	OnAnswer(interface{})
-}
-
-// DefineOnAnswerDialog is an interface to the OnAnswerDialog method.
-type DefineOnAnswerDialog interface {
-	OnAnswerDialog(int32, interface{})
-}
-
-// DefineOnShortkey is an interface to the OnShortkey method.
-type DefineOnShortkey interface {
-	OnShortkey(string)
-}
-
-// DefineOnChangeFocus is an interface to the OnChangeFocus method.
-type DefineOnChangeFocus interface {
-	OnChangeFocus(bool)
-}
-
-// DefineOnReload is an interface to the OnReload method.
-type DefineOnReload interface {
-	OnReload(bool)
-}
-
-// DefineOnStopModule is an interface to the OnStopModule method.
-type DefineOnStopModule interface {
-	OnStopModule()
-}
-
-// DefineOnSubClick is an interface to the OnSubClick method.
-type DefineOnSubClick interface {
-	OnSubClick(int32, string)
-}
-
-// DefineOnSubMiddleClick is an interface to the OnSubMiddleClick method.
-type DefineOnSubMiddleClick interface {
-	OnSubMiddleClick(string)
-}
-
-// DefineOnSubScroll is an interface to the OnSubScroll method.
-type DefineOnSubScroll interface {
-	OnSubScroll(bool, string)
-}
-
-// DefineOnSubDropData is an interface to the OnSubDropData method.
-type DefineOnSubDropData interface {
-	OnSubDropData(string, string)
-}
-
-// DefineOnSubBuildMenu is an interface to the OnSubBuildMenu method.
-type DefineOnSubBuildMenu interface {
-	OnSubBuildMenu(string)
-}
-
+// Separator adds a separator to the menu.
 //
-//--------------------------------------------------------[ CALLBACK METHODS ]--
-
-// DockCalls defines callbacks methods for matching objects with type-asserted arguments.
-// Public so it can be hacked before the first Register.
-//
-var DockCalls = pulseaudio.Calls{
-	"on_click":         func(m pulseaudio.Msg) { m.O.(DefineOnClick).OnClick() },
-	"on_middle_click":  func(m pulseaudio.Msg) { m.O.(DefineOnMiddleClick).OnMiddleClick() },
-	"on_build_menu":    func(m pulseaudio.Msg) { m.O.(DefineOnBuildMenu).OnBuildMenu() },
-	"on_menu_select":   func(m pulseaudio.Msg) { m.O.(DefineOnMenuSelect).OnMenuSelect(m.D[0].(int32)) },
-	"on_scroll":        func(m pulseaudio.Msg) { m.O.(DefineOnScroll).OnScroll(m.D[0].(bool)) },
-	"on_drop_data":     func(m pulseaudio.Msg) { m.O.(DefineOnDropData).OnDropData(m.D[0].(string)) },
-	"on_answer":        func(m pulseaudio.Msg) { m.O.(DefineOnAnswer).OnAnswer(m.D[0]) },                             // type 0 unknown, to improve
-	"on_answer_dialog": func(m pulseaudio.Msg) { m.O.(DefineOnAnswerDialog).OnAnswerDialog(m.D[0].(int32), m.D[1]) }, // type 1 unknown, to improve
-	"on_shortkey":      func(m pulseaudio.Msg) { m.O.(DefineOnShortkey).OnShortkey(m.D[0].(string)) },
-	"on_change_focus":  func(m pulseaudio.Msg) { m.O.(DefineOnChangeFocus).OnChangeFocus(m.D[0].(bool)) },
-	"on_reload_module": func(m pulseaudio.Msg) { m.O.(DefineOnReload).OnReload(m.D[0].(bool)) },
-	"on_stop_module":   func(m pulseaudio.Msg) { m.O.(DefineOnStopModule).OnStopModule() },
-
-	"on_click_sub_icon":        func(m pulseaudio.Msg) { m.O.(DefineOnSubClick).OnSubClick(m.D[0].(int32), m.D[1].(string)) },
-	"on_middle_click_sub_icon": func(m pulseaudio.Msg) { m.O.(DefineOnSubMiddleClick).OnSubMiddleClick(m.D[0].(string)) },
-	"on_scroll_sub_icon":       func(m pulseaudio.Msg) { m.O.(DefineOnSubScroll).OnSubScroll(m.D[0].(bool), m.D[1].(string)) },
-	"on_drop_data_sub_icon":    func(m pulseaudio.Msg) { m.O.(DefineOnSubDropData).OnSubDropData(m.D[0].(string), m.D[1].(string)) },
-	"on_build_menu_sub_icon":   func(m pulseaudio.Msg) { m.O.(DefineOnSubBuildMenu).OnSubBuildMenu(m.D[0].(string)) },
+func (menu *Menu) Separator() {
+	menu.Names = append(menu.Names, "")
+	menu.Actions = append(menu.Actions, func() {})
 }
 
-// DockTests defines callbacks to test if objects are implementing the callback interface.
-// Public so it can be hacked before the first Register.
-//
-var DockTests = pulseaudio.Types{
-	"on_click":         reflect.TypeOf((*DefineOnClick)(nil)).Elem(),
-	"on_middle_click":  reflect.TypeOf((*DefineOnMiddleClick)(nil)).Elem(),
-	"on_build_menu":    reflect.TypeOf((*DefineOnBuildMenu)(nil)).Elem(),
-	"on_menu_select":   reflect.TypeOf((*DefineOnMenuSelect)(nil)).Elem(),
-	"on_scroll":        reflect.TypeOf((*DefineOnScroll)(nil)).Elem(),
-	"on_drop_data":     reflect.TypeOf((*DefineOnDropData)(nil)).Elem(),
-	"on_answer":        reflect.TypeOf((*DefineOnAnswer)(nil)).Elem(),
-	"on_answer_dialog": reflect.TypeOf((*DefineOnAnswerDialog)(nil)).Elem(),
-	"on_shortkey":      reflect.TypeOf((*DefineOnShortkey)(nil)).Elem(),
-	"on_change_focus":  reflect.TypeOf((*DefineOnChangeFocus)(nil)).Elem(),
-	"on_reload_module": reflect.TypeOf((*DefineOnReload)(nil)).Elem(),
-	"on_stop_module":   reflect.TypeOf((*DefineOnStopModule)(nil)).Elem(),
-
-	"on_click_sub_icon":        reflect.TypeOf((*DefineOnSubClick)(nil)).Elem(),
-	"on_middle_click_sub_icon": reflect.TypeOf((*DefineOnSubMiddleClick)(nil)).Elem(),
-	"on_scroll_sub_icon":       reflect.TypeOf((*DefineOnSubScroll)(nil)).Elem(),
-	"on_drop_data_sub_icon":    reflect.TypeOf((*DefineOnSubDropData)(nil)).Elem(),
-	"on_build_menu_sub_icon":   reflect.TypeOf((*DefineOnSubBuildMenu)(nil)).Elem(),
+func (menu *Menu) SubMenu(label, iconPath string) cdtype.Menuer {
+	return nil
 }
 
-//
-//---------------------------------------------------------[ UNUSED / BUGGED ]--
-
-/*
-
-
-	// Connect defined events callbacks.
-	// typ := reflect.TypeOf(cda.Events)
-	// elem := reflect.ValueOf(&cda.Events).Elem()
-	// for i := 0; i < typ.NumField(); i++ { // Parsing all fields in type.
-	// 	cda.connectEvent(elem.Field(i), typ.Field(i))
-	// }
-
-
-// Connect an event to the dock if a callback is defined.
-//
-func (cda *CDDbus) connectEvent(elem reflect.Value, structField reflect.StructField) {
-	conn, _ := dbus.SessionBus()
-
-	tag := structField.Tag.Get("event")                          // Field must have the event tag.
-	if tag != "" && (!elem.IsNil() || tag == "on_stop_module") { // And a valid callback. stop module is mandatory for the close signal.
-		log.Info("Binded event", tag)
-		// 	rule := &dbus.MatchRule{
-		// 		Type:      dbus.TypeSignal,
-		// 		Interface: DbusInterfaceApplet,
-		// 		Member:    tag,
-		// 		Path:      cda.busPath,
-
-		var ret interface{}
-		e := conn.BusObject().Call(
-			"org.freedesktop.DBus.AddMatch",
-			0,
-			// "type='signal',sender='org.freedesktop.DBus'").Store()
-			"type='signal',path='"+string(cda.busPath)+"',interface='"+DbusInterfaceApplet+"',sender='"+DbusObject+"'").Store()
-		log.DEV("omar", ret, e)
+func (menu *Menu) AddCheckEntry(label string, active bool, call interface{}, userData ...interface{}) cdtype.MenuWidgeter {
+	if active {
+		label = "[x] " + label
+	} else {
+		label = "[ ] " + label
 	}
-
-	// 	cda.dbus.Handle(rule, func(msg *dbus.Message) { cda.receivedMainEvent(msg) })
-	// }
-}
-*/
-
-/*
-func (cda *CDDbus) GetIconProperties() interface{} {
-	base := cda.dbus.Object("org.cairodock.CairoDock", "/org/cairodock/CairoDock").Interface("org.cairodock.CairoDock")
-	//~ return cda.call(base, "GetIconProperties", "container=_MainDock_")
-	return cda.call(base, "GetIconProperties", interface{}("class=chromium-browser"))
-	//~ return cda.call(base, "GetIconProperties")
+	return menu.AddEntry(label, "", call, userData...)
 }
 
-func (cda *CDDbus) GetContainerProperties() []interface{} {
-	//~ props := &DockProperties{}
-
-	base := cda.dbus.Object("org.cairodock.CairoDock", "/org/cairodock/CairoDock").Interface("org.cairodock.CairoDock")
-	data, _ := cda.call(base, "GetContainerProperties", "_MainDock_")
-return data
-	//~ var args []interface{}{}:= interface{}("_MainDock_")
-	//~ args := []string{"_MainDock_"}
-	//~ args := "_MainDock_"
-	//~ return cda.call(base, "GetIconProperties", "container=_MainDock_")
-	//~ return cda.call(base, "GetContainerProperties", "_MainDock_", "")
-	//~ return cda.call(base, "GetIconProperties")
+// Launch calls the action referenced by its id.
+func (menu *Menu) Launch(id int32) {
+	if int(id) < len(menu.Actions) {
+		switch call := menu.Actions[id].(type) {
+		case func():
+			call()
+		}
+	}
 }
 
-
-*/
-
-// func call(connect *dbus.Connection, iface *dbus.Interface, action string, args ...interface{}) error {
-// 	if iface == nil {
-// 		return errors.New("no subicon interface")
-// 	}
-// 	method, e := iface.Method(action)
-// 	if e != nil {
-// 		return e
-// 	}
-// 	_, err := connect.Call(method, args...)
-// 	//~ fmt.Println("ret", ret)
-// 	return err
-// }
-
-// func dbusAsync(connect *dbus.Connection, iface *dbus.Interface, action string, args ...interface{}) error {
-// 	if iface == nil {
-// 		return errors.New("no subicon interface")
-// 	}
-// 	method, e := iface.Method(action)
-// 	if e != nil {
-// 		return e
-// 	}
-// 	return connect.CallAsync(method, args...)
-// }
+// Clear resets the menu items list.
+//
+func (menu *Menu) Clear() {
+	menu.Actions = nil
+	menu.Names = nil
+}

@@ -1,4 +1,4 @@
-// +build NetActivity
+// +build NetActivity || all
 
 package allapps
 

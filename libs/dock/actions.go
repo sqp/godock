@@ -2,33 +2,30 @@ package dock
 
 import "github.com/sqp/godock/libs/cdtype"
 
+//
+//-----------------------------------------------------------------[ ACTIONS ]--
+
 // Actions manages applet internal actions list.
 //
 type Actions struct {
-	list                        []*Action // Actions defined.
-	onActionStart, onActionStop func()    // Before and after main actions calls. Used to set display for threaded tasks.
-	Max                         int       // Maximum number of concurrent actions (simultaneous).
-	Current                     int       // Current number of active actions.
+	list                        []*cdtype.Action // Actions defined.
+	onActionStart, onActionStop func()           // Before and after main actions calls. Used to set display for threaded tasks.
+	Max                         int              // Maximum number of concurrent actions (simultaneous).
+	Current                     int              // Current number of active actions.
 }
 
-// Add action(s) to the list.
+// ActionAdd adds actions to the list.
 //
-func (actions *Actions) Add(acts ...*Action) {
+func (o *Actions) ActionAdd(acts ...*cdtype.Action) {
 	for _, act := range acts {
-		actions.list = append(actions.list, act)
+		o.list = append(o.list, act)
 	}
 }
 
-// Get action details by ID.
+// ActionID finds the ID matching given action name.
 //
-func (actions *Actions) Get(ID int) *Action {
-	return actions.list[ID]
-}
-
-// ID finds the ID matching given action name.
-//
-func (actions *Actions) ID(name string) int {
-	for _, act := range actions.list {
+func (o *Actions) ActionID(name string) int {
+	for _, act := range o.list {
 		if act.Name == name {
 			return act.ID
 		}
@@ -36,75 +33,83 @@ func (actions *Actions) ID(name string) int {
 	return 0
 }
 
-// Launch desired action by ID.
+// ActionLaunch starts the desired action by ID.
 //
-func (actions *Actions) Launch(ID int) {
-	if actions.list[ID].Call == nil || (actions.Max > 0 && actions.Current >= actions.Max) {
+func (o *Actions) ActionLaunch(ID int) {
+	if o.list[ID].Call == nil || (o.Max > 0 && o.Current >= o.Max) {
 		return
 	}
 
-	actions.Current++
-	if actions.onActionStart != nil && actions.list[ID].Threaded {
-		actions.onActionStart()
+	o.Current++
+	if o.onActionStart != nil && o.list[ID].Threaded {
+		o.onActionStart()
 	}
 
-	actions.list[ID].Call()
+	o.list[ID].Call()
 
-	if actions.onActionStart != nil && actions.list[ID].Threaded {
-		actions.onActionStop()
+	if o.onActionStart != nil && o.list[ID].Threaded {
+		o.onActionStop()
 	}
-	actions.Current--
+	o.Current--
 }
 
-// Execute desired action by name.
+// ActionCallback returns a callback to the given action ID.
 //
-// func (actions *Actions) LaunchName(name string) {
-// 	for _, act := range actions.list {
-// 		if act.Name == name {
-// 			actions.Launch(act.ID)
-// 			return
-// 		}
-// 	}
-// }
-
-// SetActionIndicators set the pre and post action callbacks.
-//
-func (actions *Actions) SetActionIndicators(onStart, onStop func()) {
-	actions.onActionStart = onStart
-	actions.onActionStop = onStop
+func (o *Actions) ActionCallback(ID int) func() {
+	return func() { o.ActionLaunch(ID) }
 }
 
-// Action is an applet internal actions that can be used for callbacks or menu.
+// ActionCount returns the number of started actions.
 //
-type Action struct {
-	ID   int
-	Name string
-	Call func()
-	Icon string
-	Menu cdtype.MenuItemType
-
-	// in fact all actions are threaded in the go version, but we could certainly
-	// use this as a "add to actions queue" to prevent problems with settings
-	// changed while working, or double launch.
-	//
-	Threaded bool
+func (o *Actions) ActionCount() int {
+	return o.Current
 }
 
-// BuildMenu construct and popup the menu with the given actions list.
+// ActionSetMax sets the maximum number of actions that can be started at the same time.
 //
-func (cda *CDApplet) BuildMenu(actionIds []int) {
-	var menu []string
+func (o *Actions) ActionSetMax(max int) {
+	o.Max = max
+}
+
+// ActionSetBool sets the pointer to the boolean value for a checkentry menu field.
+//
+func (o *Actions) ActionSetBool(ID int, boolPointer *bool) {
+	o.list[ID].Bool = boolPointer
+}
+
+// ActionSetIndicators set the pre and post action callbacks.
+//
+func (o *Actions) ActionSetIndicators(onStart, onStop func()) {
+	o.onActionStart = onStart
+	o.onActionStop = onStop
+}
+
+//
+//---------------------------------------------------------------[ BUILDMENU ]--
+
+// BuildMenu fills the menu with the given actions list.
+//
+func (o *Actions) BuildMenu(menu cdtype.Menuer, actionIds []int) {
 	for _, ID := range actionIds {
-		act := cda.Actions.Get(ID)
+		act := o.list[ID]
 		switch act.Menu {
 		case cdtype.MenuEntry:
-			menu = append(menu, act.Name)
-		// case cdtype.MenuSubMenu:
+			menu.AddEntry(act.Name, act.Icon, o.ActionCallback(act.ID))
+
 		case cdtype.MenuSeparator:
-			menu = append(menu, "")
-			// case cdtype.MenuCheckBox:
+			menu.Separator()
+
+		case cdtype.MenuCheckBox:
+			menu.AddCheckEntry(act.Name, *act.Bool, o.ActionCallback(act.ID))
+
 			// case cdtype.MenuRadioButton:
+			// case cdtype.MenuSubMenu:
 		}
 	}
-	cda.PopulateMenu(menu...)
+}
+
+// BuildMenuCallback fills the menu with the given actions list.
+//
+func (o *Actions) BuildMenuCallback(actionIds []int) func(menu cdtype.Menuer) {
+	return func(menu cdtype.Menuer) { o.BuildMenu(menu, actionIds) }
 }

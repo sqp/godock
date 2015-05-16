@@ -1,3 +1,4 @@
+// Package backendgui provides a GUI interface to interact with the dock GUI.
 package backendgui
 
 // #cgo pkg-config: gldi
@@ -21,7 +22,6 @@ extern gboolean notifShortkeyUpdate   (G_GNUC_UNUSED gpointer pUserData, G_GNUC_
 
 // Go exported func redeclarations for GUI backend.
 
-// GUI CORE BACKEND
 extern void   showModuleInstanceGui (GldiModuleInstance *pModuleInstance, int iShowPage);
 extern void   setStatusMessage      (gchar *cMessage);
 extern void   reloadCurrentWidget   (GldiModuleInstance *pInstance, int iShowPage);
@@ -49,7 +49,6 @@ static void register_gui (void)
 */
 import "C"
 import (
-	// "github.com/conformal/gotk3/glib"
 	"github.com/conformal/gotk3/gtk"
 
 	"github.com/sqp/godock/libs/gldi"

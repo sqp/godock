@@ -1,4 +1,6 @@
-// +build gtk
+// +build ignored
+
+// build was gtk
 
 package main
 

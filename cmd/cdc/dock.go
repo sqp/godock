@@ -2,8 +2,11 @@
 
 package main
 
+// #cgo pkg-config: gtk+-3.0
+// #include <gtk/gtk.h>
+import "C"
+
 import (
-	"github.com/sqp/godock/libs/appdbus"
 	"github.com/sqp/godock/libs/gldi"
 	"github.com/sqp/godock/libs/gldi/backendgui"
 	"github.com/sqp/godock/libs/gldi/backendmenu"
@@ -11,17 +14,21 @@ import (
 	"github.com/sqp/godock/libs/gldi/gui"
 	"github.com/sqp/godock/libs/gldi/maindock"
 	"github.com/sqp/godock/libs/gldi/menu"
-
-	// loader
-	"github.com/sqp/godock/libs/srvdbus"
+	"github.com/sqp/godock/libs/gldi/mgrgldi"
 	"github.com/sqp/godock/services/allapps"
 
+	// loader
+	"github.com/sqp/godock/libs/appdbus" // hack dock dbus path
+	"github.com/sqp/godock/libs/srvdbus"
+
 	// web inspection.
+	// "github.com/pkg/profile"
 	"net/http"
 	_ "net/http/pprof"
 
 	// "github.com/sqp/godock/libs/gldi/maindock/views" // custom hacked view
 
+	"errors"
 	"fmt"
 )
 
@@ -54,12 +61,12 @@ Options:
               Default is warning.
   -F          Force to display some output messages with colors.
   -k          Lock the dock so that any modification is impossible for users.
-  -a          Keep the dock above other windows whatever.
+  -a          Keep the dock above other windows.
   -s          Don't make the dock appear on all desktops.
   -M path     Ask the dock to load additionnal modules from this directory.
               (though it is unsafe for your dock to load unnofficial modules).
 
-  -N          Don't start the applets service.
+  -N          Don't start the Dbus applets service.
   -H          Http debug server: http://localhost:6987/debug/pprof
   -D          Debug mode for the go part of the code (including applets).
 
@@ -145,19 +152,36 @@ var (
 	srvDebug          *bool
 )
 
+// runDock starts dock routines and lock the main thread with gtk.
+//
 func runDock(cmd *Command, args []string) {
-	if *userVersion {
-		println(globals.Version()) // -v option only prints version.
+	settings := initDock()
+	if settings == nil {
 		return
 	}
 
-	// Applets service. Enabled by default.
-	if !*srvAppletsDisable {
-		go appletService()
+	defer settings.Clean()
+
+	// views.RegisterPanel("spanel")
+
+	settings.Start()
+	// gtk.Main()
+	C.gtk_main()
+}
+
+func initDock() *maindock.DockSettings {
+
+	if *userVersion {
+		println(globals.Version()) // -v option only prints version.
+		return nil
 	}
 
 	// HTTP listener for the pprof debug.
 	if *srvHttpPprof {
+
+		// p := profile.Start()
+		// defer p.Stop()
+
 		go func() { http.ListenAndServe("localhost:6987", nil) }()
 	}
 
@@ -176,6 +200,19 @@ func runDock(cmd *Command, args []string) {
 	logger.Info("   GTK     ", fmt.Sprintf("%d.%d.%d", gtkA, gtkB, gtkC))
 	logger.Info("  OpenGL   ", gldi.GLBackendIsUsed())
 
+	appmgr := mgrgldi.Register(allapps.List(settings.Exclude), logger)
+
+	// Dbus service is enabled by default. Mandatory if enabled, to provide remote control.
+	// This will prevent launching a 2nd instance without the disable Dbus service option.
+	if !*srvAppletsDisable {
+		dbus := serviceDbus()
+		if dbus == nil {
+			logger.NewErr("failed to register", "applets service")
+			return nil
+		}
+		dbus.SetManager(appmgr)
+	}
+
 	gldi.LoadCurrentTheme() // was after registration but caused some problems with refresh on start.
 
 	backendgui.Register(gui.NewConnector(logger))
@@ -184,31 +221,29 @@ func runDock(cmd *Command, args []string) {
 
 	settings.Prepare()
 
-	// views.RegisterPanel("spanel")
-
-	settings.Start()
-
+	return &settings
 }
 
 // Start Loader.
 //
-func appletService() {
+func serviceDbus() *srvdbus.Loader {
 	appdbus.DbusPathDock = "/org/cdc/Cdc" // TODO: improve to autodetect.
 
-	loader := srvdbus.NewLoader(allapps.List(), logger)
+	loader := srvdbus.NewLoader(logger)
 	if loader == nil {
-		return
+		return nil
 	}
 
-	active, e := loader.Start(loader, srvdbus.Introspec)
-	if logger.Err(e, "Start Applets service") {
-		return
+	active, e := loader.Start(loader, srvdbus.Introspect(""))
+	if !active {
+		e = errors.New("service already active")
 	}
 
-	logger.Info("appletService active", active)
-
-	if active {
-		// defer allapps.OnStop()
-		loader.StartLoop(true)
+	if logger.Err(e, "Start Dbus service") {
+		return nil
 	}
+
+	go loader.StartLoop(true)
+
+	return loader
 }

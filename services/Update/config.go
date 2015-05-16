@@ -105,12 +105,12 @@ const (
 	ActionToggleUserMode
 	ActionToggleReload
 	ActionBuildTarget
+	ActionUpdateAll
 	//~ 	GENERATE_REPORT // TODO
 	// ActionBuildAll
 	// ActionDownloadCore
 	// ActionDownloadApplets
 	// ActionDownloadAll
-	// ActionUpdateAll
 )
 
 //
@@ -145,5 +145,6 @@ var menuDev = []int{
 	// ActionDownloadAll,
 	ActionNone,
 	ActionToggleReload,
-	ActionToggleUserMode,
+	// ActionToggleUserMode,
+	ActionUpdateAll,
 }

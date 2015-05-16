@@ -1,4 +1,4 @@
-// +build TVPlay
+// +build TVPlay || all
 
 package allapps
 
@@ -11,7 +11,7 @@ func init() {
 
 // var once bool
 
-// func startTVPlay() dock.AppletInstance {
+// func startTVPlay() dock.AppInstance {
 // 	if !once {
 // 		once = true
 // 		TVPlay.GRRTHREADS()

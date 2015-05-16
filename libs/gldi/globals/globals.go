@@ -12,19 +12,17 @@ package globals
 #include "cairo-dock-keybinder.h"                  // NOTIFICATION_SHORTKEY_CHANGED
 #include "cairo-dock-module-manager.h"             // myModuleObjectMgr
 #include "cairo-dock-module-instance-manager.h"    // NOTIFICATION_MODULE_INSTANCE_DETACHED
+#include "cairo-dock-windows-manager.h"            // myWindowObjectMgr
 #include "gldi-icon-names.h"                       // GLDI_ICON_NAME_*
 #include "gldi-config.h"                           // GLDI_VERSION
 
 
-
 extern int g_iMajorVersion, g_iMinorVersion, g_iMicroVersion;
-
 
 extern gchar *g_cCairoDockDataDir;
 extern gchar *g_cCurrentThemePath;
 extern gchar *g_cCurrentLaunchersPath;
 extern gchar *g_cCurrentIconsPath;
-
 extern gchar *g_cConfFile;
 
 extern CairoDock *g_pMainDock;
@@ -43,7 +41,15 @@ import (
 const (
 	CairoDockIcon = "cairo-dock.svg" // CAIRO_DOCK_ICON
 
-	dirAppData = "appdata"
+	dirAppData = "appdata" // store user common applets data in ~/.cairo-dock/
+
+	// #define CAIRO_DOCK_LOCAL_EXTRAS_DIR "extras"
+	// #define CAIRO_DOCK_LAUNCHERS_DIR "launchers"
+	// #define CAIRO_DOCK_LOCAL_ICONS_DIR "icons"
+	// #define CAIRO_DOCK_LOCAL_IMAGES_DIR "images"
+
+	DirPlugIns   = "plug-ins"  // CAIRO_DOCK_PLUG_INS_DIR
+	DirAppletsGo = "goapplets" // go internal applets data files in /usr/share/cairo-dock/plug-ins
 )
 
 var (
@@ -76,22 +82,21 @@ func ConfigFile() string {
 	return C.GoString((*C.char)(C.g_cConfFile))
 }
 
-func DirDockData() string {
-	return C.GoString((*C.char)(C.g_cCairoDockDataDir))
+func DirDockData(path ...string) string {
+	dir := C.GoString((*C.char)(C.g_cCairoDockDataDir))
+	path = append([]string{dir}, path...)
+	return filepath.Join(path...)
 }
 
-// le chemin vers le repertoire des icones du theme courant.
+// DirCurrentIcons returns the path to current theme icons dir.
+//
 func DirCurrentIcons() string {
 	return C.GoString((*C.char)(C.g_cCurrentIconsPath))
 }
 
 func DirShareData(path ...string) string {
-	if len(path) > 0 {
-		path = append([]string{C.GLDI_SHARE_DATA_DIR}, path...)
-		return filepath.Join(path...)
-	}
-
-	return C.GLDI_SHARE_DATA_DIR // was CAIRO_DOCK_SHARE_DATA_DIR
+	path = append([]string{C.GLDI_SHARE_DATA_DIR}, path...) // was CAIRO_DOCK_SHARE_DATA_DIR
+	return filepath.Join(path...)
 }
 
 func DirAppdata() (string, error) {
@@ -115,12 +120,6 @@ func PrimaryContainer() *gldi.Container {
 
 // gchar *g_cCurrentImagesPath = NULL;  // le chemin vers le repertoire des images ou autre du theme courant.
 // gchar *g_cCurrentPlugInsPath = NULL;  // le chemin vers le repertoire des plug-ins du theme courant.
-
-// #define CAIRO_DOCK_LOCAL_EXTRAS_DIR "extras"
-// #define CAIRO_DOCK_LAUNCHERS_DIR "launchers"
-// #define CAIRO_DOCK_PLUG_INS_DIR "plug-ins"
-// #define CAIRO_DOCK_LOCAL_ICONS_DIR "icons"
-// #define CAIRO_DOCK_LOCAL_IMAGES_DIR "images"
 
 //
 //-------------------------------------------------------------[ DOCKS PARAM ]--
@@ -373,9 +372,24 @@ const (
 	NotifModuleInstanceDetached int = C.NOTIFICATION_MODULE_INSTANCE_DETACHED
 )
 
-// Notifications shortkeys.
+// Notifications shortkey.
 const (
 	NotifShortkeyChanged int = C.NOTIFICATION_SHORTKEY_CHANGED
+)
+
+// Notifications window.
+const (
+	NotifWindowCreated             int = C.NOTIFICATION_WINDOW_CREATED
+	NotifWindowDestroyed           int = C.NOTIFICATION_WINDOW_DESTROYED
+	NotifWindowNameChanged         int = C.NOTIFICATION_WINDOW_NAME_CHANGED
+	NotifWindowIconChanged         int = C.NOTIFICATION_WINDOW_ICON_CHANGED
+	NotifWindowAttentionChanged    int = C.NOTIFICATION_WINDOW_ATTENTION_CHANGED
+	NotifWindowSizePositionChanged int = C.NOTIFICATION_WINDOW_SIZE_POSITION_CHANGED
+	NotifWindowStateChanged        int = C.NOTIFICATION_WINDOW_STATE_CHANGED
+	NotifWindowClassChanged        int = C.NOTIFICATION_WINDOW_CLASS_CHANGED
+	NotifWindowZOrderChanged       int = C.NOTIFICATION_WINDOW_Z_ORDER_CHANGED
+	NotifWindowActivated           int = C.NOTIFICATION_WINDOW_ACTIVATED
+	NotifWindowDesktopChanged      int = C.NOTIFICATION_WINDOW_DESKTOP_CHANGED
 )
 
 // Other sub events
@@ -400,11 +414,13 @@ func (o *ObjectManager) RegisterNotification(typ int, call unsafe.Pointer, run N
 		C.gboolean(run), nil)
 }
 
+var ContainerObjectMgr = &ObjectManager{&C.myContainerObjectMgr}
 var DeskletObjectMgr = &ObjectManager{&C.myDeskletObjectMgr}
 var DockObjectMgr = &ObjectManager{&C.myDockObjectMgr}
 var ModuleObjectMgr = &ObjectManager{&C.myModuleObjectMgr}
 var ModuleInstanceObjectMgr = &ObjectManager{&C.myModuleInstanceObjectMgr}
 var ShortkeyObjectMgr = &ObjectManager{&C.myShortkeyObjectMgr}
+var WindowObjectMgr = &ObjectManager{&C.myWindowObjectMgr}
 
 //
 //-----------------------------------------------------------------[ HELPERS ]--

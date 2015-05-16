@@ -23,6 +23,7 @@ import (
 
 	"github.com/sqp/godock/libs/gldi"            // Gldi access.
 	"github.com/sqp/godock/libs/gldi/backendgui" // GUI callbacks.
+	"github.com/sqp/godock/libs/gldi/dialog"     // Popup dialog.
 	"github.com/sqp/godock/libs/gldi/globals"    // Global variables.
 	"github.com/sqp/godock/libs/ternary"         // Helpers.
 	"github.com/sqp/godock/libs/tran"            // Translate.
@@ -324,7 +325,7 @@ func (m *DockMenu) Entry(entry MenuEntry) {
 			globals.IconNameDelete,
 			func() {
 				if m.Dock.GetRefCount() != 0 {
-					gldi.DialogShowWithQuestion("Delete this dock?",
+					dialog.DialogShowWithQuestion("Delete this dock?",
 						m.Dock.GetPointedIcon(),
 						m.Container,
 						globals.DirShareData(globals.CairoDockIcon),
@@ -466,7 +467,7 @@ func (m *DockMenu) Entry(entry MenuEntry) {
 			func() {
 				switch m.Icon.GetDesktopFileName() {
 				case "", "none":
-					gldi.DialogShowTemporaryWithIcon("Sorry, this icon doesn't have a configuration file.", m.Icon, m.Container, 4000, "same icon")
+					dialog.DialogShowTemporaryWithIcon("Sorry, this icon doesn't have a configuration file.", m.Icon, m.Container, 4000, "same icon")
 
 				default:
 					backendgui.ShowItems(m.Icon, nil, nil, -1)
@@ -522,7 +523,7 @@ func (m *DockMenu) Entry(entry MenuEntry) {
 			})
 
 	case MenuMoveToDock:
-		sub, _ := m.SubMenu(tran.Slate("Move to another dock"), globals.IconNameJumpTo)
+		sub := m.SubMenu(tran.Slate("Move to another dock"), globals.IconNameJumpTo)
 
 		docks := gldi.GetAllAvailableDocks(m.Icon.GetContainer().ToCairoDock(), m.Icon.GetSubDock())
 		docks = append(docks, nil)
@@ -557,7 +558,7 @@ func (m *DockMenu) Entry(entry MenuEntry) {
 					newdock := gldi.DockGet(key)
 					if newdock != nil && newdock.GetRefCount() == 0 && len(newdock.Icons()) == 1 {
 						str := tran.Slate("The new dock has been created.\nYou can customize it by right-clicking on it -> cairo-dock -> configure this dock.")
-						gldi.DialogShowGeneralMessage(str, 8000) // we don't show it on the new dock as its window isn't positioned yet (0,0).
+						dialog.DialogShowGeneralMessage(str, 8000) // we don't show it on the new dock as its window isn't positioned yet (0,0).
 					}
 				})
 		}
@@ -576,7 +577,7 @@ func (m *DockMenu) Entry(entry MenuEntry) {
 			func() {
 				gtk.MainQuit() // TODO: remove SQP HACK, easy quit no confirm for tests.
 
-				gldi.DialogShowWithQuestion("Quit Cairo-Dock?",
+				dialog.DialogShowWithQuestion("Quit Cairo-Dock?",
 					GetIconForDesklet(m.Icon, m.Container),
 					m.Container,
 					globals.DirShareData(globals.CairoDockIcon),
@@ -663,7 +664,7 @@ func (m *DockMenu) Entry(entry MenuEntry) {
 				// 	icon = (CAIRO_DESKLET (pContainer))->pIcon;  // l'icone cliquee du desklet n'est pas forcement celle qui contient le module !
 				// g_return_if_fail (CAIRO_DOCK_IS_APPLET (icon));
 
-				gldi.DialogShowWithQuestion(
+				dialog.DialogShowWithQuestion(
 					fmt.Sprintf("You're about to remove this applet (%s) from the dock. Are you sure?", m.Icon.ModuleInstance().Module().VisitCard().GetTitle()),
 					m.Icon,
 					m.Container,
@@ -682,14 +683,14 @@ func (m *DockMenu) Entry(entry MenuEntry) {
 				if name == "" {
 					name = ternary.String(m.Icon.IsSeparator(), tran.Slate("separator"), "no name")
 				}
-				gldi.DialogShowWithQuestion(
+				dialog.DialogShowWithQuestion(
 					fmt.Sprintf("You're about to remove this icon (%s) from the dock. Are you sure?", name),
 					m.Icon,
 					m.Container,
 					"same icon",
 					cbDialogIsOK(func() {
 						if m.Icon.IsStackIcon() && m.Icon.GetSubDock() != nil && len(m.Icon.GetSubDock().Icons()) > 0 {
-							gldi.DialogShowWithQuestion(
+							dialog.DialogShowWithQuestion(
 								"Do you want to re-dispatch the icons contained inside this container into the dock?\n(otherwise they will be destroyed)",
 								m.Icon,
 								m.Container,
@@ -817,9 +818,14 @@ func (m *DockMenu) Button(btn MenuBtn) {
 //
 //-----------------------------------------------------------[ DOCKMENU FILL ]--
 
-func (menu *DockMenu) SubMenu(label, iconPath string) (*DockMenu, *gldi.MenuItem) {
-	submenu, item := gldi.MenuAddSubMenu(&menu.Menu.Menu, label, iconPath)
-	return WrapDockMenu(menu.Icon, menu.Container, menu.Dock, submenu), item
+func (m *DockMenu) SubMenu(label, iconPath string) *DockMenu {
+	submenu, _ := m.SubMenuFull(label, iconPath)
+	return submenu
+}
+
+func (m *DockMenu) SubMenuFull(label, iconPath string) (*DockMenu, *gldi.MenuItem) {
+	submenu, item := gldi.MenuAddSubMenu(&m.Menu.Menu, label, iconPath)
+	return WrapDockMenu(m.Icon, m.Container, m.Dock, submenu), item
 }
 
 func (m *DockMenu) AddButtonsEntry(str string) *ButtonsEntry {
@@ -1014,11 +1020,11 @@ func (menu *Menu) AddEntry(label, iconPath string, call interface{}, userData ..
 	return item
 }
 
-func (menu *Menu) AddCheckEntry(label string, active bool, call interface{}) (item *gtk.CheckMenuItem) {
+func (menu *Menu) AddCheckEntry(label string, active bool, call interface{}, userData ...interface{}) (item *gtk.CheckMenuItem) {
 	item, _ = gtk.CheckMenuItemNewWithLabel(label)
 	item.SetActive(active)
 	if call != nil {
-		item.Connect("toggled", call)
+		item.Connect("toggled", call, userData...)
 	}
 	menu.Append(item)
 	return item

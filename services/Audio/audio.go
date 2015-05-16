@@ -1,4 +1,4 @@
-// Package Audio is a pulseaudio controler applet for the Cairo-Dock project.
+// Package Audio is a pulseaudio controler applet for Cairo-Dock.
 package Audio
 
 import (
@@ -15,26 +15,28 @@ import (
 	"strconv"
 )
 
+var log cdtype.Logger
+
 //
 //------------------------------------------------------------------[ APPLET ]--
 
 // Applet data and controlers.
 //
 type Applet struct {
-	*dock.CDApplet
+	cdtype.AppBase // Applet base and dock connection.
+
 	conf  *appletConf
 	pulse *AppPulse
-	menu  dock.Menu
 }
 
 // NewApplet create a new applet instance.
 //
-func NewApplet() dock.AppletInstance {
-	app := &Applet{CDApplet: dock.NewCDApplet()} // Icon controler and interface to cairo-dock.
-
+func NewApplet() cdtype.AppInstance {
+	app := &Applet{AppBase: dock.NewCDApplet()} // Icon controler and interface to cairo-dock.
+	log = app.Log()
 	var e error
 	app.pulse, e = NewAppPulse(app)
-	if app.Log.Err(e, "pulseaudio dbus") {
+	if log.Err(e, "pulseaudio dbus") {
 		return nil
 	}
 	return app
@@ -49,20 +51,19 @@ func (app *Applet) Init(loadConf bool) {
 		app.conf.MixerCommand = findMixer()
 	}
 
-	app.SetDefaults(dock.Defaults{
+	app.SetDefaults(cdtype.Defaults{
 		Icon:  app.conf.Icon,
-		Label: ternary.String(app.conf.Name != "", app.conf.Name, app.AppletName),
-		Commands: dock.Commands{
-			"mixer": dock.NewCommand(app.conf.LeftAction == 1, app.conf.MixerCommand, app.conf.MixerClass)},
-		Shortkeys: []string{app.conf.MixerShortkey},
-		Debug:     app.conf.Debug})
+		Label: app.conf.Name,
+		Commands: cdtype.Commands{
+			"mixer": cdtype.NewCommand(app.conf.LeftAction == 1, app.conf.MixerCommand, app.conf.MixerClass)},
+		Shortkeys: []cdtype.Shortkey{
+			{"Actions", "MixerShortkey", "Open volume mixer", app.conf.MixerShortkey},
+		},
+		Debug: app.conf.Debug})
 
 	// pulse config.
 	app.pulse.StreamIcons = app.conf.StreamIcons
-
-	for icon := range app.Icons { // Remove old subicons.
-		app.RemoveSubIcon(icon)
-	}
+	app.RemoveSubIcons()
 
 	app.AddDataRenderer("", 0, "") // Remove renderer when settings changed to be sure.
 	switch app.conf.DisplayValues {
@@ -82,7 +83,7 @@ func (app *Applet) Init(loadConf bool) {
 	}
 
 	// find sound card and display current volume, and maybe show subicons.
-	app.Log.Err(app.pulse.Init(), "pulseaudio init")
+	log.Err(app.pulse.Init(), "pulseaudio init")
 }
 
 //
@@ -94,7 +95,7 @@ func (app *Applet) OnClick() {
 	switch app.conf.LeftAction {
 	case 1:
 		if app.conf.MixerCommand != "" {
-			app.LaunchCommand("mixer")
+			app.CommandLaunch("mixer")
 		}
 	}
 }
@@ -104,7 +105,7 @@ func (app *Applet) OnClick() {
 func (app *Applet) OnMiddleClick() {
 	switch app.conf.MiddleAction {
 	case 3: // TODO: need more actions and constants to define them.
-		app.Log.Err(app.pulse.ToggleMute())
+		log.Err(app.pulse.ToggleMute())
 	}
 }
 
@@ -113,113 +114,95 @@ func (app *Applet) OnMiddleClick() {
 func (app *Applet) OnScroll(up bool) {
 	delta := int64(ternary.Int(up, app.conf.VolumeStep, -app.conf.VolumeStep))
 	e := app.pulse.SetVolumeDelta(delta)
-	app.Log.Err(e, "SetVolumeDelta")
+	log.Err(e, "SetVolumeDelta")
 }
 
 // OnBuildMenu fills the menu with device actions: mute, mixer, select device (right click).
 //
-func (app *Applet) OnBuildMenu() {
-	app.menu.Clear()
-
-	app.menu.Append("Mute volume", func() { app.pulse.ToggleMute() })
-
+func (app *Applet) OnBuildMenu(menu cdtype.Menuer) {
+	mute, _ := app.pulse.Device(app.pulse.sink).Bool("Mute")
+	menu.AddCheckEntry("Mute volume", mute, app.pulse.ToggleMute)
 	if app.conf.MixerCommand != "" {
-		app.menu.Append("Open mixer", func() { app.LaunchCommand("mixer") })
+		menu.AddEntry("Open mixer", "", func() { app.CommandLaunch("mixer") })
 	}
-
-	sinks, _ := app.pulse.Core().ListPath("Sinks")
-	if len(sinks) > 1 { // Only show the sinks list if we have at least 2 devices to switch between.
-		app.menu.Separator()
-		for _, sink := range sinks {
-			dev := app.pulse.Device(sink)
-			prefix := ternary.String(sink == app.pulse.sink, "* ", "  ")
-
-			v, e := dev.MapString("PropertyList")
-			name := ternary.String(e == nil, v["device.description"], "")
-
-			app.menuAppend(prefix+name, sink) // use a non closure func so it will make a static reference to sink (fuck range).
-		}
-	}
-	app.PopulateMenu(app.menu.Names...)
-}
-
-func (app *Applet) menuAppend(name string, sink dbus.ObjectPath) {
-	app.menu.Append(name, func() { app.pulse.SetSink(sink) })
-}
-
-// OnMenuSelect launch the selected menu action (from main or sub icons).
-//
-func (app *Applet) OnMenuSelect(i int32) {
-	app.menu.Launch(i)
+	app.menuAddDevices(menu, app.pulse.sink, "Managed device", app.pulse.SetSink)
 }
 
 // OnShortkey opens the mixer if found.
 //
 func (app *Applet) OnShortkey(string) {
 	if app.conf.MixerCommand != "" {
-		app.LaunchCommand("mixer")
+		app.CommandLaunch("mixer")
 	}
 }
 
 // OnSubMiddleClick tries to launch the configured action.
 //
-func (app *Applet) OnSubMiddleClick(name string) {
+func (app *Applet) OnSubMiddleClick(icon string) {
 	switch app.conf.MiddleAction {
 	case 3: // TODO: need more actions and constants to define them.
-		toggleMute(app.pulse.Stream(dbus.ObjectPath(name)))
+		log.Debug("mute")
+		toggleMute(app.pulse.Stream(dbus.ObjectPath(icon)))
 	}
 }
 
 // OnSubScroll tries to launch the configured action (mouse wheel).
 //
-func (app *Applet) OnSubScroll(up bool, name string) {
-	dev := app.pulse.Stream(dbus.ObjectPath(name))
+func (app *Applet) OnSubScroll(icon string, up bool) {
+	dev := app.pulse.Stream(dbus.ObjectPath(icon))
 	values, e := dev.ListUint32("Volume")
-	if app.Log.Err(e) {
+	if log.Err(e) {
 		return
 	}
 	delta := int64(ternary.Int(up, app.conf.VolumeStep, -app.conf.VolumeStep))
-	app.Log.Err(dev.Set("Volume", VolumeDelta(values, delta)))
+	log.Err(dev.Set("Volume", VolumeDelta(values, delta)))
 }
 
 // OnSubBuildMenu fills the menu with stream actions: select device (right click).
 //
-func (app *Applet) OnSubBuildMenu(name string) {
-	dev := app.pulse.Stream(dbus.ObjectPath(name))
+func (app *Applet) OnSubBuildMenu(icon string, menu cdtype.Menuer) {
+	dev := app.pulse.Stream(dbus.ObjectPath(icon))
+
+	mute, _ := dev.Bool("Mute")
+	menu.AddCheckEntry("Mute volume", mute, func() {
+		toggleMute(dev)
+	})
+
 	sel, es := dev.ObjectPath("Device")
-	if app.Log.Err(es) {
+	if log.Err(es) {
 		return
 	}
-
-	app.menu.Clear()
-	sinks, _ := app.pulse.Core().ListPath("Sinks")
-
-	if len(sinks) > 1 { // Only show the sinks list if we have at least 2 devices to switch between.
-		for _, sink := range sinks {
-			prefix := ternary.String(sink == sel, "* ", "  ")
-			v, e := app.pulse.Device(sink).MapString("PropertyList")
-			name := ternary.String(e == nil, v["device.description"], "")
-
-			sink := sink // make local reference for the call as we are in a range.
-
-			app.menu.Append(prefix+name, func() { app.Log.Err(dev.Call("Move", 0, sink).Err) })
-		}
-	}
+	app.menuAddDevices(menu, sel, "Output", func(sink dbus.ObjectPath) error {
+		return dev.Call("Move", 0, sink).Err
+	})
 
 	// Kill works but seem to leave the client app into a bugged state (same for stream or client kill).
 	// app.menu.Append("Kill", func() {
-	// 	// app.Log.Err(dev.Call("Kill", 0).Err, "Kill") // kill stream.
+	// 	// log.Err(dev.Call("Kill", 0).Err, "Kill") // kill stream.
 	// client, ec := dev.ObjectPath("Client")
 	// if ec != nil {
 	// 	return
 	// }
 	// app.pulse.Client.Client(client).Call("Kill", 0) // kill client.
 	// })
+}
 
-	if len(app.menu.Names) > 0 {
-		app.PopulateMenu(app.menu.Names...)
+func (app *Applet) menuAddDevices(menu cdtype.Menuer, selected dbus.ObjectPath, title string, call func(dbus.ObjectPath) error) {
+	sinks, _ := app.pulse.Core().ListPath("Sinks")
+	if len(sinks) < 2 { // Only show the sinks list if we have at least 2 devices to switch between.
+		return
 	}
+	menu.Separator()
+	menu.AddEntry(title, "", nil)
+	menu.Separator()
+	for _, sink := range sinks {
+		dev := app.pulse.Device(sink)
+		sink := sink // make static reference of sink for the callback (we're in a range).
 
+		v, e := dev.MapString("PropertyList")
+		name := ternary.String(e == nil, v["device.description"], "unknown")
+		menu.AddCheckEntry(name, sink == selected, func() { log.Err(call(sink)) })
+	}
 }
 
 //
@@ -228,13 +211,11 @@ func (app *Applet) OnSubBuildMenu(name string) {
 // AppPulse connects the pulseaudio service to the dock icon.
 //
 type AppPulse struct {
-	pulseaudio.Client               // Parent API. Allow direct access to control methods.
-	icon              *Applet       // dock.RenderSimple // Dock icon renderer. To display updates on the icon.
-	log               cdtype.Logger // Dock logger for the flood.
-
-	sink        dbus.ObjectPath // Selected sound card.
-	StreamIcons bool            // whether we need to manage subicons for streams.
-	showText    func(string) error
+	pulseaudio.Client                    // Parent API. Allow direct access to control methods.
+	icon              *Applet            // dock.RenderSimple // Dock icon renderer. To display updates on the icon.
+	sink              dbus.ObjectPath    // Selected sound card.
+	StreamIcons       bool               // whether we need to manage subicons for streams.
+	showText          func(string) error // Volume display callback.
 }
 
 // NewAppPulse creates a pulseaudio dbus service.
@@ -248,11 +229,10 @@ func NewAppPulse(obj interface{}) (*AppPulse, error) {
 	ap := &AppPulse{
 		icon:   obj.(*Applet),
 		Client: *pulse,
-		log:    obj.(*Applet).Log,
 	}
 
 	for _, e := range pulse.Register(ap) {
-		ap.log.Err(e, "register signal")
+		log.Err(e, "register signal")
 	}
 
 	go pulse.Listen()
@@ -368,7 +348,8 @@ func (ap *AppPulse) ToggleMute() error {
 
 func (ap *AppPulse) addStream(path dbus.ObjectPath) {
 	name, icon := ap.StreamInfo(path)
-	ap.log.Err(ap.icon.AddSubIcon(name, icon, string(path)))
+	log.Debug("stream added", name)
+	log.Err(ap.icon.AddSubIcon(name, icon, string(path)))
 
 	values, e := ap.Stream(path).ListUint32("Volume")
 	if e == nil {
@@ -391,9 +372,9 @@ func (ap *AppPulse) DisplayStreamVolume(name string, values []uint32) error {
 		emblem = ap.icon.FileLocation("img", DefaultIconMuted)
 	}
 
-	ap.icon.Icons[name].SetEmblem(emblem, EmblemMuted)
+	ap.icon.SubIcon(name).SetEmblem(emblem, EmblemMuted)
 
-	return ap.icon.Icons[name].SetQuickInfo(label)
+	return ap.icon.SubIcon(name).SetQuickInfo(label)
 }
 
 // StreamInfo gives the name and icon of the application source of the stream.
@@ -419,9 +400,9 @@ func (ap *AppPulse) StreamInfo(path dbus.ObjectPath) (name, icon string) {
 // NewSink receives a new device information.
 //
 func (ap *AppPulse) NewSink(path dbus.ObjectPath) {
-	ap.log.Info("NewSink", path)
+	log.Info("NewSink", path)
 	if ap.sink == "" {
-		ap.log.Info("autoselected sink, need to check.")
+		log.Info("autoselected sink, need to check.")
 		ap.sink = path
 	}
 }
@@ -429,11 +410,11 @@ func (ap *AppPulse) NewSink(path dbus.ObjectPath) {
 // SinkRemoved receives a lost device information.
 //
 func (ap *AppPulse) SinkRemoved(path dbus.ObjectPath) {
-	ap.log.Info("SinkRemoved", path)
+	log.Info("SinkRemoved", path)
 	if ap.sink == path {
-		ap.log.Info("selected sink removed, need to check the reselect.")
+		log.Info("selected sink removed, need to check the reselect.")
 		ap.sink = ""
-		ap.log.Err(ap.Init(), "SinkRemoved")
+		log.Err(ap.Init(), "SinkRemoved")
 	}
 }
 
@@ -464,7 +445,8 @@ func (ap *AppPulse) NewPlaybackStream(path dbus.ObjectPath) {
 // PlaybackStreamRemoved receives a lost stream information.
 //
 func (ap *AppPulse) PlaybackStreamRemoved(path dbus.ObjectPath) {
-	ap.log.Err(ap.icon.RemoveSubIcon(string(path)))
+	log.Err(ap.icon.RemoveSubIcon(string(path)))
+	log.Debug("stream removed")
 }
 
 // StreamVolumeUpdated receives a stream volume update.

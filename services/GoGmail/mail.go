@@ -1,11 +1,10 @@
 package GoGmail
 
 import (
-	"io/ioutil"
-
 	"encoding/base64"
 	"encoding/xml"
 	"errors"
+	"io/ioutil"
 	"net/http"
 	"strings"
 )
@@ -104,7 +103,7 @@ func (feed *Feed) IsValid() bool {
 // (change since last check).
 //
 func (feed *Feed) Check() {
-	logger.Debug("Check mails")
+	log.Debug("Check mails")
 	if !feed.IsValid() {
 		feed.callResult(0, false, errors.New("no account informations provided"))
 		return
@@ -120,7 +119,7 @@ func (feed *Feed) Check() {
 // Get mails from server.
 //
 func (feed *Feed) get() error {
-	logger.Debug("Get mails from server")
+	log.Debug("Get mails from server")
 
 	// Prepare request with header
 	request, e := http.NewRequest("GET", feedGmail, nil)

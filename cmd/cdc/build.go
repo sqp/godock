@@ -104,7 +104,7 @@ func build(dir string) {
 		log.Println("Create build directory")
 		exitIfFail(os.Mkdir(build, os.ModePerm), "Creation failed")
 		os.Chdir(build)
-		execShow("cmake", "..", "-DCMAKE_INSTALL_PREFIX=/usr", "-Denable-disks=yes", "-Denable-impulse=yes")
+		execShow("cmake", "..", "-DCMAKE_INSTALL_PREFIX=/usr")
 	}
 
 	actionMakeAndInstall()
@@ -132,7 +132,7 @@ func actionMakeClean() {
 	}
 }
 
-// 
+//
 func actionMakeAndInstall() {
 	execShow("make", "-j", strconv.Itoa(*buildJobs))
 	args := []string{"make", "install"}

@@ -1,17 +1,21 @@
+// +build !dock
+
 package main
 
 import (
 	"github.com/sqp/godock/libs/srvdbus"
+	"github.com/sqp/godock/libs/srvdbus/mgrdbus"
 	"github.com/sqp/godock/services/allapps"
 
 	"strings"
 )
 
-var cmdService = &Command{
-	Run:       runService,
-	UsageLine: "service [applet arguments list]",
-	Short:     "start service with the dock or an applet",
-	Long: `
+func init() {
+	cmdService = &Command{
+		Run:       runService,
+		UsageLine: "service [applet arguments list]",
+		Short:     "start service with the dock or an applet",
+		Long: `
 Service handle the loading of the dock or its own packed applets.
 
 Options:
@@ -33,6 +37,7 @@ applet binary to forward the call:
   !/bin/sh 
   cdc service $* "$(pwd)" &
 .`,
+	}
 }
 
 var gtkStart func()
@@ -69,34 +74,38 @@ func runService(cmd *Command, args []string) {
 // Start Loader with the list of applets and args received for the first applet.
 //
 func service(withdock bool, args []string) {
-	loader := srvdbus.NewLoader(allapps.List(), logger)
+	loader := srvdbus.NewLoader(logger)
 	if loader == nil {
 		return
 	}
 
-	active, e := loader.Start(loader, srvdbus.Introspec)
+	introspect := srvdbus.Introspect(mgrdbus.IntrospectApplets)
+
+	active, e := loader.Start(loader, introspect)
 	if logger.Err(e, "StartServer") {
 		return
 	}
 
-	if !active { // Someone else is active, forward the start applet.
+	if !active { // Someone else is active, forward the start applet and quit.
 		if len(args) > 0 {
 			// Whether the first program instance will handle successfully the
 			// request or not, this isn't our problem anymore, we still must quit.
-			srvdbus.StartApplet(args[0], args[1], args[2], args[3], args[4], args[5], args[6])
+			mgrdbus.StartApplet(args[0], args[1], args[2], args[3], args[4], args[5], args[6])
 		}
 		return
 	}
 
 	if len(args) > 0 { // I am the chosen one. Let's create the first miracle.
+		mgr := mgrdbus.NewManager(allapps.List(), loader.Conn, logger)
+		loader.SetManager(mgr)
 		loader.StartApplet("", args[0], args[1], args[2], args[3], args[4], args[5], args[6])
 	}
 
-	if withdock { // Need to start a dock.
-		if logger.Err(srvdbus.StartDock(), "StartDock") {
-			return
-		}
-	}
+	// if withdock { // Need to start a dock.
+	// 	if logger.Err(srvdbus.StartDock(), "StartDock") {
+	// 		return // failed to start a dock, stop here.
+	// 	}
+	// }
 
 	// Need to stay alive.
 
@@ -114,8 +123,9 @@ func service(withdock bool, args []string) {
 	}
 }
 
-func listServices() error {
+func listServices() {
 	str, e := srvdbus.ListServices()
-	println(str)
-	return e
+	if !logger.Err(e, "List services") {
+		println(str)
+	}
 }

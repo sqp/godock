@@ -1,4 +1,4 @@
-// Package DiskActivity is a monitoring applet for the Cairo-Dock project.
+// Package DiskActivity is a monitoring applet for Cairo-Dock.
 package DiskActivity
 
 import (
@@ -6,7 +6,6 @@ import (
 	"github.com/sqp/godock/libs/cdtype/bytesize"
 	"github.com/sqp/godock/libs/dock" // Connection to cairo-dock.
 	"github.com/sqp/godock/libs/sysinfo"
-	"github.com/sqp/godock/libs/ternary" // Ternary operators.
 
 	"fmt"
 )
@@ -17,18 +16,19 @@ import (
 // Applet data and controlers.
 //
 type Applet struct {
-	*dock.CDApplet
+	cdtype.AppBase // Applet base and dock connection.
+
 	conf    *appletConf
 	service *sysinfo.IOActivity
 }
 
 // NewApplet create a new applet instance.
 //
-func NewApplet() dock.AppletInstance {
-	app := &Applet{CDApplet: dock.NewCDApplet()} // Icon controler and interface to cairo-dock.
+func NewApplet() cdtype.AppInstance {
+	app := &Applet{AppBase: dock.NewCDApplet()} // Icon controler and interface to cairo-dock.
 
 	app.service = sysinfo.NewIOActivity(app)
-	app.service.Log = app.Log
+	app.service.Log = app.Log()
 	app.service.FormatIcon = formatIcon
 	app.service.FormatLabel = formatLabel
 	app.service.GetData = sysinfo.GetDiskActivity
@@ -44,44 +44,42 @@ func (app *Applet) Init(loadConf bool) {
 	app.LoadConfig(loadConf, &app.conf) // Load config will crash if fail. Expected.
 
 	// Settings for poller and IOActivity (force renderer reset in case of reload).
-	app.conf.UpdateDelay = dock.PollerInterval(app.conf.UpdateDelay, defaultUpdateDelay)
+	app.conf.UpdateDelay = cdtype.PollerInterval(app.conf.UpdateDelay, defaultUpdateDelay)
 	app.service.Settings(uint64(app.conf.UpdateDelay), cdtype.InfoPosition(app.conf.DisplayText), app.conf.DisplayValues, app.conf.GraphType, app.conf.GaugeName, app.conf.Disks...)
 
 	// Set defaults to dock icon: display and controls.
-	app.SetDefaults(dock.Defaults{
-		Label:          ternary.String(app.conf.Name != "", app.conf.Name, app.AppletName),
+	app.SetDefaults(cdtype.Defaults{
+		Label:          app.conf.Name,
 		PollerInterval: app.conf.UpdateDelay,
-		Commands: dock.Commands{
-			"left":   dock.NewCommandStd(app.conf.LeftAction, app.conf.LeftCommand, app.conf.LeftClass),
-			"middle": dock.NewCommandStd(app.conf.MiddleAction, app.conf.MiddleCommand)},
+		Commands: cdtype.Commands{
+			"left":   cdtype.NewCommandStd(app.conf.LeftAction, app.conf.LeftCommand, app.conf.LeftClass),
+			"middle": cdtype.NewCommandStd(app.conf.MiddleAction, app.conf.MiddleCommand)},
 		Debug: app.conf.Debug})
 }
 
 //
 //------------------------------------------------------------------[ EVENTS ]--
 
-// DefineEvents set applet events callbacks.
+// OnClick launch the configured action on user click.
 //
-func (app *Applet) DefineEvents() {
+func (app *Applet) OnClick() {
+	app.CommandLaunch("left")
+}
 
-	// Left and middle clicks: launch configured command.
-	app.Events.OnClick = app.LaunchFunc("left")
-	app.Events.OnMiddleClick = app.LaunchFunc("middle")
+// OnMiddleClick launch the configured action on user middle click.
+//
+func (app *Applet) OnMiddleClick() {
+	app.CommandLaunch("middle")
+}
 
-	app.Events.OnBuildMenu = func() {
-		menu := []string{}
-		if app.conf.LeftAction > 0 {
-			menu = append(menu, "Action left click")
-		}
-		if app.conf.MiddleAction > 0 {
-			menu = append(menu, "Action middle click")
-		}
-		app.PopulateMenu(menu...)
+// OnBuildMenu fills the menu with left and middle click actions if they're set.
+//
+func (app *Applet) OnBuildMenu(menu cdtype.Menuer) {
+	if app.conf.LeftAction > 0 && app.conf.LeftCommand != "" {
+		menu.AddEntry("Action left click", "gtk-execute", app.OnClick)
 	}
-
-	app.Events.OnMenuSelect = func(i int32) {
-		list := []string{"left", "middle"}
-		app.LaunchCommand(list[i])
+	if app.conf.MiddleAction > 0 && app.conf.MiddleCommand != "" {
+		menu.AddEntry("Action middle click", "gtk-execute", app.OnMiddleClick)
 	}
 }
 

@@ -1,5 +1,4 @@
 /*
-Package dock is the Cairo-Dock applet manager, using the DBus connection.
 
 External applets are small programs spawned by the dock to manage dedicated icons.
 Once started, the program can use his icon to display informations and receive
@@ -51,19 +50,24 @@ data that will be required during all the applet lifetime.
 
 	package demo
 
-	import "github.com/sqp/godock/libs/dock" // Connection to cairo-dock.
+	import (
+		"github.com/sqp/godock/libs/cdtype" // Dock types.
+		"github.com/sqp/godock/libs/dock"   // Connection to cairo-dock.
+	)
 
 	// Applet data and controlers.
 	//
 	type Applet struct {
-		*dock.CDApplet
+		cdtype.AppBase // Extends applet base and dock connection.
+
 		conf *appletConf
 	}
 
 	// NewApplet creates a new applet instance.
 	//
-	func NewApplet() dock.AppletInstance {
-		app := &Applet{CDApplet: dock.NewCDApplet()} // Icon controler and interface to cairo-dock.
+	func NewApplet() dock.AppInstance {
+		app := &Applet{AppBase: dock.NewCDApplet()} // Icon controler and interface to cairo-dock.
+		// Create and set your permanent items...
 		return app
 	}
 
@@ -83,35 +87,38 @@ SetDefaults will help you as it reset everything it handles, even if not set
 		app.LoadConfig(loadConf, &app.conf) // Load config will crash if fail. Expected.
 
 		// Set defaults to dock icon: display and controls.
-		app.SetDefaults(dock.Defaults{
-			Label:          ternary.String(app.conf.Name != "", app.conf.Name, app.AppletName),
-			Commands: dock.Commands{
-				"left":   dock.NewCommandStd(app.conf.LeftAction, app.conf.LeftCommand, app.conf.LeftClass),
-				"middle": dock.NewCommandStd(app.conf.MiddleAction, app.conf.MiddleCommand)},
+		app.SetDefaults(cdtype.Defaults{
+			Label: app.conf.Name,
+			Icon: app.conf.Icon,
+			Commands: cdtype.Commands{
+				"left":   cdtype.NewCommandStd(app.conf.LeftAction, app.conf.LeftCommand, app.conf.LeftClass),
+				"middle": cdtype.NewCommandStd(app.conf.MiddleAction, app.conf.MiddleCommand)},
 			Debug: app.conf.Debug})
 	}
 
-DefineEvents is called only once at startup. Its goal is to get a common place
-for events callback configuration.
-See cdtype.Events and cdtype.SubEvents for the full list with arguments.
+DefineEvents is called by the backend only once at startup.
+Its goal is to get a common place for events callback configuration.
+The same events can also be declared directly as methods of your applet
+(actually, both would be called, but its not sure this will remain. we'll see
+what are the needs).
+See cdtype.Events for the full list with arguments.
 
 
 	// Define applet events callbacks.
 	//
-	func (app *Applet) DefineEvents() {
-		app.Events.OnClick = app.LaunchFunc("left")          // If you want to forward a click event to the optional command launcher.
-		app.Events.OnMiddleClick = app.LaunchFunc("middle")
+	func (app *Applet) DefineEvents(events cdtype.Events) {
+		events.OnClick = app.CommandCallback("left")          // To forward a click event to the defined command launcher.
+		events.OnMiddleClick = app.CommandCallback("middle")
 
-		app.Events.OnDropData = func(data string) { // For simple callbacks event, use a closure.
-			app.Log.Info("dropped", data)
+		events.OnDropData = func(data string) { // For simple callbacks event, use a closure.
+			app.Log().Info("dropped", data)
 		}
 
-		app.Events.OnBuildMenu = func() {
-			menu := []string{"", "ok"} // First entry is a separator.
-			app.PopulateMenu(menu...)
+		events.OnBuildMenu = func(menu cdtype.Menuer) {
+			menu.AddEntry("disabled entry", "", nil)
+			menu.Separator()
+			menu.AddEntry("my action", "gtk-execute", func() {app.Log().Info("clicked") })
 		}
-
-		app.Events.OnMenuSelect = app.clickedMenu // If you have more work to do, use a dedicated func.
 	}
 
 Poller
@@ -122,11 +129,11 @@ trigger the provided call at the end of timer or in case of manual reset with
 app.Poller().Restart().
 
 Create your poller with the applet.
-	func NewApplet() dock.AppletInstance {
-		...
+	func NewApplet() dock.AppInstance {
+		// ...
 		app.service = NewService(app)    // This will depend on your applet polling service.
 		app.AddPoller(app.service.Check) // Create poller and set action callback.
-		...
+		// ...
 	}
 
 Set interval in Init when you have config values.
@@ -165,6 +172,7 @@ The applet configuration file will be demo/src/config.go
 
 	type groupIcon struct {
 		Name             string         `conf:"name"`
+		Icon             string         `conf:"icon"`
 	}
 
 	type groupConfiguration struct {
@@ -194,10 +202,10 @@ Files needed in the "demo" directory:
    demo            the executable binary or script, without extension (use the shebang on the first line).
    demo.conf       the default config file (see above for the options syntax).
    auto-load.conf  the file describing our applet.
+   applet.go       source to load and start the applet as standalone.
    icon            the default icon of the applet (optional, without extension, can be any image format).
    preview         an image preview of the applet (optional, without extension, can be any image format).
-   applet.go       source to load and start the applet as standalone.
-   Makefile        shortcuts to build and link the applet.
+   Makefile        shortcuts to build and link the applet (optional).
 
 auto-load.conf
 	[Register]
@@ -220,6 +228,18 @@ auto-load.conf
 	# Whether the applet will act as a launcher or not (like Pidgin or Transmission)
 	act as launcher = false
 
+applet.go
+	package main
+
+	import (
+		demo "demo/src"                        // Package with your applet source
+		"github.com/sqp/godock/libs/appdbus"   // Connection to cairo-dock.
+	)
+
+	func main() {
+		appdbus.StartApplet(demo.NewApplet())
+	}
+
 Makefile
 
 	TARGET=demo
@@ -236,18 +256,6 @@ Makefile
 	link:
 		ln -s $(GOPATH)/src/$(SOURCE)/$(TARGET) $(HOME)/.config/cairo-dock/third-party/$(TARGET)
 
-applet.go
-	package main
-
-	import (
-		"demo/src" // Package with your applet source
-		"github.com/sqp/godock/libs/dock"     // Connection to cairo-dock.
-	)
-
-	func main() {
-		dock.StartApplet(demo.NewApplet())
-	}
-
 
 More documentation
 	DBus methods to interact with the dock   http://godoc.org/github.com/sqp/godock/libs/appdbus
@@ -262,10 +270,9 @@ Notes:
  *The dock will launch the applet command (applet binary or script) with
    a few options to help him know some dock settings. Those args will only be
    parsed and stored in the public fields during StartApplet, so they won't be
-   available at applet creation.
-   You can only start using them at the first Init call.
-     dock fields: AppletName, ConfFile, RootDataDir, ParentAppName, ShareDataDir
-     and related methods like FileLocation
+   available at applet creation (Name, FileLocation, FileDataDir...).
+   You can only start using them in the first Init call. Only the logger is safe
+   to use at that point.
  *The current directory by default is the applet directory, but to be safe don't
    rely on it and use chdir or absolute paths for all your file operations.
  *If you want to publish the package or ask for help, it would be easier if the
@@ -283,4 +290,4 @@ Notes:
 
 
 */
-package dock
+package cdtype

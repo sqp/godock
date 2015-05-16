@@ -27,7 +27,7 @@ func BuildMenuContainer(m *backendmenu.DockMenu) int {
 	}
 
 	//\_________________________ First item is the Cairo-Dock sub-menu.
-	dockmenu, _ := m.SubMenu("Cairo-Dock", globals.DirShareData(globals.CairoDockIcon))
+	dockmenu := m.SubMenu("Cairo-Dock", globals.DirShareData(globals.CairoDockIcon))
 
 	if !globals.DockIsLocked() {
 		dockmenu.Entry(backendmenu.MenuConfigure)
@@ -43,7 +43,7 @@ func BuildMenuContainer(m *backendmenu.DockMenu) int {
 
 		// add new item
 		if m.Dock != nil {
-			sub, _ := dockmenu.SubMenu(tran.Slate("Add"), globals.IconNameAdd)
+			sub := dockmenu.SubMenu(tran.Slate("Add"), globals.IconNameAdd)
 			sub.Entry(backendmenu.MenuAddSubDock)
 			sub.Entry(backendmenu.MenuAddMainDock)
 			sub.Entry(backendmenu.MenuAddSeparator)
@@ -84,7 +84,7 @@ func BuildMenuContainer(m *backendmenu.DockMenu) int {
 
 	if m.Icon != nil && !m.Icon.IsSeparatorAuto() {
 
-		items, _ := m.SubMenu(DefaultNameIcon(m.Icon))
+		items := m.SubMenu(DefaultNameIcon(m.Icon))
 
 		// 	GtkWidget *pItemSubMenu = _add_item_sub_menu (pIcon, menu);
 
@@ -213,7 +213,7 @@ func BuildMenuIcon(m *backendmenu.DockMenu) int {
 
 		//\_________________________ Other actions
 
-		otherActions, _ := m.SubMenu(tran.Slate("Other actions"), "")
+		otherActions := m.SubMenu(tran.Slate("Other actions"), "")
 
 		otherActions.Entry(backendmenu.MenuWindowMoveHere)
 		otherActions.Entry(backendmenu.MenuWindowFullScreen)
@@ -238,7 +238,7 @@ func BuildMenuIcon(m *backendmenu.DockMenu) int {
 		m.Button(backendmenu.MenuWindowMinAll)
 		m.Button(backendmenu.MenuWindowShowAll)
 
-		otherActions, _ := m.SubMenu(tran.Slate("Other actions"), "")
+		otherActions := m.SubMenu(tran.Slate("Other actions"), "")
 		otherActions.Entry(backendmenu.MenuWindowMoveAllHere)
 
 		// 		_add_desktops_entry (pSubMenuOtherActions, TRUE, data);

@@ -36,13 +36,14 @@ type PackageType int
 // Types of packages (location).
 //
 const (
-	TypeLocal   PackageType = iota // package installed as root on the machine (in a sub-folder /usr).
-	TypeUser                       // package located in the user's home
-	TypeDistant                    // package present on the server
-	TypeNew                        // package newly present on the server (for less than 1 month)
-	TypeUpdated                    // package present locally but with a more recent version on the server, or distant package that has been updated in the past month.
-	TypeInDev                      // package present locally but not on server. It's a user special applet we must not alter.
-	TypeAny                        // joker (the search path function will search locally first, and on the server then).
+	TypeLocal      PackageType = iota // package installed as root on the machine (in a sub-folder /usr).
+	TypeUser                          // package located in the user's home
+	TypeDistant                       // package present on the server
+	TypeNew                           // package newly present on the server (for less than 1 month)
+	TypeUpdated                       // package present locally but with a more recent version on the server, or distant package that has been updated in the past month.
+	TypeInDev                         // package present locally but not on server. It's a user special applet we must not alter.
+	TypeGoInternal                    // package included in the dock binary.
+	TypeAny                           // joker (the search path function will search locally first, and on the server then).
 )
 
 // PackageSource defines whether the loaded package is an applet or a theme.
@@ -210,11 +211,13 @@ func ListFromDir(dir string, typ PackageType, source PackageSource) (AppletPacka
 		info = fileGetLink(fullpath, info) // Get real dir if it is a link.
 		if info.IsDir() {
 			pack, e := NewAppletPackageUser(dir, info.Name(), typ, source)
-			if e != nil {
-				return nil, e
+			if !log.Err(e, "packages.ListFromDir") {
+				list = append(list, pack)
 			}
+			// if e != nil {
+			// 	return nil, e
+			// }
 
-			list = append(list, pack)
 		}
 	}
 	return list, nil
