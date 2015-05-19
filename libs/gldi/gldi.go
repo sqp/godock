@@ -796,7 +796,7 @@ func (icon *Icon) IsMultiAppli() bool {
 // IsTaskbar returns whether the icon belongs to the taskbar or not.
 //
 func (icon *Icon) IsTaskbar() bool {
-	return icon.IsAppli() && !icon.IsLauncher()
+	return icon.IsAppli() && !icon.IsLauncher() && !icon.IsApplet()
 }
 
 func (icon *Icon) IsSeparator() bool {
@@ -1200,6 +1200,10 @@ func (m *Module) InstancesList() (list []*ModuleInstance) {
 
 func (m *Module) Activate() {
 	C.gldi_module_activate(m.Ptr)
+}
+
+func (m *Module) Deactivate() {
+	C.gldi_module_deactivate(m.Ptr)
 }
 
 func (m *Module) AddInstance() {

@@ -151,6 +151,10 @@ func (cda *CDApplet) LoadTemplate(names ...string) {
 	}
 }
 
+func (cda *CDApplet) Template(file string) *template.Template {
+	return cda.templates[file]
+}
+
 // ExecuteTemplate will run a pre-loaded template with the given data.
 //
 func (cda *CDApplet) ExecuteTemplate(file, name string, data interface{}) (string, error) {

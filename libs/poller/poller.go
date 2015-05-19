@@ -140,7 +140,13 @@ func (poller *Poller) Restart() {
 	// poller.restart <- poller.name // send our restart event. This will send an event on the restart channel.
 }
 
-// Stop the polling ticker.
+// Start enable the polling ticker.
+//
+func (poller *Poller) Start() {
+	poller.enabled = true
+}
+
+// Stop disable the polling ticker.
 //
 func (poller *Poller) Stop() {
 	// if poller.active {
@@ -169,7 +175,7 @@ func (poller *Poller) Action() {
 // Safe to use on nil poller.
 //
 func (poller *Poller) Plop() bool {
-	if poller == nil || poller.delay <= 0 {
+	if poller == nil || poller.delay <= 0 || poller.enabled == false {
 		return false
 	}
 	poller.plop++

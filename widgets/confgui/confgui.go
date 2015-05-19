@@ -170,11 +170,7 @@ func NewGuiConfigure(source datatype.Source, log cdtype.Logger) *GuiConfigure {
 
 	widget.Menu = confmenu.New(widget)
 	menuIcons := pageswitch.New()
-	menuDownload := confapplets.NewMenuDownload()
 	menuIcons.Set("no-show-all", true)
-	menuDownload.ShowAll()
-	menuDownload.Hide()
-	menuDownload.Set("no-show-all", true)
 
 	// Box for separator on left of menuIcons.
 	boxIcons, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
@@ -192,11 +188,9 @@ func NewGuiConfigure(source datatype.Source, log cdtype.Logger) *GuiConfigure {
 	core := confcore.New(widget, menuIcons)
 	add := confapplets.New(widget, nil, confapplets.ListCanAdd)
 
-	// dl := confapplets.New(widget, menuDownload, confapplets.ListExternal)
-
 	// Add pages to the switcher. This will pack the pages widgets to the gui box.
 
-	widget.AddPage(icons, GroupIcons, widget.SetActionSave, widget.Menu.Save.Hide)
+	widget.AddPage(icons, GroupIcons, func() { widget.SetActionSave(); menuIcons.Show() }, func() { widget.Menu.Save.Hide(); menuIcons.Hide() })
 	widget.AddPage(add, GroupAdd, widget.SetActionAdd, widget.Menu.Save.Hide)
 	widget.AddPage(core, GroupConfig, core.SetAction, widget.Menu.Save.Hide)
 
@@ -210,7 +204,6 @@ func NewGuiConfigure(source datatype.Source, log cdtype.Logger) *GuiConfigure {
 
 	widget.Menu.PackStart(sw, false, false, 0)
 	widget.Menu.PackStart(boxIcons, false, false, 0)
-	widget.Menu.PackStart(menuDownload, false, false, 0)
 
 	widget.PackStart(widget.Menu, false, false, 2)
 	widget.PackStart(sep, false, false, 0)

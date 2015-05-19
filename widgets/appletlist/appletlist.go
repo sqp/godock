@@ -2,7 +2,6 @@
 package appletlist
 
 import (
-	// "github.com/conformal/gotk3/gdk"
 	"github.com/conformal/gotk3/gtk"
 
 	"github.com/sqp/godock/libs/log"
@@ -10,8 +9,6 @@ import (
 	"github.com/sqp/godock/widgets/confbuilder/datatype"
 	"github.com/sqp/godock/widgets/gtk/buildhelp"
 	"github.com/sqp/godock/widgets/gtk/gunvalue"
-
-	// "path/filepath"
 )
 
 //-----------------------------------------------------[ WIDGET APPLETS LIST ]--
@@ -210,42 +207,38 @@ func (widget *ListAdd) Load(list map[string]datatype.Appleter) {
 //
 type ListExternal struct {
 	List
-	appletsVersion string
 }
 
 // NewListExternal creates an applet list widget with external applets to install.
 //
-func NewListExternal(control ControlDownload, appletsVersion string) *ListExternal {
-	return &ListExternal{*NewList(control), appletsVersion}
+func NewListExternal(control ControlDownload) *ListExternal {
+	return &ListExternal{*NewList(control)}
 }
 
 // Load loads the applet list into the widget.
 //
 func (widget *ListExternal) Load(list map[string]datatype.Appleter) {
-	// packs, e := packages.ListDownload(widget.appletsVersion)
-	// log.Err(e, "ListExternal")
+	for key, pack := range list {
+		iter := widget.newIter(key, pack)
+		// iter := widget.model.Append()
+		widget.model.SetCols(iter, gtk.Cols{
+			RowKey:      key,
+			RowName:     pack.GetName(),
+			RowCategory: pack.FormatCategory(),
+		})
 
-	// for _, pack := range packs {
-	// 	iter := widget.newIter(pack)
-	// 	// iter := widget.model.Append()
-	// 	widget.model.SetCols(iter, gtk.Cols{
-	// 		RowData:     pack,
-	// 		RowName:     pack.DisplayedName,
-	// 		RowCategory: pack.FormatCategory(),
-	// 	})
+		if pack.IsInstalled() { // local packages.
+			widget.setActiveIter(iter, true)
 
-	// 	if pack.IsInstalled() { // local packages.
-	// 		widget.setActiveIter(iter, true)
-
-	// 		img := filepath.Join(pack.Path, "icon")
-	// 		if pix, e := gdk.PixbufNewFromFileAtScale(img, iconSize, iconSize, true); !log.Err(e, "Load icon") {
-	// 			widget.model.SetValue(iter, RowIcon, pix)
-	// 		}
-	// 	} else {
-	// 		widget.setActiveIter(iter, false)
-	// 		// icon missing, can't set.
-	// 	}
-	// }
+			img := pack.GetIconFilePath()
+			if pix, e := common.PixbufNewFromFile(img, iconSize); !log.Err(e, "Load icon") {
+				widget.model.SetValue(iter, RowIcon, pix)
+			}
+		} else {
+			widget.setActiveIter(iter, false)
+			// icon missing, can't set.
+		}
+	}
 }
 
 // func modelApplet() *gtk.ListStore {

@@ -93,6 +93,12 @@ func (app *Applet) Init(loadConf bool) {
 			{"Actions", "ShortkeyTwoKey", "Action two", app.conf.ShortkeyTwoKey}},
 		Debug: app.conf.Debug})
 
+	if app.conf.VersionPollingEnabled {
+		app.Poller().Start()
+	} else {
+		app.Poller().Stop()
+	}
+
 	// Branches for versions checking.
 	app.version.sources = []*Branch{
 		NewBranch(app.conf.BranchCore, path.Join(app.conf.SourceDir, app.conf.DirCore)),

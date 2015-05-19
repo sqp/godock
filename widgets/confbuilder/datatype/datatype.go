@@ -35,9 +35,13 @@ type Source interface {
 	//
 	ListIcons() map[string][]Iconer
 
-	// ListApplets builds the list of all applets.
+	// ListKnownApplets builds the list of all applets.
 	//
-	ListApplets() map[string]Appleter
+	ListKnownApplets() map[string]Appleter
+
+	// ListDownloadApplets builds the list of downloadable user applets (installed or not).
+	//
+	ListDownloadApplets() map[string]Appleter
 
 	// ListIconsMainDock builds the list of icons in the maindock.
 	//
@@ -198,8 +202,12 @@ type Appleter interface {
 
 	// Icon() string
 	IsInstalled() bool
+	Install(options string) error
+	Uninstall() error
+	CanUninstall() bool
 	IsActive() bool
 	Activate() string
+	Deactivate()
 	CanAdd() bool
 
 	GetTitle() string // module name translated for the user.

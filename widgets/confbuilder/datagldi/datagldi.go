@@ -4,14 +4,16 @@ package datagldi
 import (
 	"github.com/bradfitz/iter"
 
+	"github.com/sqp/godock/libs/cdtype"
 	"github.com/sqp/godock/libs/gldi"
 	"github.com/sqp/godock/libs/gldi/globals"
+	"github.com/sqp/godock/libs/packages"
 	"github.com/sqp/godock/libs/ternary"
 	// "github.com/sqp/godock/libs/maindock"
 	"github.com/sqp/godock/widgets/confbuilder/datatype"
 	"github.com/sqp/godock/widgets/gtk/keyfile"
 
-	// "path/filepath"
+	"path/filepath"
 	"strconv"
 )
 
@@ -93,6 +95,10 @@ func (v *AppletConf) FormatCategory() string {
 //
 func (v *AppletConf) IsInstalled() bool { return true }
 
+// CanUninstall returns whether the applet can be uninstalled or not.
+//
+func (v *AppletConf) CanUninstall() bool { return false }
+
 // IsActive returns whether there is at least one active instance of the applet or not.
 //
 func (v *AppletConf) IsActive() bool { return len(v.app.InstancesList()) > 0 }
@@ -129,6 +135,18 @@ func (v *AppletConf) Activate() string {
 	return findNewInstance(instances, v.app.InstancesList())
 }
 
+// Install does nothing. Only here for compatibility with datatype.Appleter
+//
+func (v *AppletConf) Install(options string) error { return nil }
+
+// Uninstall does nothing. Only here for compatibility with datatype.Appleter
+//
+func (v *AppletConf) Uninstall() error { return nil }
+
+// Deactivate does nothing. Only here for compatibility with datatype.Appleter
+//
+func (v *AppletConf) Deactivate() {}
+
 func findNewInstance(listold, listnew []*gldi.ModuleInstance) string {
 	for _, appnew := range listnew {
 		found := false
@@ -145,6 +163,41 @@ func findNewInstance(listold, listnew []*gldi.ModuleInstance) string {
 	}
 	return ""
 }
+
+//----------------------------------------------------------[ APPLETDOWNLOAD ]--
+
+// AppletDownload wraps a dock module and visitcard as Appleter for config data source.
+//
+type AppletDownload struct {
+	packages.AppletPackage
+	app *gldi.Module
+}
+
+// IsActive returns whether there is at least one active instance of the applet or not.
+//
+func (v *AppletDownload) IsActive() bool {
+	return v.app != nil && len(v.app.InstancesList()) > 0
+}
+
+// CanAdd returns whether the applet can be activated.
+//
+func (v *AppletDownload) CanAdd() bool {
+	return !v.IsActive()
+}
+
+// CanUninstall returns whether the applet can be uninstalled or not.
+//
+func (v *AppletDownload) CanUninstall() bool {
+	return v.Type != packages.TypeInDev && v.Type != packages.TypeLocal
+}
+
+func (v *AppletDownload) Activate() string           { v.app.Activate(); return "" }
+func (v *AppletDownload) Deactivate()                { v.app.Deactivate() }
+func (v *AppletDownload) GetTitle() string           { return v.DisplayedName }
+func (v *AppletDownload) GetName() string            { return v.FormatName() }
+func (v *AppletDownload) GetAuthor() string          { return v.Author }
+func (v *AppletDownload) GetIconFilePath() string    { return filepath.Join(v.Path, "icon") } // TODO: improve }
+func (v *AppletDownload) GetPreviewFilePath() string { return "" }
 
 //
 //-------------------------------------------------------------[ DATA SOURCE ]--
@@ -170,15 +223,33 @@ func (Data) DirAppData() (string, error) {
 	return globals.DirAppdata()
 }
 
-// ListApplets builds the list of all user applets.
+// ListKnownApplets builds the list of all user applets.
 //
-func (Data) ListApplets() map[string]datatype.Appleter {
+func (Data) ListKnownApplets() map[string]datatype.Appleter {
 	list := make(map[string]datatype.Appleter)
 	for name, app := range gldi.ModuleList() {
 		if !app.IsAutoLoaded() { // don't display modules that can't be disabled
 			list[name] = &AppletConf{*app.VisitCard(), app}
 		}
 	}
+	return list
+}
+
+// ListDownloadApplets builds the list of downloadable user applets (installed or not).
+//
+func (Data) ListDownloadApplets() map[string]datatype.Appleter {
+	packs, e := packages.ListDownloadIndex(cdtype.AppletsServerTag)
+	// if log.Err(e, "ListExternal applets") {
+	// 	return nil
+	// }
+	_ = e
+
+	applets := gldi.ModuleList()
+	list := make(map[string]datatype.Appleter)
+	for k, v := range packs {
+		list[k] = &AppletDownload{*v, applets[k]}
+	}
+
 	return list
 }
 

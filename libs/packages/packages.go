@@ -103,18 +103,35 @@ func (list ByName) Less(i, j int) bool {
 
 //-----------------------------------------------------------[ LIST DOWNLOAD ]--
 
-// ListDownload builds a merged list of external packages in local and distant
-// sources with downloadable state.
+// ListDownloadSorted builds a merged list of external packages in local and distant
+// sources with downloadable state, sorted by name.
+//
+func ListDownloadSorted(version string) (AppletPackages, error) {
+	filled, e := ListDownloadIndex(version)
+
+	// Prepare output slice with good size and fill it with packages.
+	sorted := make(AppletPackages, 0, len(filled))
+	for _, pack := range filled {
+		sorted = append(sorted, pack)
+	}
+
+	sort.Sort(ByName{sorted}) // Easy to get the list sorted the way we want.
+	return sorted, e
+}
+
+// ListDownloadIndex builds a merged list of external packages in local and distant
+// sources with downloadable state, indexed by applet name.
 // In case of multiple errors, the last one is returned.
 // (local access errors are more important than network errors)
 //
-func ListDownload(version string) (AppletPackages, error) {
+func ListDownloadIndex(version string) (map[string]*AppletPackage, error) {
 	filled := make(map[string]*AppletPackage) // index by name so local packages will replace distant ones.
 
 	found, eRet := ListDistant(cdtype.AppletsDirName + "/" + version)
 	if eRet == nil {
 		for _, pack := range found {
 			filled[pack.DisplayedName] = pack
+			pack.SrvTag = version
 		}
 	}
 
@@ -129,6 +146,7 @@ func ListDownload(version string) (AppletPackages, error) {
 					pack.Type = TypeInDev
 				}
 				filled[pack.DisplayedName] = pack
+				pack.SrvTag = version
 			}
 		} else {
 			eRet = eUsr
@@ -137,14 +155,7 @@ func ListDownload(version string) (AppletPackages, error) {
 		eRet = eDir
 	}
 
-	// Prepare output slice with good size and fill it with packages.
-	sorted := make(AppletPackages, 0, len(filled))
-	for _, pack := range filled {
-		sorted = append(sorted, pack)
-	}
-
-	sort.Sort(ByName{sorted}) // Easy to get the list sorted the way we want.
-	return sorted, eRet
+	return filled, eRet
 }
 
 //-----------------------------------------------------------------[ DISTANT ]--
@@ -237,6 +248,7 @@ type AppletPackage struct {
 	Type          PackageType // type of package : installed, user, distant...
 	Path          string      // complete path of the package.
 	LastModifDate string      `conf:"last modif"` // date of latest changes in the package.
+	SrvTag        string      // webserver version tag to download.
 
 	// On server only.
 	CreationDate int     `conf:"creation"` // date of creation of the package.
@@ -478,14 +490,14 @@ func (pack *AppletPackage) GetDescription() string {
 // Install downloads and extract an external archive to package dir.
 // Optional tar settings can be passed.
 //
-func (pack *AppletPackage) Install(version, options string) error {
+func (pack *AppletPackage) Install(options string) error {
 	// Get applets dir.
 	dir, eDir := DirExternal()
 	if eDir != nil {
 		return eDir
 	}
 	// Connect a reader to the archive on server.
-	resp, eNet := http.Get(DistantURL + cdtype.AppletsDirName + "/" + version + "/" + pack.DisplayedName + "/" + pack.DisplayedName + ".tar.gz")
+	resp, eNet := http.Get(DistantURL + cdtype.AppletsDirName + "/" + pack.SrvTag + "/" + pack.DisplayedName + "/" + pack.DisplayedName + ".tar.gz")
 	if eNet != nil {
 		return eNet
 	}
@@ -509,6 +521,7 @@ func (pack *AppletPackage) Install(version, options string) error {
 			return e
 		}
 		pack.Path = newpack.Path
+		pack.Type = newpack.Type
 		pack.Description = newpack.Description
 		pack.Version = newpack.Version
 		pack.ActAsLauncher = newpack.ActAsLauncher
@@ -524,14 +537,14 @@ func (pack *AppletPackage) Install(version, options string) error {
 
 // Uninstall removes an external applet from disk.
 //
-func (pack *AppletPackage) Uninstall(version string) error {
+func (pack *AppletPackage) Uninstall() error {
 	if pack.Type != TypeUser && pack.Type != TypeUpdated {
 		return errors.New("wrong package type " + pack.FormatState())
 	}
 	dir, eDir := DirExternal()
 	if eDir == nil && dir != "" && dir != "/" && pack.DisplayedName != "" {
 		pack.Type = TypeDistant
-		pack.Path = DistantURL + cdtype.AppletsDirName + "/" + version + "/" + pack.DisplayedName
+		pack.Path = DistantURL + cdtype.AppletsDirName + "/" + pack.SrvTag + "/" + pack.DisplayedName
 
 		return os.RemoveAll(filepath.Join(dir, pack.DisplayedName))
 	}

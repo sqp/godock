@@ -83,10 +83,10 @@ func (widget *Preview) Load(pack datatype.Appleter) {
 	// 	widget.stateIcon.Show()
 	// }
 
-	// // widget.RemoveTmpFile()
+	// widget.RemoveTmpFile()
 	widget.previewFrame.Hide() // Hide the preview frame until we have an image.
 
-	// // Async calls for description and image. They can have to be downloaded and be slow at it.
+	// Async calls for description and image. They can have to be downloaded and be slow at it.
 	go widget.description.SetMarkup(pack.GetDescription())
 	go widget.setImage(pack)
 }

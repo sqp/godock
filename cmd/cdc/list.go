@@ -80,7 +80,7 @@ func runList(cmd *Command, args []string) {
 	var e error
 	switch {
 	case *listDistant:
-		listPackages, e = packages.ListDistant(cdtype.AppletsDirName + "/" + appVersion)
+		listPackages, e = packages.ListDistant(cdtype.AppletsDirName + "/" + cdtype.AppletsServerTag)
 		logger.Err(e, "get packages list from server")
 	case *listLocal:
 		// Get applets dir.
@@ -92,7 +92,7 @@ func runList(cmd *Command, args []string) {
 		logger.Err(e, "get packages list from external dir")
 
 	default:
-		listPackages, e = packages.ListDownload(appVersion)
+		listPackages, e = packages.ListDownloadSorted(cdtype.AppletsServerTag)
 		logger.Err(e, "get packages list from server")
 	}
 

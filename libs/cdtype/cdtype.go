@@ -3,9 +3,12 @@ package cdtype
 
 import "github.com/sqp/godock/libs/poller"
 
+import "text/template"
+
 // Dock constants.
 const (
-	AppletsDirName = "third-party"
+	AppletsDirName   = "third-party"
+	AppletsServerTag = "3.4.0"
 )
 
 // Events represents the list of events you can receive with a cairo-dock applet.
@@ -129,6 +132,7 @@ type AppBase interface {
 
 	// Templates.
 	ExecuteTemplate(file, name string, data interface{}) (string, error)
+	Template(file string) *template.Template
 	LoadTemplate(names ...string)
 
 	// Config.

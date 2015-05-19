@@ -8,6 +8,7 @@ import (
 	"github.com/sqp/godock/libs/log"
 
 	"github.com/sqp/godock/widgets/common"
+	"github.com/sqp/godock/widgets/confapplets"
 	"github.com/sqp/godock/widgets/confbuilder"
 	"github.com/sqp/godock/widgets/confbuilder/datatype"
 	"github.com/sqp/godock/widgets/confsettings"
@@ -22,6 +23,11 @@ import (
 
 const iconSize = 24
 const panedPosition = 200
+
+const (
+	// TabDownload is the name of the config download tab.
+	TabDownload = "Download"
+)
 
 //
 //-----------------------------------------------------------[ CONFCORE DATA ]--
@@ -129,6 +135,12 @@ var coreItems = []*Item{
 		Managers: []string{"Backends", "Containers", "Connection", "Docks"}},
 
 	{
+		Key:     TabDownload,
+		Title:   TabDownload,
+		Icon:    "cairo-dock.svg",
+		Tooltip: "Download additional applets."},
+
+	{
 		Key:   confsettings.GuiGroup, // custom page for the config own settings.
 		Title: confsettings.GuiGroup,
 		Icon:  "cairo-dock.svg"},
@@ -149,6 +161,8 @@ type Controller interface {
 	SetActionSave()
 	SetActionGrab()
 	SetActionCancel()
+
+	SelectIcons(string)
 }
 
 // configWidget extends the Widget interface with common needed actions.
@@ -312,6 +326,21 @@ func (widget *ConfCore) onSelect(item *Item, e error) {
 		w.Load()
 		widget.Pack2(w, true, true)
 		widget.config = w
+		return
+
+	case TabDownload: // download tab has a special widget.
+
+		menuDownload := confapplets.NewMenuDownload()
+		confapp := confapplets.New(widget.data, menuDownload, confapplets.ListExternal)
+		confapp.Load()
+
+		box, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
+		box.PackStart(menuDownload, false, false, 4)
+		box.PackStart(confapp, true, true, 0)
+		box.ShowAll()
+
+		widget.Pack2(box, true, true)
+		widget.config = box
 		return
 
 	case confsettings.GuiGroup: // own config has a special path.

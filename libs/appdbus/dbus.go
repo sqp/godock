@@ -27,8 +27,6 @@ Examples:
 
 	properties, e := app.GetAll()
 
-	app.PopulateMenu("entry1", "", "after separator") // only in event BuildMenu
-
 Add SubIcons
 
 Some of the actions to play with SubIcons:
@@ -269,7 +267,7 @@ func (cda *CDDbus) OnSignal(s *dbus.Signal) (exit bool) {
 		case "on_build_menu": // Provide the simple menu builder.
 			cda.menu.Clear()
 			cda.onEvent(name, cdtype.Menuer(cda.menu))
-			cda.PopulateMenu(cda.menu.Names...)
+			cda.AddMenuItems(cda.menu.items...)
 			return false
 
 		case "on_menu_select": // Callback is already provided.
@@ -281,11 +279,11 @@ func (cda *CDDbus) OnSignal(s *dbus.Signal) (exit bool) {
 	}
 
 	name = strings.TrimPrefix(string(s.Name), DbusInterfaceSubapplet+".")
-	if name != s.Name { // dbus interface matched.
+	if name != s.Name { // dbus subicons interface matched.
 		if name == "on_build_menu_sub_icon" { // Provide the simple menu builder.
 			cda.menu.Clear()
 			cda.onEvent(name, cdtype.Menuer(cda.menu), s.Body[0].(string))
-			cda.PopulateMenu(cda.menu.Names...)
+			cda.AddMenuItems(cda.menu.items...)
 			return false
 		}
 
@@ -477,51 +475,21 @@ func (cda *CDDbus) ShowAppli(show bool) error {
 	return cda.launch(cda.dbusIcon, DbusInterfaceApplet+".ShowAppli", interface{}(show))
 }
 
-// aa{sv}
-
-//~ func (cda *CDDbus) AddMenuItems(items... []map[string]interface{}) error {
-
-// AddMenuItems is broken, sorry TODO.
-//
-func (cda *CDDbus) AddMenuItems() error {
-	menuitem := []map[string]interface{}{
-		{"widget-type": cdtype.MenuEntry, //int32(0),
-			"label": "entry",
-			// "icon":  "gtk-add",
-			"menu": int32(0),
-			"id":   int32(1),
-			// "tooltip": "this is the tooltip that will appear when you hover this entry",
-		},
-	}
-
+func (cda *CDDbus) AddMenuItems(items ...map[string]interface{}) error {
 	var data []map[string]dbus.Variant
-	for _, interf := range menuitem {
+	for _, interf := range items {
 		data = append(data, toMapVariant(interf))
 	}
 
-	// icon := map[string]dbus.Variant{
-
-	// "widget-type": dbus.MakeVariant(int32(cdtype.MenuEntry)),
-	// "label":       dbus.MakeVariant("this is an entry of the main menu"),
-	// "icon":  dbus.MakeVariant("gtk-add"),
-	// "menu":    int32(0),
-	// "id":      int32(1),
-	// "tooltip": "this is the tooltip that will appear when you hover this entry",
-	// }
-
-	// cda.log.Info("struct", data)
-	// cda.log.Err(cda.launch(cda.dbusIcon, DbusInterfaceApplet+".AddMenuItems", data), "AddMenuItems")
-	// cda.log.Err(cda.dbusIcon.Call(DbusInterfaceApplet+".AddMenuItems", 0, data).Err, "additems")
-	cda.log.NewErr("Disabled, prevent a crash")
-	return nil
+	return cda.launch(cda.dbusIcon, DbusInterfaceApplet+".AddMenuItems", data)
 }
 
 // PopulateMenu adds a list of entry to the default menu. An empty string will
 // add a separator. Can only be used in the OnBuildMenu callback.
 //
-func (cda *CDDbus) PopulateMenu(items ...string) error {
-	return cda.launch(cda.dbusIcon, DbusInterfaceApplet+".PopulateMenu", items)
-}
+// func (cda *CDDbus) PopulateMenu(items ...string) error {
+// 	return cda.launch(cda.dbusIcon, DbusInterfaceApplet+".PopulateMenu", items)
+// }
 
 // BindShortkey binds one or more keyboard shortcuts to your applet.
 //
@@ -670,48 +638,95 @@ func toMapVariant(input map[string]interface{}) map[string]dbus.Variant {
 //
 //-------------------------------------------------------------[ MENU SIMPLE ]--
 
-// Menu is a really simple menu to store callbacks at creation to be sure the
-// answer match the user request.
-// It's gonna evolve when we'll have access to the better menu build method, but
-// its goal will stay the same.
+// Menu is a menu builder to store callbacks at creation to be sure the answer
+// match the user request.
 //
 type Menu struct {
-	Actions []interface{} // Menu callbacks are saved to be sure we launch the good action (options can change).
-	Names   []string
+	*MenuData
+	MenuId int32
 }
 
 // Append an item to the menu with its callback.
 //
 func (menu *Menu) AddEntry(label, iconPath string, call interface{}, userData ...interface{}) cdtype.MenuWidgeter {
-	menu.Names = append(menu.Names, label)
-	menu.Actions = append(menu.Actions, call)
+	menu.items = append(menu.items, map[string]interface{}{
+		"widget-type": cdtype.MenuEntry, //int32(0),
+		"label":       label,
+		"icon":        iconPath,
+		"menu":        menu.MenuId, //int32(0),
+		// "id":          int32(1),
+		"id": int32(len(menu.actions)),
+		// 	"tooltip":     "this is the tooltip that will appear when you hover this entry",
+	})
+
+	menu.actions = append(menu.actions, call)
 	return nil
 }
 
 // Separator adds a separator to the menu.
 //
 func (menu *Menu) Separator() {
-	menu.Names = append(menu.Names, "")
-	menu.Actions = append(menu.Actions, func() {})
+	menu.items = append(menu.items, map[string]interface{}{
+		"widget-type": cdtype.MenuSeparator,
+		"id":          int32(len(menu.actions)),
+	})
+
+	menu.actions = append(menu.actions, nil) // func() {})
 }
 
+// SubMenu adds a submenu to the menu.
+//
 func (menu *Menu) SubMenu(label, iconPath string) cdtype.Menuer {
+	menu.items = append(menu.items, map[string]interface{}{
+		"widget-type": int32(cdtype.MenuSubMenu),
+		"label":       label,
+		"icon":        iconPath,
+		// "menu":        int32(0),
+		"id": int32(len(menu.actions)),
+		// 	"tooltip":     "this is the tooltip that will appear when you hover this entry",
+	})
+
+	menu.actions = append(menu.actions, nil)
+	return &Menu{menu.MenuData, int32(-1)}
+	// return &Menu{menu.MenuData, int32(len(menu.actions) - 1)}
+}
+
+// AddCheckEntry adds a check entry to the menu.
+//
+func (menu *Menu) AddCheckEntry(label string, active bool, call interface{}, userData ...interface{}) cdtype.MenuWidgeter {
+	menu.items = append(menu.items, map[string]interface{}{
+		"widget-type": cdtype.MenuCheckBox,
+		"label":       label,
+		"state":       active,
+		"id":          int32(len(menu.actions)),
+	})
+	menu.actions = append(menu.actions, call)
+
+	// menu.items = append(menu.items, map[string]interface{}{
+	// 	"widget-type": cdtype.MenuRadioButton,
+	// 	"label":       "1",
+	// 	"state":       true,
+	// 	"group":       int32(100),
+	// 	"id":          int32(len(menu.actions)),
+	// })
+
+	// menu.items = append(menu.items, map[string]interface{}{
+	// 	"widget-type": cdtype.MenuRadioButton,
+	// 	"label":       "2",
+	// 	"group":       int32(100),
+	// 	"id":          int32(len(menu.actions) + 1),
+	// })
+
+	// menu.actions = append(menu.actions, call)
+	// menu.actions = append(menu.actions, call)
 	return nil
 }
 
-func (menu *Menu) AddCheckEntry(label string, active bool, call interface{}, userData ...interface{}) cdtype.MenuWidgeter {
-	if active {
-		label = "[x] " + label
-	} else {
-		label = "[ ] " + label
-	}
-	return menu.AddEntry(label, "", call, userData...)
-}
-
 // Launch calls the action referenced by its id.
+//
 func (menu *Menu) Launch(id int32) {
-	if int(id) < len(menu.Actions) {
-		switch call := menu.Actions[id].(type) {
+	if int(id) < len(menu.actions) {
+		switch call := menu.actions[id].(type) {
 		case func():
 			call()
 		}
@@ -721,6 +736,12 @@ func (menu *Menu) Launch(id int32) {
 // Clear resets the menu items list.
 //
 func (menu *Menu) Clear() {
-	menu.Actions = nil
-	menu.Names = nil
+	menu.MenuData = &MenuData{}
+}
+
+// MenuData stores the menu data to send, and callbacks to launch on return.
+//
+type MenuData struct {
+	actions []interface{} // Menu callbacks are saved to be sure we launch the good action (options can change).
+	items   []map[string]interface{}
 }

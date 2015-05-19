@@ -36,12 +36,12 @@ extern gchar* g_cConfFile;
 #define CAIRO_DOCK_LOGO "cairo-dock-logo.png"
 
 #define CAIRO_DOCK_PLUGINS_EXTRAS_URL "http://extras.glx-dock.org"
-#define DISTANT_DIR "3.4.0"
+// #define DISTANT_DIR "3.4.0"
 
-static gchar *cairo_dock_get_third_party_applets_link (void)
-{
-	return g_strdup_printf (CAIRO_DOCK_PLUGINS_EXTRAS_URL"/"DISTANT_DIR);
-}
+// static gchar *cairo_dock_get_third_party_applets_link (void)
+// {
+// 	return g_strdup_printf (CAIRO_DOCK_PLUGINS_EXTRAS_URL"/"DISTANT_DIR);
+// }
 
 
 static void _cairo_dock_add_about_page (GtkWidget *pNoteBook, const gchar *cPageLabel, const gchar *cAboutText)
@@ -116,10 +116,10 @@ static void _cairo_dock_about (GldiContainer *pContainer)
 	gtk_widget_set_tooltip_text (pLink, _("Find the latest version of Cairo-Dock here !"));
 	gtk_box_pack_start (GTK_BOX (pVBox), pLink, FALSE, FALSE, 0);
 	
-	gchar *cLink = cairo_dock_get_third_party_applets_link ();
-	pLink = gtk_link_button_new_with_label (cLink, _("Get more applets!"));
-	g_free (cLink);
-	gtk_box_pack_start (GTK_BOX (pVBox), pLink, FALSE, FALSE, 0);
+	// gchar *cLink = cairo_dock_get_third_party_applets_link ();
+	// pLink = gtk_link_button_new_with_label (cLink, _("Get more applets!"));
+	// g_free (cLink);
+	// gtk_box_pack_start (GTK_BOX (pVBox), pLink, FALSE, FALSE, 0);
 	
 	gchar *cLabel = g_strdup_printf ("%s (Flattr)", _("Donate"));
 	pLink = gtk_link_button_new_with_label (CAIRO_DOCK_FLATTR_URL, cLabel);

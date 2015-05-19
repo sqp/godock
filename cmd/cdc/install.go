@@ -29,7 +29,7 @@ func runInstall(cmd *Command, args []string) {
 		cmd.Usage()
 	}
 
-	distant, e := packages.ListDistant(cdtype.AppletsDirName + "/" + appVersion)
+	distant, e := packages.ListDistant(cdtype.AppletsDirName + "/" + cdtype.AppletsServerTag)
 	exitIfFail(e, "List distant applets") // Ensure we have the server list.
 
 	options := ""
@@ -56,7 +56,8 @@ func installApplet(pack *packages.AppletPackage, options string) bool {
 		logger.NewErr(pack.DisplayedName, "unknown applet")
 		return false
 	}
-	if logger.Err(pack.Install(appVersion, options), "install") {
+	pack.SrvTag = cdtype.AppletsServerTag
+	if logger.Err(pack.Install(options), "install") {
 		return false
 	}
 	logger.Info("Applet installed", pack.DisplayedName)

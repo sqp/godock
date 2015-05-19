@@ -16,7 +16,7 @@ optdepends=(
 options=('!strip' '!emptydirs')
 srcpath=github.com/sqp/godock
 applets="Audio Cpu DiskActivity DiskFree GoGmail Mem NetActivity Notifications TVPlay Update"
-cdctags="log gtk dock"
+cdctags="log dock"
 appdir=usr/share/cairo-dock/plug-ins/Dbus/third-party/
 
 build() {

@@ -113,19 +113,17 @@ func BuildMenuContainer(m *backendmenu.DockMenu) int {
 				items.Entry(backendmenu.MenuRemoveIcon)
 				items.Entry(backendmenu.MenuMoveToDock)
 
-			case m.Icon.IsAppli() || m.Icon.IsStackIcon(): // appli with no launcher
+			case (m.Icon.IsAppli() || m.Icon.IsStackIcon()) && // appli with no launcher
+				!m.Icon.ClassIsInhibited(): // if the class doesn't already have an inhibator somewhere.
+				items.Entry(backendmenu.MenuMakeLauncher)
 
-				if !m.Icon.ClassIsInhibited() { // if the class doesn't already have an inhibator somewhere.
-					items.Entry(backendmenu.MenuMakeLauncher)
+				if !globals.DocksParam.IsLockAll() && m.Icon.IsAppli() {
 
-					if !globals.DocksParam.IsLockAll() && m.Icon.IsAppli() {
-
-						if globals.TaskbarParam.OverWriteXIcons() {
-							items.Entry(backendmenu.MenuCustomIconRemove)
-						}
-
-						items.Entry(backendmenu.MenuCustomIconSet)
+					if globals.TaskbarParam.OverWriteXIcons() {
+						items.Entry(backendmenu.MenuCustomIconRemove)
 					}
+
+					items.Entry(backendmenu.MenuCustomIconSet)
 				}
 
 			case m.Icon.IsApplet(): // applet (icon or desklet) (the sub-icons have been filtered before and won't have this menu).

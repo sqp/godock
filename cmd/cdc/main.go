@@ -18,8 +18,7 @@ import (
 	"unicode/utf8"
 )
 
-const cdcVersion = "0.0.2"
-const appVersion = "3.4.0"
+const cdcVersion = "0.0.3"
 
 // Commands lists the available commands and help topics.
 // The order here is the order in which they are printed by 'cdc help'.

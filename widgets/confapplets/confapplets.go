@@ -1,24 +1,18 @@
 // Package confapplets provides an applets list selection widget with preview.
 //
-// Can actually display the "can add" applets list.
-// The download page is yet to fix to the new data source.
 package confapplets
 
 import (
 	"github.com/conformal/gotk3/glib"
 	"github.com/conformal/gotk3/gtk"
 
-	"github.com/sqp/godock/libs/appdbus"
 	"github.com/sqp/godock/libs/log"
-	// "github.com/sqp/godock/libs/packages"
 	"github.com/sqp/godock/widgets/appletlist"
 	"github.com/sqp/godock/widgets/appletpreview"
 	"github.com/sqp/godock/widgets/confbuilder/datatype"
 
 	"os"
 )
-
-// const version = "3.3.0"
 
 // ListMode defines the ConfApplet widget behaviour.
 //
@@ -47,7 +41,8 @@ type ListInterface interface {
 //
 type GUIControl interface {
 	SelectIcons(string)
-	ListApplets() map[string]datatype.Appleter
+	ListKnownApplets() map[string]datatype.Appleter
+	ListDownloadApplets() map[string]datatype.Appleter
 }
 
 // ConfApplet provides an applet downloader widget.
@@ -81,7 +76,7 @@ func New(control GUIControl, menu MenuDownloader, mode ListMode) *ConfApplet {
 		widget.applets = appletlist.NewListAdd(widget)
 
 	case ListExternal:
-		// widget.applets = appletlist.NewListExternal(widget, version)
+		widget.applets = appletlist.NewListExternal(widget)
 	}
 
 	widget.PackStart(widget.applets, false, false, 0)
@@ -92,15 +87,16 @@ func New(control GUIControl, menu MenuDownloader, mode ListMode) *ConfApplet {
 // Load list of applets in the appletlist.
 //
 func (widget *ConfApplet) Load() {
-	list := widget.control.ListApplets()
 	switch widget.mode {
 	case ListCanAdd:
-		widget.applets.Load(list)
+		applets := widget.control.ListKnownApplets()
+		widget.applets.Load(applets)
 		widget.preview.HideState() // Hide must be done onLoad, after the 1st ShowAll.
 		widget.preview.HideSize()
 
 	case ListExternal:
-		widget.applets.Load(list)
+		applets := widget.control.ListDownloadApplets()
+		widget.applets.Load(applets)
 	}
 }
 
@@ -152,7 +148,6 @@ func (widget *ConfApplet) SetControlInstall(ctrl appletlist.ControlInstall) {
 }
 
 //
-
 //----------------------------------------------------[ WIDGET MENU DOWNLOAD ]--
 
 // MenuDownloader forwards events to other widgets.
@@ -190,7 +185,6 @@ func NewMenuDownload() *MenuDownload {
 	}
 
 	sep, _ := gtk.SeparatorNew(gtk.ORIENTATION_VERTICAL)
-	sep2, _ := gtk.SeparatorNew(gtk.ORIENTATION_VERTICAL)
 	lblInstalled, _ := gtk.LabelNew("Installed")
 	lblActive, _ := gtk.LabelNew("Active")
 
@@ -201,11 +195,10 @@ func NewMenuDownload() *MenuDownload {
 	widget.handlerActive, e = widget.active.Connect("notify::active", widget.toggledActive)
 	log.Err(e, "Connect active button callback")
 
-	widget.PackStart(sep, false, false, 8)
 	widget.PackStart(lblInstalled, false, false, 8)
 	widget.PackStart(installed, false, false, 0)
-	widget.PackStart(sep2, false, false, 4)
-	widget.PackStart(lblActive, false, false, 0)
+	widget.PackStart(sep, false, false, 4)
+	widget.PackStart(lblActive, false, false, 8)
 	widget.PackStart(active, false, false, 0)
 	return widget
 }
@@ -225,16 +218,15 @@ func (widget *MenuDownload) OnSelect(pack datatype.Appleter) {
 	widget.current = pack
 
 	// Set installed button state.
-	// widget.installed.SetSensitive(pack.Type != packages.TypeInDev) // Disable uninstall button if it's a user special applet.
+	widget.installed.SetSensitive(pack.CanUninstall()) // Disable uninstall button if it's a user special applet.
 	widget.installed.HandlerBlock(widget.handlerInstalled)
 	widget.installed.SetActive(pack.IsInstalled())
 	widget.installed.HandlerUnblock(widget.handlerInstalled)
 
 	// Set installed button state and disable it if the package isn't installed yet.
-	moduleActive := (len(appdbus.AppletInstances(pack.GetTitle())) > 0)
 	widget.active.SetSensitive(pack.IsInstalled())
 	widget.active.HandlerBlock(widget.handlerActive)
-	widget.active.SetActive(moduleActive)
+	widget.active.SetActive(pack.IsActive())
 	widget.active.HandlerUnblock(widget.handlerActive)
 }
 
@@ -243,43 +235,43 @@ func (widget *MenuDownload) OnSelect(pack datatype.Appleter) {
 // Action on Installed button. Need to install or delete the applet.
 //
 func (widget *MenuDownload) toggledInstalled(switc *gtk.Switch) {
-	// name := widget.current.DisplayedName
-	// if widget.installed.GetActive() { // Install
-	// 	e := widget.current.Install(version, "")
+	name := widget.current.GetTitle()
+	if widget.installed.GetActive() { // Install
+		e := widget.current.Install("")
 
-	// 	if log.Err(e, "Installing "+name) { // Install failed. Force unchecked state of widget.
-	// 		widget.installed.HandlerBlock(widget.handlerInstalled)
-	// 		widget.installed.SetActive(false)
-	// 		widget.installed.HandlerUnblock(widget.handlerInstalled)
-	// 		return
-	// 	}
+		if log.Err(e, "Install failed: "+name) { // Failed => Force unchecked state of widget.
+			widget.installed.HandlerBlock(widget.handlerInstalled)
+			widget.installed.SetActive(false)
+			widget.installed.HandlerUnblock(widget.handlerInstalled)
+			return
+		}
 
-	// 	log.Info("Installed applet", name)
-	// 	widget.active.SetSensitive(true)
-	// 	widget.applets.SetActive(true)
+		log.Info("Installed applet", name)
+		widget.active.SetSensitive(true)
+		widget.applets.SetActive(true)
 
-	// } else { // Uninstall
-	// 	e := widget.current.Uninstall(version)
-	// 	if log.Err(e, "Uninstall package") { // Uninstall failed. Force checked state of widget.
-	// 		widget.installed.HandlerBlock(widget.handlerInstalled)
-	// 		widget.installed.SetActive(true)
-	// 		widget.installed.HandlerUnblock(widget.handlerInstalled)
-	// 		return
-	// 	}
+	} else { // Uninstall
+		e := widget.current.Uninstall()
+		if log.Err(e, "Uninstall package") { // Uninstall failed. Force checked state of widget.
+			widget.installed.HandlerBlock(widget.handlerInstalled)
+			widget.installed.SetActive(true)
+			widget.installed.HandlerUnblock(widget.handlerInstalled)
+			return
+		}
 
-	// 	log.Info("Removed applet", name)
+		log.Info("Removed applet", name)
 
-	// 	widget.applets.SetActive(false)
-	// 	widget.active.SetSensitive(false)
-	// }
+		widget.applets.SetActive(false)
+		widget.active.SetSensitive(false)
+	}
 }
 
 // Action on Active button. Need to activate or unload the applet.
 //
 func (widget *MenuDownload) toggledActive(switc *gtk.Switch) {
 	if widget.active.GetActive() {
-		appdbus.AppletAdd(widget.current.GetTitle())
+		widget.current.Activate()
 	} else {
-		appdbus.AppletRemove(widget.current.GetTitle() + ".conf")
+		widget.current.Deactivate()
 	}
 }

@@ -407,9 +407,9 @@ func InfoApplet(name string) *packages.AppletPackage {
 	return nil
 }
 
-// ListApplets asks the dock informations about all known applets.
+// ListKnownApplets asks the dock informations about all known applets.
 //
-func ListApplets() map[string]*packages.AppletPackage {
+func ListKnownApplets() map[string]*packages.AppletPackage {
 	list := make(map[string]*packages.AppletPackage)
 	// var list []*packages.AppletPackage
 	for _, props := range DockProperties("type=Module") {
@@ -468,7 +468,7 @@ func parseApplet(props map[string]dbus.Variant) *packages.AppletPackage {
 			pack.ModuleType = int(v.Value().(uint32))
 
 		default:
-			log.Info("ListApplets unmatched", k, v)
+			log.Info("parseApplet field unmatched", k, v)
 		}
 	}
 	return pack
