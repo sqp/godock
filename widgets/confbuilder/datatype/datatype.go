@@ -352,3 +352,7 @@ type Shortkeyer interface {
 	GetSuccess() bool
 	Rebind(keystring, description string) bool
 }
+
+type UpdateModuleStater interface {
+	UpdateModuleState(name string, active bool)
+}

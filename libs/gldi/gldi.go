@@ -66,6 +66,11 @@ static gboolean IconIsStackIcon    (Icon *icon) { return CAIRO_DOCK_ICON_TYPE_IS
 extern void onShortkey(gchar*, gpointer);
 
 
+static void emitSignalDropData(GldiContainer* container, gchar* data, Icon* icon, double order) {
+	gldi_object_notify(container,NOTIFICATION_DROP_DATA, data, icon, order, container);
+}
+
+
 static void objectNotify(GldiContainer* container, int notif,  Icon* icon,  CairoDock* dock, GdkModifierType key) {
 	gldi_object_notify(container, notif, icon, dock, key);
 }
@@ -372,6 +377,16 @@ func ObjectIsDock(obj IObject) bool {
 
 func ObjectNotify(container *Container, notif int, icon *Icon, dock *CairoDock, key gdk.ModifierType) {
 	C.objectNotify(container.Ptr, C.int(notif), icon.Ptr, dock.Ptr, C.GdkModifierType(key))
+}
+
+func EmitSignalDropData(container *Container, data string, icon *Icon, order float64) {
+	cstr := (*C.gchar)(C.CString(data))
+	defer C.free(unsafe.Pointer((*C.char)(cstr)))
+	var iconPtr *C.Icon
+	if icon != nil {
+		iconPtr = icon.Ptr
+	}
+	C.emitSignalDropData(container.Ptr, cstr, iconPtr, C.double(order))
 }
 
 func QuickHideAllDocks() {

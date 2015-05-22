@@ -33,6 +33,7 @@ type ListInterface interface {
 	gtk.IWidget
 	Load(map[string]datatype.Appleter)
 	Selected() datatype.Appleter
+	UpdateModuleState(string, bool)
 	Delete(string)
 	Clear()
 }
@@ -62,10 +63,10 @@ type ConfApplet struct {
 // New creates a widget to download cairo-dock applets.
 //
 func New(control GUIControl, menu MenuDownloader, mode ListMode) *ConfApplet {
-	box, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
+	mainbox, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
 
 	widget := &ConfApplet{
-		Box:     *box,
+		Box:     *mainbox,
 		preview: appletpreview.New(),
 		mode:    mode,
 		control: control,
@@ -76,11 +77,19 @@ func New(control GUIControl, menu MenuDownloader, mode ListMode) *ConfApplet {
 		widget.applets = appletlist.NewListAdd(widget)
 
 	case ListExternal:
+		if menu == nil {
+			menu := NewMenuDownload()
+			widget.menu = menu
+			widget.PackStart(menu, false, false, 0)
+		}
 		widget.applets = appletlist.NewListExternal(widget)
 	}
 
-	widget.PackStart(widget.applets, false, false, 0)
-	widget.PackStart(widget.preview, true, true, 4)
+	inbox, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
+
+	widget.PackStart(inbox, true, true, 0)
+	inbox.PackStart(widget.applets, false, false, 0)
+	inbox.PackStart(widget.preview, true, true, 4)
 	return widget
 }
 
@@ -128,6 +137,20 @@ func (widget *ConfApplet) Clear() {
 	widget.applets.Clear()
 }
 
+// UpdateModuleState updates the state of the given applet, from a dock event.
+//
+func (widget *ConfApplet) UpdateModuleState(name string, active bool) {
+	switch widget.mode {
+	case ListCanAdd:
+		widget.applets.UpdateModuleState(name, active)
+
+	case ListExternal:
+		if widget.menu != nil && widget.applets.Selected().GetTitle() == name {
+			widget.menu.SetActiveState(active)
+		}
+	}
+}
+
 //--------------------------------------------------[ LIST CONTROL CALLBACKS ]--
 
 // OnSelect reacts when a row is selected. Show preview and set menu position.
@@ -155,6 +178,7 @@ func (widget *ConfApplet) SetControlInstall(ctrl appletlist.ControlInstall) {
 type MenuDownloader interface {
 	OnSelect(datatype.Appleter)
 	SetControlInstall(appletlist.ControlInstall)
+	SetActiveState(bool)
 }
 
 // MenuDownload provides install and active switches to control the selected applet.
@@ -219,14 +243,24 @@ func (widget *MenuDownload) OnSelect(pack datatype.Appleter) {
 
 	// Set installed button state.
 	widget.installed.SetSensitive(pack.CanUninstall()) // Disable uninstall button if it's a user special applet.
-	widget.installed.HandlerBlock(widget.handlerInstalled)
-	widget.installed.SetActive(pack.IsInstalled())
-	widget.installed.HandlerUnblock(widget.handlerInstalled)
+	widget.SetInstalledState(pack.IsInstalled())
 
 	// Set installed button state and disable it if the package isn't installed yet.
 	widget.active.SetSensitive(pack.IsInstalled())
+	widget.SetActiveState(pack.IsActive())
+}
+
+func (widget *MenuDownload) SetInstalledState(state bool) {
+	// widget.active.SetSensitive(!state)
+	widget.installed.HandlerBlock(widget.handlerInstalled)
+	widget.installed.SetActive(state)
+	widget.installed.HandlerUnblock(widget.handlerInstalled)
+}
+
+func (widget *MenuDownload) SetActiveState(state bool) {
+	// widget.installed.SetSensitive(pack.CanUninstall())
 	widget.active.HandlerBlock(widget.handlerActive)
-	widget.active.SetActive(pack.IsActive())
+	widget.active.SetActive(state)
 	widget.active.HandlerUnblock(widget.handlerActive)
 }
 
@@ -240,9 +274,7 @@ func (widget *MenuDownload) toggledInstalled(switc *gtk.Switch) {
 		e := widget.current.Install("")
 
 		if log.Err(e, "Install failed: "+name) { // Failed => Force unchecked state of widget.
-			widget.installed.HandlerBlock(widget.handlerInstalled)
-			widget.installed.SetActive(false)
-			widget.installed.HandlerUnblock(widget.handlerInstalled)
+			widget.SetInstalledState(false)
 			return
 		}
 
@@ -253,9 +285,7 @@ func (widget *MenuDownload) toggledInstalled(switc *gtk.Switch) {
 	} else { // Uninstall
 		e := widget.current.Uninstall()
 		if log.Err(e, "Uninstall package") { // Uninstall failed. Force checked state of widget.
-			widget.installed.HandlerBlock(widget.handlerInstalled)
-			widget.installed.SetActive(true)
-			widget.installed.HandlerUnblock(widget.handlerInstalled)
+			widget.SetInstalledState(true)
 			return
 		}
 

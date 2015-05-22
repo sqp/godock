@@ -108,7 +108,7 @@ func (widget *List) setActiveIter(iter *gtk.TreeIter, state bool) {
 	if state {
 		weight += 200
 	}
-	widget.model.Set(iter, []int{RowNameWeight}, []interface{}{weight})
+	widget.model.SetValue(iter, RowNameWeight, weight)
 }
 
 // Selected returns the applet package for the selected line.
@@ -167,12 +167,13 @@ func (widget *List) Clear() {
 //
 type ListAdd struct {
 	List
+	unused map[string]datatype.Appleter
 }
 
 // NewListAdd creates an applet list widget with applets allowed to be enabled.
 //
 func NewListAdd(control ControlDownload) *ListAdd {
-	return &ListAdd{*NewList(control)}
+	return &ListAdd{*NewList(control), make(map[string]datatype.Appleter)}
 }
 
 // Load loads the applet list into the widget.
@@ -180,24 +181,58 @@ func NewListAdd(control ControlDownload) *ListAdd {
 func (widget *ListAdd) Load(list map[string]datatype.Appleter) {
 	for key, app := range list {
 		if app.CanAdd() {
-			iter := widget.newIter(key, app)
-			widget.model.SetCols(iter, gtk.Cols{
-				RowKey:      key,
-				RowName:     app.GetTitle(),
-				RowCategory: app.FormatCategory(),
-			})
-
-			// 	int iSize = cairo_dock_search_icon_size (GTK_ICON_SIZE_LARGE_TOOLBAR);
-			// 	gchar *cIcon = cairo_dock_search_icon_s_path (pModule->pVisitCard->cIconFilePath, iSize);
-
-			img := app.GetIconFilePath()
-			if pix, e := common.PixbufNewFromFile(img, iconSize); !log.Err(e, "Load icon") {
-				widget.model.SetValue(iter, RowIcon, pix)
-			}
-
-			widget.setActiveIter(iter, app.IsActive())
+			widget.AddRow(key, app)
+		} else {
+			widget.unused[key] = app
 		}
 	}
+}
+
+// AddRow adds a row for the applet in the applet list.
+//
+func (widget *ListAdd) AddRow(name string, app datatype.Appleter) {
+	iter := widget.newIter(name, app)
+	widget.model.SetCols(iter, gtk.Cols{
+		RowKey:      name,
+		RowName:     app.GetTitle(),
+		RowCategory: app.FormatCategory(),
+	})
+
+	// 	int iSize = cairo_dock_search_icon_size (GTK_ICON_SIZE_LARGE_TOOLBAR);
+	// 	gchar *cIcon = cairo_dock_search_icon_s_path (pModule->pVisitCard->cIconFilePath, iSize);
+
+	img := app.GetIconFilePath()
+	if pix, e := common.PixbufNewFromFile(img, iconSize); !log.Err(e, "Load icon") {
+		widget.model.SetValue(iter, RowIcon, pix)
+	}
+
+	widget.setActiveIter(iter, app.IsActive())
+}
+
+// UpdateModuleState updates the state of the given applet, from a dock event.
+//
+func (widget *ListAdd) UpdateModuleState(name string, active bool) {
+	if active {
+		row, ok := widget.rows[name]
+		if ok && !row.Pack.CanAdd() {
+			widget.unused[name] = widget.rows[name].Pack
+			widget.Delete(name)
+		}
+
+	} else {
+		row, ok := widget.unused[name]
+		if ok && row.CanAdd() {
+			widget.AddRow(name, widget.unused[name])
+			delete(widget.unused, name)
+		}
+	}
+}
+
+// Clear clears the widget data.
+//
+func (widget *ListAdd) Clear() {
+	widget.unused = make(map[string]datatype.Appleter)
+	widget.List.Clear()
 }
 
 //
@@ -240,6 +275,8 @@ func (widget *ListExternal) Load(list map[string]datatype.Appleter) {
 		}
 	}
 }
+
+func (widget *ListExternal) UpdateModuleState(name string, active bool) {}
 
 // func modelApplet() *gtk.ListStore {
 // 	store, _ := gtk.ListStoreNew(

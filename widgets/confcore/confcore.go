@@ -27,6 +27,8 @@ const panedPosition = 200
 const (
 	// TabDownload is the name of the config download tab.
 	TabDownload = "Download"
+	// TabShortkeys is the name of the config shortkeys tab.
+	TabShortkeys = "Shortkeys"
 )
 
 //
@@ -122,8 +124,8 @@ var coreItems = []*Item{
 	// 	Icon:  "icons/icon-controler.svg"},
 
 	{
-		Key:     "Shortkeys",
-		Title:   "Shortkeys",
+		Key:     TabShortkeys,
+		Title:   TabShortkeys,
 		Icon:    "icons/icon-shortkeys.svg",
 		Tooltip: "Define all the keyboard shortcuts currently available."},
 
@@ -158,6 +160,7 @@ var coreItems = []*Item{
 type Controller interface {
 	datatype.Source
 	GetWindow() *gtk.Window
+	SetActionNone()
 	SetActionSave()
 	SetActionGrab()
 	SetActionCancel()
@@ -321,7 +324,7 @@ func (widget *ConfCore) onSelect(item *Item, e error) {
 
 	file := ""
 	switch item.Key {
-	case "Shortkeys":
+	case TabShortkeys:
 		w := confshortkeys.New(widget.data)
 		w.Load()
 		widget.Pack2(w, true, true)
@@ -329,18 +332,12 @@ func (widget *ConfCore) onSelect(item *Item, e error) {
 		return
 
 	case TabDownload: // download tab has a special widget.
+		w := confapplets.New(widget.data, nil, confapplets.ListExternal)
+		w.Load()
+		w.ShowAll()
 
-		menuDownload := confapplets.NewMenuDownload()
-		confapp := confapplets.New(widget.data, menuDownload, confapplets.ListExternal)
-		confapp.Load()
-
-		box, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
-		box.PackStart(menuDownload, false, false, 4)
-		box.PackStart(confapp, true, true, 0)
-		box.ShowAll()
-
-		widget.Pack2(box, true, true)
-		widget.config = box
+		widget.Pack2(w, true, true)
+		widget.config = w
 		return
 
 	case confsettings.GuiGroup: // own config has a special path.
@@ -367,12 +364,29 @@ func (widget *ConfCore) SetAction() {
 	switch {
 	case e != nil: // Do nothing. Should be triggered only on load, before any user selection.
 
-	case item.Key == "Shortkeys":
+	case item.Key == TabShortkeys:
 		widget.data.SetActionGrab()
+
+	case item.Key == TabDownload:
+		widget.data.SetActionNone()
 
 	default:
 		widget.data.SetActionSave()
 	}
+}
+
+// UpdateModuleState updates the state of the given applet, from a dock event.
+//
+func (widget *ConfCore) UpdateModuleState(name string, active bool) {
+	if widget.config == nil {
+		return
+	}
+	confapp, ok := widget.config.(datatype.UpdateModuleStater)
+	if !ok {
+		return
+	}
+
+	confapp.UpdateModuleState(name, active)
 }
 
 // UpdateShortkeys updates the shortkey widget if it's loaded.
@@ -384,7 +398,7 @@ func (widget *ConfCore) UpdateShortkeys() {
 
 	if grab := widget.grabber(); grab != nil {
 		grab.Load()
-		// if e == nil && conf.Key == "Shortkeys" {
+		// if e == nil && conf.Key == TabShortkeys {
 		// widget.config.Load()
 	}
 }

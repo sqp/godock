@@ -5,6 +5,7 @@
 
 #include "cairo-dock-applications-manager.h"       // myTaskbarParam
 #include "cairo-dock-desktop-manager.h"            // gldi_desktop_get_width
+#include "cairo-dock-dock-manager.h"       // 
 #include "cairo-dock-class-manager.h"              // cairo_dock_get_class_icon
 #include "cairo-dock-icon-facility.h"              // cairo_dock_get_icon_order
 #include "cairo-dock-launcher-manager.h"           // GLDI_OBJECT_IS_LAUNCHER_ICON

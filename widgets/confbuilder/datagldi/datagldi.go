@@ -13,6 +13,7 @@ import (
 	"github.com/sqp/godock/widgets/confbuilder/datatype"
 	"github.com/sqp/godock/widgets/gtk/keyfile"
 
+	"errors"
 	"path/filepath"
 	"strconv"
 )
@@ -198,6 +199,38 @@ func (v *AppletDownload) GetName() string            { return v.FormatName() }
 func (v *AppletDownload) GetAuthor() string          { return v.Author }
 func (v *AppletDownload) GetIconFilePath() string    { return filepath.Join(v.Path, "icon") } // TODO: improve }
 func (v *AppletDownload) GetPreviewFilePath() string { return "" }
+
+// Install downloads and extract an external archive to package dir.
+//
+func (pack *AppletDownload) Install(options string) error {
+	// Using the "drop data signal" trick to ask the Dbus applet to work for us.
+	// Only way I found for now to interact with it and let it know it will have
+	// a new applet to handle. As a bonus, it also activate the applet, which
+	// will toggle the activated button with the UpdateModuleState signal.
+	url := packages.DistantURL + cdtype.AppletsDirName + "/" + pack.SrvTag + "/" + pack.DisplayedName + "/" + pack.DisplayedName + ".tar.gz"
+	gldi.EmitSignalDropData(globals.Maindock().Container(), url, nil, 0)
+
+	pack.app = gldi.ModuleGet(pack.DisplayedName)
+	if pack.app == nil {
+		return errors.New("install failed: pack.DisplayedName")
+	}
+
+	dir, _ := packages.DirExternal()
+	pack.SetInstalled(dir)
+	return nil
+
+	// return pack.AppletPackage.Install(options)
+}
+
+// Uninstall downloads and extract an external archive to package dir.
+//
+func (pack *AppletDownload) Uninstall() error {
+	e := pack.AppletPackage.Uninstall()
+	if e == nil {
+		pack.app = nil
+	}
+	return e
+}
 
 //
 //-------------------------------------------------------------[ DATA SOURCE ]--

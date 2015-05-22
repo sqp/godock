@@ -18,7 +18,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"time"
+	// "time"
 )
 
 const (
@@ -496,6 +496,7 @@ func (pack *AppletPackage) Install(options string) error {
 	if eDir != nil {
 		return eDir
 	}
+
 	// Connect a reader to the archive on server.
 	resp, eNet := http.Get(DistantURL + cdtype.AppletsDirName + "/" + pack.SrvTag + "/" + pack.DisplayedName + "/" + pack.DisplayedName + ".tar.gz")
 	if eNet != nil {
@@ -503,7 +504,7 @@ func (pack *AppletPackage) Install(options string) error {
 	}
 	defer resp.Body.Close()
 
-	// Connect http reader to command tar.
+	// Connect http reader to tar command.
 	cmd := exec.Command("tar", "xz"+options) // Tar extract zip.
 	cmd.Dir = dir                            // Extract in external applet directory.
 	cmd.Stdin = resp.Body                    // Input is the http stream.
@@ -511,27 +512,36 @@ func (pack *AppletPackage) Install(options string) error {
 	cmd.Stderr = os.Stderr
 
 	eRun := cmd.Run()
-	if eRun == nil {
-		lastModif := time.Now().Format("20060102")
-		file := filepath.Join(dir, pack.DisplayedName, "last-modif")
-		log.Err(ioutil.WriteFile(file, []byte(lastModif), 0644), "Write last-modif")
-
-		newpack, e := NewAppletPackageUser(dir, pack.DisplayedName, TypeUser, SourceApplet)
-		if e != nil {
-			return e
-		}
-		pack.Path = newpack.Path
-		pack.Type = newpack.Type
-		pack.Description = newpack.Description
-		pack.Version = newpack.Version
-		pack.ActAsLauncher = newpack.ActAsLauncher
-
-		// modif, e := ioutil.ReadFile(filepath.Join(fullpath, "last-modif"))
-		// if !log.Err(e, "Get last-modif") {
-		// 	pack.LastModifDate = strings.Replace(string(modif), "\n", "", -1) // strip \n. Check to use trimInt from Update.
-		// }
-
+	if eRun != nil {
+		return eRun
 	}
+	return pack.SetInstalled(dir)
+}
+
+// SetInstalled updates package data with info from disk after download.
+//
+func (pack *AppletPackage) SetInstalled(dir string) error {
+
+	// lastModif := time.Now().Format("20060102")
+	// file := filepath.Join(dir, pack.DisplayedName, "last-modif")
+	// log.Err(ioutil.WriteFile(file, []byte(lastModif), 0644), "Write last-modif")
+
+	newpack, e := NewAppletPackageUser(dir, pack.DisplayedName, TypeUser, SourceApplet)
+	if e != nil {
+		return e
+	}
+
+	pack.Path = newpack.Path
+	pack.Type = newpack.Type
+	pack.Description = newpack.Description
+	pack.Version = newpack.Version
+	pack.ActAsLauncher = newpack.ActAsLauncher
+
+	// modif, e := ioutil.ReadFile(filepath.Join(fullpath, "last-modif"))
+	// if !log.Err(e, "Get last-modif") {
+	// 	pack.LastModifDate = strings.Replace(string(modif), "\n", "", -1) // strip \n. Check to use trimInt from Update.
+	// }
+
 	return nil
 }
 

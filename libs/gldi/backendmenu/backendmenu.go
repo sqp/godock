@@ -3,15 +3,10 @@ package backendmenu
 
 // #cgo pkg-config: gldi
 /*
-
-#include "cairo-dock-dock-manager.h"       // NOTIFICATION_CLICK_ICON
-
-#include "backendmenu.h"       // to remake.
-
+#include "backendmenu.h"       // to remake/remove.
 
 extern gboolean buildMenuIcon(gpointer, Icon*, GldiContainer*, GtkWidget*);
 extern gboolean buildMenuContainer(gpointer, Icon*, GldiContainer*, GtkWidget*, gboolean);
-
 
 */
 import "C"
@@ -57,10 +52,10 @@ func init() {
 func Register(name string, menucontainer, menuicon func(*DockMenu) int) {
 	if menucontainer != nil {
 		if len(menuContainer) == 0 {
-			C.gldi_object_register_notification(C.gpointer(&C.myContainerObjectMgr),
-				C.NOTIFICATION_BUILD_CONTAINER_MENU,
-				C.GldiNotificationFunc(C.buildMenuContainer),
-				C.GLDI_RUN_FIRST, nil)
+			globals.ContainerObjectMgr.RegisterNotification(
+				globals.NotifBuildContainerMenu,
+				unsafe.Pointer(C.buildMenuContainer),
+				globals.RunFirst)
 		}
 
 		menuContainer[name] = menucontainer
@@ -68,10 +63,10 @@ func Register(name string, menucontainer, menuicon func(*DockMenu) int) {
 
 	if menuicon != nil {
 		if len(menuIcon) == 0 {
-			C.gldi_object_register_notification(C.gpointer(&C.myContainerObjectMgr),
-				C.NOTIFICATION_BUILD_ICON_MENU,
-				C.GldiNotificationFunc(C.buildMenuIcon),
-				C.GLDI_RUN_AFTER, nil)
+			globals.ContainerObjectMgr.RegisterNotification(
+				globals.NotifBuildIconMenu,
+				unsafe.Pointer(C.buildMenuIcon),
+				globals.RunAfter)
 		}
 
 		menuIcon[name] = menuicon
@@ -499,7 +494,7 @@ func (m *DockMenu) Entry(entry MenuEntry) {
 			"Launch a new (Shift+clic)",
 			globals.IconNameAdd,
 			func() {
-				gldi.ObjectNotify(m.Container, C.NOTIFICATION_CLICK_ICON, m.Icon, m.Dock, gdk.GDK_SHIFT_MASK) // emit a shift click on the icon.
+				gldi.ObjectNotify(m.Container, globals.NotifClickIcon, m.Icon, m.Dock, gdk.GDK_SHIFT_MASK) // emit a shift click on the icon.
 			})
 
 	case MenuLockIcons:

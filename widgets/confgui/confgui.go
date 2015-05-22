@@ -313,6 +313,12 @@ func (widget *GuiConfigure) OnSelectPage(page string) {
 	}
 }
 
+// SetActionNone disables the action button.
+//
+func (widget *GuiConfigure) SetActionNone() {
+	widget.Menu.Save.Hide()
+}
+
 // SetActionSave sets the action button with save text.
 //
 func (widget *GuiConfigure) SetActionSave() {
@@ -376,12 +382,15 @@ func (widget *GuiConfigure) UpdateModulesList() {
 func (widget *GuiConfigure) UpdateModuleState(name string, active bool) {
 	widget.log.Info("TODO: UpdateModuleState", name, active)
 
-	// w, ok := widget.pages[GroupAdd].Widget.(*confapplets.ConfApplet)
-	// if ok {
-	// 	w.Clear()
-	// 	w.Load()
-	// }
+	w, ok := widget.pages[GroupAdd].Widget.(datatype.UpdateModuleStater)
+	if ok {
+		w.UpdateModuleState(name, active)
+	}
 
+	w, ok = widget.pages[GroupConfig].Widget.(datatype.UpdateModuleStater)
+	if ok {
+		w.UpdateModuleState(name, active)
+	}
 }
 
 // UpdateShortkeys updates the shortkeys widget.
