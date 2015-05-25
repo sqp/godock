@@ -127,6 +127,8 @@ type KeyFiler interface {
 	KeyFile() *keyfile.KeyFile
 }
 
+// KeyFile returns the pointer to the internal KeyFile.
+//
 func (build *Grouper) KeyFile() *keyfile.KeyFile {
 	return &build.Conf.KeyFile
 }

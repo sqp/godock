@@ -16,8 +16,11 @@ const (
 	//
 	KeyMainDock = "_MainDock_"
 
+	// DirIconsSystem is the location of desktop icons themes installed on the system.
 	DirIconsSystem = "/usr/share/icons"
-	DirIconsUser   = ".icons" // in $HOME
+
+	// DirIconsUser is the name of desktop icons themes dir in the user home dir.
+	DirIconsUser = ".icons" // in $HOME
 )
 
 // Source defines external data needed by the config builder.
@@ -84,11 +87,11 @@ type Source interface {
 
 	// ListThemeXML builds a list of icon theme in system and user dir.
 	//
-	ListThemeXML(localSystem, localUser, distant string) []packages.Theme
+	ListThemeXML(localSystem, localUser, distant string) map[string]Handbooker
 
 	// ListThemeINI builds a list of icon theme in system and user dir.
 	//
-	ListThemeINI(localSystem, localUser, distant string) packages.AppletPackages
+	ListThemeINI(localSystem, localUser, distant string) map[string]Handbooker
 
 	// ManagerReload reloads the manager matching the given name.
 	//
@@ -101,7 +104,7 @@ type SourceCommon struct{}
 
 // ListThemeXML builds a list of icon theme in system and user dir.
 //
-func (SourceCommon) ListThemeXML(localSystem, localUser, distant string) []packages.Theme {
+func (SourceCommon) ListThemeXML(localSystem, localUser, distant string) map[string]Handbooker {
 	// list, _ := packages.ListExternalUser(localSystem, "theme")
 	list, _ := packages.ListThemesDir(localSystem, packages.TypeLocal)
 
@@ -116,7 +119,8 @@ func (SourceCommon) ListThemeXML(localSystem, localUser, distant string) []packa
 	// TODO: maybe need to use hint here.
 	dist, _ := packages.ListDistant(distant)
 	for k, v := range list {
-		if more := dist.Get(v.DirName); more != nil && more.Title != "" {
+		more := dist.Get(v.DirName)
+		if more != nil && more.Title != "" {
 			list[k].Title = more.Title
 		}
 	}
@@ -127,12 +131,17 @@ func (SourceCommon) ListThemeXML(localSystem, localUser, distant string) []packa
 	// 	log.DEV("", v)
 	// }
 
-	return list
+	out := make(map[string]Handbooker)
+	for _, v := range list {
+		out[v.GetName()] = v
+	}
+
+	return out
 }
 
 // ListThemeINI builds a list of icon theme in system and user dir.
 //
-func (SourceCommon) ListThemeINI(localSystem, localUser, distant string) packages.AppletPackages {
+func (SourceCommon) ListThemeINI(localSystem, localUser, distant string) map[string]Handbooker {
 	// Themes installed in system dir.
 	list, _ := packages.ListFromDir(localSystem, packages.TypeLocal, packages.SourceTheme)
 
@@ -141,7 +150,13 @@ func (SourceCommon) ListThemeINI(localSystem, localUser, distant string) package
 		dist, _ := packages.ListFromDir(userDir, packages.TypeUser, packages.SourceTheme)
 		list = append(list, dist...)
 	}
-	return list
+
+	out := make(map[string]Handbooker)
+	for _, v := range list {
+		out[v.GetName()] = v
+	}
+
+	return out
 }
 
 // ListIconTheme builds a list of desktop icon-themes in system and user dir.
@@ -216,6 +231,9 @@ type Appleter interface {
 	GetDescription() string
 	GetPreviewFilePath() string
 	GetIconFilePath() string
+	IconState() string
+	FormatState() string
+	FormatSize() string
 	FormatCategory() string
 }
 
@@ -329,6 +347,7 @@ func (icon *IconSeparator) Reload() {}
 // Handbooker defines the interface needed by handbook module data provided as config source.
 //
 type Handbooker interface {
+	GetName() string // name will be used as key.
 	GetTitle() string
 	GetAuthor() string
 	GetDescription() string
@@ -353,6 +372,8 @@ type Shortkeyer interface {
 	Rebind(keystring, description string) bool
 }
 
+// UpdateModuleStater defines the UpdateModuleState single interface.
+//
 type UpdateModuleStater interface {
 	UpdateModuleState(name string, active bool)
 }

@@ -2,6 +2,7 @@
 package appletpreview
 
 import (
+	"github.com/conformal/gotk3/glib"
 	"github.com/conformal/gotk3/gtk"
 
 	"github.com/sqp/godock/libs/log"
@@ -11,8 +12,6 @@ import (
 
 	"fmt"
 )
-
-// const DataDirCRAP = "/usr/share/cairo-dock/"
 
 // Preview image settings.
 const (
@@ -73,29 +72,39 @@ func New() *Preview {
 //
 func (widget *Preview) Load(pack datatype.Appleter) {
 	widget.title.SetMarkup(common.Big(common.Bold(pack.GetTitle())))
-	widget.author.SetMarkup(common.Small(common.Mono(fmt.Sprintf("by %s", pack.GetAuthor()))))
-	// widget.stateText.SetMarkup(pack.FormatState())
-	// widget.size.SetMarkup(common.Small(pack.FormatSize()))
+	author := pack.GetAuthor()
+	if author != "" {
+		author = fmt.Sprintf("by %s", author)
+	}
+	widget.author.SetMarkup(common.Small(common.Mono(author)))
+	widget.stateText.SetMarkup(pack.FormatState())
+	widget.size.SetMarkup(common.Small(pack.FormatSize()))
 
-	//DataDirCRAP+pack.IconState()
-	// if pixbuf, e := common.PixbufAtSize(pack.IconState(), 24, 24); !log.Err(e, "Load image pixbuf") {
-	// 	widget.stateIcon.SetFromPixbuf(pixbuf)
-	// 	widget.stateIcon.Show()
-	// }
+	if icon := pack.IconState(); icon != "" {
+		if pixbuf, e := common.PixbufAtSize(icon, 24, 24); !log.Err(e, "Load image pixbuf") {
+			widget.stateIcon.SetFromPixbuf(pixbuf)
+			widget.stateIcon.Show()
+		}
+	}
 
 	// widget.RemoveTmpFile()
+
 	widget.previewFrame.Hide() // Hide the preview frame until we have an image.
 
 	// Async calls for description and image. They can have to be downloaded and be slow at it.
-	go widget.description.SetMarkup(pack.GetDescription())
-	go widget.setImage(pack)
+	glib.IdleAdd(func() {
+		widget.description.SetMarkup(pack.GetDescription())
+		widget.setImage(pack)
+	})
 }
 
 func (widget *Preview) setImage(pack datatype.Appleter) {
 	imageLocation := pack.GetPreviewFilePath()
+
 	// imageLocation, isTemp := pack.GetPreview(widget.TmpFile) // reuse the same tmp location if needed.
 	if imageLocation != "" {
-		if pixbuf, e := common.PixbufAtSize(imageLocation, MaxPreviewWidth, MaxPreviewHeight); !log.Err(e, "Load image pixbuf") {
+		pixbuf, e := common.PixbufAtSize(imageLocation, MaxPreviewWidth, MaxPreviewHeight)
+		if e == nil {
 			widget.previewImage.SetFromPixbuf(pixbuf)
 			widget.previewFrame.Show()
 		}
@@ -110,7 +119,8 @@ func (widget *Preview) setImage(pack datatype.Appleter) {
 // HideState hides the state widget.
 //
 func (widget *Preview) HideState() {
-	// widget.stateText.Hide()
+	widget.stateText.Hide()
+	widget.stateIcon.Hide()
 }
 
 // HideSize hides the size widget.

@@ -74,6 +74,8 @@ func NewList(control ControlDownload) *List {
 		rows:           make(map[string]*Row),
 	}
 
+	columnName := builder.GetTreeViewColumn("columnName")
+
 	if len(builder.Errors) > 0 {
 		for _, e := range builder.Errors {
 			log.DEV("build appletlist", e)
@@ -87,6 +89,9 @@ func NewList(control ControlDownload) *List {
 	if sel, e := widget.tree.GetSelection(); !log.Err(e, "appletlist TreeView.GetSelection") {
 		sel.Connect("changed", widget.onSelectionChanged) // Changed is connected to TreeSelection
 	}
+
+	// Sort applets by name.
+	columnName.Emit("clicked")
 
 	return widget
 }
@@ -276,6 +281,8 @@ func (widget *ListExternal) Load(list map[string]datatype.Appleter) {
 	}
 }
 
+// UpdateModuleState does nothing (stub for interface).
+//
 func (widget *ListExternal) UpdateModuleState(name string, active bool) {}
 
 // func modelApplet() *gtk.ListStore {

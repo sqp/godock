@@ -6,7 +6,6 @@ import (
 	"github.com/conformal/gotk3/gtk"
 
 	"github.com/sqp/godock/libs/log"
-	"github.com/sqp/godock/libs/packages"
 
 	"github.com/sqp/godock/widgets/common"
 	"github.com/sqp/godock/widgets/confbuilder/datatype"
@@ -30,6 +29,8 @@ type Handbook struct {
 	description  *gtk.Label
 	previewFrame *gtk.Frame
 	previewImage *gtk.Image
+
+	ShowVersion bool
 }
 
 // NewHandbook creates a handbook widget (applet info).
@@ -62,13 +63,23 @@ func NewHandbook() *Handbook {
 // SetPackage fills the handbook data with a package.
 //
 func (widget *Handbook) SetPackage(book datatype.Handbooker) {
-	title := common.Bold(common.Big(book.GetTitle() + " "))
-	widget.title.SetMarkup(title + "v" + book.GetModuleVersion())
-	widget.author.SetMarkup(common.Small(common.Mono(fmt.Sprintf("by %s", book.GetAuthor()))))
+	title := common.Bold(common.Big(book.GetTitle()))
+	if widget.ShowVersion {
+		title += " v" + book.GetModuleVersion()
+	}
+	widget.title.SetMarkup(title)
+
+	author := book.GetAuthor()
+	if author != "" {
+		author = fmt.Sprintf("by %s", author)
+		widget.author.SetMarkup(common.Small(common.Mono(author)))
+	}
+	widget.author.SetVisible(author != "")
+
 	widget.description.SetMarkup("<span rise='8000'>" + book.GetDescription() + "</span>")
 
 	previewFound := false
-	defer widget.previewFrame.SetVisible(previewFound)
+	defer func() { widget.previewFrame.SetVisible(previewFound) }()
 
 	file := book.GetPreviewFilePath()
 	if file == "" {
@@ -84,7 +95,7 @@ func (widget *Handbook) SetPackage(book datatype.Handbooker) {
 		pixbuf, e = gdk.PixbufNewFromFile(file)
 	}
 
-	if !log.Err(e, "Handbook image: "+file) && pixbuf != nil {
+	if e == nil && pixbuf != nil {
 		previewFound = true
 		widget.previewImage.SetFromPixbuf(pixbuf)
 	}
@@ -93,35 +104,15 @@ func (widget *Handbook) SetPackage(book datatype.Handbooker) {
 //
 //-------------------------------------------------------------[ MODELS DATA ]--
 
-func fillModelWithTheme(model *gtk.ListStore, list []packages.Theme, current string) (toSelect *gtk.TreeIter) {
+func fillModelWithTheme(model *gtk.ListStore, list map[string]datatype.Handbooker, current string) (toSelect *gtk.TreeIter) {
 	for _, theme := range list {
-		key := fmt.Sprintf("%s[%d]", theme.DirName, theme.Type)
+		key := theme.GetName()
 		iter := model.Append()
 		model.SetCols(iter, gtk.Cols{
 			RowKey:  key,
-			RowName: theme.Title,
+			RowName: theme.GetTitle(),
 			// RowIcon: "none",
 			RowDesc: "none"})
-
-		if key == current {
-			toSelect = iter
-		}
-	}
-	return
-}
-
-func fillModelWithThemeINI(model *gtk.ListStore, list packages.AppletPackages, current string) (toSelect *gtk.TreeIter) {
-	for _, theme := range list {
-		// key := fmt.Sprintf("%s[%d]", theme.DisplayedName, theme.Type)
-		key := theme.DisplayedName
-		iter := model.Append()
-		model.SetCols(iter, gtk.Cols{
-			RowKey:  key,
-			RowName: theme.DisplayedName,
-			// RowIcon: "none",
-			RowDesc: "none"})
-
-		log.DEV(key, theme.DisplayedName)
 
 		if key == current {
 			toSelect = iter

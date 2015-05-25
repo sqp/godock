@@ -52,10 +52,10 @@ patch:
 
 install:
 	mkdir -p "$(PKGDIR)/usr/bin"
-	install -p -m755 "../../../../bin/cdc" "$(PKGDIR)/usr/bin"
+	install -p -m755 "$(GOPATH)/bin/cdc" "$(PKGDIR)/usr/bin"
 
 	mkdir -p "$(PKGDIR)/$(APPDIR)"
-	for f in $(APPLETS) $(UNSTABLE); do	\
+	for f in $(APPLETS); do	\
 		cp -Rv --preserve=timestamps "applets/$$f" "$(PKGDIR)/$(APPDIR)" ;\
 		rm $(PKGDIR)/$(APPDIR)/$$f/$$f ;\
 		rm $(PKGDIR)/$(APPDIR)/$$f/applet.go ;\

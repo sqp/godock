@@ -1,7 +1,7 @@
 # Maintainer: SQP <sqp@glx-dock.org>
 
 pkgname=cairo-dock-control
-pkgver=20141030
+pkgver=20150509
 pkgrel=1
 pkgdesc="Cairo-Dock control tool and go applets."
 arch=('x86_64' 'i686')
@@ -10,14 +10,13 @@ license=('GPL3')
 depends=('gtk3' 'vte3' 'curl' 'gupnp-av') # also depends on the dock but it's removed so we could use a custom install.
 makedepends=('git' 'go')
 optdepends=(
-  'bzr: dock version check (Update)'
   'xclip: clipboard control for uptoshare (NetActivity)'
 )
 options=('!strip' '!emptydirs')
 srcpath=github.com/sqp/godock
 applets="Audio Cpu DiskActivity DiskFree GoGmail Mem NetActivity Notifications TVPlay Update"
-cdctags="log dock"
-appdir=usr/share/cairo-dock/plug-ins/Dbus/third-party/
+cdctags="dock"
+# appdir=usr/share/cairo-dock/plug-ins/goapplets/
 
 build() {
   # Download
@@ -27,7 +26,8 @@ build() {
   cd "$srcdir/src/$srcpath" && GOPATH="$srcdir" make patch
 
   # Build
-  GOPATH="$srcdir" go get -fix -v -tags "$applets $cdctags" $srcpath/cmd/cdc # -x 
+  cd "$srcdir/src/$srcpath" && GOPATH="$srcdir" make DOCK="$cdctags $applets" dock
+  # GOPATH="$srcdir" go get -fix -v -tags "$applets $cdctags" $srcpath/cmd/cdc # -x 
 }
 
 #check() {
@@ -35,21 +35,24 @@ build() {
 #}
 
 package() {
-  mkdir -p "$pkgdir/usr/bin"
-  install -p -m755 "$srcdir/bin/cdc" "$pkgdir/usr/bin"
+  cd "$srcdir/src/$srcpath" && GOPATH="$srcdir" make PKGDIR="$pkgdir" APPLETS="$applets" install
 
-  mkdir -p "$pkgdir/$appdir"
-  for f in $applets; do
-    cp -Rv --preserve=timestamps "$srcdir/src/$srcpath/applets/$f" "$pkgdir/$appdir"
-  done
 
-  # Package license (if available)
-  for f in LICENSE COPYING LICENSE.* COPYING.*; do
-    if [ -e "$srcdir/src/$srcpath/$f" ]; then
-      install -Dm644 "$srcdir/src/$srcpath/$f" \
-        "$pkgdir/usr/share/licenses/$pkgname/$f"
-    fi
-  done
+#  mkdir -p "$pkgdir/usr/bin"
+#  install -p -m755 "$srcdir/bin/cdc" "$pkgdir/usr/bin"
+#
+#  mkdir -p "$pkgdir/$appdir"
+#  for f in $applets; do
+#    cp -Rv --preserve=timestamps "$srcdir/src/$srcpath/applets/$f" "$pkgdir/$appdir"
+#  done
+#
+#  # Package license (if available)
+#  for f in LICENSE COPYING LICENSE.* COPYING.*; do
+#    if [ -e "$srcdir/src/$srcpath/$f" ]; then
+#      install -Dm644 "$srcdir/src/$srcpath/$f" \
+#        "$pkgdir/usr/share/licenses/$pkgname/$f"
+#    fi
+#  done
 }
 
 # vim:set ts=2 sw=2 et:

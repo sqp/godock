@@ -75,6 +75,8 @@ func New(control GUIControl, menu MenuDownloader, mode ListMode) *ConfApplet {
 	switch widget.mode {
 	case ListCanAdd:
 		widget.applets = appletlist.NewListAdd(widget)
+		widget.preview.HideState()
+		widget.preview.HideSize()
 
 	case ListExternal:
 		if menu == nil {
@@ -100,8 +102,6 @@ func (widget *ConfApplet) Load() {
 	case ListCanAdd:
 		applets := widget.control.ListKnownApplets()
 		widget.applets.Load(applets)
-		widget.preview.HideState() // Hide must be done onLoad, after the 1st ShowAll.
-		widget.preview.HideSize()
 
 	case ListExternal:
 		applets := widget.control.ListDownloadApplets()
@@ -250,6 +250,8 @@ func (widget *MenuDownload) OnSelect(pack datatype.Appleter) {
 	widget.SetActiveState(pack.IsActive())
 }
 
+// SetInstalledState sets the state of the 'installed' switch.
+//
 func (widget *MenuDownload) SetInstalledState(state bool) {
 	// widget.active.SetSensitive(!state)
 	widget.installed.HandlerBlock(widget.handlerInstalled)
@@ -257,6 +259,8 @@ func (widget *MenuDownload) SetInstalledState(state bool) {
 	widget.installed.HandlerUnblock(widget.handlerInstalled)
 }
 
+// SetActiveState sets the state of the 'active' switch.
+//
 func (widget *MenuDownload) SetActiveState(state bool) {
 	// widget.installed.SetSensitive(pack.CanUninstall())
 	widget.active.HandlerBlock(widget.handlerActive)

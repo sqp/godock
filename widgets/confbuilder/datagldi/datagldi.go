@@ -138,15 +138,37 @@ func (v *AppletConf) Activate() string {
 
 // Install does nothing. Only here for compatibility with datatype.Appleter
 //
-func (v *AppletConf) Install(options string) error { return nil }
+func (v *AppletConf) Install(options string) error {
+	return nil
+}
 
 // Uninstall does nothing. Only here for compatibility with datatype.Appleter
 //
-func (v *AppletConf) Uninstall() error { return nil }
+func (v *AppletConf) Uninstall() error {
+	return nil
+}
 
 // Deactivate does nothing. Only here for compatibility with datatype.Appleter
 //
 func (v *AppletConf) Deactivate() {}
+
+// IconState does nothing. Only here for compatibility with datatype.Appleter
+//
+func (v *AppletConf) IconState() string {
+	return ""
+}
+
+// FormatState does nothing. Only here for compatibility with datatype.Appleter
+//
+func (v *AppletConf) FormatState() string {
+	return ""
+}
+
+// FormatSize does nothing. Only here for compatibility with datatype.Appleter
+//
+func (v *AppletConf) FormatSize() string {
+	return ""
+}
 
 func findNewInstance(listold, listnew []*gldi.ModuleInstance) string {
 	for _, appnew := range listnew {
@@ -192,42 +214,79 @@ func (v *AppletDownload) CanUninstall() bool {
 	return v.Type != packages.TypeInDev && v.Type != packages.TypeLocal
 }
 
-func (v *AppletDownload) Activate() string           { v.app.Activate(); return "" }
-func (v *AppletDownload) Deactivate()                { v.app.Deactivate() }
-func (v *AppletDownload) GetTitle() string           { return v.DisplayedName }
-func (v *AppletDownload) GetName() string            { return v.FormatName() }
-func (v *AppletDownload) GetAuthor() string          { return v.Author }
-func (v *AppletDownload) GetIconFilePath() string    { return filepath.Join(v.Path, "icon") } // TODO: improve }
-func (v *AppletDownload) GetPreviewFilePath() string { return "" }
+// Activate activates the applet.
+// TODO: May have to returns the path to the config file of the new instance.
+//
+func (v *AppletDownload) Activate() string {
+	v.app.Activate()
+	return ""
+}
+
+// Deactivate deactivates the applet.
+//
+func (v *AppletDownload) Deactivate() {
+	v.app.Deactivate()
+}
+
+// GetTitle returns the applet readable name.
+//
+func (v *AppletDownload) GetTitle() string {
+	return v.DisplayedName
+}
+
+// GetName returns the applet name to use as config key.
+//
+func (v *AppletDownload) GetName() string {
+	return v.FormatName()
+}
+
+// GetAuthor returns the applet author.
+//
+func (v *AppletDownload) GetAuthor() string {
+	return v.Author
+}
+
+// GetIconFilePath returns the location of the applet icon.
+// TODO: improve.
+//
+func (v *AppletDownload) GetIconFilePath() string {
+	return filepath.Join(v.Path, "icon")
+}
+
+// IconState returns the icon location for the state for the applet.
+//
+func (v *AppletDownload) IconState() string {
+	return globals.DirShareData(v.AppletPackage.IconState())
+}
 
 // Install downloads and extract an external archive to package dir.
 //
-func (pack *AppletDownload) Install(options string) error {
+func (v *AppletDownload) Install(options string) error {
 	// Using the "drop data signal" trick to ask the Dbus applet to work for us.
 	// Only way I found for now to interact with it and let it know it will have
 	// a new applet to handle. As a bonus, it also activate the applet, which
 	// will toggle the activated button with the UpdateModuleState signal.
-	url := packages.DistantURL + cdtype.AppletsDirName + "/" + pack.SrvTag + "/" + pack.DisplayedName + "/" + pack.DisplayedName + ".tar.gz"
+	url := packages.DistantURL + cdtype.AppletsDirName + "/" + v.SrvTag + "/" + v.DisplayedName + "/" + v.DisplayedName + ".tar.gz"
 	gldi.EmitSignalDropData(globals.Maindock().Container(), url, nil, 0)
 
-	pack.app = gldi.ModuleGet(pack.DisplayedName)
-	if pack.app == nil {
-		return errors.New("install failed: pack.DisplayedName")
+	v.app = gldi.ModuleGet(v.DisplayedName)
+	if v.app == nil {
+		return errors.New("install failed: v.DisplayedName")
 	}
 
 	dir, _ := packages.DirExternal()
-	pack.SetInstalled(dir)
+	v.SetInstalled(dir)
 	return nil
 
-	// return pack.AppletPackage.Install(options)
+	// return v.AppletPackage.Install(options)
 }
 
 // Uninstall downloads and extract an external archive to package dir.
 //
-func (pack *AppletDownload) Uninstall() error {
-	e := pack.AppletPackage.Uninstall()
+func (v *AppletDownload) Uninstall() error {
+	e := v.AppletPackage.Uninstall()
 	if e == nil {
-		pack.app = nil
+		v.app = nil
 	}
 	return e
 }

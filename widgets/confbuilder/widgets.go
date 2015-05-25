@@ -222,21 +222,33 @@ func (build *Builder) WidgetListTheme(key *Key) {
 	model.SetSortColumnId(RowName, gtk.SORT_ASCENDING)
 	combo, getValue := build.newComboBoxWithModel(model, true, false, true)
 
+	details := NewHandbook()
+	build.addKeyWidget(combo, key, getValue)
+	build.addWidget(details, false, false, 0)
+
+	// Connect the theme preview update on selection.
+	var list map[string]datatype.Handbooker
+	combo.Connect("changed", func() {
+		pack, ok := list[getValue().(string)]
+		if ok {
+			details.SetPackage(pack)
+		}
+	})
+
+	// Fill the list with known themes.
 	if len(key.AuthorizedValues) > 2 {
 		current, _ := build.Conf.GetString(key.Group, key.Name)
 		if key.AuthorizedValues[1] == "gauges" {
-			list := build.data.ListThemeXML(key.AuthorizedValues[0], key.AuthorizedValues[1], key.AuthorizedValues[2])
+			list = build.data.ListThemeXML(key.AuthorizedValues[0], key.AuthorizedValues[1], key.AuthorizedValues[2])
 			iter := fillModelWithTheme(model, list, current)
 			combo.SetActiveIter(iter)
 
 		} else {
-			list := build.data.ListThemeINI(key.AuthorizedValues[0], key.AuthorizedValues[1], key.AuthorizedValues[2])
-			iter := fillModelWithThemeINI(model, list, current)
+			list = build.data.ListThemeINI(key.AuthorizedValues[0], key.AuthorizedValues[1], key.AuthorizedValues[2])
+			iter := fillModelWithTheme(model, list, current)
 			combo.SetActiveIter(iter)
 		}
 	}
-
-	build.addKeyWidget(combo, key, getValue)
 
 	// //\______________ On construit le widget de visualisation de themes.
 	// modele = _cairo_dock_gui_allocate_new_model ();
@@ -1085,6 +1097,13 @@ func (build *Builder) WidgetStrings(key *Key) {
 			grab.Connect("clicked", onKeyGrabClicked, &textGrabData{entry: widget, win: build.win})
 		}
 		build.addSubWidget(grab)
+
+		// for _, sk := range build.data.ListShortkeys() {
+		// 	if sk.GetConfFilePath() == build.Conf.File {
+		// 		println("found file shortkey")
+		// 	}
+		// }
+
 	}
 
 	// Display a default value when empty.
@@ -1115,6 +1134,7 @@ func (build *Builder) WidgetStrings(key *Key) {
 func (build *Builder) WidgetHandbook(key *Key) {
 	appletName, e := build.Conf.GetString(key.Group, key.Name)
 	widget := NewHandbook()
+	widget.ShowVersion = true
 
 	book := build.data.Handbook(appletName)
 	// pack := build.data.AppletPackage(appletName)

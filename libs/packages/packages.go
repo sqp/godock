@@ -1,4 +1,4 @@
-// Package packages lists and act on cairo-dock packages.
+// Package packages lists and acts on cairo-dock packages.
 package packages
 
 import (
@@ -8,9 +8,9 @@ import (
 	"github.com/sqp/godock/libs/cdtype/bytesize"
 	"github.com/sqp/godock/libs/config"
 
-	"errors"
-	// "fmt"
 	"encoding/xml"
+	"errors"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -57,6 +57,7 @@ const (
 	SourceTheme
 )
 
+//
 //---------------------------------------------------------[ APPLET PACKAGES ]--
 
 // AppletPackages defines a list of AppletPackage.
@@ -101,6 +102,7 @@ func (list ByName) Less(i, j int) bool {
 // TODO:
 // local size
 
+//
 //-----------------------------------------------------------[ LIST DOWNLOAD ]--
 
 // ListDownloadSorted builds a merged list of external packages in local and distant
@@ -158,6 +160,7 @@ func ListDownloadIndex(version string) (map[string]*AppletPackage, error) {
 	return filled, eRet
 }
 
+//
 //-----------------------------------------------------------------[ DISTANT ]--
 
 // ListDistant lists packages available on the server applets market for given version.
@@ -201,6 +204,7 @@ func ListDistant(version string) (AppletPackages, error) {
 	return list, nil
 }
 
+//
 //-----------------------------------------------------------[ USER EXTERNAL ]--
 
 // ListFromDir lists packages in external applets dir.
@@ -234,6 +238,7 @@ func ListFromDir(dir string, typ PackageType, source PackageSource) (AppletPacka
 	return list, nil
 }
 
+//
 //-----------------------------------------------------------[ APPLET PACKAGE ]--
 
 //~ gchar *cPackagePath //
@@ -383,7 +388,6 @@ func (pack *AppletPackage) FormatState() string {
 
 // IconState returns the icon location for the state for the applet.
 //
-// GLDI_SHARE_DATA_DIR
 func (pack *AppletPackage) IconState() string {
 	switch pack.Type {
 	case TypeLocal:
@@ -462,11 +466,15 @@ func (pack *AppletPackage) GetPreview(tmp string) (string, bool) {
 }
 
 // GetDescription returns the package description text.
-// Description will be downloaded if needed (non installed package).
+// Can be slow if it needs to download the file (non installed package).
 //
 func (pack *AppletPackage) GetDescription() string {
 	if pack.Description == "" {
 		switch pack.Type {
+		case TypeLocal, TypeUser:
+			body, _ := ioutil.ReadFile(filepath.Join(pack.Path, "readme"))
+			pack.Description = string(body)
+
 		case TypeDistant, TypeNew: // Applets not on disk.
 
 			resp, eNet := http.Get(pack.Path + "/readme")
@@ -485,6 +493,40 @@ func (pack *AppletPackage) GetDescription() string {
 	return strings.Replace(pack.Description, "\\n", "\n", -1)
 }
 
+//
+// Handbooker interface.
+
+// GetTitle returns the package readable name.
+//
+func (pack *AppletPackage) GetTitle() string { return pack.DisplayedName }
+
+// GetAuthor returns the package author.
+//
+func (pack *AppletPackage) GetAuthor() string { return pack.Author }
+
+// GetGettextDomain is a stub. TODO: expand and use.
+//
+func (pack *AppletPackage) GetGettextDomain() string { return "" }
+
+// GetModuleVersion returns the version of the package.
+//
+func (pack *AppletPackage) GetModuleVersion() string { return pack.Version }
+
+// GetName returns the package name to use as config key.
+//
+func (pack *AppletPackage) GetName() string {
+	return fmt.Sprintf("%s[%d]", pack.DisplayedName, pack.Type)
+}
+
+// GetPreviewFilePath returns the location of the preview file.
+// Can be slow if it needs to download the file (non installed package).
+//
+func (pack *AppletPackage) GetPreviewFilePath() string {
+	file, _ := pack.GetPreview("")
+	return file
+}
+
+//
 //-----------------------------------------------------------[ DOWNLOAD EXTERNAL ]--
 
 // Install downloads and extract an external archive to package dir.
@@ -561,6 +603,9 @@ func (pack *AppletPackage) Uninstall() error {
 	return eDir
 }
 
+//
+//--------------------------------------------------------------------[ DIRS ]--
+
 // DirExternal returns external applets location.
 //
 func DirExternal() (dir string, e error) {
@@ -609,6 +654,7 @@ func stripComments(l string) string {
 }
 */
 
+//
 //----------------------------------------------------------[ APPLETS THEMES ]--
 
 // Gauge is an icon theme.
@@ -627,6 +673,7 @@ type Theme struct {
 	Author  string      `xml:"author"` // author(s)
 	Version string      `xml:"version"`
 	Type    PackageType // type of package : installed, user, distant...
+	path    string
 }
 
 // ListThemesDir lists themes in a given directory.
@@ -646,7 +693,7 @@ func ListThemesDir(dir string, typ PackageType) ([]Theme, error) {
 			body, _ := ioutil.ReadFile(fullpath)
 
 			// Parse data.
-			theme := Theme{Type: typ, DirName: info.Name()}
+			theme := Theme{Type: typ, DirName: info.Name(), path: dir}
 			gauge := Gauge{Theme: theme}
 			if e := xml.Unmarshal(body, &gauge); e == nil {
 				list = append(list, gauge.Theme)
@@ -657,6 +704,43 @@ func ListThemesDir(dir string, typ PackageType) ([]Theme, error) {
 	return list, nil
 }
 
+//
+// Handbooker interface.
+
+// GetTitle returns the package readable name.
+//
+func (t Theme) GetTitle() string { return t.Title }
+
+// GetAuthor returns the package author.
+//
+func (t Theme) GetAuthor() string { return t.Author }
+
+// GetGettextDomain is a stub. TODO: expand and use.
+//
+func (t Theme) GetGettextDomain() string { return "" }
+
+// GetModuleVersion returns the version of the package.
+//
+func (t Theme) GetModuleVersion() string { return t.Version }
+
+// GetName returns the package name to use as config key.
+//
+func (t Theme) GetName() string { return fmt.Sprintf("%s[%d]", t.DirName, t.Type) }
+
+// GetDescription returns the package description text.
+// Can be slow if it needs to download the file (non installed package).
+//
+func (t Theme) GetDescription() string {
+	body, _ := ioutil.ReadFile(filepath.Join(t.path, t.DirName, "readme"))
+	return string(body)
+}
+
+// GetPreviewFilePath returns the location of the preview file.
+// Can be slow if it needs to download the file (non installed package).
+//
+func (t Theme) GetPreviewFilePath() string { return filepath.Join(t.path, t.DirName, "preview") }
+
+//
 //-----------------------------------------------------------[ HELPER ]--
 
 // Follow link if needed to get real file or dir. Give it your current FileInfo
