@@ -7,8 +7,6 @@ package uptoshare
 import "C"
 
 import (
-	"github.com/andelf/go-curl" // imported as curl
-
 	"github.com/robfig/config" // Config parser.
 
 	"github.com/sqp/godock/libs/cdtype"
@@ -137,9 +135,6 @@ type Uploader struct {
 func New() *Uploader {
 	return &Uploader{
 		queue: make(chan string, 10),
-
-		// upFile:  DlFreeFr,
-		// upVideo: VideoBinOrg,
 	}
 }
 
@@ -334,7 +329,7 @@ func (up *Uploader) uploadOne(data string) Links {
 		// 	cd_debug ("we'll consider this as an archive.");
 	}
 
-	// up.Log.Info("file", fileType, filePath)
+	up.Log.Debug("file upload", "type:", fileType, "path:", filePath)
 	var call func(string, string, bool, int) Links
 
 	if up.FileForAll { // Forced upload as file.
@@ -388,9 +383,8 @@ func (up *Uploader) uploadOne(data string) Links {
 
 func getFileType(filePath string) FileType {
 	mimetype := mime.TypeByExtension(path.Ext(filePath))
-	// Log.Info(mimetype)
 	switch {
-	case strings.HasPrefix(mimetype, "video"):
+	case strings.HasPrefix(mimetype, "video") || strings.HasSuffix(filePath, ".ogv"):
 		return FileTypeVideo
 
 	case strings.HasPrefix(mimetype, "image"):
@@ -443,6 +437,7 @@ func linkWarn(str string) Links {
 //
 func curlExec(url string, limitRate int, fileref, filepath string, opts []string) (string, error) {
 	args := []string{
+		"-s", // silent mode.
 		"-L", url,
 		"--connect-timeout", "5",
 		"--retry", "2",
@@ -456,14 +451,6 @@ func curlExec(url string, limitRate int, fileref, filepath string, opts []string
 	}
 
 	return curlExecArgs(args...)
-
-	// body, e := exec.Command("curl", args...).Output()
-
-	// if len(body) == 0 {
-	// 	return "", errors.New("curl output empty")
-	// }
-
-	// return string(body), e
 }
 
 func curlExecArgs(args ...string) (string, error) {
@@ -474,69 +461,6 @@ func curlExecArgs(args ...string) (string, error) {
 	}
 
 	return string(body), e
-}
-
-// Create a new curl uploader using api.
-//
-func curler(url, fileref, filepath string, opt map[string]string) *curl.CURL {
-
-	curly := curl.EasyInit()
-
-	curly.Setopt(curl.OPT_URL, url)
-	// curly.Setopt(curl.OPT_PORT, 80)
-	curly.Setopt(curl.OPT_FOLLOWLOCATION, true)
-
-	form := curl.NewForm()
-	for k, v := range opt {
-		form.Add(k, v)
-	}
-	form.AddFile(fileref, filepath)
-
-	curly.Setopt(curl.OPT_HTTPPOST, form)
-	return curly
-
-	// Possible options.
-
-	// disable HTTP/1.1 Expect: 100-continue
-	// easy.Setopt(curl.OPT_HTTPHEADER, []string{"Expect:"})
-
-	// easy.Setopt(curl.OPT_VERBOSE, true)
-
-	// print upload progress
-	// easy.Setopt(curl.OPT_NOPROGRESS, false)
-	// easy.Setopt(curl.OPT_PROGRESSFUNCTION, func(dltotal, dlnow, ultotal, ulnow float64, _ interface{}) bool {
-	// 	fmt.Printf("Download %3.2f%%, Uploading %3.2f%%\r", dlnow/dltotal*100, ulnow/ultotal*100)
-	// 	return true
-	// })
-
-	// easy.Setopt(curl.OPT_WRITEFUNCTION, func(ptr []byte, unk interface{}) bool {
-	// 	Log.Info("", string(ptr), unk)
-	// 	return true
-	// })
-}
-
-// Perform and return redirected url.
-//
-func curlEffectiveURL(curly *curl.CURL) (string, error) {
-	if e := curly.Perform(); e != nil {
-		return "", e
-	}
-
-	uncast, e := curly.Getinfo(curl.INFO_EFFECTIVE_URL)
-	if e != nil {
-		return "", e
-	}
-	url, ok := uncast.(string)
-	if !ok {
-		return "", errors.New("cast to string failed")
-	}
-	return url, nil
-}
-
-// writeNull grab curl output to prevent it from being displayed in console.
-//
-func writeNull(ptr []byte, unk interface{}) bool {
-	return true
 }
 
 // Creates a new http POST request with optional extra params.

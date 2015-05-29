@@ -1,14 +1,13 @@
 TARGET=cdc
 SOURCE=github.com/sqp/godock
-VERSION=0.0.1-2
+VERSION=0.0.3-1
 APPLETS=Audio Cpu DiskActivity DiskFree GoGmail Mem NetActivity Update
 
 # unstable applets requires uncommited patches to build.
 UNSTABLE=Notifications TVPlay
 UNSTABLE_TAGS=gtk
-# unused ATM: log
 
-# and dock even more, plus gldi installed.
+# and dock even more, plus the rewritten dock.
 DOCK=dock all
 
 # Install prefix if any.

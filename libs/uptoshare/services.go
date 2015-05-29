@@ -1,13 +1,7 @@
 package uptoshare
 
 import (
-	"github.com/andelf/go-curl" // imported as curl
-
-	"github.com/sqp/godock/libs/ternary"
-
-	"io/ioutil"
 	"net/url"
-	"path"
 	"strings"
 )
 
@@ -174,20 +168,9 @@ const URLImageBinCa = "http://imagebin.ca/upload.php"
 // ImageBinCa uploads an image file to this website.
 //
 func ImageBinCa(filepath, cLocalDir string, bAnonymous bool, limitRate int) Links {
-	opt := map[string]string{
-		// "t":       "file",
-		"private": "true",
-	}
-	curly := curler(URLImageBinCa, "file", filepath, opt)
-	defer curly.Cleanup()
-
-	var data string
-	curly.Setopt(curl.OPT_WRITEFUNCTION, func(ptr []byte, unk interface{}) bool {
-		data += string(ptr)
-		return true
-	})
-
-	if e := curly.Perform(); e != nil {
+	opts := []string{"private=true"}
+	data, e := curlExec(URLImageBinCa, limitRate, "file", filepath, opts)
+	if e != nil {
 		return linkErr(e, "ImageBinCa")
 	}
 
@@ -266,22 +249,19 @@ const URLPixToileLibreOrg = "http://pix.toile-libre.org/?action=upload"
 // PixToileLibreOrg uploads an image file to this website.
 //
 func PixToileLibreOrg(filepath, cLocalDir string, bAnonymous bool, limitRate int) Links {
-	opt := map[string]string{
-		"submit":  "Envoyer",
-		"private": "yes"}
-	curly := curler(URLPixToileLibreOrg, "img", filepath, opt)
-	defer curly.Cleanup()
+	data, e := curlExecArgs("-L",
+		"-F", "MAX_FILE_SIZE=15360000",
+		"-F", "img=@"+filepath+";type=image/png;filename="+filepath,
+		URLPixToileLibreOrg)
 
-	curly.Setopt(curl.OPT_WRITEFUNCTION, writeNull) // We do nothing, just prevent console flood.
-
-	url, e := curlEffectiveURL(curly)
 	if e != nil {
 		return linkErr(e, "PixToileLibreOrg")
 	}
 
 	return Links{
-		"link":  strings.Replace(url, "?img=", "upload/original/", 1),
-		"thumb": strings.Replace(url, "?img=", "upload/thumb/", 1)}
+		"link":   findLink(data, "http://pix.toile-libre.org/upload/original", "</textarea>"),
+		"thumb":  findLink(data, "http://pix.toile-libre.org/upload/thumb", "[/img]"),
+		"medium": findLink(data, "http://pix.toile-libre.org/upload/img", "[/img]")}
 }
 
 //
@@ -293,23 +273,6 @@ const URLUppixCom = "http://uppix.com/upload"
 // UppixCom uploads an image file to this website.
 //
 func UppixCom(filepath, cLocalDir string, bAnonymous bool, limitRate int) Links {
-
-	// opt := map[string]string{"api": "1", "u_submit": "Upload", "u_agb": "yes"}
-	// curly := curler(UppixUrl, "u_file", filepath, opt)
-	// defer curly.Cleanup()
-
-	// // disable HTTP/1.1 Expect: 100-continue
-	// curly.Setopt(curl.OPT_HTTPHEADER, []string{"Expect:"})
-
-	// if err := curly.Perform(); err != nil {
-	// 	println("ERROR: ", err.Error())
-	// }
-
-	// a, e := curly.Getinfo(curl.INFO_EFFECTIVE_URL)
-	// log.Info("out", a, e)
-
-	// return
-
 	opts := []string{"u_submit=Upload", "u_agb=yes"}
 	data, e := curlExec(URLUppixCom, limitRate, "u_file", filepath, opts)
 	if e != nil {
@@ -334,26 +297,13 @@ const URLVideoBinOrg = "http://videobin.org/add"
 // VideoBinOrg uploads a video file to this website.
 //
 func VideoBinOrg(filepath, cLocalDir string, bAnonymous bool, limitRate int) Links {
-	opt := map[string]string{"api": "1"}
-	curly := curler(URLVideoBinOrg, "videoFile", filepath, opt)
-	defer curly.Cleanup()
-
-	url, e := curlEffectiveURL(curly)
+	opts := []string{"api=1"}
+	data, e := curlExec(URLVideoBinOrg, limitRate, "videoFile", filepath, opts)
 	if e != nil {
 		return linkErr(e, "VideoBinOrg")
 	}
 
-	return NewLinks().Add("link", url)
-
-	// list := NewLinks()
-
-	// if link, e := curly.Getinfo(curl.INFO_EFFECTIVE_URL); !log.Err(e, "get URL") {
-	// 	list.Add("link", link.(string))
-	// }
-
-	// // log.Info("out", list)
-
-	// return list
+	return NewLinks().Add("link", data)
 }
 
 //
@@ -367,8 +317,6 @@ const URLDlFreeFr = "ftp://dl.free.fr/"
 
 // DlFreeFr uploads any file to this website.
 //
-// Use curl command for now as it allow the CombinedOutput to get the result from error pipe.
-//
 func DlFreeFr(filepath, cLocalDir string, bAnonymous bool, limitRate int) Links {
 	body, e := curlExecArgs("-q", "-v", "-T", filepath, "-u", "cairo@dock.org:toto", URLDlFreeFr)
 	if e != nil {
@@ -379,55 +327,4 @@ func DlFreeFr(filepath, cLocalDir string, bAnonymous bool, limitRate int) Links 
 	list.Add("link", findLink(body, "http://dl.free.fr/", "\r\n"))
 	list.Add("del", findLink(body, "http://dl.free.fr/rm.pl?", "\r\n"))
 	return list
-}
-
-//
-//---------------------------------------------------------[ UNUSED BACKENDS ]--
-
-// FreeFrBlock is the block size for the unused free.fr curl backend.
-const FreeFrBlock = 10000
-
-// FreeFrCurl is not working, but almost.
-// It upload the file but can't get the answer as it's only forwarded with the verbose flood.
-//
-func FreeFrCurl(filepath, cLocalDir string, bAnonymous bool, limitRate int) Links {
-	data, e := ioutil.ReadFile(filepath)
-	if e != nil || len(data) == 0 {
-		return linkErr(e, "FreeFr read file")
-	}
-
-	curly := curl.EasyInit()
-	defer curly.Cleanup()
-
-	curly.Setopt(curl.OPT_URL, URLDlFreeFr+path.Base(filepath))
-
-	curly.Setopt(curl.OPT_VERBOSE, true)
-
-	curly.Setopt(curl.OPT_USERPWD, "cairo@dock.org:toto")
-
-	curly.Setopt(curl.OPT_TRANSFERTEXT, false)
-	curly.Setopt(curl.OPT_FTP_USE_EPSV, false)
-	curly.Setopt(curl.OPT_UPLOAD, true)
-
-	var current int
-	curly.Setopt(curl.OPT_READFUNCTION, func(ptr []byte, _ interface{}) int {
-		// log.Info("read")
-		size := ternary.Min(FreeFrBlock, len(data)-current)
-		sent := copy(ptr, data[current:current+size]) // WARNING: never use append()
-		current += sent
-		return sent
-	})
-
-	// curly.Setopt(curl.OPT_WRITEFUNCTION, func(ptr []byte, unk interface{}) bool {
-	// 	log.Info("", string(ptr), unk)
-	// 	return true
-	// })
-
-	if err := curly.Perform(); err != nil {
-		println("ERROR: ", err.Error())
-	}
-
-	// a, e := curly.Getinfo(curl.INFO_FTP_ENTRY_PATH)
-	// log.Info("out", a, e)
-	return nil
 }
