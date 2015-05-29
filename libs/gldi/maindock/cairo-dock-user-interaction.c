@@ -19,6 +19,8 @@
 
 #include "cairo-dock-icon-facility.h"        // gldi_icon_is_launching
 #include "cairo-dock-applications-manager.h" // myTaskbarParam
+#include "cairo-dock-desktop-manager.h"      // gldi_desktop_get_current
+#include "cairo-dock-dock-facility.h"        // cairo_dock_show_subdock
 #include "cairo-dock-launcher-manager.h"     // gldi_launcher_add_new
 #include "cairo-dock-stack-icon-manager.h"   // GLDI_OBJECT_IS_STACK_ICON
 #include "cairo-dock-applet-manager.h"       // GLDI_OBJECT_IS_APPLET_ICON

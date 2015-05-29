@@ -103,14 +103,14 @@ func (app *Applet) defineActions() {
 		&cdtype.Action{
 			ID:       ActionShowAll,
 			Name:     "Show messages",
-			Icon:     "gtk-media-forward",
+			Icon:     "media-seek-forward",
 			Call:     app.displayAll,
 			Threaded: true,
 		},
 		&cdtype.Action{
 			ID:       ActionClear,
 			Name:     "Clear all",
-			Icon:     "gtk-clear",
+			Icon:     "edit-clear",
 			Call:     app.notifs.Clear,
 			Threaded: true,
 		},
@@ -149,7 +149,7 @@ func (app *Applet) displayAll() {
 	app.PopupDialog(cdtype.DialogData{
 		Message:   msg,
 		UseMarkup: true,
-		Buttons:   "gtk-clear;cancel",
+		Buttons:   "edit-clear;cancel",
 		Callback:  cdtype.DialogCallbackIsOK(app.ActionCallback(ActionClear)), // Clear notifs if the user press the 1st button.
 	})
 

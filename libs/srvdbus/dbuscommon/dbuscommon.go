@@ -19,7 +19,7 @@ type Client struct {
 	srvObj string
 }
 
-// GetServer return a connection to the active instance of the internal Dbus
+// GetClient return a connection to the active instance of the internal Dbus
 // service if any. Return nil, nil if none found.
 //
 func GetClient(SrvObj, SrvPath string) (*Client, error) {
@@ -42,6 +42,8 @@ func GetClient(SrvObj, SrvPath string) (*Client, error) {
 	return &Client{*conn.Object(SrvObj, dbus.ObjectPath(SrvPath)), SrvObj}, nil
 }
 
+// Call calls a method on a Dbus object.
+//
 func (cl *Client) Call(method string, args ...interface{}) error {
 	return cl.Object.Call(cl.srvObj+"."+method, 0, args...).Err
 }
@@ -53,6 +55,8 @@ func (cl *Client) Call(method string, args ...interface{}) error {
 //
 //------------------------------------------------------------------[ SERVER ]--
 
+// Server is a Dbus server with applets service management.
+//
 type Server struct {
 	Conn   *dbus.Conn          // Dbus connection.
 	Events <-chan *dbus.Signal // Dbus incoming signals channel.
@@ -81,8 +85,8 @@ func NewServer(srvObj, srvPath string, log cdtype.Logger) *Server {
 	return load
 }
 
-// StartServer will try to start and manage the applets server. You must provide
-// the applet arguments used to launch the applet.
+// Start will try to start and manage the applets server.
+// You must provide the applet arguments used to launch the applet.
 // If a server was already active, the applet start request is forwarded and
 // no loop will be started, the function just return with the error if any.
 //

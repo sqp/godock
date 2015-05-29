@@ -94,6 +94,8 @@ func NewLoader(log cdtype.Logger) *Loader {
 		restart: make(chan string, 1)}
 }
 
+// SetManager sets the applet manager service.
+//
 func (load *Loader) SetManager(mgr AppService) {
 	load.apps = mgr
 	if db, ok := mgr.(MgrDbus); ok {

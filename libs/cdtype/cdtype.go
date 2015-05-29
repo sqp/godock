@@ -1,4 +1,3 @@
-// Package cdtype defines main types and constants for Cairo-Dock applets.
 package cdtype
 
 import "github.com/sqp/godock/libs/poller"
@@ -262,7 +261,7 @@ type IconBase interface {
 	// A lot of image formats are supported, including SVG.
 	// You can refer to the image by either its name if it's an image from a icon theme, or by a path.
 	//   app.SetIcon("gimp")
-	//   app.SetIcon("gtk-go-up")
+	//   app.SetIcon("go-up")
 	//   app.SetIcon("/path/to/image")
 	//
 	SetIcon(icon string) error

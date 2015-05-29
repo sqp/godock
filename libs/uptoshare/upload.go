@@ -83,7 +83,7 @@ var (
 	}
 
 	backendFile = map[string]CallUpload{
-		"Codepad.org": DlFreeFr,
+		"dl.free.fr": DlFreeFr,
 	}
 )
 

@@ -8,8 +8,8 @@ Actions on the main icon
 Examples:
 	app.SetQuickInfo("OK")
 	app.SetLabel("label changed")
-	app.SetIcon("/usr/share/icons/gnome/32x32/actions/gtk-media-pause.png")
-	app.SetEmblem("/usr/share/icons/gnome/32x32/actions/gtk-go-down.png", cdtype.EmblemTopRight)
+	app.SetIcon("/usr/share/icons/gnome/32x32/actions/media-playback-pause.png")
+	app.SetEmblem("/usr/share/icons/gnome/32x32/actions/go-down.png", cdtype.EmblemTopRight)
 	app.Animate("fire", 10)
 	app.DemandsAttention(true, "default")
 	app.ShowDialog("dialog string\n with time in second", 8)
@@ -160,7 +160,7 @@ func New(path string) *CDDbus {
 	}
 }
 
-// New creates a CDDbus connection and binds it to an applet instance.
+// NewWithApp creates a CDDbus connection and binds it to an applet instance.
 //
 func NewWithApp(app cdtype.AppInstance, args []string, dir string) *CDDbus {
 	name := args[0][2:] // Strip ./ in the beginning.
@@ -178,35 +178,35 @@ func NewWithApp(app cdtype.AppInstance, args []string, dir string) *CDDbus {
 
 // SetOnEvent sets the OnEvent callback to forwards events.
 //
-func (o *CDDbus) SetOnEvent(onEvent func(string, ...interface{}) bool) {
-	o.onEvent = onEvent
+func (cda *CDDbus) SetOnEvent(onEvent func(string, ...interface{}) bool) {
+	cda.onEvent = onEvent
 }
 
 // SubIcon returns the subicon object matching the given key.
 //
-func (o *CDDbus) SubIcon(key string) cdtype.IconBase {
-	return o.icons[key]
+func (cda *CDDbus) SubIcon(key string) cdtype.IconBase {
+	return cda.icons[key]
 }
 
 // RemoveSubIcons removes all subicons from the applet. (To be called in init).
 //
-func (o *CDDbus) RemoveSubIcons() {
-	for icon := range o.icons { // Remove old subicons.
-		o.RemoveSubIcon(icon)
+func (cda *CDDbus) RemoveSubIcons() {
+	for icon := range cda.icons { // Remove old subicons.
+		cda.RemoveSubIcon(icon)
 	}
 }
 
 // HaveMonitor gives the state of the monitored application. See cdtype.AppIcon.
 //
-func (o *CDDbus) HaveMonitor() (haveApp bool, haveFocus bool) {
-	Xid, e := o.Get("Xid")
-	o.log.Err(e, "Xid")
+func (cda *CDDbus) HaveMonitor() (haveApp bool, haveFocus bool) {
+	Xid, e := cda.Get("Xid")
+	cda.log.Err(e, "Xid")
 
 	if id, ok := Xid.(uint64); ok {
 		haveApp = id > 0
 	}
 
-	HasFocus, _ := o.Get("has_focus")
+	HasFocus, _ := cda.Get("has_focus")
 	return haveApp, HasFocus.(bool)
 }
 
@@ -340,7 +340,7 @@ func (cda *CDDbus) SetLabel(label string) error {
 // A lot of image formats are supported, including SVG.
 // You can refer to the image by either its name if it's an image from a icon theme, or by a path.
 //   app.SetIcon("gimp")
-//   app.SetIcon("gtk-go-up")
+//   app.SetIcon("go-up")
 //   app.SetIcon("/path/to/image")
 //
 func (cda *CDDbus) SetIcon(icon string) error {
@@ -475,6 +475,8 @@ func (cda *CDDbus) ShowAppli(show bool) error {
 	return cda.launch(cda.dbusIcon, DbusInterfaceApplet+".ShowAppli", interface{}(show))
 }
 
+// AddMenuItems adds a list of items to the menu triggered by OnBuildMenu.
+//
 func (cda *CDDbus) AddMenuItems(items ...map[string]interface{}) error {
 	var data []map[string]dbus.Variant
 	for _, interf := range items {
@@ -643,17 +645,17 @@ func toMapVariant(input map[string]interface{}) map[string]dbus.Variant {
 //
 type Menu struct {
 	*MenuData
-	MenuId int32
+	MenuID int32
 }
 
-// Append an item to the menu with its callback.
+// AddEntry adds an item to the menu with its callback.
 //
 func (menu *Menu) AddEntry(label, iconPath string, call interface{}, userData ...interface{}) cdtype.MenuWidgeter {
 	menu.items = append(menu.items, map[string]interface{}{
 		"widget-type": cdtype.MenuEntry, //int32(0),
 		"label":       label,
 		"icon":        iconPath,
-		"menu":        menu.MenuId, //int32(0),
+		"menu":        menu.MenuID, //int32(0),
 		// "id":          int32(1),
 		"id": int32(len(menu.actions)),
 		// 	"tooltip":     "this is the tooltip that will appear when you hover this entry",

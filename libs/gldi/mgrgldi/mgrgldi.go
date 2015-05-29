@@ -392,10 +392,13 @@ func (o *AppManager) OnChangeFocus(win *gldi.WindowActor) bool {
 
 	// Emit signal on the applet that now has focus.
 	if win != nil {
-		icon := win.GetAppliIcon().GetInhibitor(false)
-		if icon != nil && icon.IsApplet() {
-			o.sendApp(icon, "on_change_focus", true)
-			o.activeIcon = icon
+		icon := win.GetAppliIcon()
+		if icon != nil {
+			icon = icon.GetInhibitor(false)
+			if icon != nil && icon.IsApplet() {
+				o.sendApp(icon, "on_change_focus", true)
+				o.activeIcon = icon
+			}
 		}
 	}
 	return false

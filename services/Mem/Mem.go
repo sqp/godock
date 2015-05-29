@@ -40,7 +40,7 @@ func (app *Applet) Init(loadConf bool) {
 
 	// Settings for service.
 	app.service.Settings(app.conf.DisplayText, app.conf.DisplayValues, app.conf.GraphType, app.conf.GaugeName)
-	app.service.SetSize(countTrue(app.conf.ShowRam, app.conf.ShowSwap))
+	app.service.SetSize(countTrue(app.conf.ShowRAM, app.conf.ShowSwap))
 
 	// Set defaults to dock icon: display and controls.
 	app.SetDefaults(cdtype.Defaults{
@@ -71,10 +71,10 @@ func (app *Applet) OnMiddleClick() {
 //
 func (app *Applet) OnBuildMenu(menu cdtype.Menuer) {
 	if app.conf.LeftAction > 0 && app.conf.LeftCommand != "" {
-		menu.AddEntry("Action left click", "gtk-execute", app.OnClick)
+		menu.AddEntry("Action left click", "system-run", app.OnClick)
 	}
 	if app.conf.MiddleAction > 0 && app.conf.MiddleCommand != "" {
-		menu.AddEntry("Action middle click", "gtk-execute", app.OnMiddleClick)
+		menu.AddEntry("Action middle click", "system-run", app.OnMiddleClick)
 	}
 }
 
@@ -86,7 +86,7 @@ func (app *Applet) OnBuildMenu(menu cdtype.Menuer) {
 func (app *Applet) GetMemActivity() {
 	app.service.Clear()
 
-	if app.conf.ShowRam {
+	if app.conf.ShowRAM {
 		mem := sigar.Mem{}
 		mem.Get()
 

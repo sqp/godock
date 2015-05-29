@@ -163,27 +163,27 @@ func (app *Applet) defineActions() {
 		&cdtype.Action{
 			ID:   ActionOpenClient,
 			Name: "Open mail client",
-			Icon: "gtk-open",
+			Icon: "document-open",
 			Call: app.actionOpenClient,
 		},
 		&cdtype.Action{
 			ID:       ActionCheckMail,
 			Name:     "Check now",
-			Icon:     "gtk-refresh",
+			Icon:     "view-refresh",
 			Call:     app.actionCheckMail,
 			Threaded: true,
 		},
 		&cdtype.Action{
 			ID:       ActionShowMails,
 			Name:     "Show mail dialog",
-			Icon:     "gtk-media-forward",
+			Icon:     "media-seek-forward",
 			Call:     app.actionShowMails,
 			Threaded: true,
 		},
 		&cdtype.Action{
 			ID:       ActionRegister,
 			Name:     "Set account",
-			Icon:     "gtk-media-forward",
+			Icon:     "media-seek-forward",
 			Call:     app.actionRegister,
 			Threaded: true,
 		},
@@ -345,7 +345,7 @@ func (app *Applet) mailPopup(nb, duration int, template string) {
 		Message:    strings.TrimRight(text, "\n"), // Remove last EOL if any (from template range).
 		TimeLength: duration,
 		UseMarkup:  true,
-		Buttons:    "gtk-open;cancel",
+		Buttons:    "document-open;cancel",
 		Callback:   cdtype.DialogCallbackIsOK(app.ActionCallback(ActionOpenClient)), // Open mail client if the user press the 1st button.
 		// Widget:     interface{} ,
 	})

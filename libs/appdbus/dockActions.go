@@ -34,7 +34,7 @@ func dockCall(method string, args ...interface{}) error {
 // DockAdd adds an item to the Dock.
 //
 //   Launcher from desktop file:      "type":"Launcher", "config-file":"application://vlc.desktop"
-//   Launcher custom:                 "type":"Launcher", "name":"Top 10", "command":"xterm -e top", "icon":"gtk-home.png"
+//   Launcher custom:                 "type":"Launcher", "name":"Top 10", "command":"xterm -e top", "icon":"go-home.png"
 //   Stack icon (SubDock container)   "type":"Stack-Icon", "name":"my sub-dock", "icon":"folder.png"
 //   Separator                        "type":"Separator"
 //   Module                           "type":"Module", "module":"clock"

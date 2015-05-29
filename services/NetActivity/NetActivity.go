@@ -136,11 +136,11 @@ func (app *Applet) OnMiddleClick() {
 func (app *Applet) OnBuildMenu(menu cdtype.Menuer) {
 	needSep := false
 	if app.conf.LeftAction > 0 && app.conf.LeftCommand != "" {
-		menu.AddEntry("Action left click", "gtk-execute", app.OnClick)
+		menu.AddEntry("Action left click", "system-run", app.OnClick)
 		needSep = true
 	}
 	if app.conf.MiddleAction > 0 && app.conf.MiddleCommand != "" {
-		menu.AddEntry("Action middle click", "gtk-execute", app.OnMiddleClick)
+		menu.AddEntry("Action middle click", "system-run", app.OnMiddleClick)
 		needSep = true
 	}
 	if needSep {
@@ -157,6 +157,8 @@ func (app *Applet) OnBuildMenu(menu cdtype.Menuer) {
 
 }
 
+// OnDropData uploads file(s) or text dropped on the icon.
+//
 func (app *Applet) OnDropData(data string) {
 	app.Upload(data)
 }

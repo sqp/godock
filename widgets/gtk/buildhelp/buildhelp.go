@@ -24,7 +24,7 @@ func New() *BuildHelp {
 	return &BuildHelp{Builder: *builder}
 }
 
-// New creates a *BuildHelp to load gtk.Builder interfaces easily from a slice of bytes.
+// NewFromBytes creates a *BuildHelp to load gtk.Builder interfaces easily from a slice of bytes.
 //
 func NewFromBytes(bytes []byte) *BuildHelp {
 	builder, _ := gtk.BuilderNew()

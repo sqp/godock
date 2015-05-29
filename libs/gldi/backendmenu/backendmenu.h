@@ -1,17 +1,21 @@
 
 #include <math.h>
 
+#include <glib/gstdio.h>  // g_mkdir/g_remove
+
 #include "gldi-icon-names.h"                       // GLDI_ICON_NAME_*
 
 #include "cairo-dock-applications-manager.h"       // myTaskbarParam
-#include "cairo-dock-desktop-manager.h"            // gldi_desktop_get_width
-#include "cairo-dock-dock-manager.h"       // 
 #include "cairo-dock-class-manager.h"              // cairo_dock_get_class_icon
+#include "cairo-dock-desktop-manager.h"            // gldi_desktop_get_width
+#include "cairo-dock-dialog-factory.h"       // gldi_dialog_show_temporary_with_default_icon
+#include "cairo-dock-dock-manager.h"       // 
+#include "cairo-dock-file-manager.h"              // cairo_dock_copy_file
 #include "cairo-dock-icon-facility.h"              // cairo_dock_get_icon_order
 #include "cairo-dock-launcher-manager.h"           // GLDI_OBJECT_IS_LAUNCHER_ICON
 #include "cairo-dock-stack-icon-manager.h"         // GLDI_OBJECT_IS_STACK_ICON
+#include "cairo-dock-themes-manager.h"         // cairo_dock_update_conf_file
 #include "cairo-dock-utils.h"                      // cairo_dock_launch_command_sync
-
 
 
 #include "cairo-dock-log.h"

@@ -13,6 +13,7 @@ import (
 	"strings"
 )
 
+// Introspect defines the introspect text for the StartApplet method.
 var IntrospectApplets = `
 	<method name="StartApplet">
 			<arg direction="in" type="s"/>

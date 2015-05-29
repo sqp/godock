@@ -222,13 +222,13 @@ func (app *Applet) defineActions() {
 		&cdtype.Action{
 			ID:   ActionShowDiff,
 			Name: "Show diff",
-			Icon: "gtk-justify-fill",
+			Icon: "format-justify-fill",
 			Call: app.actionShowDiff,
 		},
 		&cdtype.Action{
 			ID:       ActionShowVersions,
 			Name:     "Show versions",
-			Icon:     "gtk-network", // to change
+			Icon:     "network-workgroup", // to change
 			Call:     func() { app.actionShowVersions(true) },
 			Threaded: true,
 		},
@@ -236,14 +236,14 @@ func (app *Applet) defineActions() {
 		&cdtype.Action{
 			ID:       ActionCheckVersions,
 			Name:     "Check versions",
-			Icon:     "gtk-network",
+			Icon:     "network-workgroup",
 			Call:     app.actionCheckVersions,
 			Threaded: true,
 		},
 		&cdtype.Action{
 			ID:       ActionCycleTarget,
 			Name:     "Cycle target",
-			Icon:     "gtk-refresh",
+			Icon:     "view-refresh",
 			Call:     func() { go app.cycleTarget(1) }, // async as it require a dbus query (need ask and answer in internal mode).
 			Threaded: true,
 		},
@@ -263,44 +263,44 @@ func (app *Applet) defineActions() {
 		&cdtype.Action{
 			ID:       ActionBuildTarget,
 			Name:     "Build target",
-			Icon:     "gtk-media-play",
+			Icon:     "media-playback-start",
 			Call:     app.actionBuildTarget,
 			Threaded: true,
 		},
-		//~ action_add(CDCairoBzrAction.GENERATE_REPORT, action_none, "", "gtk-refresh");
+		//~ action_add(CDCairoBzrAction.GENERATE_REPORT, action_none, "", "view-refresh");
 
 		// &cdtype.Action{
 		// 	ID:       ActionBuildAll,
 		// 	Name:     "Build All",
-		// 	Icon:     "gtk-media-next",
+		// 	Icon:     "media-skip-forward",
 		// 	Call:     func() { app.actionBuildAll() },
 		// 	Threaded: true,
 		// },
 		// &cdtype.Action{
 		// 	ID:       ActionDownloadCore,
 		// 	Name:     "Download Core",
-		// 	Icon:     "gtk-network",
+		// 	Icon:     "network-workgroup",
 		// 	Call:     func() { app.actionDownloadCore() },
 		// 	Threaded: true,
 		// },
 		// &cdtype.Action{
 		// 	ID:       ActionDownloadApplets,
 		// 	Name:     "Download Plug-Ins",
-		// 	Icon:     "gtk-network",
+		// 	Icon:     "network-workgroup",
 		// 	Call:     func() { app.actionDownloadApplets() },
 		// 	Threaded: true,
 		// },
 		// &cdtype.Action{
 		// 	ID:       ActionDownloadAll,
 		// 	Name:     "Download All",
-		// 	Icon:     "gtk-network",
+		// 	Icon:     "network-workgroup",
 		// 	Call:     func() { app.actionDownloadAll() },
 		// 	Threaded: true,
 		// },
 		&cdtype.Action{
 			ID:       ActionUpdateAll,
 			Name:     "Update All",
-			Icon:     "gtk-network",
+			Icon:     "network-workgroup",
 			Call:     app.actionUpdateAll,
 			Threaded: true,
 		},
@@ -378,7 +378,7 @@ func (app *Applet) actionShowVersions(force bool) {
 			Message:    text,
 			TimeLength: app.conf.VersionDialogTimer,
 			UseMarkup:  true,
-			// Buttons:    "gtk-open;cancel",
+			// Buttons:    "document-open;cancel",
 		})
 		log.Err(e, "popup")
 	}

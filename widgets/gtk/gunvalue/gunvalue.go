@@ -87,7 +87,7 @@ func SelectedIter(model *gtk.ListStore, selection *gtk.TreeSelection) (*gtk.Tree
 }
 
 // SelectedValue returns the liststore row value for the selected line as converter.
-
+//
 func SelectedValue(model *gtk.ListStore, selection *gtk.TreeSelection, row int) Conv {
 	iter, e := SelectedIter(model, selection)
 	if e != nil {

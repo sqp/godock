@@ -39,6 +39,8 @@ func New(mi *gldi.ModuleInstance) *AppGldi {
 	}
 }
 
+// SetOnEvent sets the OnEvent callback to forwards events.
+//
 func (o *AppGldi) SetOnEvent(onEvent func(string, ...interface{}) bool) {
 	o.onEvent = onEvent
 }
@@ -267,6 +269,16 @@ func (o *AppGldi) onShortkey(shortkey string) {
 	o.onEvent("on_shortkey", shortkey)
 }
 
+// Get a property of the icon of your applet. Current available properties are :
+//   x            int32     x position of the icon's center on the screen (starting from 0 on the left)
+//   y            int32     y position of the icon's center on the screen (starting from 0 at the top of the screen)
+//   width        int32     width of the icon, in pixels (this is the maximum width, when the icon is zoomed)
+//   height       int32     height of the icon, in pixels (this is the maximum height, when the icon is zoomed)
+//   container    uint32   type of container of the applet (DOCK, DESKLET)
+//   orientation  uint32   position of the container on the screen (BOTTOM, TOP, RIGHT, LEFT). A desklet has always an orientation of BOTTOM.
+//   Xid          uint64   ID of the application's window which is controlled by the applet, or 0 if none (this parameter can only be non nul if you used the method ControlAppli beforehand).
+//   has_focus    bool     Whether the application's window which is controlled by the applet is the current active window (it has the focus) or not. E.g.:
+//
 func (o *AppGldi) Get(property string) (interface{}, error) {
 	container := o.Icon.GetContainer()
 	switch property {

@@ -243,7 +243,7 @@ type Calls map[string]func(Msg)
 //
 type Types map[string]reflect.Type
 
-// Hook defines a list of objects indexed by the methods they implement.
+// Hooker defines a list of objects indexed by the methods they implement.
 // An object can be referenced multiple times.
 // If an object declares all methods, he will be referenced in every field.
 //   hooker:= NewHooker(myCalls, myTypes)

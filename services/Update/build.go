@@ -40,7 +40,7 @@ func (app *Applet) setBuildTarget() {
 	} else {
 		list := app.conf.BuildTargets
 		target := list[app.targetID]
-		switch build.GetBuildType(target) {
+		switch build.GetSourceType(target) {
 
 		case build.Godock:
 			app.target = &build.BuilderGodock{}
@@ -109,7 +109,7 @@ func (app *Applet) restartTarget() {
 	}
 	target := app.conf.BuildTargets[app.targetID]
 	log.Info("restart", target)
-	switch build.GetBuildType(target) {
+	switch build.GetSourceType(target) {
 	case build.AppletScript, build.AppletCompiled:
 		if target == app.Name() { // Don't eat the chicken, or you won't have any more eggs.
 			log.ExecAsync("make", "reload")

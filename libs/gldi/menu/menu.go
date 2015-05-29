@@ -9,6 +9,8 @@ import (
 	"github.com/sqp/godock/libs/tran"             // Translate.
 )
 
+// BuildMenuContainer builds the dock container menu (1st line).
+//
 func BuildMenuContainer(m *backendmenu.DockMenu) int {
 
 	if m.Container.IsDesklet() && m.Icon != nil && !m.Icon.IsApplet() { // not on the icons of a desklet, except the applet icon (on a desklet, it's easy to click out of any icon).
@@ -154,6 +156,8 @@ func BuildMenuContainer(m *backendmenu.DockMenu) int {
 	return backendmenu.LetPass
 }
 
+// BuildMenuIcon builds the dock icon menu (2nd line).
+//
 func BuildMenuIcon(m *backendmenu.DockMenu) int {
 
 	//\_________________________ Clic en-dehors d'une icone utile => on s'arrete la.

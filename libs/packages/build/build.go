@@ -21,34 +21,36 @@ import (
 
 var cdcpath = []string{"src", "github.com", "sqp", "godock"}
 
+// Log defines the package logger. Mandatory.
 var Log cdtype.Logger
 
 //
 //---------------------------------------------------------[ BUILDERS CONFIG ]--
 
 var (
-	CmdSudo string = "gksudo" // Default command to get root access for installation.
+	// CmdSudo defines the command used to get root access for installation.
+	CmdSudo = "gksudo"
 
-	inProgress error = errors.New("not finished")
+	errInProgress = errors.New("not finished")
 )
 
-// BuildType defines the type of a builder.
-//
-type BuildType int
+// SourceType defines the type of a builder.
+type SourceType int
 
+// Applets build types.
 const (
-	Core           BuildType = iota // Dock core.
-	Applets                         // Dock all internal applets (C).
-	AppletInternal                  // Dock one internal applet (C).
-	AppletScript                    // Dock one external applet script (bash, python, ruby).
-	AppletCompiled                  // Dock one external applet compiled (go, mono, vala).
-	Godock                          // New dock.
+	Core           SourceType = iota // Dock core.
+	Applets                          // Dock all internal applets (C).
+	AppletInternal                   // Dock one internal applet (C).
+	AppletScript                     // Dock one external applet script (bash, python, ruby).
+	AppletCompiled                   // Dock one external applet compiled (go, mono, vala).
+	Godock                           // New dock.
 )
 
-// GetBuildType try to detect an applet type based on its location and content.
+// GetSourceType try to detect an applet type based on its location and content.
 // Could be improved.
 //
-func GetBuildType(name string) BuildType {
+func GetSourceType(name string) SourceType {
 	switch name {
 	case "core":
 		return Core
@@ -116,21 +118,32 @@ type BuilderBase struct {
 	dir  string
 }
 
+// SetIcon sets the icon name (or path) for the builder.
+//
 func (build *BuilderBase) SetIcon(icon string) {
 	build.icon = icon
 }
 
+// SetDir sets the source path for the builder.
+//
 func (build *BuilderBase) SetDir(dir string) {
 	build.dir = dir
 }
 
+// SourceDir returns the source path of the builder.
+//
 func (build *BuilderBase) SourceDir() string {
 	return build.dir
 }
 
+// Icon returns the icon name (or path) of the builder.
+//
 func (build *BuilderBase) Icon() string {
 	return build.icon
 }
+
+//
+//------------------------------------------------------------[ BUILDER NULL ]--
 
 // BuilderNull is an empty Build for fallback.
 //
@@ -139,13 +152,34 @@ type BuilderNull struct {
 	BuilderProgress
 }
 
-func (build *BuilderNull) Icon() string                { return "none" }
-func (build *BuilderNull) Label() string               { return "" }
-func (build *BuilderNull) SourceDir() string           { return "" }
-func (build *BuilderNull) Build() error                { return inProgress }
-func (build *BuilderNull) SetProgress(f func(float64)) {}
+// Icon returns the icon name (or path) of the builder.
+//
+func (build *BuilderNull) Icon() string {
+	return "none"
+}
 
-// BuilderGodock is the new dock sources builder.
+// Label returns the builder label.
+//
+func (build *BuilderNull) Label() string {
+	return ""
+}
+
+// SourceDir returns the source path of the builder.
+//
+func (build *BuilderNull) SourceDir() string {
+	return ""
+}
+
+// Build builds the source code.
+//
+func (build *BuilderNull) Build() error {
+	return errInProgress
+}
+
+//
+//----------------------------------------------------------[ BUILDER GODOCK ]--
+
+// BuilderGodock builds the new go dock version.
 //
 type BuilderGodock struct {
 	BuilderBase
@@ -153,25 +187,36 @@ type BuilderGodock struct {
 	MakeFlags string
 }
 
+// Icon returns the icon name (or path) of the builder.
+//
 func (build *BuilderGodock) Icon() string {
 	return "/usr/share/cairo-dock/cairo-dock.svg"
 }
 
+// Label returns the builder label.
+//
 func (build *BuilderGodock) Label() string {
 	return "cdc"
 }
 
+// SourceDir returns the source path of the builder.
+//
 func (build BuilderGodock) SourceDir() string {
 	path := append([]string{os.Getenv("GOPATH")}, cdcpath...)
 	return filepath.Join(path...)
 }
 
+// Build builds the source code.
+//
 func (build *BuilderGodock) Build() error {
 	go dlogbus.Action((*dlogbus.Client).Restart) // No need to wait an answer, it blocks.
 	return nil
 }
 
-// BuilderCore is the dock core sources builder.
+//
+//------------------------------------------------------------[ BUILDER CORE ]--
+
+// BuilderCore builds the dock core sources.
 //
 type BuilderCore struct {
 	BuilderBase
@@ -179,23 +224,34 @@ type BuilderCore struct {
 	MakeFlags string
 }
 
+// Icon returns the icon name (or path) of the builder.
+//
 func (build *BuilderCore) Icon() string {
 	return "/usr/share/cairo-dock/cairo-dock.svg"
 }
 
+// Label returns the builder label.
+//
 func (build *BuilderCore) Label() string {
 	return "Core"
 }
 
+// SourceDir returns the source path of the builder.
+//
 func (build BuilderCore) SourceDir() string {
 	return filepath.Join(build.dir, "cairo-dock-core")
 }
 
+// Build builds the source code.
+//
 func (build *BuilderCore) Build() error {
 	return buildCmake(build.SourceDir(), build.BuilderProgress.f, build.MakeFlags)
 }
 
-// Build all Cairo-Dock plug-ins.
+//
+//---------------------------------------------------------[ BUILDER APPLETS ]--
+
+// BuilderApplets builds all Cairo-Dock plug-ins.
 //
 type BuilderApplets struct {
 	BuilderBase
@@ -203,23 +259,36 @@ type BuilderApplets struct {
 	MakeFlags string
 }
 
+// Icon returns the icon name (or path) of the builder.
+//
 func (build *BuilderApplets) Icon() string {
 	return "/usr/share/cairo-dock/icons/icon-extensions.svg"
 }
 
+// Label returns the builder label.
+//
 func (build *BuilderApplets) Label() string {
 	return "Applets"
 }
 
+// SourceDir returns the source path of the builder.
+//
 func (build BuilderApplets) SourceDir() string {
 	return filepath.Join(build.dir, "cairo-dock-plug-ins")
 }
 
+// Build builds the source code.
+//
 func (build *BuilderApplets) Build() error {
 	return buildCmake(build.SourceDir(), build.BuilderProgress.f, build.MakeFlags)
 }
 
-// Internal applet = C applet provided by the plug-ins package.
+//
+//--------------------------------------------------------[ BUILDER INTERNAL ]--
+
+// BuilderInternal builds a Cairo-Dock internal applet.
+// As C applet are provided by the plug-ins package, they are only available
+// after the plug-ins build has been done at least once.
 //
 type BuilderInternal struct {
 	BuilderBase
@@ -227,10 +296,14 @@ type BuilderInternal struct {
 	Module string
 }
 
+// Label returns the builder label.
+//
 func (build *BuilderInternal) Label() string {
 	return build.Module
 }
 
+// Build builds the source code.
+//
 func (build *BuilderInternal) Build() error {
 	dir := filepath.Join(build.dir, "build", build.Module)
 	if e := os.Chdir(dir); e != nil {
@@ -239,7 +312,11 @@ func (build *BuilderInternal) Build() error {
 	return actionMakeAndInstall(build.BuilderProgress.f)
 }
 
-// External applet that must be compiled (golang or vala)
+//
+//--------------------------------------------------------[ BUILDER COMPILED ]--
+
+// BuilderCompiled builds external applet that must be compiled (golang or vala).
+// A Makefile with default build will have to be provided in each applet dir.
 //
 type BuilderCompiled struct {
 	BuilderBase
@@ -247,10 +324,14 @@ type BuilderCompiled struct {
 	Module string
 }
 
+// Label returns the builder label.
+//
 func (build *BuilderCompiled) Label() string {
 	return build.Module
 }
 
+// Build builds the source code.
+//
 func (build *BuilderCompiled) Build() error {
 	if e := os.Chdir(build.dir); e != nil {
 		return e
@@ -338,7 +419,7 @@ func actionMakeAndInstall(progress func(float64)) error {
 	line, err := r.ReadString('\n')
 	for err == nil {
 		if len(line) > 3 && line[0] == '[' {
-			current, e := TrimInt(line[1:4])
+			current, e := trimInt(line[1:4])
 			if e == nil {
 				progress(float64(current) / 100)
 				fmt.Printf("%s %s", line[:6], color.Green(line[7:]))
@@ -387,7 +468,6 @@ func activityBar(quit chan struct{}, c <-chan time.Time, render func(float64)) {
 //
 
 //
-
-func TrimInt(str string) (int, error) {
+func trimInt(str string) (int, error) {
 	return strconv.Atoi(strings.Trim(str, " \n"))
 }

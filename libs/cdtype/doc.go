@@ -1,3 +1,4 @@
+// Package cdtype defines main types and constants for Cairo-Dock applets.
 /*
 
 External applets are small programs spawned by the dock to manage dedicated icons.
@@ -117,7 +118,7 @@ See cdtype.Events for the full list with arguments.
 		events.OnBuildMenu = func(menu cdtype.Menuer) {
 			menu.AddEntry("disabled entry", "", nil)
 			menu.Separator()
-			menu.AddEntry("my action", "gtk-execute", func() {app.Log().Info("clicked") })
+			menu.AddEntry("my action", "system-run", func() {app.Log().Info("clicked") })
 		}
 	}
 

@@ -32,7 +32,7 @@ type groupConfiguration struct {
 	// GraphMix bool
 
 	UpdateDelay int
-	ShowRam     bool
+	ShowRAM     bool
 	ShowSwap    bool
 }
 

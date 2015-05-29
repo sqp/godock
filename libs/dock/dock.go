@@ -151,6 +151,8 @@ func (cda *CDApplet) LoadTemplate(names ...string) {
 	}
 }
 
+// Template gives access to a loaded template by its name.
+//
 func (cda *CDApplet) Template(file string) *template.Template {
 	return cda.templates[file]
 }

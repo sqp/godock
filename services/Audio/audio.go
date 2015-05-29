@@ -123,7 +123,7 @@ func (app *Applet) OnBuildMenu(menu cdtype.Menuer) {
 	mute, _ := app.pulse.Device(app.pulse.sink).Bool("Mute")
 	menu.AddCheckEntry("Mute volume", mute, app.pulse.ToggleMute)
 	if app.conf.MixerCommand != "" {
-		menu.AddEntry("Open mixer", "", func() { app.CommandLaunch("mixer") })
+		menu.AddEntry("Open mixer", "multimedia-volume-control", func() { app.CommandLaunch("mixer") })
 	}
 	app.menuAddDevices(menu, app.pulse.sink, "Managed device", app.pulse.SetSink)
 }
@@ -193,7 +193,7 @@ func (app *Applet) menuAddDevices(menu cdtype.Menuer, selected dbus.ObjectPath, 
 		return
 	}
 	menu.Separator()
-	menu.AddEntry(title, "", nil)
+	menu.AddEntry(title, "audio-card", nil)
 	menu.Separator()
 	for _, sink := range sinks {
 		dev := app.pulse.Device(sink)

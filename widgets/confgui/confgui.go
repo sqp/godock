@@ -213,6 +213,8 @@ func NewGuiConfigure(source datatype.Source, log cdtype.Logger) *GuiConfigure {
 	return widget
 }
 
+// AddPage adds a tab to the main config switcher with its widget.
+//
 func (widget *GuiConfigure) AddPage(saver Saver, name string, onShow, onHide func()) {
 	widget.stack.AddTitled(saver, name, name)
 	widget.pages[name] = &Page{

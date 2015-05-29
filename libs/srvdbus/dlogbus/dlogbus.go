@@ -16,6 +16,7 @@ const SrvObj = "org.cairodock.DockLog"
 // SrvPath is the Dbus path name for the service.
 const SrvPath = "/org/cairodock/DockLog"
 
+// Introspec is the Dbus introspect text with service methods.
 const Introspec = `
 <node>
 	<interface name="` + SrvObj + `">
@@ -28,10 +29,14 @@ const Introspec = `
 //
 //------------------------------------------------------------------[ CLIENT ]--
 
+// Client defines a Dbus client to connect to the dlogbus server.
+//
 type Client struct {
 	*dbuscommon.Client
 }
 
+// Action sends an action to the dlogbus server.
+//
 func Action(action func(*Client) error) error {
 	client, e := dbuscommon.GetClient(SrvObj, SrvPath)
 	if e != nil {
@@ -40,6 +45,8 @@ func Action(action func(*Client) error) error {
 	return action(&Client{client}) // we have a server, launch the provided action.
 }
 
+// Restart sends the Restart action to the dlogbus server.
+//
 func (client *Client) Restart() error {
 	return client.Call("Restart")
 }
@@ -47,12 +54,15 @@ func (client *Client) Restart() error {
 //
 //------------------------------------------------------------------[ SERVER ]--
 
+// Server defines a Dbus server that manage the state of a cdc program.
+//
 type Server struct {
 	*dbuscommon.Server
 	DockArgs []string
 }
 
-// NewServer creates a dlog dbus session.
+// NewServer creates a dlogbus server instance with cdc command args.
+// Only one can be active.
 //
 func NewServer(dockArgs []string, log cdtype.Logger) *Server {
 	return &Server{
@@ -61,15 +71,21 @@ func NewServer(dockArgs []string, log cdtype.Logger) *Server {
 	}
 }
 
+// DockStart starts the dock.
+//
 func (o *Server) DockStart() error {
 	return o.Log.ExecAsync("cdc", o.DockArgs...)
 }
 
+// DockStop stops the dock.
+//
 func (o *Server) DockStop() error {
 	appdbus.DbusPathDock = "/org/cdc/Cdc"
 	return srvdbus.Action((*srvdbus.Client).StopDock)
 }
 
+// DockRestart restarts the dock.
+//
 func (o *Server) DockRestart() error {
 	o.Log.Info("build")
 	e := o.Log.ExecShow("go", "install", "-tags", "dock log all", "github.com/sqp/godock/cmd/cdc")
@@ -89,6 +105,8 @@ func (o *Server) DockRestart() error {
 //
 //----------------------------------------------------------------[ DBUS API ]--
 
+// Restart restarts the dock.
+//
 func (o *Server) Restart() *dbus.Error {
 	// e :=
 	o.DockRestart()
