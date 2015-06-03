@@ -61,9 +61,46 @@ func New(data Controller, switcher *pageswitch.Switcher) *GuiIcons {
 		data:     data,
 	}
 	widget.icons = NewList(widget)
-	widget.Pack1(widget.icons, true, true)
+
+	up, _ := gtk.ButtonNewFromIconName("go-up", gtk.ICON_SIZE_BUTTON)
+	down, _ := gtk.ButtonNewFromIconName("go-down", gtk.ICON_SIZE_BUTTON)
+	remove, _ := gtk.ButtonNewFromIconName("list-remove", gtk.ICON_SIZE_BUTTON)
+
+	boxLeft, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
+	boxBtns, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
+	boxLeft.PackStart(widget.icons, true, true, 0)
+	boxLeft.PackStart(boxBtns, false, false, 0)
+	boxBtns.PackStart(up, false, false, 0)
+	boxBtns.PackStart(down, false, false, 0)
+	boxBtns.PackEnd(remove, false, false, 0)
+
+	widget.Pack1(boxLeft, true, true)
 
 	widget.SetPosition(listIconsWidth) // Paned position = list icons width.
+
+	up.Connect("clicked", func() {
+		ic, e := widget.icons.SelectedIcon()
+		if e == nil {
+			ic.MoveBeforePrevious()
+		}
+	})
+
+	down.Connect("clicked", func() {
+		ic, e := widget.icons.SelectedIcon()
+		if e == nil {
+			ic.MoveAfterNext()
+		}
+	})
+
+	remove.Connect("clicked", func() {
+		ic, e := widget.icons.SelectedIcon()
+		if e == nil {
+			ic.RemoveFromDock()
+		}
+	})
+
+	// widget.icons.Connect("row-inserted", func() { log.Info("row inserted") })
+	// widget.icons.Connect("row-deleted", func() { log.Info("row deleted") })
 
 	return widget
 }
@@ -176,7 +213,7 @@ func (widget *GuiIcons) onSelect(icon datatype.Iconer, ei error) {
 		return
 	}
 
-	build, e := confbuilder.NewGrouper(widget.data, widget.data.GetWindow(), icon.ConfigPath())
+	build, e := confbuilder.NewGrouper(widget.data, widget.data.GetWindow(), icon.ConfigPath(), icon.GetGettextDomain())
 	if log.Err(e, "Load Keyfile "+icon.ConfigPath()) {
 		return
 	}
@@ -224,7 +261,7 @@ func launcherMagic(icon datatype.Iconer, origins string) gtk.IWidget {
 	}
 
 	str := "Magic launcher :" +
-		"\nName :\t\t" + icon.GetClassInfo(gldi.ClassName) +
+		"\nName :\t\t" + icon.GetClassInfo(gldi.ClassName) + // Must not use gldi, those consts will have to move.
 		"\nIcon :\t\t" + icon.GetClassInfo(gldi.ClassIcon) +
 		"\nCommand :\t" + icon.GetClassInfo(gldi.ClassCommand) +
 		"\nDesktop file :\t" + strings.Join(apps, ", ")

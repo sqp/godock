@@ -344,26 +344,6 @@ func (pack *AppletPackage) FormatName() string {
 	return pack.DisplayedName
 }
 
-// FormatCategory returns the human readable category for the applet.
-//
-func (pack *AppletPackage) FormatCategory() string {
-	switch pack.Category {
-	case 2:
-		return "Files"
-	case 3:
-		return "Internet"
-	case 4:
-		return "Desktop"
-	case 5:
-		return "Accessory"
-	case 6:
-		return "System"
-	case 7:
-		return "Fun"
-	}
-	return ""
-}
-
 // FormatState returns the human readable state for the applet.
 //
 func (pack *AppletPackage) FormatState() string {
@@ -772,4 +752,26 @@ func dirSize(location string) (size int64) {
 		}
 	}
 	return
+}
+
+// FormatCategory returns the human readable category for the applet.
+//
+func FormatCategory(cat int) (text, RGB string) {
+	switch cat {
+	case 0:
+		return "Behavior", "888888"
+	case 2:
+		return "Files", "004EA1"
+	case 3:
+		return "Internet", "FF5555"
+	case 4:
+		return "Desktop", "116E08"
+	case 5:
+		return "Accessory", "900009"
+	case 6:
+		return "System", "A58B0D"
+	case 7:
+		return "Fun", "FF55FF"
+	}
+	return "", ""
 }

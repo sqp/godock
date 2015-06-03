@@ -124,10 +124,10 @@ import (
 	"github.com/conformal/gotk3/gdk"
 	"github.com/conformal/gotk3/glib"
 	"github.com/conformal/gotk3/gtk"
-	"github.com/gosexy/gettext"
 
 	"github.com/sqp/godock/libs/cdtype" // Dock types.
 	"github.com/sqp/godock/libs/packages"
+	"github.com/sqp/godock/libs/tran"
 	"github.com/sqp/godock/widgets/gtk/keyfile"
 
 	"errors"
@@ -1050,6 +1050,12 @@ func (icon *Icon) Redraw() {
 	C.cairo_dock_redraw_icon(icon.Ptr)
 }
 
+// MoveAfterIcon moves the icon position after the given icon.
+//
+func (icon *Icon) MoveAfterIcon(container *CairoDock, target *Icon) {
+	C.cairo_dock_move_icon_after_icon(container.Ptr, icon.Ptr, target.Ptr)
+}
+
 //
 //--------------------------------------------------[ DATARENDERERATTRIBUTES ]--
 
@@ -1377,7 +1383,7 @@ func NewVisitCardFromPackage(pack *packages.AppletPackage) *VisitCard {
 
 	// cShareDataDir ? g_strdup_printf ("%s/preview", cShareDataDir) : NULL;
 	vc.cPreviewFilePath = gchar(filepath.Join(pack.Path, "preview"))
-	vc.cGettextDomain = gchar("NEED-GETTEXT-FFS") // TODO: fix  GETTEXT_NAME_EXTRAS
+	vc.cGettextDomain = gchar("cairo-dock-plugins") // TODO: NEED-GETTEXT-FFS:  GETTEXT_NAME_EXTRAS ... no, need another domain for go applets.
 	vc.cUserDataDir = gchar(pack.DisplayedName)
 	vc.cShareDataDir = gchar(pack.Path) // TODO: check cShareDataDir
 	vc.cConfFileName = gchar(pack.DisplayedName + ".conf")
@@ -1438,7 +1444,7 @@ func (vc *VisitCard) GetAuthor() string {
 //
 func (vc *VisitCard) GetDescription() string {
 	desc := C.GoString((*C.char)(vc.Ptr.cDescription))
-	return gettext.DGettext(vc.GetGettextDomain(), desc)
+	return tran.Sloc(vc.GetGettextDomain(), desc)
 }
 
 func (vc *VisitCard) GetPreviewFilePath() string {

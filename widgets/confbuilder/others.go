@@ -6,6 +6,7 @@ import (
 	"github.com/conformal/gotk3/gtk"
 
 	"github.com/sqp/godock/libs/log"
+	"github.com/sqp/godock/libs/tran"
 
 	"github.com/sqp/godock/widgets/common"
 	"github.com/sqp/godock/widgets/confbuilder/datatype"
@@ -384,15 +385,15 @@ func onFileChooserOpen(obj *gtk.Button, data fileChooserData) {
 
 	switch data.key.Type {
 	case WidgetFolderSelector:
-		title = "Pick up a directory" // GETTEXT TRANSLATION
+		title = tran.Slate("Pick up a directory")
 		action = gtk.FILE_CHOOSER_ACTION_SELECT_FOLDER
 
 	case WidgetImageSelector:
-		title = "Pick up an image" // GETTEXT TRANSLATION
+		title = tran.Slate("Pick up an image")
 		action = gtk.FILE_CHOOSER_ACTION_OPEN
 
 	default:
-		title = "Pick up a file" // GETTEXT TRANSLATION
+		title = tran.Slate("Pick up a file")
 		action = gtk.FILE_CHOOSER_ACTION_OPEN
 	}
 
@@ -420,14 +421,14 @@ func onFileChooserOpen(obj *gtk.Button, data fileChooserData) {
 
 	if data.key.Type == WidgetFileSelector || data.key.Type == WidgetSoundSelector { // Add shortcuts to system icons directories.
 		filter, _ := gtk.FileFilterNew()
-		filter.SetName("All") // GETTEXT TRANSLATION
+		filter.SetName(tran.Slate("All"))
 		filter.AddPattern("*")
 		dialog.AddFilter(filter)
 	}
 
 	if data.key.Type == WidgetFileSelector || data.key.Type == WidgetImageSelector { // Preview and images filter.
 		filter, _ := gtk.FileFilterNew()
-		filter.SetName("Image") // GETTEXT TRANSLATION
+		filter.SetName(tran.Slate("Image"))
 		filter.AddPixbufFormats()
 		dialog.AddFilter(filter)
 

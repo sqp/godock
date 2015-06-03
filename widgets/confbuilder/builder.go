@@ -31,6 +31,7 @@ import (
 	"github.com/conformal/gotk3/gtk"
 
 	"github.com/sqp/godock/libs/log"
+	"github.com/sqp/godock/libs/tran"
 
 	"github.com/sqp/godock/widgets/confbuilder/datatype"
 	"github.com/sqp/godock/widgets/confsettings"
@@ -161,9 +162,10 @@ type Builder struct {
 
 	keys []*Key
 
-	Conf *CairoConfig
-	data datatype.Source
-	win  *gtk.Window // Parent window.
+	Conf          *CairoConfig
+	data          datatype.Source
+	win           *gtk.Window // Parent window.
+	gettextDomain string
 }
 
 // BuildPage builds a Cairo-Dock configuration page for the given group.
@@ -299,7 +301,7 @@ func (build *Builder) BuildPage(cGroupName string) *gtk.ScrolledWindow {
 				var e error
 				build.pLabel, e = gtk.LabelNew("")
 				log.Err(e, "new plabel")
-				text := strings.TrimRight(key.Text, ":") // dirty hack against ugly trailing colon.
+				text := strings.TrimRight(build.translate(key.Text), ":") // dirty hack against ugly trailing colon.
 
 				build.pLabel.SetMarkup(text)
 				build.pLabel.SetHAlign(gtk.ALIGN_START)
@@ -573,6 +575,10 @@ func (build *Builder) Save() {
 //
 //-----------------------------------------------------------------[ HELPERS ]--
 
+func (build *Builder) translate(str string) string {
+	return tran.Sloc(build.gettextDomain, str)
+}
+
 func (build *Builder) addWidget(child gtk.IWidget, expand, fill bool, padding uint) {
 	if build.pFrameVBox != nil {
 		build.pFrameVBox.PackStart(child, expand, fill, padding)
@@ -601,27 +607,17 @@ func (build *Builder) addKeyScale(child *gtk.Scale, key *Key, f func() interface
 
 		child.Set("value-pos", gtk.POS_TOP)
 		// log.DEV("MISSING SubScale options", string(key.Type), key.AuthorizedValues)
-		// if pAuthorizedValuesList != NULL && pAuthorizedValuesList[0] != NULL && pAuthorizedValuesList[1] != NULL && pAuthorizedValuesList[2] != NULL && pAuthorizedValuesList[3] != NULL {
 		box, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
-		// 	GtkWidget * label = gtk_label_new(dgettext(cGettextDomain, pAuthorizedValuesList[2]))
 		// 	GtkWidget * pAlign = gtk_alignment_new(1., 1., 0., 0.)
-		// 	gtk_container_add(GTK_CONTAINER(pAlign), label)
-
-		// 	label = gtk_label_new(dgettext(cGettextDomain, pAuthorizedValuesList[3]))
+		labelLeft, _ := gtk.LabelNew(build.translate(key.AuthorizedValues[2]))
 		// 	pAlign = gtk_alignment_new(1., 1., 0., 0.)
-		// 	gtk_container_add(GTK_CONTAINER(pAlign), label)
-
-		labelLeft, _ := gtk.LabelNew(key.AuthorizedValues[2])  // GETTEXT TRANSLATION
-		labelRight, _ := gtk.LabelNew(key.AuthorizedValues[3]) // GETTEXT TRANSLATION
+		labelRight, _ := gtk.LabelNew(build.translate(key.AuthorizedValues[3]))
 
 		box.PackStart(labelLeft, false, false, 0)
 		box.PackStart(child, false, false, 0)
 		box.PackStart(labelRight, false, false, 0)
 
 		build.addKeyWidget(box, key, f)
-
-		// build.addSubWidget(box)
-		// key.GetValues = append(key.GetValues, f)
 	} else {
 		child.Set("value-pos", gtk.POS_LEFT)
 		build.addKeyWidget(child, key, f)

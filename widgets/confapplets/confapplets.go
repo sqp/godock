@@ -46,8 +46,8 @@ type GUIControl interface {
 	ListDownloadApplets() map[string]datatype.Appleter
 }
 
-// ConfApplet provides an applet downloader widget.
-// It's connected to a control menu to allow actions on the modules listed.
+// ConfApplet provides an applets list and preview widget.
+// It can be connected to a control menu to allow actions on the modules listed.
 //
 type ConfApplet struct {
 	gtk.Box

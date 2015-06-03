@@ -1,7 +1,6 @@
 package tran
 
 import (
-	// "code.google.com/p/gettext-go/gettext"
 	"github.com/gosexy/gettext"
 )
 
@@ -9,6 +8,12 @@ import (
 //
 func Slate(str string) string {
 	return gettext.Gettext(str)
+}
+
+// Sloc translates the given string with another package name.
+//
+func Sloc(domain, str string) string {
+	return gettext.DGettext(domain, str)
 }
 
 // Scend transcends your program with its gettext settings.
@@ -20,5 +25,4 @@ func Scend(pkg, dir, codeset string) {
 	gettext.BindTextdomain(pkg, dir)
 	gettext.BindTextdomainCodeset(pkg, codeset)
 	gettext.Textdomain(pkg)
-
 }

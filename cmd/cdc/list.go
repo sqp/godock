@@ -131,7 +131,8 @@ func printConsole(list packages.AppletPackages) {
 		}
 
 		line.Set(1, pack.DisplayedName)
-		line.Set(2, pack.FormatCategory())
+		cat, _ := packages.FormatCategory(pack.Category)
+		line.Set(2, cat)
 	}
 	lf.Print()
 }

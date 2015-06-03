@@ -10,6 +10,7 @@ import (
 	"github.com/conformal/gotk3/gtk"
 
 	"github.com/sqp/godock/libs/log"
+	"github.com/sqp/godock/libs/tran"
 
 	"github.com/sqp/godock/widgets/common"
 	"github.com/sqp/godock/widgets/confbuilder/datatype"
@@ -315,7 +316,7 @@ func (build *Builder) WidgetListTheme(key *Key) {
 func (build *Builder) WidgetIconThemeList(key *Key) {
 	list := append([]datatype.Field{
 		{},
-		{Key: "_Custom Icons_", Name: "_Custom Icons_"}}, // TODO: gettext translate
+		{Key: "_Custom Icons_", Name: tran.Slate("_Custom Icons_")}},
 		build.data.ListIconTheme()...)
 	build.newComboBoxFields(key, list)
 }
@@ -745,7 +746,7 @@ func (build *Builder) WidgetLists(key *Key) {
 			if key.Type == WidgetListWithEntry {
 				name = key.AuthorizedValues[k]
 			} else {
-				name = key.AuthorizedValues[k] // cGettextDomain
+				name = build.translate(key.AuthorizedValues[k])
 			}
 
 			result := ""
@@ -1036,7 +1037,7 @@ func (build *Builder) WidgetLink(key *Key) {
 	if len(key.AuthorizedValues) > 0 {
 		text = key.AuthorizedValues[0]
 	} else {
-		text = "link" // TRANSLATE GETTEXT
+		text = tran.Slate("link")
 	}
 	widget, e := gtk.LinkButtonNewWithLabel(link, text)
 	log.Err(e, "linkbutton")
@@ -1108,7 +1109,7 @@ func (build *Builder) WidgetStrings(key *Key) {
 
 	// Display a default value when empty.
 	if len(key.AuthorizedValues) > 0 && key.AuthorizedValues[0] != "" {
-		defaultText := key.AuthorizedValues[0] // TRANSLATE GETTEXT
+		defaultText := build.translate(key.AuthorizedValues[0])
 		if value == "" {
 			key.IsDefault = true
 
@@ -1171,7 +1172,7 @@ func (build *Builder) WidgetFrame(key *Key) {
 
 	// Create the frame label with the optional icon.
 	build.pLabel, _ = gtk.LabelNew("")
-	build.pLabel.SetMarkup(" " + common.Bold(value) + " ") // cGettextDomain
+	build.pLabel.SetMarkup(" " + common.Bold(build.translate(value)) + " ")
 	if img == "" {
 		build.pLabelContainer = build.pLabel
 	} else {

@@ -188,22 +188,22 @@ func (m *DockMenu) Entry(entry MenuEntry) {
 
 	case MenuAbout:
 		m.AddEntry(
-			"About",
+			tran.Slate("About"),
 			globals.IconNameAbout,
 			func() {
 				C._cairo_dock_about((*C.GldiContainer)(unsafe.Pointer(m.Container.Ptr)))
 			},
-		).SetTooltipText("This will hide the dock until you hover over it with the mouse.")
+		).SetTooltipText(tran.Slate("This will hide the dock until you hover over it with the mouse."))
 
 	case MenuAddApplet:
 		m.AddEntry(
-			"Applet",
+			tran.Slate("Applet"),
 			globals.IconNameAdd,
 			backendgui.ShowAddons)
 
 	case MenuAddLauncher:
 		m.AddEntry(
-			"Custom launcher",
+			tran.Slate("Custom launcher"),
 			globals.IconNameAdd,
 			func() {
 				newIcon := gldi.LauncherAddNew("", m.Dock, nextOrder(m.Icon, m.Dock))
@@ -214,11 +214,11 @@ func (m *DockMenu) Entry(entry MenuEntry) {
 					backendgui.ShowItems(newIcon, nil, nil, -1)
 				}
 			},
-		).SetTooltipText("Usually you would drag a launcher from the menu and drop it on the dock.")
+		).SetTooltipText(tran.Slate("Usually you would drag a launcher from the menu and drop it on the dock."))
 
 	case MenuAddMainDock:
 		m.AddEntry(
-			"Main dock",
+			tran.Slate("Main dock"),
 			globals.IconNameAdd,
 			func() {
 				key := gldi.DockAddConfFile()
@@ -231,7 +231,7 @@ func (m *DockMenu) Entry(entry MenuEntry) {
 
 	case MenuAddSeparator:
 		m.AddEntry(
-			"Separator",
+			tran.Slate("Separator"),
 			globals.IconNameAdd,
 			func() {
 				newIcon := gldi.SeparatorIconAddNew(m.Dock, nextOrder(m.Icon, m.Dock))
@@ -243,7 +243,7 @@ func (m *DockMenu) Entry(entry MenuEntry) {
 
 	case MenuAddSubDock:
 		m.AddEntry(
-			"Sub-dock",
+			tran.Slate("Sub-dock"),
 			globals.IconNameAdd,
 			func() {
 				newIcon := gldi.StackIconAddNew(m.Dock, nextOrder(m.Icon, m.Dock))
@@ -276,10 +276,10 @@ func (m *DockMenu) Entry(entry MenuEntry) {
 
 	case MenuConfigure:
 		m.AddEntry(
-			"Configure",
+			tran.Slate("Configure"),
 			globals.IconNamePreferences,
 			backendgui.ShowMainGui,
-		).SetTooltipText("Configure behaviour, appearance, and applets.")
+		).SetTooltipText(tran.Slate("Configure behaviour, appearance, and applets."))
 
 	case MenuCustomIconRemove:
 		classIcon := m.Icon.GetClassInfo(gldi.ClassIcon)
@@ -299,7 +299,7 @@ func (m *DockMenu) Entry(entry MenuEntry) {
 
 		if path != "" {
 			m.AddEntry(
-				"Remove custom icon",
+				tran.Slate("Remove custom icon"),
 				globals.IconNameRemove,
 				func() {
 					C._cairo_dock_remove_custom_appli_icon((*C.Icon)(unsafe.Pointer(m.Icon.Ptr)), (*C.CairoDock)(unsafe.Pointer(m.Dock.Ptr)))
@@ -308,7 +308,7 @@ func (m *DockMenu) Entry(entry MenuEntry) {
 
 	case MenuCustomIconSet:
 		m.AddEntry(
-			"Set a custom icon",
+			tran.Slate("Set a custom icon"),
 			globals.IconNameSelectColor,
 			func() {
 				C._cairo_dock_set_custom_appli_icon((*C.Icon)(unsafe.Pointer(m.Icon.Ptr)), (*C.CairoDock)(unsafe.Pointer(m.Dock.Ptr)))
@@ -316,7 +316,7 @@ func (m *DockMenu) Entry(entry MenuEntry) {
 
 	case MenuDeleteDock:
 		m.AddEntry(
-			"Delete this dock",
+			tran.Slate("Delete this dock"),
 			globals.IconNameDelete,
 			func() {
 				if m.Dock.GetRefCount() != 0 {
@@ -332,7 +332,7 @@ func (m *DockMenu) Entry(entry MenuEntry) {
 
 	case MenuDeskletLock:
 		m.AddCheckEntry(
-			"Lock position",
+			tran.Slate("Lock position"),
 			m.Container.ToDesklet().PositionLocked(),
 			func(c *gtk.CheckMenuItem) {
 				m.Container.ToDesklet().LockPosition(c.GetActive())
@@ -341,7 +341,7 @@ func (m *DockMenu) Entry(entry MenuEntry) {
 
 	case MenuDeskletSticky:
 		m.AddCheckEntry(
-			"On all desktops",
+			tran.Slate("On all desktops"),
 			m.Container.ToDesklet().IsSticky(),
 			func(c *gtk.CheckMenuItem) {
 				m.Container.ToDesklet().SetSticky(c.GetActive())
@@ -410,7 +410,7 @@ func (m *DockMenu) Entry(entry MenuEntry) {
 
 	case MenuDetachApplet:
 		m.AddEntry(
-			ternary.String(m.Dock != nil, "Detach", "Return to the dock"),
+			ternary.String(m.Dock != nil, tran.Slate("Detach"), tran.Slate("Return to the dock")),
 			ternary.String(m.Dock != nil, globals.IconNameGotoTop, globals.IconNameGotoBottom),
 			func() {
 				// if (CAIRO_DOCK_IS_DESKLET (pContainer))
@@ -422,7 +422,7 @@ func (m *DockMenu) Entry(entry MenuEntry) {
 
 	case MenuDuplicateApplet:
 		m.AddEntry(
-			"Duplicate",
+			tran.Slate("Duplicate"),
 			globals.IconNameAdd,
 			func() {
 				// if (CAIRO_DOCK_IS_DESKLET (pContainer))
@@ -435,7 +435,7 @@ func (m *DockMenu) Entry(entry MenuEntry) {
 
 	case MenuEditApplet:
 		m.AddEntry(
-			"Edit",
+			tran.Slate("Edit"),
 			globals.IconNameEdit,
 			func() {
 				// if (CAIRO_DOCK_IS_DESKLET (pContainer))
@@ -446,18 +446,18 @@ func (m *DockMenu) Entry(entry MenuEntry) {
 
 	case MenuEditDock:
 		m.AddEntry(
-			"Configure this dock",
+			tran.Slate("Configure this dock"),
 			globals.IconNameExecute,
 			func() {
 				if m.Dock.GetRefCount() != 0 {
 					backendgui.ShowItems(nil, m.Container, nil, 0)
 				}
 			},
-		).SetTooltipText("Customize the position, visibility and appearance of this main dock.")
+		).SetTooltipText(tran.Slate("Customize the position, visibility and appearance of this main dock."))
 
 	case MenuEditIcon:
 		m.AddEntry(tran.Slate(
-			"Edit"),
+			tran.Slate("Edit")),
 			globals.IconNameEdit,
 			func() {
 				switch m.Icon.GetDesktopFileName() {
@@ -484,14 +484,14 @@ func (m *DockMenu) Entry(entry MenuEntry) {
 
 	case MenuHelp:
 		m.AddEntry(
-			"Help",
+			tran.Slate("Help"),
 			globals.IconNameHelp,
 			func() { backendgui.ShowModuleGui("Help") },
-		).SetTooltipText("There are no problems, only solutions (and a lot of useful hints!)")
+		).SetTooltipText(tran.Slate("There are no problems, only solutions (and a lot of useful hints!)"))
 
 	case MenuLaunchNew:
 		m.AddEntry(
-			"Launch a new (Shift+clic)",
+			tran.Slate("Launch a new (Shift+clic)"),
 			globals.IconNameAdd,
 			func() {
 				gldi.ObjectNotify(m.Container, globals.NotifClickIcon, m.Icon, m.Dock, gdk.GDK_SHIFT_MASK) // emit a shift click on the icon.
@@ -499,7 +499,7 @@ func (m *DockMenu) Entry(entry MenuEntry) {
 
 	case MenuLockIcons:
 		m.AddCheckEntry(
-			"Lock icons position",
+			tran.Slate("Lock icons position"),
 			globals.DocksParam.IsLockIcons(),
 			func() {
 				globals.DocksParam.SetLockIcons(!globals.DocksParam.IsLockIcons())
@@ -507,11 +507,11 @@ func (m *DockMenu) Entry(entry MenuEntry) {
 				// 	G_TYPE_BOOLEAN, "Accessibility", "lock icons", myDocksParam.bLockIcons,
 				// 	G_TYPE_INVALID);
 			},
-		).SetTooltipText("This will (un)lock the position of the icons.")
+		).SetTooltipText(tran.Slate("This will (un)lock the position of the icons."))
 
 	case MenuMakeLauncher:
 		m.AddEntry(
-			"Make it a launcher",
+			tran.Slate("Make it a launcher"),
 			globals.IconNameNew,
 			func() {
 				C._cairo_dock_make_launcher_from_appli((*C.Icon)(unsafe.Pointer(m.Icon.Ptr)), (*C.CairoDock)(unsafe.Pointer(m.Dock.Ptr)))
@@ -560,14 +560,14 @@ func (m *DockMenu) Entry(entry MenuEntry) {
 
 	case MenuQuickHide:
 		m.AddEntry(
-			"Quick-Hide",
+			tran.Slate("Quick-Hide"),
 			globals.IconNameGotoBottom,
 			gldi.QuickHideAllDocks,
-		).SetTooltipText("This will hide the dock until you hover over it with the mouse.")
+		).SetTooltipText(tran.Slate("This will hide the dock until you hover over it with the mouse."))
 
 	case MenuQuit:
 		item := m.AddEntry(
-			"Quit",
+			tran.Slate("Quit"),
 			globals.IconNameQuit,
 			func() {
 				backendgui.CloseGui()
@@ -681,14 +681,14 @@ func (m *DockMenu) Entry(entry MenuEntry) {
 					name = ternary.String(m.Icon.IsSeparator(), tran.Slate("separator"), "no name")
 				}
 				dialog.DialogShowWithQuestion(
-					fmt.Sprintf("You're about to remove this icon (%s) from the dock. Are you sure?", name),
+					fmt.Sprintf(tran.Slate("You're about to remove this icon (%s) from the dock. Are you sure?"), name),
 					m.Icon,
 					m.Container,
 					"same icon",
 					cbDialogIsOK(func() {
 						if m.Icon.IsStackIcon() && m.Icon.GetSubDock() != nil && len(m.Icon.GetSubDock().Icons()) > 0 {
 							dialog.DialogShowWithQuestion(
-								"Do you want to re-dispatch the icons contained inside this container into the dock?\n(otherwise they will be destroyed)",
+								tran.Slate("Do you want to re-dispatch the icons contained inside this container into the dock?\n(otherwise they will be destroyed)"),
 								m.Icon,
 								m.Container,
 								globals.DirShareData(globals.CairoDockIcon),
@@ -699,7 +699,7 @@ func (m *DockMenu) Entry(entry MenuEntry) {
 
 						m.Icon.RemoveFromDock()
 					}))
-			}).SetTooltipText("You can remove a launcher by dragging it out of the dock with the mouse .")
+			}).SetTooltipText(tran.Slate("You can remove a launcher by dragging it out of the dock with the mouse ."))
 
 	case MenuThemes:
 		// 		pMenuItem = cairo_dock_add_in_menu_with_stock_and_data (_("Manage themes"),
@@ -712,14 +712,14 @@ func (m *DockMenu) Entry(entry MenuEntry) {
 	case MenuWindowAbove:
 		flag := m.Icon.Window().IsAbove()
 		m.AddEntry(
-			ternary.String(flag, "Don't keep above", "Keep above"),
+			ternary.String(flag, tran.Slate("Don't keep above"), tran.Slate("Keep above")),
 			ternary.String(flag, globals.IconNameGotoBottom, globals.IconNameGotoTop),
 			cbActionWindowToggle(m.Icon, (*gldi.WindowActor).SetAbove, (*gldi.WindowActor).IsAbove))
 
 	case MenuWindowBelow:
 		if !m.Icon.Window().IsHidden() { // this could be a button in the menu, if we find an icon that doesn't look too much like the "minimise" one
 			m.AddEntry(
-				"Below other windows"+actionMiddleClick(m.Icon, 4),
+				tran.Slate("Below other windows")+actionMiddleClick(m.Icon, 4),
 				globals.DirShareData("icons", "icon-lower.svg"),
 				cbActionWindow(m.Icon, (*gldi.WindowActor).Lower))
 		}
@@ -727,19 +727,19 @@ func (m *DockMenu) Entry(entry MenuEntry) {
 	case MenuWindowFullScreen:
 		flag := m.Icon.Window().IsFullScreen()
 		m.AddEntry(
-			ternary.String(flag, "Not Fullscreen", "Fullscreen"),
+			ternary.String(flag, tran.Slate("Not Fullscreen"), tran.Slate("Fullscreen")),
 			ternary.String(flag, globals.IconNameLeaveFullScreen, globals.IconNameFullScreen),
 			cbActionWindowToggle(m.Icon, (*gldi.WindowActor).SetFullScreen, (*gldi.WindowActor).IsFullScreen))
 
 	case MenuWindowKill:
 		m.AddEntry(
-			"Kill",
+			tran.Slate("Kill"),
 			globals.IconNameClose,
 			cbActionWindow(m.Icon, (*gldi.WindowActor).Kill))
 
 	case MenuWindowMoveAllHere:
 		m.AddEntry(
-			"Move all to this desktop",
+			tran.Slate("Move all to this desktop"),
 			globals.IconNameJumpTo,
 			cbActionSubWindows(m.Icon, (*gldi.WindowActor).MoveToCurrentDesktop))
 
@@ -753,11 +753,11 @@ func (m *DockMenu) Entry(entry MenuEntry) {
 				}
 			})
 		}
-		m.AddEntry("Move to this desktop", globals.IconNameJumpTo, callback)
+		m.AddEntry(tran.Slate("Move to this desktop"), globals.IconNameJumpTo, callback)
 
 	case MenuWindowSticky:
 		m.AddEntry(
-			ternary.String(m.Icon.Window().IsSticky(), "Visible only on this desktop", "Visible on all desktops"),
+			ternary.String(m.Icon.Window().IsSticky(), tran.Slate("Visible only on this desktop"), tran.Slate("Visible on all desktops")),
 			globals.IconNameJumpTo,
 			cbActionWindowToggle(m.Icon, (*gldi.WindowActor).SetSticky, (*gldi.WindowActor).IsSticky))
 
@@ -768,44 +768,44 @@ func (m *DockMenu) Button(btn MenuBtn) {
 	switch btn {
 	case MenuWindowClose:
 		m.btns.AddButton(
-			"Close"+actionMiddleClick(m.Icon, 1),
+			tran.Slate("Close")+actionMiddleClick(m.Icon, 1),
 			globals.DirShareData("icons", "icon-close.svg"),
 			cbActionWindow(m.Icon, (*gldi.WindowActor).Close))
 
 	case MenuWindowCloseAll:
 		m.btns.AddButton(
-			"Close all"+actionMiddleClick(m.Icon, 1),
+			tran.Slate("Close all")+actionMiddleClick(m.Icon, 1),
 			globals.DirShareData("icons", "icon-close.svg"),
 			cbActionSubWindows(m.Icon, (*gldi.WindowActor).Close))
 
 	case MenuWindowMax:
 		max := m.Icon.Window().IsMaximized()
 		m.btns.AddButton(
-			ternary.String(max, "Unmaximise", "Maximise"),
+			ternary.String(max, tran.Slate("Unmaximise"), tran.Slate("Maximise")),
 			globals.DirShareData("icons", ternary.String(max, "icon-restore.svg", "icon-maximize.svg")),
 			cbActionWindowToggle(m.Icon, (*gldi.WindowActor).Maximize, (*gldi.WindowActor).IsMaximized))
 
 	case MenuWindowMin:
 		m.btns.AddButton(
-			"Minimise"+actionMiddleClick(m.Icon, 2),
+			tran.Slate("Minimise")+actionMiddleClick(m.Icon, 2),
 			globals.DirShareData("icons", "icon-minimize.svg"),
 			cbActionWindow(m.Icon, (*gldi.WindowActor).Minimize))
 
 	case MenuWindowMinAll:
 		m.btns.AddButton(
-			"Minimise all"+actionMiddleClick(m.Icon, 2),
+			tran.Slate("Minimise all")+actionMiddleClick(m.Icon, 2),
 			globals.DirShareData("icons", "icon-minimize.svg"),
 			cbActionSubWindows(m.Icon, (*gldi.WindowActor).Minimize))
 
 	case MenuWindowShow:
 		m.btns.AddButton(
-			"Show",
+			tran.Slate("Show"),
 			globals.IconNameFind,
 			cbActionWindow(m.Icon, (*gldi.WindowActor).Show))
 
 	case MenuWindowShowAll:
 		m.btns.AddButton(
-			"Show all",
+			tran.Slate("Show all"),
 			globals.IconNameFind,
 			cbActionSubWindows(m.Icon, (*gldi.WindowActor).Show))
 

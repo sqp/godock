@@ -60,13 +60,14 @@ func (conf *CairoConfig) List(cGroupName string) (list []*Key) {
 
 // Builder returns a builder ready to create a configuration gui for the keyfile.
 //
-func (conf *CairoConfig) Builder(source datatype.Source, win *gtk.Window) *Grouper {
+func (conf *CairoConfig) Builder(source datatype.Source, win *gtk.Window, gettextDomain string) *Grouper {
 	box, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
 	build := &Builder{
-		Box:  *box,
-		Conf: conf,
-		data: source,
-		win:  win,
+		Box:           *box,
+		Conf:          conf,
+		data:          source,
+		win:           win,
+		gettextDomain: gettextDomain,
 	}
 	return &Grouper{*build}
 }
@@ -77,12 +78,12 @@ type Grouper struct{ Builder }
 
 // NewGrouper creates a config page builder from the file.
 //
-func NewGrouper(source datatype.Source, win *gtk.Window, configFile string) (*Grouper, error) {
+func NewGrouper(source datatype.Source, win *gtk.Window, configFile, gettextDomain string) (*Grouper, error) {
 	keyfile, e := LoadFile(configFile)
 	if e != nil {
 		return nil, e
 	}
-	return keyfile.Builder(source, win), nil
+	return keyfile.Builder(source, win, gettextDomain), nil
 }
 
 // BuildSingle builds a single page config for the given group.

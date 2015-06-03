@@ -237,28 +237,6 @@ type Appleter interface {
 	FormatCategory() string
 }
 
-// FormatCategory returns the human readable category for the applet.
-//
-func FormatCategory(cat int) string {
-	switch cat {
-	case 0:
-		return "Behavior"
-	case 2:
-		return "<span fgcolor='#004EA1'>Files</span>" // blue.
-	case 3:
-		return "<span fgcolor='#FF5555'>Internet</span>" // orange.
-	case 4:
-		return "<span fgcolor='#116E08'>Desktop</span>" // green.
-	case 5:
-		return "<span fgcolor='#900009'>Accessory</span>" // red.
-	case 6:
-		return "<span fgcolor='#A58B0D'>System</span>" // yellow.
-	case 7:
-		return "<span fgcolor='#FF55FF'>Fun</span>" // pink.
-	}
-	return ""
-}
-
 //
 //----------------------------------------------------------[ ICON INTERFACE ]--
 
@@ -272,6 +250,20 @@ type Iconer interface {
 	GetClassInfo(int) string
 	GetCommand() string
 	Reload()
+
+	// MoveAfterNext swaps the icon position with the previous one.
+	//
+	MoveBeforePrevious()
+
+	// MoveAfterNext swaps the icon position with the next one.
+	//
+	MoveAfterNext()
+
+	// RemoveFromDock removes the icon from the dock.
+	RemoveFromDock()
+
+	// GetGettextDomain returns the translation domain for the applet.
+	GetGettextDomain() string
 }
 
 /* An icon can either be:
@@ -341,6 +333,18 @@ func (icon *IconSeparator) GetClassInfo(int) string { return "" }
 
 // Reload is unused ATM.
 func (icon *IconSeparator) Reload() {}
+
+// MoveBeforePrevious is unused.
+func (icon *IconSeparator) MoveBeforePrevious() {}
+
+// MoveAfterNext is unused.
+func (icon *IconSeparator) MoveAfterNext() {}
+
+// RemoveFromDock is unused.
+func (icon *IconSeparator) RemoveFromDock() {}
+
+// GetGettextDomain is unused.
+func (v *IconSeparator) GetGettextDomain() string { return "" }
 
 //------------------------------------------------------[ HANDBOOK INTERFACE ]--
 

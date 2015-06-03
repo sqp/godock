@@ -50,7 +50,7 @@ import (
 )
 
 const (
-	CAIRO_DOCK_DATA_DIR = "cairo-dock"
+	CAIRO_DOCK_DATA_DIR = "cairo-dock" // Default config path in .config.
 
 	// Nom du repertoire des themes extras.
 	CAIRO_DOCK_EXTRAS_DIR = "extras"
@@ -63,8 +63,6 @@ const (
 	CAIRO_DOCK_DISTANT_THEMES_DIR = "themes3.4"
 
 	CAIRO_DOCK_THEME_SERVER = "http://download.tuxfamily.org/glxdock/themes"
-
-	CAIRO_DOCK_GETTEXT_PACKAGE = "cairo-dock"
 
 	// Unused AFAIK.
 	// CAIRO_DOCK_BACKUP_THEME_SERVER ="http://fabounet03.free.fr"
@@ -133,7 +131,7 @@ func (settings *DockSettings) Init() {
 	gtk.Init(nil)
 
 	//\___________________ internationalize the app.
-	tran.Scend(CAIRO_DOCK_GETTEXT_PACKAGE, C.CAIRO_DOCK_LOCALE_DIR, "UTF-8")
+	tran.Scend(globals.CairoDockGettextPackage, C.CAIRO_DOCK_LOCALE_DIR, "UTF-8")
 
 	if settings.Verbosity != "" {
 		gldi.LogSetLevelFromName(settings.Verbosity)
@@ -400,7 +398,7 @@ func ConfigDir(dir string) string {
 
 	usr, e := user.Current()
 	if e == nil {
-		return filepath.Join(usr.HomeDir, ".config", CAIRO_DOCK_DATA_DIR) // Default theme path in .config.
+		return filepath.Join(usr.HomeDir, ".config", CAIRO_DOCK_DATA_DIR) // Default dock config path in .config.
 	}
 
 	return ""

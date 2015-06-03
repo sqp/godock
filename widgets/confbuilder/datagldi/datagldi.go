@@ -9,6 +9,7 @@ import (
 	"github.com/sqp/godock/libs/gldi/globals"
 	"github.com/sqp/godock/libs/packages"
 	"github.com/sqp/godock/libs/ternary"
+	"github.com/sqp/godock/libs/tran"
 	// "github.com/sqp/godock/libs/maindock"
 	"github.com/sqp/godock/widgets/confbuilder/datatype"
 	"github.com/sqp/godock/widgets/gtk/keyfile"
@@ -77,6 +78,35 @@ func (icon *IconConf) Reload() {
 	}
 }
 
+// MoveAfterNext swaps the icon position with the previous one.
+//
+func (icon *IconConf) MoveBeforePrevious() {
+	prev := icon.GetContainer().ToCairoDock().GetPreviousIcon(&icon.Icon)
+	if prev == nil {
+		return
+	}
+	prev.MoveAfterIcon(icon.GetContainer().ToCairoDock(), &icon.Icon)
+}
+
+// MoveAfterNext swaps the icon position with the next one.
+//
+func (icon *IconConf) MoveAfterNext() {
+	next := icon.GetContainer().ToCairoDock().GetNextIcon(&icon.Icon)
+	if next != nil {
+		icon.MoveAfterIcon(icon.GetContainer().ToCairoDock(), next)
+	}
+}
+
+// GetGettextDomain returns the translation domain for the applet.
+//
+func (v *IconConf) GetGettextDomain() string {
+	mi := v.ModuleInstance()
+	if mi == nil {
+		return ""
+	}
+	return mi.Module().VisitCard().GetGettextDomain()
+}
+
 // AppletConf wraps a dock module and visitcard as Appleter for config data source.
 //
 type AppletConf struct {
@@ -89,7 +119,8 @@ type AppletConf struct {
 // FormatCategory formats the applet category text.
 //
 func (v *AppletConf) FormatCategory() string {
-	return datatype.FormatCategory(int(v.GetCategory()))
+	txt, color := packages.FormatCategory(int(v.GetCategory()))
+	return "<span fgcolor='#" + color + "'>" + tran.Slate(txt) + "</span>"
 }
 
 // IsInstalled returns whether the applet is installed or not.
@@ -244,6 +275,13 @@ func (v *AppletDownload) GetName() string {
 //
 func (v *AppletDownload) GetAuthor() string {
 	return v.Author
+}
+
+// FormatCategory formats the applet category text.
+//
+func (v *AppletDownload) FormatCategory() string {
+	txt, color := packages.FormatCategory(int(v.Category))
+	return "<span fgcolor='#" + color + "'>" + tran.Slate(txt) + "</span>"
 }
 
 // GetIconFilePath returns the location of the applet icon.

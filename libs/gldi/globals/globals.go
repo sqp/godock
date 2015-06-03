@@ -41,6 +41,8 @@ import (
 const (
 	CairoDockIcon = "cairo-dock.svg" // CAIRO_DOCK_ICON
 
+	CairoDockGettextPackage = "cairo-dock" // CAIRO_DOCK_GETTEXT_PACKAGE
+
 	dirAppData = "appdata" // store user common applets data in ~/.cairo-dock/
 
 	// #define CAIRO_DOCK_LOCAL_EXTRAS_DIR "extras"

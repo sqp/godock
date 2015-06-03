@@ -3,7 +3,6 @@ package confcore
 
 import (
 	"github.com/conformal/gotk3/gtk"
-	// "github.com/gosexy/gettext"
 
 	"github.com/sqp/godock/libs/log"
 
@@ -347,7 +346,7 @@ func (widget *ConfCore) onSelect(item *Item, e error) {
 		file = widget.data.MainConf()
 	}
 
-	build, e := confbuilder.NewGrouper(widget.data, widget.data.GetWindow(), file)
+	build, e := confbuilder.NewGrouper(widget.data, widget.data.GetWindow(), file, "")
 	if log.Err(e, "Load Keyfile "+file) {
 		return
 	}
