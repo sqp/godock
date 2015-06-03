@@ -31,7 +31,6 @@
         <property name="model">model</property>
         <property name="headers_clickable">False</property>
         <property name="expander_column">columnDescription</property>
-        <property name="rules_hint">True</property>
         <property name="enable_grid_lines">vertical</property>
         <child internal-child="selection">
           <object class="GtkTreeSelection" id="selection"/>

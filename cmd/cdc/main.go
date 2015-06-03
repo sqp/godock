@@ -88,18 +88,19 @@ func setExitStatus(n int) {
 }
 
 func main() {
-	flag.Usage = usage
-	flag.Parse()
+	fl := flag.NewFlagSet(os.Args[0], flag.ContinueOnError)
+	fl.Usage = usage
+
+	args := setDefaultCommand("dock", os.Args[1:])
+
+	if len(args) == 0 {
+		usage()
+	}
+
+	fl.Parse(args)
 	// log.SetFlags(0)
 
-	args := flag.Args()
-	if len(args) < 1 {
-		if cmdDock != nil {
-			args = []string{"dock"}
-		} else {
-			usage()
-		}
-	}
+	args = fl.Args()
 
 	logger.SetLogOut(log.Logs)
 	logger.SetName(os.Args[0])
@@ -135,6 +136,21 @@ func main() {
 	fmt.Fprintf(os.Stderr, "cdc: unknown subcommand %q\nRun 'cdc help' for usage.\n", args[0])
 	setExitStatus(2)
 	exit()
+}
+
+func setDefaultCommand(cmd string, args []string) []string {
+	if cmdDock != nil { // open a dock as default action if available.
+		foundCommand := false
+		for _, str := range args {
+			if str[0] != '-' {
+				foundCommand = true
+			}
+		}
+		if !foundCommand {
+			args = append([]string{cmd}, args...)
+		}
+	}
+	return args
 }
 
 //

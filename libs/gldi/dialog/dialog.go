@@ -101,15 +101,16 @@ func DialogShowWithQuestion(str string, icon *gldi.Icon, container *gldi.Contain
 //
 //-----------------------------------------------------------[ CUSTOM DIALOG ]--
 
-// NewDialog creates a custom dialog
-
+// NewDialog creates a custom dialog.
+//
 func NewDialog(icon *gldi.Icon, container *gldi.Container, dialog cdtype.DialogData) *Dialog {
 	dialogCall = nil
 
 	// Common dialog attributes.
 	attr := new(C.CairoDialogAttr)
-
-	attr.pIcon = (*C.Icon)(unsafe.Pointer(icon.Ptr))
+	if icon != nil {
+		attr.pIcon = (*C.Icon)(unsafe.Pointer(icon.Ptr))
+	}
 	attr.pContainer = (*C.GldiContainer)(unsafe.Pointer(container.Ptr))
 
 	if dialog.Icon != "" {

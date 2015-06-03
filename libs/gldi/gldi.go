@@ -922,6 +922,9 @@ func (icon *Icon) GetClassInfo(typ int) string {
 		c = C.cairo_dock_get_class_command(icon.Ptr.cClass)
 
 	case ClassName:
+		if icon.Ptr.cClass == nil {
+			return ""
+		}
 		c = C.cairo_dock_get_class_name(icon.Ptr.cClass)
 
 	case ClassIcon:

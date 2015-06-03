@@ -13,8 +13,8 @@ DOCK=dock all
 # Install prefix if any.
 PKGDIR=
 
-APPDIR=usr/share/cairo-dock/plug-ins/goapplets/
-# APPDIR=usr/share/cairo-dock/plug-ins/Dbus/third-party/
+APPDIRGLDI=usr/share/cairo-dock/plug-ins/goapplets/
+APPDIRDBUS=usr/share/cairo-dock/plug-ins/Dbus/third-party/
 
 
 %: build
@@ -53,14 +53,14 @@ install:
 	mkdir -p "$(PKGDIR)/usr/bin"
 	install -p -m755 "$(GOPATH)/bin/cdc" "$(PKGDIR)/usr/bin"
 
-	mkdir -p "$(PKGDIR)/$(APPDIR)"
+	mkdir -p "$(PKGDIR)/$(APPDIRGLDI)"
 	for f in $(APPLETS); do	\
-		cp -Rv --preserve=timestamps "applets/$$f" "$(PKGDIR)/$(APPDIR)" ;\
-		rm $(PKGDIR)/$(APPDIR)/$$f/$$f ;\
-		rm $(PKGDIR)/$(APPDIR)/$$f/applet.go ;\
-		rm $(PKGDIR)/$(APPDIR)/$$f/last-modif ;\
-		rm $(PKGDIR)/$(APPDIR)/$$f/Makefile ;\
-		rm $(PKGDIR)/$(APPDIR)/$$f/tocdc ;\
+		cp -Rv --preserve=timestamps "applets/$$f" "$(PKGDIR)/$(APPDIRGLDI)" ;\
+		rm $(PKGDIR)/$(APPDIRGLDI)/$$f/$$f ;\
+		rm $(PKGDIR)/$(APPDIRGLDI)/$$f/applet.go ;\
+		rm $(PKGDIR)/$(APPDIRGLDI)/$$f/last-modif ;\
+		rm $(PKGDIR)/$(APPDIRGLDI)/$$f/Makefile ;\
+		rm $(PKGDIR)/$(APPDIRGLDI)/$$f/tocdc ;\
 	done
 
 
@@ -71,3 +71,15 @@ install:
 	# 	fi
 	# done
 
+
+install-dbus:
+	mkdir -p "$(PKGDIR)/usr/bin"
+	install -p -m755 "$(GOPATH)/bin/cdc" "$(PKGDIR)/usr/bin"
+
+	mkdir -p "$(PKGDIR)/$(APPDIRDBUS)"
+	for f in $(APPLETS); do	\
+		cp -Rv --preserve=timestamps "applets/$$f" "$(PKGDIR)/$(APPDIRDBUS)" ;\
+		rm $(PKGDIR)/$(APPDIRDBUS)/$$f/applet.go ;\
+		rm $(PKGDIR)/$(APPDIRDBUS)/$$f/last-modif ;\
+		rm $(PKGDIR)/$(APPDIRDBUS)/$$f/Makefile ;\
+	done

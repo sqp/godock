@@ -114,6 +114,13 @@ type Config struct {
 	Errors []error
 }
 
+// New creates a new Config parser.
+//
+func New() *Config {
+	c := config.New(config.DEFAULT_COMMENT, config.ALTERNATIVE_SEPARATOR, false, false)
+	return &Config{Config: *c}
+}
+
 // NewFromFile creates a new Config parser with reflection to fill fields.
 //
 func NewFromFile(filename string) (*Config, error) {

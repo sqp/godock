@@ -570,6 +570,8 @@ func (m *DockMenu) Entry(entry MenuEntry) {
 			"Quit",
 			globals.IconNameQuit,
 			func() {
+				backendgui.CloseGui()
+
 				gtk.MainQuit() // TODO: remove SQP HACK, easy quit no confirm for tests.
 
 				dialog.DialogShowWithQuestion("Quit Cairo-Dock?",

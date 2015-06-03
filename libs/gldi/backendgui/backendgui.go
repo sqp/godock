@@ -71,7 +71,7 @@ type GuiInterface interface {
 	ReloadItems()
 	// ReloadCategoryWidget()
 	// Reload()
-	// Close()
+	CloseGui()
 
 	UpdateModulesList()
 	UpdateModuleState(name string, active bool)
@@ -336,6 +336,15 @@ func ReloadCurrentWidget(moduleInstance *gldi.ModuleInstance, showPage int) {
 		return
 	}
 	dockGui.ReloadCurrentWidget(moduleInstance, showPage)
+}
+
+// CloseGui closes the configuration window.
+//
+func CloseGui() {
+	if dockGui == nil {
+		return
+	}
+	dockGui.CloseGui()
 }
 
 //

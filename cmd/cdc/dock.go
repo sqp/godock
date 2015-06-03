@@ -152,42 +152,28 @@ var (
 	srvDebug          *bool
 )
 
-// runDock starts dock routines and lock the main thread with gtk.
+// runDock starts dock routines and locks the main thread with gtk.
 //
 func runDock(cmd *Command, args []string) {
-	settings := initDock()
-	if settings == nil {
-		return
+	if startDock() {
+		defer maindock.Clean()
+		maindock.Lock()
 	}
-
-	defer settings.Clean()
-
-	// views.RegisterPanel("spanel")
-
-	settings.Start()
-	// gtk.Main()
-	C.gtk_main()
 }
 
-func initDock() *maindock.DockSettings {
-
+// startDock wraps all backends and clients to start a dock :
+// Dbus server, applets manager, GUI, menu and gldi.
+//
+func startDock() bool {
 	if *userVersion {
 		println(globals.Version()) // -v option only prints version.
-		return nil
+		return false
 	}
 
-	// HTTP listener for the pprof debug.
-	if *srvHttpPprof {
-
-		// p := profile.Start()
-		// defer p.Stop()
-
-		go func() { http.ListenAndServe("localhost:6987", nil) }()
-	}
+	customHacks()
 
 	// Logger debug state.
 	logger.SetDebug(*srvDebug)
-
 	maindock.SetLogger(logger)
 
 	settings := dockSettings()
@@ -205,45 +191,55 @@ func initDock() *maindock.DockSettings {
 	// Dbus service is enabled by default. Mandatory if enabled, to provide remote control.
 	// This will prevent launching a 2nd instance without the disable Dbus service option.
 	if !*srvAppletsDisable {
-		dbus := serviceDbus()
-		if dbus == nil {
-			logger.NewErr("failed to register", "applets service")
-			return nil
+		dbus, e := serviceDbus()
+		if logger.Err(e, "applets service") {
+			return false
 		}
 		dbus.SetManager(appmgr)
 	}
 
-	gldi.LoadCurrentTheme() // was after registration but caused some problems with refresh on start.
-
 	backendgui.Register(gui.NewConnector(logger))
 	backendmenu.Register("dock", menu.BuildMenuContainer, menu.BuildMenuIcon)
-	maindock.RegisterEvents()
 
 	settings.Prepare()
+	settings.Start()
 
-	return &settings
+	return true
 }
 
 // Start Loader.
 //
-func serviceDbus() *srvdbus.Loader {
+func serviceDbus() (*srvdbus.Loader, error) {
 	appdbus.DbusPathDock = "/org/cdc/Cdc" // TODO: improve to autodetect.
 
 	loader := srvdbus.NewLoader(logger)
 	if loader == nil {
-		return nil
+		return nil, errors.New("Dbus service failed to start")
 	}
 
 	active, e := loader.Start(loader, srvdbus.Introspect(""))
-	if !active {
-		e = errors.New("service already active")
-	}
-
-	if logger.Err(e, "Start Dbus service") {
-		return nil
+	switch {
+	case e != nil:
+		return nil, e
+	case !active:
+		return nil, errors.New("service already active")
 	}
 
 	go loader.StartLoop(true)
 
-	return loader
+	return loader, nil
+}
+
+func customHacks() {
+
+	// HTTP listener for the pprof debug.
+	if *srvHttpPprof {
+
+		// p := profile.Start()
+		// defer p.Stop()
+
+		go func() { http.ListenAndServe("localhost:6987", nil) }()
+	}
+
+	// views.RegisterPanel("spanel")
 }

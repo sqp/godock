@@ -11,6 +11,7 @@ import "C"
 
 import (
 	"errors"
+	// "runtime"
 	"unsafe"
 )
 
@@ -73,7 +74,9 @@ type KeyFile struct {
 
 // New is a wrapper around g_key_file_new().
 func New() *KeyFile {
-	return &KeyFile{C.g_key_file_new()}
+	kf := &KeyFile{cKey: C.g_key_file_new()}
+	// runtime.SetFinalizer(kf, func(kf *KeyFile) { C.g_key_file_free(kf.cKey) })
+	return kf
 }
 
 // NewFromNative wraps a pointer to a C keyfile.
@@ -82,6 +85,16 @@ func NewFromNative(p unsafe.Pointer) *KeyFile {
 		return nil
 	}
 	return &KeyFile{(*C.GKeyFile)(p)}
+}
+
+// NewFromFile returns a loaded keyfile if possible.
+func NewFromFile(file string, flags Flags) (*KeyFile, error) {
+	kf := New()
+	_, e := kf.LoadFromFile(file, flags)
+	if e != nil {
+		return nil, e
+	}
+	return kf, nil
 }
 
 // LoadFromFile is a wrapper around g_key_file_load_from_file().
@@ -107,6 +120,7 @@ func (this *KeyFile) ToNative() *C.GKeyFile {
 	return this.cKey
 }
 
+// HasKey is a wrapper around g_key_file_has_key().
 func (this *KeyFile) HasKey(group string, key string) bool {
 	cGroup := (*C.gchar)(C.CString(group))
 	defer C.g_free(C.gpointer(cGroup))

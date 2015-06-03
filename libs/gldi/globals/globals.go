@@ -62,6 +62,12 @@ func Version() string {
 	return C.GLDI_VERSION // was CAIRO_DOCK_VERSION
 }
 
+// VersionSplit returns the current version of the dock.
+//
+func VersionSplit() (int, int, int) {
+	return int(C.g_iMajorVersion), int(C.g_iMinorVersion), int(C.g_iMicroVersion) // was CAIRO_DOCK_VERSION
+}
+
 func GtkVersion() (int, int, int) {
 	return C.GTK_MAJOR_VERSION, C.GTK_MINOR_VERSION, C.GTK_MICRO_VERSION
 }

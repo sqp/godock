@@ -174,4 +174,12 @@ func (gc *Connector) ShowModuleInstanceGui(pModuleInstance *gldi.ModuleInstance,
 
 // Window returns the pointer to the parent window.
 //
-func (gc *Connector) Window() *gtk.Window { return gc.Win }
+func (gc *Connector) Window() *gtk.Window {
+	return gc.Win
+}
+
+// CloseGui closes the configuration window.
+//
+func (gc *Connector) CloseGui() {
+	gc.Win.Destroy()
+}

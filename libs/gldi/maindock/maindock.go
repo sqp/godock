@@ -7,9 +7,22 @@ Files in the src dir are the same as in the cairo-dock-core tree. (or should be)
 */
 package maindock
 
+// Missing:
+// _cairo_dock_successful_launch - Happy New Year message.
+// extern gboolean g_bEasterEggs;
+// crash tests and recovery. Not sure what to do about it.
+//   static gint s_iNbCrashes = 0;
+//   static gboolean s_bSucessfulLaunch = FALSE;
+//   static GString *s_pLaunchCommand = NULL;
+
+//
+
 // #cgo pkg-config: gldi
-// #include "maindock.h"
+// #include "cairo-dock-user-interaction.h"
 /*
+
+gboolean g_bLocked;   // TODO: To remove (1 more use in interaction)
+
 
 #define CAIRO_DOCK_SHARE_THEMES_DIR "/usr/share/cairo-dock/themes"
 #define CAIRO_DOCK_LOCALE_DIR       "/usr/share/locale"
@@ -21,15 +34,19 @@ import (
 
 	"github.com/sqp/godock/libs/cdtype"       // Logger type.
 	"github.com/sqp/godock/libs/config"       // Config parser.
+	"github.com/sqp/godock/libs/files"        // Files operations.
 	"github.com/sqp/godock/libs/gldi"         // Gldi access.
 	"github.com/sqp/godock/libs/gldi/dialog"  // Popup dialog.
 	"github.com/sqp/godock/libs/gldi/globals" // Global variables.
+	"github.com/sqp/godock/libs/ternary"      // Ternary operators.
 	"github.com/sqp/godock/libs/tran"         // Translate.
 
+	"fmt"
 	"os"
 	"os/user"
 	"path/filepath"
 	"time"
+	"unsafe"
 )
 
 const (
@@ -53,6 +70,7 @@ const (
 	// CAIRO_DOCK_BACKUP_THEME_SERVER ="http://fabounet03.free.fr"
 
 	HiddenFile = ".cairo-dock"
+	Changelog  = "ChangeLog.txt"
 )
 
 var log cdtype.Logger
@@ -88,8 +106,9 @@ type DockSettings struct {
 	NoSticky   bool
 	ModulesDir string
 
-	isFirstLaunch bool
-	isNewVersion  bool
+	isFirstLaunch  bool
+	isNewVersion   bool
+	sessionWasUsed bool
 }
 
 func (settings *DockSettings) Init() {
@@ -97,11 +116,10 @@ func (settings *DockSettings) Init() {
 	_, e := os.Stat(confdir)
 	settings.isFirstLaunch = e != nil // TODO: need test is dir.
 
-	hidden := LoadHidden(confdir)
+	hidden := loadHidden(confdir)
 
-	settings.isNewVersion = hidden.LastVersion == globals.Version()
-
-	// log.DETAIL(LoadHidden(confdir)) // missing year (don't know why)
+	settings.isNewVersion = hidden.LastVersion != globals.Version()
+	settings.sessionWasUsed = hidden.SessionWasUsed
 
 	// MISSING
 	// //\___________________ build the command line used to respawn, and check if we have been launched from another life.
@@ -185,7 +203,7 @@ func (settings *DockSettings) Init() {
 	if settings.AskBackend || (gldi.GLBackendIsUsed() && !gldi.GLBackendIsSafe() && !settings.ForceOpenGL && !settings.IndirectOpenGL) {
 		if settings.AskBackend || hidden.DefaultBackend == "" { // no backend defined.
 			dialogAskBackend()
-		} else if hidden.DefaultBackend != "opengl" { // un backend par defaut qui n'est pas OpenGL.
+		} else if hidden.DefaultBackend != "opengl" { // disable opengl if unused, revert to cairo.
 			gldi.GLBackendDeactivate()
 		}
 	}
@@ -202,7 +220,30 @@ func (settings *DockSettings) Init() {
 	}
 }
 
+// Prepare is the last step before starting the dock, creating the config files.
+//
 func (settings DockSettings) Prepare() {
+
+	// Register events.
+	globals.ContainerObjectMgr.RegisterNotification(
+		globals.NotifClickIcon,
+		unsafe.Pointer(C.cairo_dock_notification_click_icon),
+		globals.RunAfter)
+
+	globals.ContainerObjectMgr.RegisterNotification(
+		globals.NotifDropData,
+		unsafe.Pointer(C.cairo_dock_notification_drop_data),
+		globals.RunAfter)
+
+	globals.ContainerObjectMgr.RegisterNotification(
+		globals.NotifMiddleClickIcon,
+		unsafe.Pointer(C.cairo_dock_notification_middle_click_icon),
+		globals.RunAfter)
+
+	globals.ContainerObjectMgr.RegisterNotification(
+		globals.NotifScrollIcon,
+		unsafe.Pointer(C.cairo_dock_notification_scroll_icon),
+		globals.RunAfter)
 
 	//\___________________ handle crashes.
 	// if (! bTesting)
@@ -215,12 +256,31 @@ func (settings DockSettings) Prepare() {
 	// MISSING
 	//\___________________ Disable modules that have crashed
 	//\___________________ maintenance mode -> show the main config panel.
-	//\___________________ load the current theme. (create if missing)
-	// The first time the Cairo-Dock session is used but not the first time the dock is launched: propose to use the Default-Panel theme
 
+	// Copy the default theme if needed.
+	_, e := os.Stat(globals.ConfigFile())
+	// if e == os.ErrNotExist {
+	if e != nil {
+		log.Info("creating configuration directory", globals.DirDockData())
+
+		themeName := "Default-Single"
+
+		if os.Getenv("DESKTOP_SESSION") == "cairo-dock" { // We're using the CD session for the first time
+			themeName = "Default-Panel"
+			settings.sessionWasUsed = true
+			files.UpdateConfFile(globals.DirDockData(HiddenFile), "Launch", "cd session", true)
+		}
+
+		files.CopyDir(globals.DirShareData("themes", themeName), globals.CurrentThemePath())
+	}
+
+	// MISSING
+	// The first time the Cairo-Dock session is used but not the first time the dock is launched: propose to use the Default-Panel theme
+	// s_bCDSessionLaunched => settings.sessionWasUsed
 }
 
 func (settings *DockSettings) Start() {
+	gldi.LoadCurrentTheme() // was moved before registration when I had some problems with refresh on start. Removed here for now.
 
 	//\___________________ lock mode.
 
@@ -237,16 +297,47 @@ func (settings *DockSettings) Start() {
 		dialogNoPlugins()
 	}
 
-	if settings.isNewVersion {
-		/// If any operation must be done on the user theme (like activating a module by default, or disabling an option),
-		/// it should be done here once (when CAIRO_DOCK_VERSION matches the new version).
+	if settings.isNewVersion { // update the version in the file.
+		files.UpdateConfFile(globals.DirDockData(HiddenFile), "Launch", "last version", globals.Version())
+
+		// If any operation must be done on the user theme (like activating
+		// a module by default, or disabling an option), it should be done
+		// here once (when CAIRO_DOCK_VERSION matches the new version).
 	}
 
-	// MISSING end of
 	//\___________________ display the changelog in case of a new version.
+
+	if settings.isFirstLaunch { // first launch => set up config
+		time.AfterFunc(4*time.Second, firstLaunchSetup)
+
+	} else if settings.isNewVersion { // new version -> changelog (if it's the first launch, useless to display what's new, we already have the Welcome message).
+		dialogChangelog()
+		// In case something has changed in Compiz/Gtk/others, we also run the script on a new version of the dock.
+		time.AfterFunc(4*time.Second, firstLaunchSetup)
+	}
+
+	// else if (cExcludeModule != NULL && ! bMaintenance && s_iNbCrashes > 1) {
+	// 	gchar *cMessage;
+	// 	if (s_iNbCrashes == 2) // <=> second crash: display a dialogue
+	// 		cMessage = g_strdup_printf (_("The module '%s' may have encountered a problem.\nIt has been restored successfully, but if it happens again, please report it at http://glx-dock.org"), cExcludeModule);
+	// 	else // since the 3th crash: the applet has been disabled
+	// 		cMessage = g_strdup_printf (_("The module '%s' has been deactivated because it may have caused some problems.\nYou can reactivate it, if it happens again thanks to report it at http://glx-dock.org"), cExcludeModule);
+
+	// 	GldiModule *pModule = gldi_module_get (cExcludeModule);
+	// 	Icon *icon = gldi_icons_get_any_without_dialog ();
+	// 	gldi_dialog_show_temporary_with_icon (cMessage, icon, CAIRO_CONTAINER (g_pMainDock), 15000., (pModule ? pModule->pVisitCard->cIconFilePath : NULL));
+	// 	g_free (cMessage);
+	// }
+
+	// if (! bTesting)
+	// 	g_timeout_add_seconds (5, _cairo_dock_successful_launch, GINT_TO_POINTER (bFirstLaunch));
 }
 
-func (settings *DockSettings) Clean() {
+func Lock() {
+	C.gtk_main()
+}
+
+func Clean() {
 
 	// signal(SIGSEGV, NULL) // Segmentation violation
 	// signal(SIGFPE, NULL)  // Floating-point exception
@@ -261,13 +352,6 @@ func (settings *DockSettings) Clean() {
 	// rsvg_term ();
 	// #endif
 	gldi.XMLCleanupParser()
-}
-
-//
-//------------------------------------------------------------------[ EVENTS ]--
-
-func RegisterEvents() {
-	C.register_events()
 }
 
 //
@@ -322,22 +406,24 @@ func ConfigDir(dir string) string {
 	return ""
 }
 
+func firstLaunchSetup() {
+	log.Info("firstLaunchScript", globals.DirShareData("scripts", "initial-setup.sh"))
+	log.ExecShow(globals.DirShareData("scripts", "initial-setup.sh"))
+}
+
 //
 //-----------------------------------------------------------------[ DIALOGS ]--
 
 func dialogAskBackend() {
-	dialog, _ := gtk.DialogNew()
-	dialog.SetTitle("Use OpenGL in Cairo-Dock")
-	dialog.AddButton("Yes", gtk.RESPONSE_YES)
-	dialog.AddButton("No", gtk.RESPONSE_NO)
+	// Need to keep the string as it is for translation.
+	str := "OpenGL allows you to use the hardware acceleration, reducing the CPU load to the minimum.\nIt also allows some pretty visual effects similar to Compiz.\nHowever, some cards and/or their drivers don't fully support it, which may prevent the dock from running correctly.\nDo you want to activate OpenGL ?\n (To not show this dialog, launch the dock from the Application menu,\n  or with the -o option to force OpenGL and -c to force cairo.)"
 
-	labelTxt, _ := gtk.LabelNew(
-		`OpenGL allows you to use the hardware acceleration, reducing the CPU load to the minimum.
-It also allows some pretty visual effects similar to Compiz.
-However, some cards and/or their drivers don't fully support it, which may prevent the dock from running correctly.
-Do you want to activate OpenGL ?
- (To not show this dialog, launch the dock from the Application menu,
-   or with the -o option to force OpenGL and -c to force cairo.)`)
+	dialog, _ := gtk.DialogNew()
+	dialog.SetTitle(tran.Slate("Use OpenGL in Cairo-Dock"))
+	dialog.AddButton(tran.Slate("Yes"), gtk.RESPONSE_YES)
+	dialog.AddButton(tran.Slate("No"), gtk.RESPONSE_NO)
+
+	labelTxt, _ := gtk.LabelNew(tran.Slate(str))
 
 	content, _ := dialog.GetContentArea()
 	content.PackStart(labelTxt, false, false, 0)
@@ -345,7 +431,7 @@ Do you want to activate OpenGL ?
 	askBox, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 3)
 	content.PackStart(askBox, false, false, 0)
 
-	labelSave, _ := gtk.LabelNew("Remember this choice")
+	labelSave, _ := gtk.LabelNew(tran.Slate("Remember this choice"))
 	check, _ := gtk.CheckButtonNew()
 	askBox.PackEnd(check, false, false, 0)
 	askBox.PackEnd(labelSave, false, false, 0)
@@ -361,64 +447,100 @@ Do you want to activate OpenGL ?
 	}
 
 	if remember { // save user choice to file.
-		log.Info("answer not saved yet")
-		// 	s_cDefaulBackend = g_strdup (iAnswer == GTK_RESPONSE_NO ? "cairo" : "opengl");
-		// 	gchar *cConfFilePath = g_strdup_printf ("%s/.cairo-dock", g_cCairoDockDataDir);
-		// 	cairo_dock_update_conf_file (cConfFilePath,
-		// 		G_TYPE_STRING, "Launch", "default backend", s_cDefaulBackend,
-		// 		G_TYPE_INVALID);
-		// 	g_free (cConfFilePath);
+		value := ternary.String(gtk.ResponseType(answer) == gtk.RESPONSE_YES, "opengl", "cairo")
+		files.UpdateConfFile(globals.DirDockData(HiddenFile), "Launch", "default backend", value)
 	}
 }
 
 func dialogNoPlugins() {
-	str := `No plug-in were found.
-
-Plug-ins provide most of the functionalities (animations, applets, views, etc).
-See http://glx-dock.org for more information.
-There is almost no meaning in running the dock without them and it's probably due to a problem with the installation of these plug-ins.
-But if you really want to use the dock without these plug-ins, you can launch the dock with the '-f' option to no longer have this message.
-`
-
+	// Need to keep the string as it is for translation.
+	str := "No plug-in were found.\nPlug-ins provide most of the functionalities (animations, applets, views, etc).\nSee http://glx-dock.org for more information.\nThere is almost no meaning in running the dock without them and it's probably due to a problem with the installation of these plug-ins.\nBut if you really want to use the dock without these plug-ins, you can launch the dock with the '-f' option to no longer have this message.\n"
 	icon := gldi.IconsGetAnyWithoutDialog()
 	container := globals.Maindock().ToContainer()
 	iconpath := globals.DirShareData(globals.CairoDockIcon)
-	dialog.DialogShowTemporaryWithIcon(str, icon, container, 0, iconpath)
+	dialog.DialogShowTemporaryWithIcon(tran.Slate(str), icon, container, 0, iconpath)
+}
+
+func dialogChangelog() {
+	str := getChangelog()
+	if str == "" {
+		return
+	}
+	log.Info("", str) // Also show it on console.
+	// TODO: icon shouldn't be nil, grab first icon.
+	// 			Icon *pFirstIcon = cairo_dock_get_first_icon (g_pMainDock->icons);
+	dialog.NewDialog(nil, globals.Maindock().Container(), cdtype.DialogData{
+		Message:   str,
+		Icon:      globals.DirShareData(globals.CairoDockIcon),
+		UseMarkup: true})
+}
+
+func getChangelog() string {
+	changelogPath := globals.DirShareData(Changelog)
+
+	conf, e := config.NewFromFile(changelogPath)
+	if e != nil {
+		log.Debug("changelog not found", changelogPath, e.Error())
+		return ""
+	}
+
+	major, minor, micro := globals.VersionSplit()
+
+	// Get first line
+	strver := fmt.Sprintf("%d.%d.%d", major, minor, micro) // version without "alpha", "beta", "rc", etc.
+	msg, e := conf.String("ChangeLog", strver)
+	if e != nil {
+		log.Debug("changelog", "no info for version", globals.Version())
+		return ""
+	}
+	msg = tran.Slate(msg)
+
+	// Add all changelog lines for that version.
+	i := 0
+	for {
+		strver := fmt.Sprintf("%d.%d.%d.%d", major, minor, micro, i)
+		sub, e := conf.String("ChangeLog", strver)
+		if e != nil {
+			break
+		}
+		msg += "\n " + tran.Slate(sub)
+		i++
+	}
+
+	return msg
 }
 
 //
 //---------------------------------------------------------[ HIDDEN SETTINGS ]--
 
-type HiddenSettings struct {
+type hiddenConfig struct {
 	LastVersion    string `conf:"last version"`
 	DefaultBackend string `conf:"default backend"`
-	// TestComposite string
-	LastYear int `conf:"last year"`
-	// UseSession bool `conf:"cd session"`
+	LastYear       int    `conf:"last year"`
+	SessionWasUsed bool   `conf:"cd session"`
 }
 
-// LoadHidden will try to load the hidden config data from the file.
+// loadHidden will try to load the hidden config data from the file.
 //
-func LoadHidden(path string) *HiddenSettings {
+func loadHidden(path string) *hiddenConfig {
 	file := filepath.Join(path, HiddenFile)
+	conf, e := config.NewFromFile(file)
 
-	conf, e := config.NewFromFile(file) // Special conf reflector around the config file parser.
-	if log.Err(e, "load hidden config file") {
-		// TODO: need to create the file.
-		return nil
+	if e != nil { // File missing, create it.
+		conf = config.New()
+		conf.AddSection("Launch")
+		conf.AddOption("Launch", "last version", "")
+		conf.AddOption("Launch", "default backend", "")
+		conf.AddOption("Launch", "last year", "0")
+		conf.AddSection("Gui")
+		conf.AddOption("Gui", "mode", "0")
+
+		log.Err(conf.WriteFile(file, 0644, ""), "create hidden conf", file)
+		return &hiddenConfig{}
 	}
 
-	hidden := &HiddenSettings{}
+	// Load data from file.
+	hidden := &hiddenConfig{}
 	conf.UnmarshalGroup(hidden, "Launch", config.GetTag)
-
-	// TODO: update file with new version
-	// if (bNewVersion)
-	// {
-	// 	gchar *cConfFilePath = g_strdup_printf ("%s/.cairo-dock", g_cCairoDockDataDir);
-	// 	cairo_dock_update_conf_file (cConfFilePath,
-	// 		G_TYPE_STRING, "Launch", "last version", CAIRO_DOCK_VERSION,
-	// 		G_TYPE_INVALID);
-	// 	g_free (cConfFilePath);
-
 	return hidden
 }

@@ -168,8 +168,8 @@
                       <object class="GtkImage" id="previewImage">
                         <property name="visible">True</property>
                         <property name="can_focus">False</property>
-                        <property name="margin_left">10</property>
-                        <property name="margin_right">10</property>
+                        <property name="margin_start">10</property>
+                        <property name="margin_end">10</property>
                         <property name="margin_top">10</property>
                         <property name="margin_bottom">10</property>
                       </object>

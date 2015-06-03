@@ -226,13 +226,11 @@ func ListFromDir(dir string, typ PackageType, source PackageSource) (AppletPacka
 		info = fileGetLink(fullpath, info) // Get real dir if it is a link.
 		if info.IsDir() {
 			pack, e := NewAppletPackageUser(dir, info.Name(), typ, source)
-			if !log.Err(e, "packages.ListFromDir") {
+			if e == nil {
 				list = append(list, pack)
+			} else {
+				log.Debug("packages.ListFromDir", e.Error())
 			}
-			// if e != nil {
-			// 	return nil, e
-			// }
-
 		}
 	}
 	return list, nil
@@ -281,7 +279,7 @@ type AppletPackage struct {
 func NewAppletPackageUser(dir, name string, typ PackageType, source PackageSource) (*AppletPackage, error) {
 
 	pack, e := ReadPackageFile(dir, name, source)
-	if log.Err(e, "read package description") {
+	if e != nil {
 		return nil, e
 	}
 
