@@ -4,7 +4,6 @@ package main
 
 import (
 	"github.com/sqp/godock/libs/log"
-	"github.com/sqp/godock/libs/srvdbus"
 
 	"bytes"
 	"flag"
@@ -18,7 +17,7 @@ import (
 	"unicode/utf8"
 )
 
-const cdcVersion = "0.0.3"
+const cdcVersion = "0.0.3.1"
 
 // Commands lists the available commands and help topics.
 // The order here is the order in which they are printed by 'cdc help'.
@@ -104,8 +103,6 @@ func main() {
 
 	logger.SetLogOut(log.Logs)
 	logger.SetName(os.Args[0])
-
-	srvdbus.SetLogger(logger)
 
 	if args[0] == "help" {
 		help(args[1:])

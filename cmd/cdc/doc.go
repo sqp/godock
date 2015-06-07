@@ -1,6 +1,7 @@
 /*
 cdc, Cairo-Dock Control, is a tool to manage a Cairo-Dock installation.
 It can also embed and manage multiple applets if compiled with their support.
+Most of the commands will require an active dock to work (with Dbus API).
 
 Usage:
 
@@ -8,60 +9,15 @@ Usage:
 
 The commands are:
 
-    build       build a cairo-dock package
-    config      config open the configuration GUI
     debug       debug change the debug state of an applet
+    dock        dock starts a custom version of cairo-dock with a new config GUI.
     install     install external applet
     list        list external applets
-    restart     restart the dock or one or more applet
-    service     start service with the dock or an applet
     upload      upload data to one-click hosting service
+    build       build a cairo-dock package
     version     print cdc version
 
 Use "cdc help [command]" for more information about a command.
-
-Additional help topics:
-
-
-Use "cdc help [topic]" for more information about that topic.
-
-
-Build a cairo-dock package
-
-Usage:
-
-	cdc build [-k] [-r] [-h] target
-
-Build builds and install a Cairo-Dock package.
-
-Targets:
-  c or core        Build the dock core.
-  p or plug-ins    Build all plug-ins.
-  applet name      Use the name of the applet directory in cairo-dock-plug-ins.
-                   Plug-ins must have been installed first.
-
-Flags:
-  -k               Keep build dir unchanged before build (no make clean).
-  -r               Reload your target after build.
-  -h               Hide the make install flood if any.
-  -g               Graphical mode. Use gksudo to request password.
-
-Options:
-  -s               Sources directory. Default is current dir.
-  -j               Specifies the number of jobs (commands) to run simultaneously.
-                   Default = all availables processors.
-
-
-Config open the configuration GUI
-
-Usage:
-
-	cdc config  [path to applet config file]
-
-Config open the Cairo-Dock configuration GUI.
-
-The first argument can be an applet configuration file absolute location.
-.
 
 
 Debug change the debug state of an applet
@@ -80,11 +36,56 @@ Options:
 .
 
 
+Dock starts a custom version of cairo-dock with a new config GUI.
+
+Usage:
+
+	cdc dock
+
+Dock starts a custom version of cairo-dock with a new GUI.
+
+Options:
+  -c          Use Cairo backend.
+  -o          Use OpenGL backend.
+  -O          Use OpenGL backend with indirect rendering.
+              There are very few case where this option should be used.
+  -A          Ask again on startup which backend to use.
+  -e env      Force the dock to consider this environnement - use it with care.
+
+  -d path     Use a custom config directory. Default: ~/.config/cairo-dock
+  -S url      Address of a server with additional themes (overrides default).
+
+  -w time     Wait for N seconds before starting; this is useful if you notice
+              some problems when the dock starts with the session.
+  -x appname  Exclude a given plug-in from activating (it is still loaded).
+  -f          Safe mode: don't load any plug-ins.
+  -W          Work around some bugs in Metacity Window-Manager
+              (invisible dialogs or sub-docks)
+  -l level    Log verbosity (debug,message,warning,critical,error).
+              Default is warning.
+  -F          Force to display some output messages with colors.
+  -k          Lock the dock so that any modification is impossible for users.
+  -a          Keep the dock above other windows.
+  -s          Don't make the dock appear on all desktops.
+  -M path     Ask the dock to load additionnal modules from this directory.
+              (though it is unsafe for your dock to load unnofficial modules).
+
+  -N          Don't start the Dbus applets service.
+  -H          Http debug server: http://localhost:6987/debug/pprof
+  -D          Debug mode for the go part of the code (including applets).
+
+  -v          Print version.
+
+This version lacks a lot of options and may not be considered usable for
+everybody at the moment.
+.
+
+
 Install external applet
 
 Usage:
 
-	cdc install [-d] [-l] [-f format] [-json]
+	cdc install [-v] appletname [appletname...]
 
 Install download and install a Cairo-Dock external applets from the repository.
 
@@ -132,49 +133,6 @@ The -json flag causes the applet package data to be printed in JSON format
 instead of using the template format.
 
 
-Restart the dock or one or more applet
-
-Usage:
-
-	cdc restart [appletname...]
-
-Restart restarts the Cairo-Dock instance or external applets.
-
-Without any argument, all your dock will be restarted.
-
-If one or more applet name is provided, they will be restarted.
-
-Note that only external applets will benefit from a simple applet restart if you modified the code.
-
-
-Start service with the dock or an applet
-
-Usage:
-
-	cdc service [applet arguments list]
-
-Service handle the loading of the dock or its own packed applets.
-
-Options:
-  dock        Start the dock. This allow to relaunch the dock with its output
-              in the same location.
-  list        List available and active applets instances handled by the service.
-  stop        Stop the dock and cdc.
-
-The service option can also be called with options to start an applet. Those
-options are provided by the dock when starting an applet. It only work for
-applets actually packed in this program.
-
-Without arguments, the list will be displayed.
-
-To enable the applet service for an applet, use a shell script in place of the
-applet binary to forward the call:
-
-  !/bin/sh
-  cdc service $* &
-.
-
-
 Upload data to one-click hosting service
 
 Usage:
@@ -188,6 +146,32 @@ Otherwise, the data is sent as raw text.
 
 Note that you must have an active instance of the NetActivity applet.
 .
+
+
+Build a cairo-dock package
+
+Usage:
+
+	cdc build [-k] [-r] [-h] target
+
+Build builds and install a Cairo-Dock package.
+
+Targets:
+  c or core        Build the dock core.
+  p or plug-ins    Build all plug-ins.
+  applet name      Use the name of the applet directory in cairo-dock-plug-ins.
+                   Plug-ins must have been installed first.
+
+Flags:
+  -k               Keep build dir unchanged before build (no make clean).
+  -r               Reload your target after build.
+  -h               Hide the make install flood if any.
+  -g               Graphical mode. Use gksudo to request password.
+
+Options:
+  -s               Sources directory. Default is current dir.
+  -j               Specifies the number of jobs (commands) to run simultaneously.
+                   Default = all availables processors.
 
 
 Print cdc version

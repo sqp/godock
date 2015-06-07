@@ -6,7 +6,7 @@ import (
 	"github.com/conformal/gotk3/glib"
 	"github.com/conformal/gotk3/gtk"
 
-	"github.com/sqp/godock/libs/log"
+	"github.com/sqp/godock/libs/cdtype"
 	"github.com/sqp/godock/widgets/appletlist"
 	"github.com/sqp/godock/widgets/appletpreview"
 	"github.com/sqp/godock/widgets/confbuilder/datatype"
@@ -52,9 +52,11 @@ type GUIControl interface {
 type ConfApplet struct {
 	gtk.Box
 	menu    MenuDownloader
-	control GUIControl
 	applets ListInterface
 	preview *appletpreview.Preview
+
+	control GUIControl
+	log     cdtype.Logger
 
 	mode    ListMode
 	Applets *map[string]datatype.Appleter // List of applets known by the Dock.
@@ -62,29 +64,30 @@ type ConfApplet struct {
 
 // New creates a widget to download cairo-dock applets.
 //
-func New(control GUIControl, menu MenuDownloader, mode ListMode) *ConfApplet {
+func New(control GUIControl, log cdtype.Logger, menu MenuDownloader, mode ListMode) *ConfApplet {
 	mainbox, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
 
 	widget := &ConfApplet{
 		Box:     *mainbox,
-		preview: appletpreview.New(),
-		mode:    mode,
-		control: control,
 		menu:    menu,
+		preview: appletpreview.New(log),
+		control: control,
+		log:     log,
+		mode:    mode,
 	}
 	switch widget.mode {
 	case ListCanAdd:
-		widget.applets = appletlist.NewListAdd(widget)
+		widget.applets = appletlist.NewListAdd(widget, log)
 		widget.preview.HideState()
 		widget.preview.HideSize()
 
 	case ListExternal:
 		if menu == nil {
-			menu := NewMenuDownload()
+			menu := NewMenuDownload(log)
 			widget.menu = menu
 			widget.PackStart(menu, false, false, 0)
 		}
-		widget.applets = appletlist.NewListExternal(widget)
+		widget.applets = appletlist.NewListExternal(widget, log)
 	}
 
 	inbox, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
@@ -145,7 +148,8 @@ func (widget *ConfApplet) UpdateModuleState(name string, active bool) {
 		widget.applets.UpdateModuleState(name, active)
 
 	case ListExternal:
-		if widget.menu != nil && widget.applets.Selected().GetTitle() == name {
+		sel := widget.applets.Selected()
+		if widget.menu != nil && sel != nil && sel.GetTitle() == name {
 			widget.menu.SetActiveState(active)
 		}
 	}
@@ -193,11 +197,13 @@ type MenuDownload struct {
 
 	applets appletlist.ControlInstall // still needed?
 	current datatype.Appleter
+
+	log cdtype.Logger
 }
 
 // NewMenuDownload creates the menu to control the selected applet.
 //
-func NewMenuDownload() *MenuDownload {
+func NewMenuDownload(log cdtype.Logger) *MenuDownload {
 	box, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
 	installed, _ := gtk.SwitchNew()
 	active, _ := gtk.SwitchNew()
@@ -206,6 +212,7 @@ func NewMenuDownload() *MenuDownload {
 		Box:       *box,
 		installed: installed,
 		active:    active,
+		log:       log,
 	}
 
 	sep, _ := gtk.SeparatorNew(gtk.ORIENTATION_VERTICAL)
@@ -277,23 +284,23 @@ func (widget *MenuDownload) toggledInstalled(switc *gtk.Switch) {
 	if widget.installed.GetActive() { // Install
 		e := widget.current.Install("")
 
-		if log.Err(e, "Install failed: "+name) { // Failed => Force unchecked state of widget.
+		if widget.log.Err(e, "Install failed: "+name) { // Failed => Force unchecked state of widget.
 			widget.SetInstalledState(false)
 			return
 		}
 
-		log.Info("Installed applet", name)
+		widget.log.Info("Installed applet", name)
 		widget.active.SetSensitive(true)
 		widget.applets.SetActive(true)
 
 	} else { // Uninstall
 		e := widget.current.Uninstall()
-		if log.Err(e, "Uninstall package") { // Uninstall failed. Force checked state of widget.
+		if widget.log.Err(e, "Uninstall package") { // Uninstall failed. Force checked state of widget.
 			widget.SetInstalledState(true)
 			return
 		}
 
-		log.Info("Removed applet", name)
+		widget.log.Info("Removed applet", name)
 
 		widget.applets.SetActive(false)
 		widget.active.SetSensitive(false)

@@ -156,8 +156,8 @@ var (
 //
 func runDock(cmd *Command, args []string) {
 	if startDock() {
-		defer maindock.Clean()
 		maindock.Lock()
+		maindock.Clean() // may be better with defer, but cause confused panic messages.
 	}
 }
 
@@ -169,8 +169,6 @@ func startDock() bool {
 		println(globals.Version()) // -v option only prints version.
 		return false
 	}
-
-	customHacks()
 
 	// Logger debug state.
 	logger.SetDebug(*srvDebug)
@@ -197,6 +195,8 @@ func startDock() bool {
 		}
 		dbus.SetManager(appmgr)
 	}
+
+	customHacks()
 
 	backendgui.Register(gui.NewConnector(logger))
 	backendmenu.Register("dock", menu.BuildMenuContainer, menu.BuildMenuIcon)
@@ -225,13 +225,12 @@ func serviceDbus() (*srvdbus.Loader, error) {
 		return nil, errors.New("service already active")
 	}
 
-	go loader.StartLoop(true)
+	go loader.StartLoop()
 
 	return loader, nil
 }
 
 func customHacks() {
-
 	// HTTP listener for the pprof debug.
 	if *srvHttpPprof {
 

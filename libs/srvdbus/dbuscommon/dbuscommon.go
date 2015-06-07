@@ -106,7 +106,6 @@ func (load *Server) Start(obj interface{}, introspec string) (bool, error) {
 	e = load.Conn.Export(obj, dbus.ObjectPath(load.srvPath), load.srvObj)
 	load.Log.Err(e, "register service object")
 
-	// e = load.conn.Export(load, SrvPath, "org.freedesktop.DBus.Introspectable")
 	e = load.Conn.Export(introspect.Introspectable(introspec), dbus.ObjectPath(load.srvPath), "org.freedesktop.DBus.Introspectable")
 	load.Log.Err(e, "register service introspect")
 

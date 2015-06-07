@@ -492,9 +492,7 @@ func (pack *AppletPackage) GetModuleVersion() string { return pack.Version }
 
 // GetName returns the package name to use as config key.
 //
-func (pack *AppletPackage) GetName() string {
-	return fmt.Sprintf("%s[%d]", pack.DisplayedName, pack.Type)
-}
+func (pack *AppletPackage) GetName() string { return pack.DisplayedName }
 
 // GetPreviewFilePath returns the location of the preview file.
 // Can be slow if it needs to download the file (non installed package).

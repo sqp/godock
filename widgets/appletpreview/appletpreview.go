@@ -5,7 +5,8 @@ import (
 	"github.com/conformal/gotk3/glib"
 	"github.com/conformal/gotk3/gtk"
 
-	"github.com/sqp/godock/libs/log"
+	"github.com/sqp/godock/libs/cdtype"
+
 	"github.com/sqp/godock/widgets/common"
 	"github.com/sqp/godock/widgets/confbuilder/datatype"
 	"github.com/sqp/godock/widgets/gtk/buildhelp"
@@ -35,11 +36,13 @@ type Preview struct {
 	previewFrame *gtk.Frame
 
 	TmpFile string
+
+	log cdtype.Logger
 }
 
 // New creates an applet preview widget.
 //
-func New() *Preview {
+func New(log cdtype.Logger) *Preview {
 	builder := buildhelp.New()
 	builder.AddFromString(string(appletpreviewXML()))
 	// builder.AddFromFile("appletpreview.xml")
@@ -54,11 +57,12 @@ func New() *Preview {
 		description:  builder.GetLabel("description"),
 		previewFrame: builder.GetFrame("previewFrame"),
 		previewImage: builder.GetImage("previewImage"),
+		log:          log,
 	}
 
 	if len(builder.Errors) > 0 {
 		for _, e := range builder.Errors {
-			log.DEV("build appletpreview", e)
+			log.Err(e, "build appletpreview")
 		}
 		return nil
 	}
@@ -81,7 +85,7 @@ func (widget *Preview) Load(pack datatype.Appleter) {
 	widget.size.SetMarkup(common.Small(pack.FormatSize()))
 
 	if icon := pack.IconState(); icon != "" {
-		if pixbuf, e := common.PixbufAtSize(icon, 24, 24); !log.Err(e, "Load image pixbuf") {
+		if pixbuf, e := common.PixbufAtSize(icon, 24, 24); !widget.log.Err(e, "Load image pixbuf") {
 			widget.stateIcon.SetFromPixbuf(pixbuf)
 			widget.stateIcon.Show()
 		}

@@ -5,7 +5,7 @@ import (
 	"github.com/conformal/gotk3/glib"
 	"github.com/conformal/gotk3/gtk"
 
-	"github.com/sqp/godock/libs/log"
+	"github.com/sqp/godock/libs/cdtype"
 	"github.com/sqp/godock/libs/tran"
 
 	"github.com/sqp/godock/widgets/common"
@@ -36,7 +36,7 @@ type Handbook struct {
 
 // NewHandbook creates a handbook widget (applet info).
 //
-func NewHandbook() *Handbook {
+func NewHandbook(log cdtype.Logger) *Handbook {
 	builder := buildhelp.New()
 
 	builder.AddFromString(string(handbookXML()))
@@ -53,7 +53,7 @@ func NewHandbook() *Handbook {
 
 	if len(builder.Errors) > 0 {
 		for _, e := range builder.Errors {
-			log.DEV("build handbook", e)
+			log.Err(e, "build handbook")
 		}
 		return nil
 	}
@@ -282,7 +282,7 @@ func (build *Builder) newComboBoxWithModel(model *gtk.ListStore, bAddPreviewWidg
 		combo.AddAttribute(renderer, "text", RowName)
 		getValue = func() interface{} {
 			iter, _ := combo.GetActiveIter()
-			text := GetActiveRowInCombo(model, iter)
+			text := build.getActiveRowInCombo(model, iter)
 			return text
 		}
 
@@ -300,12 +300,12 @@ func (build *Builder) newComboBoxWithModel(model *gtk.ListStore, bAddPreviewWidg
 	return
 }
 
-// GetActiveRowInCombo gets the value of the current RowKey in the store.
+// getActiveRowInCombo gets the value of the current RowKey in the store.
 //
-func GetActiveRowInCombo(model *gtk.ListStore, iter *gtk.TreeIter) string {
+func (build *Builder) getActiveRowInCombo(model *gtk.ListStore, iter *gtk.TreeIter) string {
 	if iter != nil {
 		str, e := gunvalue.New(model.GetValue(iter, RowKey)).String()
-		if !log.Err(e, "GetActiveRowInCombo") {
+		if !build.log.Err(e, "getActiveRowInCombo") {
 			return str
 		}
 	}
@@ -458,6 +458,7 @@ func onFileChooserUpdatePreview(dialog *gtk.FileChooserDialog, img *gtk.Image) {
 }
 
 type treeViewData struct {
+	log    cdtype.Logger
 	model  *gtk.ListStore
 	widget *gtk.TreeView
 	entry  *gtk.Entry
@@ -467,12 +468,12 @@ func onTreeviewMoveUp(_ *gtk.Button, data treeViewData) {
 	var treeModel gtk.ITreeModel = data.model
 	var iter gtk.TreeIter
 	sel, e := data.widget.GetSelection()
-	if log.Err(e, "WidgetTreeView widget.GetSelection") || !sel.GetSelected(&treeModel, &iter) {
+	if data.log.Err(e, "WidgetTreeView widget.GetSelection") || !sel.GetSelected(&treeModel, &iter) {
 		return
 	}
 
 	order, e := gunvalue.New(data.model.GetValue(&iter, 5)).Int()
-	if log.Err(e, "WidgetTreeView model.GetValue order") {
+	if data.log.Err(e, "WidgetTreeView model.GetValue order") {
 		return
 	}
 
@@ -490,11 +491,11 @@ func onTreeviewMoveDown(_ *gtk.Button, data treeViewData) {
 	var treeModel gtk.ITreeModel = data.model
 	var iter gtk.TreeIter
 	sel, e := data.widget.GetSelection()
-	if log.Err(e, "WidgetTreeView widget.GetSelection") || !sel.GetSelected(&treeModel, &iter) {
+	if data.log.Err(e, "WidgetTreeView widget.GetSelection") || !sel.GetSelected(&treeModel, &iter) {
 		return
 	}
 	order, e := gunvalue.New(data.model.GetValue(&iter, 5)).Int()
-	if log.Err(e, "WidgetTreeView model.GetValue order") {
+	if data.log.Err(e, "WidgetTreeView model.GetValue order") {
 		return
 	}
 
@@ -514,7 +515,7 @@ func onTreeviewAddText(_ *gtk.Button, data treeViewData) {
 
 	// Add new iter to model with the value of the entry widget. Clear entry widget.
 	val, e := data.entry.GetText()
-	if val != "" && !log.Err(e, "WidgetTreeView entry.GetText") {
+	if val != "" && !data.log.Err(e, "WidgetTreeView entry.GetText") {
 		data.entry.SetText("")
 
 		// Add new iter to model.
@@ -526,7 +527,7 @@ func onTreeviewAddText(_ *gtk.Button, data treeViewData) {
 
 		// Select new iter.
 		sel, e := data.widget.GetSelection()
-		if !log.Err(e, "WidgetTreeView widget.GetSelection") {
+		if !data.log.Err(e, "WidgetTreeView widget.GetSelection") {
 			sel.SelectIter(iter)
 		}
 	}
@@ -539,20 +540,20 @@ func onTreeviewRemoveText(_ *gtk.Button, data treeViewData) {
 	var treeModel gtk.ITreeModel = data.model
 	var iter gtk.TreeIter
 	sel, e := data.widget.GetSelection()
-	if !log.Err(e, "WidgetTreeView widget.GetSelection") {
+	if !data.log.Err(e, "WidgetTreeView widget.GetSelection") {
 		if !sel.GetSelected(&treeModel, &iter) {
 			return
 		}
 	}
 
 	name, e := gunvalue.New(data.model.GetValue(&iter, RowName)).String()
-	if !log.Err(e, "WidgetTreeView model.GetValue RowName") {
+	if !data.log.Err(e, "WidgetTreeView model.GetValue RowName") {
 		data.entry.SetText(name)
 	}
 
 	order, e := gunvalue.New(data.model.GetValue(&iter, 5)).Int()
 	data.model.Remove(&iter)
-	if log.Err(e, "WidgetTreeView model.GetValue order") { // no order nor iters. can't do shit.
+	if data.log.Err(e, "WidgetTreeView model.GetValue order") { // no order nor iters. can't do shit.
 		return
 	}
 
@@ -605,7 +606,7 @@ func onKeyGrabReceived(_ *gtk.Window, event *gdk.Event, data *textGrabData) {
 }
 
 func onClassGrabClicked(obj *gtk.Button) {
-	log.DEV("grab class is still to do")
+	println("grab class is still to do")
 
 	// 	GtkEntry *pEntry = data[0];
 	// 	GtkWindow *pParentWindow = data[1];

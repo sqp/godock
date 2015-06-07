@@ -1,6 +1,6 @@
 TARGET=cdc
 SOURCE=github.com/sqp/godock
-VERSION=0.0.3-1
+VERSION=0.0.3.1
 APPLETS=Audio Cpu DiskActivity DiskFree GoGmail Mem NetActivity Update
 
 # unstable applets requires uncommited patches to build.
@@ -45,11 +45,24 @@ patch:
 	# iconview link_font_button expander cellrendererpixbuf accelerator
 	# https://github.com/shish/gotk3 file-chooser
 	# https://github.com/shish/gotk3 paned
+	# https://github.com/MovingToMars/gotk3 144f78d8900c48ba361dc65342878f73709d1c05
 
 	# Patch Dbus (for Notifications)
 	cd "$(GOPATH)/src/github.com/godbus/dbus" && git pull --commit --no-edit https://github.com/sqp/dbus fixeavesdrop
 
 install:
+	mkdir -p "$(PKGDIR)/usr/bin"
+	install -p -m755 "$(GOPATH)/bin/cdc" "$(PKGDIR)/usr/bin"
+
+	mkdir -p "$(PKGDIR)/$(APPDIRDBUS)"
+	for f in $(APPLETS); do	\
+		cp -Rv --preserve=timestamps "applets/$$f" "$(PKGDIR)/$(APPDIRDBUS)" ;\
+		rm $(PKGDIR)/$(APPDIRDBUS)/$$f/applet.go ;\
+		rm $(PKGDIR)/$(APPDIRDBUS)/$$f/last-modif ;\
+		rm $(PKGDIR)/$(APPDIRDBUS)/$$f/Makefile ;\
+	done
+
+install-dock:
 	mkdir -p "$(PKGDIR)/usr/bin"
 	install -p -m755 "$(GOPATH)/bin/cdc" "$(PKGDIR)/usr/bin"
 
@@ -63,7 +76,6 @@ install:
 		rm $(PKGDIR)/$(APPDIRGLDI)/$$f/tocdc ;\
 	done
 
-
 	# Package license (if available)
 	# for f in LICENSE COPYING LICENSE.* COPYING.*; do
 	# 	if [ -e "$(GOPATH)/src/$(SOURCE)/$f" ]; then
@@ -72,14 +84,3 @@ install:
 	# done
 
 
-install-dbus:
-	mkdir -p "$(PKGDIR)/usr/bin"
-	install -p -m755 "$(GOPATH)/bin/cdc" "$(PKGDIR)/usr/bin"
-
-	mkdir -p "$(PKGDIR)/$(APPDIRDBUS)"
-	for f in $(APPLETS); do	\
-		cp -Rv --preserve=timestamps "applets/$$f" "$(PKGDIR)/$(APPDIRDBUS)" ;\
-		rm $(PKGDIR)/$(APPDIRDBUS)/$$f/applet.go ;\
-		rm $(PKGDIR)/$(APPDIRDBUS)/$$f/last-modif ;\
-		rm $(PKGDIR)/$(APPDIRDBUS)/$$f/Makefile ;\
-	done

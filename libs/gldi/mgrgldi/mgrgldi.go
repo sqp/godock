@@ -96,9 +96,9 @@ func NewAppManager(services cdtype.ListStarter, log cdtype.Logger) *AppManager {
 	return load
 }
 
-// Count returns the number of managed applets.
+// CountActive returns the number of managed applets.
 //
-func (load *AppManager) Count() int {
+func (load *AppManager) CountActive() int {
 	return len(load.actives)
 }
 
@@ -227,6 +227,11 @@ func (o *AppManager) startApplet(mi *gldi.ModuleInstance, kf *keyfile.KeyFile) {
 
 	// Create applet instance and set its core data.
 	app := call()
+
+	if app == nil {
+		o.log.NewErr(name, "failed to start applet")
+		return
+	}
 
 	o.actives[unsafe.Pointer(icon.Ptr)] = app
 

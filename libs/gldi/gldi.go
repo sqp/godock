@@ -20,6 +20,7 @@ package gldi
 #include "cairo-dock-desklet-manager.h"          // myDeskletObjectMgr
 #include "cairo-dock-desktop-manager.h"          // g_desktopGeometry
 #include "cairo-dock-data-renderer.h"            // cairo_dock_render_new_data_on_icon
+#include "cairo-dock-desklet-manager.h"          // gldi_desklets_foreach
 #include "cairo-dock-dock-factory.h"             // CairoDock
 #include "cairo-dock-dock-facility.h"            // cairo_dock_get_available_docks
 #include "cairo-dock-dock-manager.h"             // gldi_dock_get_readable_name
@@ -97,6 +98,7 @@ static gboolean _module_is_auto_loaded(GldiModule *module) {
 //
 //---------------------------------------------------------[ LSTS FORWARDING ]--
 
+extern void addDesklet    (gpointer, gpointer);
 extern void addShortkey   (gpointer, gpointer);
 extern void addItemToList (gpointer, gchar*, gpointer);
 
@@ -104,6 +106,7 @@ static void     fwd_one (const gchar *name, gpointer *item, gpointer p) { addIte
 static gboolean fwd_chk (      gchar *name, gpointer *item, gpointer p) { addItemToList(p, name,           item); return FALSE;}
 
 static void list_shortkey           (gpointer p){ gldi_shortkeys_foreach                ((GFunc)addShortkey, p); }
+static void list_desklets           (gpointer p){ gldi_desklets_foreach                 ((GldiDeskletForeachFunc)addDesklet, p); }
 
 static void list_animation          (gpointer p){ cairo_dock_foreach_animation          ((GHFunc)fwd_one, p); }
 static void list_desklet_decoration (gpointer p){ cairo_dock_foreach_desklet_decoration ((GHFunc)fwd_one, p); }
@@ -518,6 +521,9 @@ func (dock *CairoDock) GetReadableName() string {
 	return C.GoString((*C.char)(C.gldi_dock_get_readable_name(dock.Ptr)))
 }
 
+// GetRefCount gives the number of icons pointing on the dock.
+// 0 means it is a root dock, >0 a sub-dock.
+//
 func (dock *CairoDock) GetRefCount() int {
 	return int(dock.Ptr.iRefCount)
 }
@@ -613,6 +619,20 @@ func NewDeskletFromNative(p unsafe.Pointer) *Desklet {
 		return nil
 	}
 	return &Desklet{(*C.CairoDesklet)(p)}
+}
+
+// ListDesklets returns the list of active desklets.
+//
+func DeskletList() []*Desklet {
+	list := &listForward{[]*Desklet{}}
+	C.list_desklets(C.gpointer(list))
+	return list.p.([]*Desklet)
+}
+
+//export addDesklet
+func addDesklet(sk C.gpointer, l C.gpointer) {
+	list := (*listForward)(l)
+	list.p = append(list.p.([]*Desklet), NewDeskletFromNative(unsafe.Pointer(sk)))
 }
 
 func (o *Desklet) ToNative() unsafe.Pointer {
@@ -1267,6 +1287,10 @@ func (mi *ModuleInstance) GetConfFilePath() string {
 	return C.GoString((*C.char)(mi.Ptr.cConfFilePath))
 }
 
+func (mi *ModuleInstance) Dock() *CairoDock {
+	return NewDockFromNative(unsafe.Pointer(mi.Ptr.pDock))
+}
+
 func (mi *ModuleInstance) Module() *Module {
 	return NewModuleFromNative(unsafe.Pointer(mi.Ptr.pModule))
 }
@@ -1665,6 +1689,14 @@ func NewCairoDockRendererFromNative(p unsafe.Pointer) *CairoDockRenderer {
 
 func (dr *CairoDockRenderer) GetDisplayedName() string {
 	return C.GoString((*C.char)(dr.Ptr.cDisplayedName))
+}
+
+func (dr *CairoDockRenderer) GetReadmeFilePath() string {
+	return C.GoString((*C.char)(dr.Ptr.cReadmeFilePath))
+}
+
+func (dr *CairoDockRenderer) GetPreviewFilePath() string {
+	return C.GoString((*C.char)(dr.Ptr.cPreviewFilePath))
 }
 
 //

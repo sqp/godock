@@ -2,6 +2,7 @@
 package TVPlay
 
 import (
+	"github.com/conformal/gotk3/glib"
 	"github.com/conformal/gotk3/gtk"
 
 	"github.com/sqp/gupnp/mediacp"        // upnp control point.
@@ -34,10 +35,7 @@ func NewApplet() cdtype.AppInstance {
 	app.cp, e = mediacp.New()
 	app.Log().Err(e, "temp Dir")
 
-	app.gui, app.win = guigtk.NewGui(app.cp, false)
-	if app.gui != nil {
-		app.gui.Load()
-	}
+	app.createGui(false, false)
 
 	hook := app.cp.SubscribeHook("applet")
 	hook.OnRendererFound = app.onMediaRendererFound
@@ -96,6 +94,26 @@ func (app *Applet) cpInit() {
 	app.cp.SetPreferredServer(app.conf.PreferredServer)
 }
 
+func (app *Applet) createGui(init, show bool) {
+	glib.IdleAdd(func() {
+		app.gui, app.win = guigtk.NewGui(app.cp)
+		if app.gui == nil {
+			return
+		}
+		app.gui.Load()
+
+		app.win.Connect("delete-event", func() bool { app.gui, app.win = nil, nil; return false })
+		// app.win.Connect("delete-event", func() bool { window.Iconify(); return true })
+
+		if init {
+			app.cpInit()
+		}
+		if !show {
+			app.win.Iconify()
+		}
+	})
+}
+
 func (app *Applet) onMediaRendererFound(r *upnpcp.Renderer) {
 	app.Log().Info("Renderer Found", r.Name, "", r.Udn)
 }
@@ -126,8 +144,7 @@ func (app *Applet) DefineEvents(events *cdtype.Events) {
 		if haveMonitor { // Window opened.
 			app.ShowAppli(!hasFocus)
 		} else {
-			// guigtk.NewGui(app.cp, true).Load() // shouldn't be reached ATM.
-			// app.cpInit()
+			app.createGui(true, true)
 		}
 	}
 

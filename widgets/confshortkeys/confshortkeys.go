@@ -6,7 +6,7 @@ import (
 	"github.com/conformal/gotk3/glib"
 	"github.com/conformal/gotk3/gtk"
 
-	"github.com/sqp/godock/libs/log"
+	"github.com/sqp/godock/libs/cdtype"
 
 	"github.com/sqp/godock/widgets/common"
 	"github.com/sqp/godock/widgets/confbuilder/datatype"
@@ -46,6 +46,7 @@ type Shortkeys struct {
 	model              *gtk.ListStore
 	selection          *gtk.TreeSelection
 	control            Controller
+	log                cdtype.Logger
 
 	cbID glib.SignalHandle // Grab callback id.
 
@@ -54,7 +55,7 @@ type Shortkeys struct {
 
 // New creates a dock shortkeys management widget.
 //
-func New(control Controller) *Shortkeys {
+func New(control Controller, log cdtype.Logger) *Shortkeys {
 	builder := buildhelp.NewFromBytes(confshortkeysXML())
 
 	widget := &Shortkeys{
@@ -63,6 +64,7 @@ func New(control Controller) *Shortkeys {
 		tree:           builder.GetTreeView("tree"),
 		selection:      builder.GetTreeSelection("selection"),
 		control:        control,
+		log:            log,
 		rows:           make(map[*gtk.TreeIter]datatype.Shortkeyer),
 	}
 
@@ -70,7 +72,7 @@ func New(control Controller) *Shortkeys {
 
 	if len(builder.Errors) > 0 {
 		for _, e := range builder.Errors {
-			log.DEV("build confshortkeys", e)
+			log.Err(e, "build confshortkeys")
 		}
 		return nil
 	}
@@ -109,7 +111,7 @@ func (widget *Shortkeys) Load() {
 			rowEditable:    true}) // Editable forced for all shortkey cells.
 
 		img := sk.GetIconFilePath()
-		if pix, e := common.PixbufNewFromFile(img, 24); !log.Err(e, "Load icon") {
+		if pix, e := common.PixbufNewFromFile(img, 24); !widget.log.Err(e, "Load icon") {
 			widget.model.SetValue(iter, rowIcon, pix)
 		}
 	}
@@ -160,7 +162,7 @@ func (widget *Shortkeys) updateShortkey(accel string) {
 	if sk == nil {
 		return
 	}
-	log.Debug("Set new shortkey", accel)
+	widget.log.Debug("Set new shortkey", accel)
 
 	sk.Rebind(accel, "")
 
@@ -170,14 +172,14 @@ func (widget *Shortkeys) updateShortkey(accel string) {
 	}
 
 	if sk.GetDescription() == "-" {
-		log.Info("shortkeys update aren't saved to file from this page for external applets.", "You muse use the applet config page.")
+		widget.log.Info("shortkeys update aren't saved to file from this page for external applets.", "You muse use the applet config page.")
 		return
 	}
 
 	// TODO: improve code.
 	pKeyF := keyfile.New()
 	_, e := pKeyF.LoadFromFile(file, keyfile.FlagsKeepComments|keyfile.FlagsKeepTranslations)
-	if log.Err(e, "Update shortkey to file") {
+	if widget.log.Err(e, "Update shortkey to file") {
 		// pKeyF.Free()
 		return
 	}
@@ -208,7 +210,7 @@ func (widget *Shortkeys) updateDisplay() {
 //
 func (widget *Shortkeys) selectedShortkey() (datatype.Shortkeyer, *gtk.TreeIter) {
 	iter, e := gunvalue.SelectedIter(widget.model, widget.selection)
-	if log.Err(e, "selectedShortkey") {
+	if widget.log.Err(e, "selectedShortkey") {
 		return nil, nil
 	}
 	for it, sk := range widget.rows {

@@ -30,7 +30,7 @@ import (
 	"github.com/conformal/gotk3/gdk"
 	"github.com/conformal/gotk3/gtk"
 
-	"github.com/sqp/godock/libs/log"
+	"github.com/sqp/godock/libs/cdtype"
 	"github.com/sqp/godock/libs/tran"
 
 	"github.com/sqp/godock/widgets/confbuilder/datatype"
@@ -59,8 +59,11 @@ const (
 	UserIconSeparator
 )
 
-// #define CAIRO_DOCK_WIDGET_CAIRO_ONLY '*'
-// #define CAIRO_DOCK_WIDGET_OPENGL_ONLY '&'
+// Modifier to show a widget according to the display backend.
+const (
+	WidgetCairoOnly  = '*'
+	WidgetOpenGLOnly = '&'
+)
 
 // Dock buildable widgets list.
 //
@@ -127,16 +130,16 @@ const ( // WidgetType;
 // Key defines a configuration entry.
 //
 type Key struct {
-	Group            string
-	Name             string
-	Type             byte
-	NbElements       int
-	AuthorizedValues []string
-	Text             string
-	Tooltip          string
-	IsAligned        bool
-	IsDefault        bool // true when a default text has been set (must be ignored). Match "ignore-value" in the C version.
-	GetValues        []func() interface{}
+	Group             string
+	Name              string
+	Type              byte
+	NbElements        int
+	AuthorizedValues  []string
+	Text              string
+	Tooltip           string
+	IsAlignedVertical bool
+	IsDefault         bool // true when a default text has been set (must be ignored). Match "ignore-value" in the C version.
+	GetValues         []func() interface{}
 }
 
 // Builder builds a Cairo-Dock configuration page.
@@ -164,6 +167,7 @@ type Builder struct {
 
 	Conf          *CairoConfig
 	data          datatype.Source
+	log           cdtype.Logger
 	win           *gtk.Window // Parent window.
 	gettextDomain string
 }
@@ -205,7 +209,6 @@ func (build *Builder) BuildPage(cGroupName string) *gtk.ScrolledWindow {
 	// GtkListStore *modele;
 	// gboolean bAddBackButton;
 	// GtkWidget *pPreviewBox;
-	// gboolean bIsAligned;
 
 	bInsert := false
 
@@ -249,17 +252,18 @@ func (build *Builder) BuildPage(cGroupName string) *gtk.ScrolledWindow {
 				build.pAdditionalItemsVBox.PackStart(build.pKeyBox, false, false, 0)
 
 			} else {
-				// if key.IsAligned {
-				build.pKeyBox, _ = gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, MarginGUI)
-				// } else {
-				// 	build.pKeyBox, _ = gtk.BoxNew(gtk.ORIENTATION_VERTICAL, MarginGUI)
-				// }
+				if key.IsAlignedVertical {
+					build.log.Info("aligned /", strings.TrimSuffix(key.Name, "\n"))
+					build.pKeyBox, _ = gtk.BoxNew(gtk.ORIENTATION_VERTICAL, MarginGUI)
+				} else {
+					build.pKeyBox, _ = gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, MarginGUI)
+				}
 
 				build.addWidget(build.pKeyBox, bFullSize, bFullSize, 0)
 			}
 
 			if key.Tooltip != "" {
-				build.pKeyBox.SetTooltipText(key.Tooltip) // cGettextDomain
+				build.pKeyBox.SetTooltipText(build.translate(key.Tooltip))
 			}
 
 			// 	if (pControlWidgets != NULL)
@@ -298,9 +302,7 @@ func (build *Builder) BuildPage(cGroupName string) *gtk.ScrolledWindow {
 
 			// Key description on the left.
 			if key.Text != "" { // and maybe need to test different from  "loading..." ?
-				var e error
-				build.pLabel, e = gtk.LabelNew("")
-				log.Err(e, "new plabel")
+				build.pLabel, _ = gtk.LabelNew("")
 				text := strings.TrimRight(build.translate(key.Text), ":") // dirty hack against ugly trailing colon.
 
 				build.pLabel.SetMarkup(text)
@@ -372,9 +374,9 @@ func (build *Builder) BuildPage(cGroupName string) *gtk.ScrolledWindow {
 		// 	WidgetJumpToModuleIfExists: // idem mais seulement affiche si le module existe.
 		// 	build.WidgetJumpToModule(key)
 
-		// case WidgetLaunchCommandSimple,
-		// 	WidgetLaunchCommandIfCondition:
-		// 	build.WidgetLaunchCommand(key)
+		case WidgetLaunchCommandSimple,
+			WidgetLaunchCommandIfCondition:
+			build.WidgetLaunchCommand(key)
 
 		case WidgetListSimple, // a list of strings.
 			WidgetListWithEntry, // a list of strings with an entry to add custom choices.
@@ -425,7 +427,7 @@ func (build *Builder) BuildPage(cGroupName string) *gtk.ScrolledWindow {
 			build.WidgetSeparator()
 
 		default:
-			log.Info("Load build: invalid widget type", string(key.Type), ":", key.Name)
+			build.log.Info("Load build: invalid widget type", string(key.Type), ":", key.Name)
 			bInsert = false
 		}
 	}
@@ -558,7 +560,7 @@ func (build *Builder) Save() {
 
 			default:
 				for i, f := range key.GetValues {
-					log.DEV("KEY", key.Name, i+1, "/", len(key.GetValues), "[", f(), "]")
+					build.log.Info("KEY NOT MATCHED", key.Name, i+1, "/", len(key.GetValues), "[", f(), "]")
 				}
 			}
 

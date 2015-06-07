@@ -181,5 +181,7 @@ func (gc *Connector) Window() *gtk.Window {
 // CloseGui closes the configuration window.
 //
 func (gc *Connector) CloseGui() {
-	gc.Win.Destroy()
+	if gc.Win != nil {
+		gc.Win.Destroy()
+	}
 }

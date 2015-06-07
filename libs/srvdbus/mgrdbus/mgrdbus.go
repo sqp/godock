@@ -13,18 +13,21 @@ import (
 	"strings"
 )
 
-// Introspect defines the introspect text for the StartApplet method.
+// Introspect defines other Dbus actions to provide with introspect.
 var IntrospectApplets = `
+	<method name="ListServices">
+		<arg direction="out" type="s"/>
+	</method>
 	<method name="StartApplet">
-			<arg direction="in" type="s"/>
-			<arg direction="in" type="s"/>
-			<arg direction="in" type="s"/>
-			<arg direction="in" type="s"/>
-			<arg direction="in" type="s"/>
-			<arg direction="in" type="s"/>
-			<arg direction="in" type="s"/>
-			<arg direction="in" type="s"/>
-		</method>`
+		<arg direction="in" type="s"/>
+		<arg direction="in" type="s"/>
+		<arg direction="in" type="s"/>
+		<arg direction="in" type="s"/>
+		<arg direction="in" type="s"/>
+		<arg direction="in" type="s"/>
+		<arg direction="in" type="s"/>
+		<arg direction="in" type="s"/>
+	</method>`
 
 // activeApp holds a reference to an active applet instance.
 //
@@ -37,25 +40,26 @@ type activeApp struct {
 // Manager is an external applets manager for cairo-dock.
 //
 type Manager struct {
+	*srvdbus.Loader // Extends the applet service loader to provide its methods on the bus.
+
 	actives  map[string]*activeApp // Active applets.    Key = applet dbus path (/org/cairodock/CairoDock/appletName).
 	services cdtype.ListStarter    // Available applets. Key = applet name.
-	conn     *dbus.Conn
 	log      cdtype.Logger
 }
 
 // NewManager creates a loader with the given list of applets services.
 //
-func NewManager(services cdtype.ListStarter, conn *dbus.Conn, log cdtype.Logger) *Manager {
+func NewManager(loader *srvdbus.Loader, log cdtype.Logger, services cdtype.ListStarter) *Manager {
 	return &Manager{
+		Loader:   loader,
 		services: services,
 		actives:  make(map[string]*activeApp),
-		conn:     conn,
 		log:      log}
 }
 
-// Count returns the number of managed applets.
+// CountActive returns the number of managed applets.
 //
-func (load *Manager) Count() int {
+func (load *Manager) CountActive() int {
 	return len(load.actives)
 }
 
@@ -114,9 +118,15 @@ func (load *Manager) StartApplet(a, b, c, d, e, f, g, h string) *dbus.Error {
 	load.log.Debug("StartApplet", name)
 	app := fn()
 
+	if app == nil {
+		load.log.NewErr(name, "failed to start applet")
+		return nil
+		// return &dbus.Error{Name: "start failed: " + name}
+	}
+
 	backend := appdbus.NewWithApp(app, args, h)
 
-	er := backend.ConnectEvents(load.conn)
+	er := backend.ConnectEvents(load.Loader.Conn)
 	load.log.Err(er, "ConnectEvents") // TODO: Big problem, need to handle better?
 
 	load.actives[c] = &activeApp{
@@ -161,14 +171,6 @@ func (load *Manager) GetApplets(name string) (list []cdtype.AppInstance) {
 //
 //----------------------------------------------------------[ DBUS CALLBACKS ]--
 
-// RestartDock is a full restart of the dock, respawned in the same location if
-// it was managed.
-//
-// func (load *Manager) RestartDock() *dbus.Error {
-// 	load.log.Err(RestartDock(), "restart dock")
-// 	return nil
-// }
-
 // ListServices displays active services.
 //
 func (load *Manager) ListServices() (string, *dbus.Error) {
@@ -195,20 +197,6 @@ func (load *Manager) ListServices() (string, *dbus.Error) {
 	return str, nil
 }
 
-// LogWindow provides an optional call to open the log window.
-// var LogWindow func()
-
-// LogWindow opens the log terminal.
-//
-// func (load *Manager) LogWindow() *dbus.Error {
-// 	if LogWindow != nil {
-// 		LogWindow()
-// 	} else {
-// 		load.log.NewErr("no log service available", "open log window")
-// 	}
-// 	return nil
-// }
-
 //
 //------------------------------------------------------------[ DOCK CONTROL ]--
 
@@ -223,40 +211,19 @@ func StartApplet(a, b, c, d, e, f, g string) error {
 	return client.Call("StartApplet", "", a, b, c, d, e, f, g)
 }
 
-// StartDock launch the dock.
+// ListServices forwards action to get the list of active services.
 //
-// func StartDock() error {
-// 	// TODO: use loader logger.
-// 	return log.ExecAsync("cairo-dock") // TODO: create a dedicated logger to the dock when sender becomes used.
+func ListServices() (string, error) {
+	client, e := dbuscommon.GetClient(srvdbus.SrvObj, srvdbus.SrvPath)
+	if e != nil {
+		return "", e
+	}
 
-// 	// cmd := exec.Command("cairo-dock")
-// 	// cmd.Stdout = log.Logs
-// 	// cmd.Stderr = log.Logs // TODO: need to split std and err streams.
-// 	// return cmd.Start()
-// }
-
-// // cmd := exec.Command("cairo-dock")
-// // cmd.Stdout = logHistory
-// // cmd.Stderr = logHistory //os.Stderr
-
-// // if err := cmd.Start(); err != nil {
-// // 	logger.Err(err, "start dock")
-// // }
-
-// StopDock close the dock.
-//
-// func StopDock() error {
-// 	return appdbus.DockQuit()
-// }
-
-// // RestartDock close and relaunch the dock.
-// //
-// func RestartDock() error {
-// 	if e := StopDock(); e != nil {
-// 		return e
-// 	}
-// 	return StartDock()
-// }
-
-//
-//-----------------------------------------------------------------[ HELPERS ]--
+	call := client.Object.Call("ListServices", 0)
+	if call.Err != nil {
+		return "", call.Err
+	}
+	str := ""
+	e = call.Store(&str)
+	return str, e
+}

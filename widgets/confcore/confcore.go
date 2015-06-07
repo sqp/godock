@@ -4,7 +4,8 @@ package confcore
 import (
 	"github.com/conformal/gotk3/gtk"
 
-	"github.com/sqp/godock/libs/log"
+	"github.com/sqp/godock/libs/cdtype"
+	"github.com/sqp/godock/libs/tran"
 
 	"github.com/sqp/godock/widgets/common"
 	"github.com/sqp/godock/widgets/confapplets"
@@ -146,6 +147,12 @@ var coreItems = []*Item{
 		Title: confsettings.GuiGroup,
 		Icon:  "cairo-dock.svg"},
 
+	// {
+	// 	Key:     "Help",
+	// 	Title:   "Help",
+	// 	Icon:    "plug-ins/Help/icon.svg",
+	// 	Tooltip: "Try new themes and save your theme."},
+
 	// + icon effects*
 	// _add_sub_group_to_group_button (pGroupDescription, "Indicators", "icon-indicators.svg", _("Indicators"));
 
@@ -197,19 +204,21 @@ type ConfCore struct {
 	switcher *pageswitch.Switcher
 
 	data Controller
+	log  cdtype.Logger
 }
 
 // New creates a ConfCore widget to edit the main cairo-dock config.
 //
-func New(data Controller, switcher *pageswitch.Switcher) *ConfCore {
+func New(data Controller, log cdtype.Logger, switcher *pageswitch.Switcher) *ConfCore {
 	paned, _ := gtk.PanedNew(gtk.ORIENTATION_HORIZONTAL)
 
 	widget := &ConfCore{
 		Paned:    *paned,
 		switcher: switcher,
 		data:     data,
+		log:      log,
 	}
-	widget.list = NewList(widget)
+	widget.list = NewList(widget, log)
 	widget.Pack1(widget.list, true, true)
 
 	widget.SetPosition(panedPosition)
@@ -249,7 +258,7 @@ func (widget *ConfCore) Save() {
 		saver.Save()
 
 		item, e := widget.list.Selected()
-		if log.Err(e, "Save: selection problem") {
+		if widget.log.Err(e, "Save: selection problem") {
 			return
 		}
 
@@ -309,7 +318,7 @@ func (widget *ConfCore) grabber() grabber {
 // onSelect acts as a row selected callback.
 //
 func (widget *ConfCore) onSelect(item *Item, e error) {
-	if log.Err(e, "onSelect: selection problem") {
+	if widget.log.Err(e, "onSelect: selection problem") {
 		return
 	}
 	// widget.switcher.Clear() // unused yet
@@ -324,14 +333,14 @@ func (widget *ConfCore) onSelect(item *Item, e error) {
 	file := ""
 	switch item.Key {
 	case TabShortkeys:
-		w := confshortkeys.New(widget.data)
+		w := confshortkeys.New(widget.data, widget.log)
 		w.Load()
 		widget.Pack2(w, true, true)
 		widget.config = w
 		return
 
 	case TabDownload: // download tab has a special widget.
-		w := confapplets.New(widget.data, nil, confapplets.ListExternal)
+		w := confapplets.New(widget.data, widget.log, nil, confapplets.ListExternal)
 		w.Load()
 		w.ShowAll()
 
@@ -346,8 +355,8 @@ func (widget *ConfCore) onSelect(item *Item, e error) {
 		file = widget.data.MainConf()
 	}
 
-	build, e := confbuilder.NewGrouper(widget.data, widget.data.GetWindow(), file, "")
-	if log.Err(e, "Load Keyfile "+file) {
+	build, e := confbuilder.NewGrouper(widget.data, widget.log, widget.data.GetWindow(), file, "")
+	if widget.log.Err(e, "Load Keyfile "+file) {
 		return
 	}
 	widget.config = build.BuildSingle(item.Key)
@@ -391,7 +400,7 @@ func (widget *ConfCore) UpdateModuleState(name string, active bool) {
 // UpdateShortkeys updates the shortkey widget if it's loaded.
 //
 func (widget *ConfCore) UpdateShortkeys() {
-	log.Info("UpdateShortkeys")
+	widget.log.Info("UpdateShortkeys")
 	// conf, e := widget.list.Selected()
 	// log.Err(e, "confcore selected")
 
@@ -433,13 +442,14 @@ type List struct {
 	model              *gtk.ListStore
 	selection          *gtk.TreeSelection
 	control            controlItems
+	log                cdtype.Logger
 
 	rows map[string]*row
 }
 
 // NewList creates cairo-dock main config pages list.
 //
-func NewList(control controlItems) *List {
+func NewList(control controlItems, log cdtype.Logger) *List {
 	builder := buildhelp.NewFromBytes(confcoreXML())
 
 	widget := &List{
@@ -448,12 +458,13 @@ func NewList(control controlItems) *List {
 		tree:           builder.GetTreeView("tree"),
 		selection:      builder.GetTreeSelection("selection"),
 		control:        control,
+		log:            log,
 		rows:           make(map[string]*row),
 	}
 
 	if len(builder.Errors) > 0 {
 		for _, e := range builder.Errors {
-			log.DEV("build configMain", e)
+			log.Err(e, "build confcore list")
 		}
 		return nil
 	}
@@ -473,14 +484,14 @@ func (widget *List) Load(shareData string) {
 
 		args := gtk.Cols{
 			rowKey:     item.Key,
-			rowName:    item.Title,
+			rowName:    tran.Slate(item.Title),
 			rowTooltip: item.Tooltip,
 		}
 		widget.model.SetCols(iter, args)
 
 		if item.Icon != "" {
 			path := filepath.Join(shareData, item.Icon)
-			if pix, e := common.PixbufNewFromFile(path, iconSize); !log.Err(e, "Load icon") {
+			if pix, e := common.PixbufNewFromFile(path, iconSize); !widget.log.Err(e, "Load icon") {
 				widget.model.SetValue(iter, rowIcon, pix)
 			}
 		}

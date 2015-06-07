@@ -4,14 +4,12 @@ package conficons
 import (
 	"github.com/conformal/gotk3/gtk"
 
+	"github.com/sqp/godock/libs/cdtype"
 	"github.com/sqp/godock/libs/gldi"
-	"github.com/sqp/godock/libs/log"
 
 	"github.com/sqp/godock/widgets/common"
 	"github.com/sqp/godock/widgets/confbuilder"
 	"github.com/sqp/godock/widgets/confbuilder/datatype"
-	"github.com/sqp/godock/widgets/gtk/buildhelp"
-	"github.com/sqp/godock/widgets/gtk/gunvalue"
 	"github.com/sqp/godock/widgets/pageswitch"
 
 	"errors"
@@ -49,18 +47,20 @@ type GuiIcons struct {
 	switcher *pageswitch.Switcher
 
 	data Controller
+	log  cdtype.Logger
 }
 
 // New creates a GuiIcons widget to edit cairo-dock icons config.
 //
-func New(data Controller, switcher *pageswitch.Switcher) *GuiIcons {
+func New(data Controller, log cdtype.Logger, switcher *pageswitch.Switcher) *GuiIcons {
 	paned, _ := gtk.PanedNew(gtk.ORIENTATION_HORIZONTAL)
 	widget := &GuiIcons{
 		Paned:    *paned,
 		switcher: switcher,
 		data:     data,
+		log:      log,
 	}
-	widget.icons = NewList(widget)
+	widget.icons = NewList(widget, log)
 
 	up, _ := gtk.ButtonNewFromIconName("go-up", gtk.ICON_SIZE_BUTTON)
 	down, _ := gtk.ButtonNewFromIconName("go-down", gtk.ICON_SIZE_BUTTON)
@@ -78,31 +78,25 @@ func New(data Controller, switcher *pageswitch.Switcher) *GuiIcons {
 
 	widget.SetPosition(listIconsWidth) // Paned position = list icons width.
 
-	up.Connect("clicked", func() {
-		ic, e := widget.icons.SelectedIcon()
-		if e == nil {
-			ic.MoveBeforePrevious()
-		}
-	})
-
-	down.Connect("clicked", func() {
-		ic, e := widget.icons.SelectedIcon()
-		if e == nil {
-			ic.MoveAfterNext()
-		}
-	})
-
-	remove.Connect("clicked", func() {
-		ic, e := widget.icons.SelectedIcon()
-		if e == nil {
-			ic.RemoveFromDock()
-		}
-	})
+	up.Connect("clicked", widget.actionSelected(datatype.Iconer.MoveBeforePrevious))
+	down.Connect("clicked", widget.actionSelected(datatype.Iconer.MoveAfterNext))
+	remove.Connect("clicked", widget.actionSelected(datatype.Iconer.RemoveFromDock))
 
 	// widget.icons.Connect("row-inserted", func() { log.Info("row inserted") })
 	// widget.icons.Connect("row-deleted", func() { log.Info("row deleted") })
 
 	return widget
+}
+
+// actionSelected prepares a callback to act on the icon of the selected row.
+//
+func (widget *GuiIcons) actionSelected(call func(datatype.Iconer)) func() {
+	return func() {
+		ic, e := widget.icons.SelectedIcon()
+		if e == nil {
+			call(ic)
+		}
+	}
 }
 
 // Load loads the list of icons in the iconsList.
@@ -127,7 +121,7 @@ func (widget *GuiIcons) Select(conf string) bool {
 // Clear clears the widget data.
 //
 func (widget *GuiIcons) Clear() string {
-	path, _ := widget.icons.SelectedConf()
+	path := widget.icons.SelectedConf()
 	widget.switcher.Clear()
 
 	if widget.config != nil {
@@ -213,14 +207,19 @@ func (widget *GuiIcons) onSelect(icon datatype.Iconer, ei error) {
 		return
 	}
 
-	build, e := confbuilder.NewGrouper(widget.data, widget.data.GetWindow(), icon.ConfigPath(), icon.GetGettextDomain())
-	if log.Err(e, "Load Keyfile "+icon.ConfigPath()) {
+	build, e := confbuilder.NewGrouper(widget.data, widget.log, widget.data.GetWindow(), icon.ConfigPath(), icon.GetGettextDomain())
+	if widget.log.Err(e, "Load Keyfile "+icon.ConfigPath()) {
 		return
 	}
-
-	if icon.IsTaskbar() {
+	name, _ := icon.DefaultNameIcon()
+	switch {
+	case icon.IsTaskbar():
 		widget.config = build.BuildSingle("TaskBar")
-	} else {
+
+	case name == "_desklets_":
+		widget.config = build.BuildSingle("Desklets")
+
+	default:
 		widget.config = build.BuildAll(widget.switcher)
 
 		// Little hack for empty launchers, not sure it could go somewhere else.
@@ -232,7 +231,6 @@ func (widget *GuiIcons) onSelect(icon datatype.Iconer, ei error) {
 	}
 	widget.Pack2(widget.config, true, true)
 	widget.config.ShowAll()
-
 }
 
 func launcherMagic(icon datatype.Iconer, origins string) gtk.IWidget {
@@ -240,23 +238,18 @@ func launcherMagic(icon datatype.Iconer, origins string) gtk.IWidget {
 
 	apps := strings.Split(origins, ";")
 
-	var dir string
 	if len(apps) > 0 {
-		dir = filepath.Dir(apps[0])
+		// Extract the path from the first item.
+		dir := filepath.Dir(apps[0])
 		apps[0] = filepath.Base(apps[0])
-		// log.DEV("Launcher origin", apps[0])
-		// log.DETAIL(apps[1:])
-	}
 
-	desktop := icon.GetClassInfo(gldi.ClassDesktopFile)
-	for k, v := range apps {
-		flag := false
-		if filepath.Join(dir, v) == desktop {
-			flag = true
-		}
-		apps[k] = strings.TrimSuffix(apps[k], ".desktop")
-		if flag {
-			apps[k] = common.Bold(apps[k])
+		// Remove suffix from apps names and highlight the active one.
+		desktop := icon.GetClassInfo(gldi.ClassDesktopFile)
+		for k, v := range apps {
+			apps[k] = strings.TrimSuffix(apps[k], ".desktop")
+			if filepath.Join(dir, v) == desktop {
+				apps[k] = common.Bold(apps[k])
+			}
 		}
 	}
 
@@ -273,146 +266,153 @@ func launcherMagic(icon datatype.Iconer, origins string) gtk.IWidget {
 
 //-------------------------------------------------------[ WIDGET ICONS LIST ]--
 
-// Liststore rows. Must match the ListStore declaration type and order.
-//
-const (
-	rowConf = iota
-	rowIcon
-	rowName
-)
-
 // controlItems forwards events to other widgets.
 //
 type controlItems interface {
 	onSelect(datatype.Iconer, error)
 }
 
-// row defines a pointer to link the icon object with its iter.
-//
-type row struct {
-	Iter *gtk.TreeIter
-	Icon datatype.Iconer
-}
-
 // List defines a dock icons management widget.
 //
 type List struct {
 	gtk.ScrolledWindow // Main widget is the container. The ScrolledWindow will handle list scrollbars.
-	tree               *gtk.TreeView
-	model              *gtk.ListStore
-	selection          *gtk.TreeSelection
-	control            controlItems
+	list               *gtk.ListBox
 
-	rows map[string]*row // maybe need to make if map[string] to get a ref to configfile.
+	index map[*gtk.ListBoxRow]datatype.Iconer
+
+	control controlItems // link to higher level widgets.
+	log     cdtype.Logger
 }
 
 // NewList creates a dock icons management widget.
 //
-func NewList(control controlItems) *List {
-	builder := buildhelp.New()
-
-	builder.AddFromString(string(conficonsXML()))
-	// builder.AddFromFile("conficons.xml")
-
+func NewList(control controlItems, log cdtype.Logger) *List {
+	scroll, _ := gtk.ScrolledWindowNew(nil, nil)
 	widget := &List{
-		ScrolledWindow: *builder.GetScrolledWindow("widget"),
-		model:          builder.GetListStore("model"),
-		tree:           builder.GetTreeView("tree"),
-		selection:      builder.GetTreeSelection("selection"),
+		ScrolledWindow: *scroll,
 		control:        control,
-		rows:           make(map[string]*row),
+		log:            log,
+		index:          make(map[*gtk.ListBoxRow]datatype.Iconer),
 	}
 
-	if len(builder.Errors) > 0 {
-		for _, e := range builder.Errors {
-			log.DEV("build conficons", e)
-		}
-		return nil
-	}
-
-	// Action: on Treeview Selected line.
-	widget.selection.Connect("changed", widget.onSelectionChanged)
+	widget.list, _ = gtk.ListBoxNew()
+	widget.list.Connect("row-selected", widget.onSelectionChanged)
+	widget.Add(widget.list)
 
 	return widget
 }
 
 // Load loads icons list in the widget.
 //
-func (widget *List) Load(icons map[string][]datatype.Iconer) {
+func (widget *List) Load(icons *datatype.ListIcon) {
 	widget.Clear()
 
-	for container, byOrder := range icons { // container, byOrder
-		if container != datatype.KeyMainDock {
-			log.Info("container dropped", container, "size:", len(byOrder))
-			continue
-		}
+	for _, iconContainer := range icons.Maindocks {
+		widget.addBoxItem(iconContainer.Container, 0, true)
+		widget.iconsDock(iconContainer.Icons, icons.Subdocks, 1)
+	}
 
-		for _, icon := range byOrder {
-			iter := widget.model.Append()
-			confPath := icon.ConfigPath()
-			widget.rows[confPath] = &row{iter, icon} // also save local reference to icon so it's not garbage collected.
+	widget.ShowAll()
+}
 
-			name, img := icon.DefaultNameIcon()
+// iconsDock adds a list of icons, and fills subdocks content if needed (recursive).
+//
+func (widget *List) iconsDock(icons []datatype.Iconer, subdocks map[string][]datatype.Iconer, indent int) {
+	for _, icon := range icons {
+		widget.addBoxItem(icon, indent, icon.IsStackIcon())
 
-			widget.model.SetCols(iter, gtk.Cols{
-				rowName: name,
-				rowConf: confPath,
-			})
-
-			if img != "" {
-				if pix, e := common.PixbufNewFromFile(img, iconSize); !log.Err(e, "Load icon") {
-					widget.model.SetValue(iter, rowIcon, pix)
-				}
+		if icon.IsStackIcon() {
+			name, _ := icon.DefaultNameIcon()
+			subicons, ok := subdocks[name]
+			if ok {
+				widget.iconsDock(subicons, subdocks, indent+1)
 			}
 		}
 	}
 }
 
-// SelectedIcon returns the iconer matching the selected row.
+// addBoxItem adds an item to the list.
 //
-func (widget *List) SelectedIcon() (datatype.Iconer, error) {
-	key, e := widget.SelectedConf()
-	if e != nil {
-		return nil, e
-	}
-	icon, ok := widget.rows[key]
-	if !ok {
-		// TODO:  warn
-		return nil, errors.New("no matching row found")
-	}
-	return icon.Icon, nil
-}
+func (widget *List) addBoxItem(icon datatype.Iconer, indent int, bold bool) *gtk.ListBoxRow {
+	row, _ := gtk.ListBoxRowNew()
+	box, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
+	row.Add(box)
 
-// SelectedConf returns the path to icon config file for the selected row.
-//
-func (widget *List) SelectedConf() (string, error) {
-	return gunvalue.SelectedValue(widget.model, widget.selection, rowConf).String()
-}
+	name, img := icon.DefaultNameIcon()
 
-// Select sets the selected icon based on its config file.
-//
-func (widget *List) Select(conf string) bool {
-	row, ok := widget.rows[conf]
-	if !ok {
-		return false
+	box.Set("margin-start", 15*indent)
+	if bold {
+		name = common.Bold(name)
 	}
-	widget.selection.SelectIter(row.Iter)
-	return true
+	if img != "" {
+		if pix, e := common.ImageNewFromFile(img, iconSize); !widget.log.Err(e, "Load icon") {
+			box.PackStart(pix, false, false, 0)
+		}
+	}
+	lbl, _ := gtk.LabelNew(name)
+	lbl.SetUseMarkup(true)
+	box.PackStart(lbl, false, false, 0)
 
-	// widget.tree.ScrollToCell : lol arguments are a joke, we'll see later.
+	widget.list.Add(row)
+	widget.index[row] = icon
+
+	return row
 }
 
 // Clear clears the widget data.
 //
 func (widget *List) Clear() {
-	widget.rows = make(map[string]*row)
-	widget.model.Clear()
+	for box := range widget.index {
+		widget.list.Remove(box)
+	}
+	widget.index = make(map[*gtk.ListBoxRow]datatype.Iconer)
+}
+
+//---------------------------------------------------------------[ SELECTION ]--
+
+// SelectedIcon returns the iconer matching the selected row.
+//
+func (widget *List) SelectedIcon() (datatype.Iconer, error) {
+	sel := widget.list.GetSelectedRow()
+	if sel == nil {
+		return nil, errors.New("no selection")
+	}
+	for box, icon := range widget.index {
+		if box.Native() == sel.Native() {
+			return icon, nil
+		}
+	}
+	return nil, errors.New("no matching icon for selection")
+}
+
+// SelectedConf returns the path to icon config file for the selected row.
+//
+func (widget *List) SelectedConf() string {
+	icon, e := widget.SelectedIcon()
+	if e != nil {
+		return ""
+	}
+	return icon.ConfigPath()
+}
+
+// Select sets the selected icon based on its config file.
+//
+func (widget *List) Select(conf string) bool {
+	if conf != "" {
+		for box, icon := range widget.index {
+			if icon.ConfigPath() == conf {
+				box.Activate()
+				return true
+			}
+		}
+	}
+	return false
 }
 
 //-------------------------------------------------------[ ACTIONS CALLBACKS ]--
 
 // Selected line has changed. Forward the call to the controler.
 //
-func (widget *List) onSelectionChanged(obj *gtk.TreeSelection) {
+func (widget *List) onSelectionChanged(box *gtk.ListBox, row *gtk.ListBoxRow) {
 	widget.control.onSelect(widget.SelectedIcon())
 }

@@ -78,8 +78,10 @@ func Maindock() *gldi.CairoDock {
 	return gldi.NewDockFromNative(unsafe.Pointer(C.g_pMainDock))
 }
 
-func CurrentThemePath() string {
-	return C.GoString((*C.char)(C.g_cCurrentThemePath))
+func CurrentThemePath(path ...string) string {
+	dir := C.GoString((*C.char)(C.g_cCurrentThemePath))
+	path = append([]string{dir}, path...)
+	return filepath.Join(path...)
 }
 
 func CurrentLaunchersPath() string {

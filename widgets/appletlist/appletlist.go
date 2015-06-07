@@ -2,9 +2,11 @@
 package appletlist
 
 import (
+	"github.com/conformal/gotk3/gdk"
 	"github.com/conformal/gotk3/gtk"
 
-	"github.com/sqp/godock/libs/log"
+	"github.com/sqp/godock/libs/cdtype"
+
 	"github.com/sqp/godock/widgets/common"
 	"github.com/sqp/godock/widgets/confbuilder/datatype"
 	"github.com/sqp/godock/widgets/gtk/buildhelp"
@@ -31,6 +33,7 @@ const (
 type ControlDownload interface {
 	OnSelect(datatype.Appleter)
 	SetControlInstall(ControlInstall)
+	Save()
 }
 
 // ControlInstall is the interface to the download page for the main GUI.
@@ -54,13 +57,14 @@ type List struct {
 	tree               *gtk.TreeView
 	model              *gtk.ListStore
 	control            ControlDownload
+	log                cdtype.Logger
 
 	rows map[string]*Row
 }
 
 // NewList creates a new applets list widget.
 //
-func NewList(control ControlDownload) *List {
+func NewList(control ControlDownload, log cdtype.Logger) *List {
 	builder := buildhelp.New()
 
 	builder.AddFromString(string(appletlistXML()))
@@ -71,6 +75,7 @@ func NewList(control ControlDownload) *List {
 		model:          builder.GetListStore("model"),
 		tree:           builder.GetTreeView("tree"),
 		control:        control,
+		log:            log,
 		rows:           make(map[string]*Row),
 	}
 
@@ -78,12 +83,20 @@ func NewList(control ControlDownload) *List {
 
 	if len(builder.Errors) > 0 {
 		for _, e := range builder.Errors {
-			log.DEV("build appletlist", e)
+			log.Err(e, "build appletlist")
 		}
 		return nil
 	}
 
 	control.SetControlInstall(widget)
+
+	// Double click launch add action.
+	widget.tree.Connect("button-press-event", func(tree *gtk.TreeView, ev *gdk.Event) {
+		btn := &gdk.EventButton{ev}
+		if btn.Button() == 1 && btn.Type() == gdk.EVENT_2BUTTON_PRESS {
+			control.Save()
+		}
+	})
 
 	// Action: Treeview Select line.
 	if sel, e := widget.tree.GetSelection(); !log.Err(e, "appletlist TreeView.GetSelection") {
@@ -124,7 +137,7 @@ func (widget *List) Selected() datatype.Appleter {
 	var treeModel gtk.ITreeModel = widget.model
 	sel.GetSelected(&treeModel, &iter)
 	name, e := gunvalue.New(widget.model.GetValue(&iter, RowKey)).String()
-	if log.Err(e, "Get selected iter name GoValue") {
+	if widget.log.Err(e, "Get selected iter name GoValue") {
 		return nil
 	}
 	if row, ok := widget.rows[name]; ok {
@@ -177,8 +190,8 @@ type ListAdd struct {
 
 // NewListAdd creates an applet list widget with applets allowed to be enabled.
 //
-func NewListAdd(control ControlDownload) *ListAdd {
-	return &ListAdd{*NewList(control), make(map[string]datatype.Appleter)}
+func NewListAdd(control ControlDownload, log cdtype.Logger) *ListAdd {
+	return &ListAdd{*NewList(control, log), make(map[string]datatype.Appleter)}
 }
 
 // Load loads the applet list into the widget.
@@ -207,7 +220,7 @@ func (widget *ListAdd) AddRow(name string, app datatype.Appleter) {
 	// 	gchar *cIcon = cairo_dock_search_icon_s_path (pModule->pVisitCard->cIconFilePath, iSize);
 
 	img := app.GetIconFilePath()
-	if pix, e := common.PixbufNewFromFile(img, iconSize); !log.Err(e, "Load icon") {
+	if pix, e := common.PixbufNewFromFile(img, iconSize); !widget.log.Err(e, "Load icon") {
 		widget.model.SetValue(iter, RowIcon, pix)
 	}
 
@@ -251,8 +264,8 @@ type ListExternal struct {
 
 // NewListExternal creates an applet list widget with external applets to install.
 //
-func NewListExternal(control ControlDownload) *ListExternal {
-	return &ListExternal{*NewList(control)}
+func NewListExternal(control ControlDownload, log cdtype.Logger) *ListExternal {
+	return &ListExternal{*NewList(control, log)}
 }
 
 // Load loads the applet list into the widget.
@@ -271,7 +284,7 @@ func (widget *ListExternal) Load(list map[string]datatype.Appleter) {
 			widget.setActiveIter(iter, true)
 
 			img := pack.GetIconFilePath()
-			if pix, e := common.PixbufNewFromFile(img, iconSize); !log.Err(e, "Load icon") {
+			if pix, e := common.PixbufNewFromFile(img, iconSize); !widget.log.Err(e, "Load icon") {
 				widget.model.SetValue(iter, RowIcon, pix)
 			}
 		} else {

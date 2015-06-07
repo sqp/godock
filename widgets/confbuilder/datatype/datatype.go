@@ -36,7 +36,7 @@ type Source interface {
 
 	// ListIcons builds the list of all icons.
 	//
-	ListIcons() map[string][]Iconer
+	ListIcons() *ListIcon
 
 	// ListKnownApplets builds the list of all applets.
 	//
@@ -60,7 +60,7 @@ type Source interface {
 
 	// ListViews returns the list of views.
 	//
-	ListViews() []Field
+	ListViews() map[string]Handbooker
 
 	// ListAnimations returns the list of animations.
 	//
@@ -238,6 +238,40 @@ type Appleter interface {
 }
 
 //
+//----------------------------------------------------------------[ LISTICON ]--
+
+// ListIcon defines data for icons list building.
+//
+//   Maindocks  list of container + icons. (maindocks, desklets, services)
+//   Subdocks   index of SubdockName => list of icons.
+//
+type ListIcon struct {
+	Maindocks []*ListIconContainer
+	Subdocks  map[string][]Iconer
+}
+
+// NewListIcon creates a container to list dock icons.
+//
+func NewListIcon() *ListIcon {
+	return &ListIcon{Subdocks: make(map[string][]Iconer)}
+}
+
+// Add adds a container with its icons in the list.
+//
+func (li *ListIcon) Add(container Iconer, icons []Iconer) {
+	li.Maindocks = append(li.Maindocks, &ListIconContainer{
+		Container: container,
+		Icons:     icons})
+}
+
+// ListIconContainer defines a ListIcon container with its icons.
+//
+type ListIconContainer struct {
+	Container Iconer
+	Icons     []Iconer
+}
+
+//
 //----------------------------------------------------------[ ICON INTERFACE ]--
 
 // Iconer defines the interface needed by icons provided as config source.
@@ -247,6 +281,9 @@ type Iconer interface {
 	DefaultNameIcon() (string, string) //applets map[string]*packages.AppletPackage) (string, string)
 	IsTaskbar() bool
 	IsLauncher() bool
+
+	IsStackIcon() bool
+
 	GetClassInfo(int) string
 	GetCommand() string
 	Reload()
@@ -294,72 +331,161 @@ type Field struct {
 	Icon string
 }
 
-// IconSeparator is a simple Iconer used for separators. (taskbar only ATM).
+// IconSimple provides a simple Iconer.
 //
-type IconSeparator struct {
+type IconSimple struct {
 	Field
 	Taskbar bool
 }
 
+// NewIconSimple creates a simple Iconer compatible object.
+//
+func NewIconSimple(key, name, icon string) *IconSimple {
+	return &IconSimple{Field: Field{
+		Key:  key,
+		Name: name,
+		Icon: icon}}
+}
+
 // ConfigPath returns the key.
 //
-func (icon *IconSeparator) ConfigPath() string {
-	return icon.Key
+func (is *IconSimple) ConfigPath() string {
+	return is.Key
 }
 
 // IsTaskbar returns whether the icon belongs to the taskbar or not.
 //
-func (icon *IconSeparator) IsTaskbar() bool {
-	return icon.Taskbar
+func (is *IconSimple) IsTaskbar() bool {
+	return is.Taskbar
 }
 
 // IsLauncher returns whether the icon is a separator or not.
 //
-func (icon *IconSeparator) IsLauncher() bool {
+func (is *IconSimple) IsLauncher() bool {
+	return false
+}
+
+// IsStackIcon returns whether the icon is a stack icon (subdock) or not.
+//
+func (is *IconSimple) IsStackIcon() bool {
 	return false
 }
 
 // DefaultNameIcon returns improved name and image for the icon if possible.
 //
-func (icon *IconSeparator) DefaultNameIcon() (string, string) {
-	return icon.Name, icon.Icon
+func (is *IconSimple) DefaultNameIcon() (string, string) {
+	return is.Name, is.Icon
 }
 
 // GetCommand is unused ATM.
-func (icon *IconSeparator) GetCommand() string { return "" }
+func (is *IconSimple) GetCommand() string { return "" }
 
 // GetClassInfo is unused ATM.
-func (icon *IconSeparator) GetClassInfo(int) string { return "" }
+func (is *IconSimple) GetClassInfo(int) string { return "" }
 
 // Reload is unused ATM.
-func (icon *IconSeparator) Reload() {}
+func (is *IconSimple) Reload() {}
 
 // MoveBeforePrevious is unused.
-func (icon *IconSeparator) MoveBeforePrevious() {}
+func (is *IconSimple) MoveBeforePrevious() {}
 
 // MoveAfterNext is unused.
-func (icon *IconSeparator) MoveAfterNext() {}
+func (is *IconSimple) MoveAfterNext() {}
 
 // RemoveFromDock is unused.
-func (icon *IconSeparator) RemoveFromDock() {}
+func (is *IconSimple) RemoveFromDock() {}
 
 // GetGettextDomain is unused.
-func (v *IconSeparator) GetGettextDomain() string { return "" }
+func (is *IconSimple) GetGettextDomain() string { return "" }
 
+//
 //------------------------------------------------------[ HANDBOOK INTERFACE ]--
 
 // Handbooker defines the interface needed by handbook module data provided as config source.
 //
 type Handbooker interface {
+	// GetName returns the book key.
+	//
 	GetName() string // name will be used as key.
+
+	// GetTitle returns the book readable name.
+	//
 	GetTitle() string
+
+	// GetAuthor returns the book author.
+	//
 	GetAuthor() string
+
+	// GetDescription returns the book description.
+	//
 	GetDescription() string
+
+	// GetDescription returns the book icon name or path.
+	//
 	GetPreviewFilePath() string
+
+	// GetDescription returns the book gettext domain for translations.
+	//
 	GetGettextDomain() string
+
+	// GetDescription returns the book version.
+	//
 	GetModuleVersion() string
 }
 
+// HandbookSimple provides a simple Handbooker.
+//
+type HandbookSimple struct {
+	Key         string
+	Title       string
+	Author      string
+	Description string
+	Preview     string
+}
+
+// GetName returns the book key.
+//
+func (hs *HandbookSimple) GetName() string { return hs.Key }
+
+// GetTitle returns the book readable name.
+//
+func (hs *HandbookSimple) GetTitle() string { return hs.Title }
+
+// GetAuthor returns the book author.
+//
+func (hs *HandbookSimple) GetAuthor() string { return hs.Author }
+
+// GetDescription returns the book description.
+//
+func (hs *HandbookSimple) GetDescription() string { return hs.Description }
+
+// GetPreviewFilePath returns the book preview path.
+//
+func (hs *HandbookSimple) GetPreviewFilePath() string { return hs.Preview }
+
+// GetGettextDomain is unused.
+//
+func (hs *HandbookSimple) GetGettextDomain() string { return "" }
+
+// GetModuleVersion is unused.
+//
+func (hs *HandbookSimple) GetModuleVersion() string { return "" }
+
+//
+
+// HandbookDescDisk improves HandbookSimple to read the description from disk, using the
+// current description value as source path (implements Handbooker).
+//
+type HandbookDescDisk struct{ Handbooker }
+
+// GetDescription returns the book icon name or path.
+//
+func (dv *HandbookDescDisk) GetDescription() string {
+	body, _ := ioutil.ReadFile(dv.Handbooker.GetDescription())
+	return string(body)
+}
+
+//
 //------------------------------------------------------[ SHORTKEY INTERFACE ]--
 
 // Shortkeyer defines the interface needed by shortkey data provided as config source.

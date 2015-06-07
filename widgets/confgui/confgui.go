@@ -133,12 +133,11 @@ type UpdateShortkeyser interface {
 type GuiConfigure struct {
 	gtk.Box
 
-	datatype.Source             // embeds the data source.
-	window          *gtk.Window // pointer to the parent window.
+	datatype.Source // embeds the data source.
 
-	Menu *confmenu.MenuBar
-
-	stack *gtk.Stack
+	window *gtk.Window       // pointer to the parent window.
+	Menu   *confmenu.MenuBar // GUI menu widget.
+	stack  *gtk.Stack        // GUI main switcher (icons/add/config).
 
 	OnQuit func() // On clicked Quit callback.
 
@@ -184,9 +183,9 @@ func NewGuiConfigure(source datatype.Source, log cdtype.Logger) *GuiConfigure {
 	sw.SetStack(widget.stack)
 	sw.SetHomogeneous(false)
 
-	icons := conficons.New(widget, menuIcons)
-	core := confcore.New(widget, menuIcons)
-	add := confapplets.New(widget, nil, confapplets.ListCanAdd)
+	icons := conficons.New(widget, log, menuIcons)
+	core := confcore.New(widget, log, menuIcons)
+	add := confapplets.New(widget, log, nil, confapplets.ListCanAdd)
 
 	// Add pages to the switcher. This will pack the pages widgets to the gui box.
 
@@ -271,7 +270,7 @@ func (widget *GuiConfigure) ClickedQuit() {
 // If the icon isn't found, the name is cached for the late ReloadItems callback.
 //
 func (widget *GuiConfigure) SelectIcons(item string) {
-	widget.log.Info("SelectIcons", item)
+	// widget.log.Info("SelectIcons", item)
 	b := widget.Select(GroupIcons, item)
 	if b {
 		widget.iconToSelect = "" // Found, clear cache.

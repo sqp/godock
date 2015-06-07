@@ -6,7 +6,6 @@ import (
 
 	"github.com/sqp/godock/libs/appdbus"
 	"github.com/sqp/godock/libs/cdtype" // Logger type.
-	"github.com/sqp/godock/libs/srvdbus"
 	"github.com/sqp/godock/libs/srvdbus/dbuscommon"
 )
 
@@ -80,8 +79,7 @@ func (o *Server) DockStart() error {
 // DockStop stops the dock.
 //
 func (o *Server) DockStop() error {
-	appdbus.DbusPathDock = "/org/cdc/Cdc"
-	return srvdbus.Action((*srvdbus.Client).StopDock)
+	return appdbus.DockQuit()
 }
 
 // DockRestart restarts the dock.

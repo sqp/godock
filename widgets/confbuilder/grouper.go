@@ -4,7 +4,7 @@ package confbuilder
 import (
 	"github.com/conformal/gotk3/gtk"
 
-	"github.com/sqp/godock/libs/log"
+	"github.com/sqp/godock/libs/cdtype"
 
 	"github.com/sqp/godock/widgets/confbuilder/datatype"
 	"github.com/sqp/godock/widgets/gtk/keyfile"
@@ -46,7 +46,7 @@ func (conf *CairoConfig) List(cGroupName string) (list []*Key) {
 
 		if key := ParseKeyComment(cKeyComment); key != nil {
 			if key.Type == '[' { // on gere le bug de la Glib, qui rajoute les nouvelles cles apres le commentaire du groupe suivant !
-				log.DEV("LIBC BUG, DETECTED")
+				// log.DEV("LIBC BUG, DETECTED", cKeyComment) // often seem to be a [gtk-convert]
 				continue
 			}
 
@@ -60,12 +60,13 @@ func (conf *CairoConfig) List(cGroupName string) (list []*Key) {
 
 // Builder returns a builder ready to create a configuration gui for the keyfile.
 //
-func (conf *CairoConfig) Builder(source datatype.Source, win *gtk.Window, gettextDomain string) *Grouper {
+func (conf *CairoConfig) Builder(source datatype.Source, log cdtype.Logger, win *gtk.Window, gettextDomain string) *Grouper {
 	box, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
 	build := &Builder{
 		Box:           *box,
 		Conf:          conf,
 		data:          source,
+		log:           log,
 		win:           win,
 		gettextDomain: gettextDomain,
 	}
@@ -78,12 +79,12 @@ type Grouper struct{ Builder }
 
 // NewGrouper creates a config page builder from the file.
 //
-func NewGrouper(source datatype.Source, win *gtk.Window, configFile, gettextDomain string) (*Grouper, error) {
+func NewGrouper(source datatype.Source, log cdtype.Logger, win *gtk.Window, configFile, gettextDomain string) (*Grouper, error) {
 	keyfile, e := LoadFile(configFile)
 	if e != nil {
 		return nil, e
 	}
-	return keyfile.Builder(source, win, gettextDomain), nil
+	return keyfile.Builder(source, log, win, gettextDomain), nil
 }
 
 // BuildSingle builds a single page config for the given group.
@@ -140,8 +141,6 @@ func (build *Grouper) KeyFile() *keyfile.KeyFile {
 // ParseKeyComment parse comments for a key.
 //
 func ParseKeyComment(cKeyComment string) *Key {
-	//  gchar ***pAuthorizedValuesList, gboolean *bAligned, const gchar **cTipString
-
 	cUsefulComment := strings.TrimLeft(cKeyComment, "# \n")  // remove #, spaces, and endline from start.
 	cUsefulComment = strings.TrimRight(cUsefulComment, "\n") // remove endline from end.
 
@@ -154,9 +153,14 @@ func ParseKeyComment(cKeyComment string) *Key {
 	cUsefulComment = cUsefulComment[1:]
 
 	for i, c := range cUsefulComment {
-		if c != '-' && c != '+' {
-			if c != '*' && c != '&' { // NEED TO IMPROVE TEST OPENGL & CAIRO
+		if c != '-' && c != '+' && c != ' ' {
+			if c == WidgetCairoOnly {
+				// If opengl, need drop key
 
+			} else if c == WidgetOpenGLOnly {
+				// If !opengl, need drop key
+
+			} else {
 				// Try to detect a value indicating the number of elements.
 				key.NbElements, _ = strconv.Atoi(string(cUsefulComment[i:]))
 
@@ -184,41 +188,17 @@ func ParseKeyComment(cKeyComment string) *Key {
 
 	// log.DEV("parsed", string(iType), iNbElements, cUsefulComment)
 
-	// if (*cUsefulComment == WIDGET_CAIRO_ONLY)
-	// {
-	// 	if (g_bUseOpenGL)
-	// 		return NULL;
-	// 	cUsefulComment ++;
-	// }
-	// else if (*cUsefulComment == WIDGET_OPENGL_ONLY)
-	// {
-	// 	if (! g_bUseOpenGL)
-	// 		return NULL;
-	// 	cUsefulComment ++;
-	// }
-
-	// //\______________ On recupere l'alignement.
-	// int len = strlen (cUsefulComment);
-	// if (cUsefulComment[len - 1] == '\n')
-	// {
-	// 	len --;
-	// 	cUsefulComment[len] = '\0';
-	// }
-	// if (cUsefulComment[len - 1] == '/')
-	// {
-	// 	cUsefulComment[len - 1] = '\0';
-	// 	*bAligned = FALSE;
-	// }
-	// else
-	// {
-	// 	*bAligned = TRUE;
-	// }
+	// Special widget alignment with a trailing slash.
+	if strings.HasSuffix(cUsefulComment, "/") {
+		cUsefulComment = strings.TrimSuffix(cUsefulComment, "/")
+		key.IsAlignedVertical = true
+	}
 
 	// Get tooltip.
 	toolStart := strings.IndexByte(cUsefulComment, '{')
 	toolEnd := strings.IndexByte(cUsefulComment, '}')
 	if toolStart > 0 && toolEnd > 0 && toolStart < toolEnd {
-		key.Tooltip = cUsefulComment[toolStart+1 : toolEnd-1]
+		key.Tooltip = cUsefulComment[toolStart+1 : toolEnd]
 		cUsefulComment = cUsefulComment[:toolStart-1]
 	}
 

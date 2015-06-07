@@ -1,0 +1,44 @@
+# Maintainer: SQP <sqp@glx-dock.org>
+
+pkgname=cairo-dock-rework
+pkgver=0.0.3.1
+pkgrel=1
+pkgdesc="Cairo-Dock reworked version with a new GUI and more applets (WIP)."
+arch=('x86_64' 'i686')
+url="http://github.com/sqp/godock"
+license=('GPL3')
+depends=('gtk3' 'gupnp-av' 'gobject-introspection') # also depends on the dock but it's removed so we could use a custom install.
+makedepends=('git' 'go')
+optdepends=(
+  'git: dock version check (Update)'
+  'xclip: clipboard control for uptoshare (NetActivity)'
+  'curl: upload files with uptoshare (NetActivity: all but text services)'
+  'cairo-dock: the dock is mandatory but as optional it allow to use custom installs'
+)
+conflicts=('cairo-dock-rework')
+options=('!strip' '!emptydirs')
+
+srcpath=github.com/sqp/godock
+applets="Audio Cpu DiskActivity DiskFree GoGmail Mem NetActivity Notifications TVPlay Update"
+cdctags="dock"
+
+build() {
+  # Download
+  GOPATH="$srcdir" go get -d -u -tags "$applets $cdctags" $srcpath/cmd/cdc
+
+  # Patch  
+  cd "$srcdir/src/$srcpath" && GOPATH="$srcdir" make patch
+
+  # Build
+  cd "$srcdir/src/$srcpath" && GOPATH="$srcdir" make DOCK="$cdctags $applets" dock
+}
+
+#check() {
+#  GOPATH="$GOPATH:$srcdir" go test -v -x $srcpath/...
+#}
+
+package() {
+  cd "$srcdir/src/$srcpath" && GOPATH="$srcdir" make PKGDIR="$pkgdir" APPLETS="$applets" install-dock
+}
+
+# vim:set ts=2 sw=2 et:

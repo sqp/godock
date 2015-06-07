@@ -9,7 +9,6 @@ import (
 	"github.com/conformal/gotk3/glib"
 	"github.com/conformal/gotk3/gtk"
 
-	"github.com/sqp/godock/libs/log"
 	"github.com/sqp/godock/libs/tran"
 
 	"github.com/sqp/godock/widgets/common"
@@ -217,13 +216,13 @@ func (build *Builder) WidgetColorSelector(key *Key) {
 //
 func (build *Builder) WidgetListTheme(key *Key) {
 	current, _ := build.Conf.GetString(key.Group, key.Name)
-	log.Info("theme", current, key.AuthorizedValues)
+	build.log.Info("theme", current, key.AuthorizedValues)
 
 	model, _ := newModelSimple()
 	model.SetSortColumnId(RowName, gtk.SORT_ASCENDING)
 	combo, getValue := build.newComboBoxWithModel(model, true, false, true)
 
-	details := NewHandbook()
+	details := NewHandbook(build.log)
 	build.addKeyWidget(combo, key, getValue)
 	build.addWidget(details, false, false, 0)
 
@@ -250,37 +249,6 @@ func (build *Builder) WidgetListTheme(key *Key) {
 			combo.SetActiveIter(iter)
 		}
 	}
-
-	// //\______________ On construit le widget de visualisation de themes.
-	// modele = _cairo_dock_gui_allocate_new_model ();
-	// gtk_tree_sortable_set_sort_column_id (GTK_TREE_SORTABLE (modele), CAIRO_DOCK_MODEL_NAME, GTK_SORT_ASCENDING);
-
-	// _add_combo_from_modele (modele, TRUE, FALSE, TRUE);
-
-	// add the state icon.
-	// 	rend = gtk_cell_renderer_pixbuf_new ();
-	// 	gtk_cell_layout_pack_start (GTK_CELL_LAYOUT (pOneWidget), rend, FALSE);
-	// 	gtk_cell_layout_set_attributes (GTK_CELL_LAYOUT (pOneWidget), rend, "pixbuf", CAIRO_DOCK_MODEL_ICON, NULL);
-	// 	gtk_cell_layout_reorder (GTK_CELL_LAYOUT (pOneWidget), rend, 0);
-
-	// //\______________ On recupere les themes.
-	// if (pAuthorizedValuesList != NULL)
-	// {
-	// 	// get the local, shared and distant paths.
-	// 	gchar *cShareThemesDir = NULL, *cUserThemesDir = NULL, *cDistantThemesDir = NULL, *cHint = NULL;
-	// 	if (pAuthorizedValuesList[0] != NULL)
-	// 	{
-	// 		cShareThemesDir = (*pAuthorizedValuesList[0] != '\0' ? cairo_dock_search_image_s_path (pAuthorizedValuesList[0]) : NULL);  // on autorise les ~/blabla.
-	// 		if (pAuthorizedValuesList[1] != NULL)
-	// 		{
-	// 			cUserThemesDir = g_strdup_printf ("%s/%s", g_cExtrasDirPath, pAuthorizedValuesList[1]);
-	// 			if (pAuthorizedValuesList[2] != NULL)
-	// 			{
-	// 				cDistantThemesDir = (*pAuthorizedValuesList[2] != '\0' ? pAuthorizedValuesList[2] : NULL);
-	// 				cHint = pAuthorizedValuesList[3];  // NULL to not filter.
-	// 			}
-	// 		}
-	// 	}
 
 	// 	// list local packages first.
 	// 	_allocate_new_buffer;
@@ -324,13 +292,27 @@ func (build *Builder) WidgetIconThemeList(key *Key) {
 // WidgetViewList adds a view list widget.
 //
 func (build *Builder) WidgetViewList(key *Key) {
-	list := append([]datatype.Field{{Key: "", Name: "default"}}, build.data.ListViews()...)
-	build.newComboBoxFields(key, list)
+	index := build.data.ListViews()
 
-	// RowDesc: "none"}) // (pRenderer != NULL ? pRenderer->cReadmeFilePath : "none")
-	// 		CAIRO_DOCK_MODEL_IMAGE, (pRenderer != NULL ? pRenderer->cPreviewFilePath : "none")
+	model, _ := newModelSimple()
+	combo, getValue := build.newComboBoxWithModel(model, false, false, false)
+	current, _ := build.Conf.GetString(key.Group, key.Name)
+	iter := fillModelWithTheme(model, index, current)
+	model.SetSortColumnId(RowName, gtk.SORT_ASCENDING)
 
-	// 	gtk_tree_sortable_set_sort_column_id (GTK_TREE_SORTABLE (pListStore), CAIRO_DOCK_MODEL_NAME, GTK_SORT_ASCENDING);
+	// Connect the view preview update on selection.
+	details := NewHandbook(build.log)
+	combo.Connect("changed", func() {
+		key := getValue().(string)
+		pack, ok := index[key]
+		if ok {
+			details.SetPackage(pack)
+		}
+	})
+	combo.SetActiveIter(iter) // Set iter after connect, to update with current value.
+
+	build.addKeyWidget(combo, key, getValue)
+	build.addWidget(details, false, false, 0)
 }
 
 // WidgetAnimationList adds an animation list widget.
@@ -419,7 +401,7 @@ func (build *Builder) WidgetDockList(key *Key) {
 
 	getValue := func() interface{} {
 		iter, _ := combo.GetActiveIter()
-		text := GetActiveRowInCombo(model, iter)
+		text := build.getActiveRowInCombo(model, iter)
 		// text := combo.GetActive();
 		return text
 	}
@@ -462,7 +444,7 @@ func (build *Builder) WidgetIconsList(key *Key) {
 	widget.Set("id-column", RowName)
 	getValue := func() interface{} {
 		iter, _ := widget.GetActiveIter()
-		text := GetActiveRowInCombo(model, iter)
+		text := build.getActiveRowInCombo(model, iter)
 		return text
 	}
 
@@ -482,7 +464,7 @@ func (build *Builder) WidgetIconsList(key *Key) {
 		})
 
 		if img != "" {
-			if pix, e := common.PixbufNewFromFile(img, iconSize); !log.Err(e, "Load icon") {
+			if pix, e := common.PixbufNewFromFile(img, iconSize); !build.log.Err(e, "Load icon") {
 				model.SetValue(iter, RowIcon, pix)
 			}
 		}
@@ -639,26 +621,34 @@ func (build *Builder) WidgetJumpToModule(key *Key) {
 func (build *Builder) WidgetLaunchCommand(key *Key) {
 	// if (pAuthorizedValuesList == NULL || pAuthorizedValuesList[0] == NULL || *pAuthorizedValuesList[0] == '\0')
 	// 	break ;
+	if len(key.AuthorizedValues) == 0 || key.AuthorizedValues[0] == "" {
+		return
+	}
+
+	// log.Info(key.Name, key.AuthorizedValues)
+
 	// gchar *cFirstCommand = NULL;
 	// cFirstCommand = pAuthorizedValuesList[0];
-	// if (iElementType == CAIRO_DOCK_WidgetLaunchCommandIfCondition)
-	// {
-	// 	if (pAuthorizedValuesList[1] == NULL)
-	// 	{ // condition without condition...
-	// 		gtk_widget_set_sensitive (pLabel, FALSE);
-	// 		break ;
-	// 	}
-	// 	gchar *cSecondCommand = pAuthorizedValuesList[1];
-	// 	gchar *cResult = cairo_dock_launch_command_sync (cSecondCommand);
-	// 	cd_debug ("%s: %s => %s", __func__, cSecondCommand, cResult);
-	// 	if (cResult == NULL || *cResult == '0' || *cResult == '\0')  // result is 'fail'
-	// 	{
-	// 		gtk_widget_set_sensitive (pLabel, FALSE);
-	// 		g_free (cResult);
-	// 		break ;
-	// 	}
-	// 	g_free (cResult);
-	// }
+	if key.Type == WidgetLaunchCommandIfCondition {
+		if len(key.AuthorizedValues) < 2 {
+			build.pLabel.SetSensitive(false)
+			return
+		}
+		// build.log.Info("test", key.AuthorizedValues[1])
+
+		// build.log.Err(build.log.ExecShow(key.AuthorizedValues[1]), "exec test")
+
+		// gchar *cSecondCommand = pAuthorizedValuesList[1];
+		// gchar *cResult = cairo_dock_launch_command_sync (cSecondCommand);
+		// cd_debug ("%s: %s => %s", __func__, cSecondCommand, cResult);
+		// if (cResult == NULL || *cResult == '0' || *cResult == '\0')  // result is 'fail'
+		// {
+		// 	gtk_widget_set_sensitive (pLabel, FALSE);
+		// 	g_free (cResult);
+		// 	break ;
+		// }
+		// g_free (cResult);
+	}
 	// pOneWidget = gtk_button_new_from_stock (GTK_STOCK_JUMP_TO);
 	// g_signal_connect (G_OBJECT (pOneWidget),
 	// 	"clicked",
@@ -815,7 +805,7 @@ func (build *Builder) WidgetTreeView(key *Key) {
 
 	// value, _ := build.Conf.GetString(key.Group, key.Name)
 	_, values, e := build.Conf.GetStringList(key.Group, key.Name)
-	log.Err(e, "WidgetTreeView conf.GetStringList")
+	build.log.Err(e, "WidgetTreeView conf.GetStringList")
 
 	// Build treeview.
 	model, _ := gtk.ListStoreNew(
@@ -834,7 +824,7 @@ func (build *Builder) WidgetTreeView(key *Key) {
 		iter, ok := model.GetIterFirst()
 		for ; ok; ok = model.IterNext(iter) {
 			str, e := gunvalue.New(model.GetValue(iter, RowName)).String()
-			if !log.Err(e, "WidgetTreeView GetValue "+key.Name) {
+			if !build.log.Err(e, "WidgetTreeView GetValue "+key.Name) {
 				list = append(list, str)
 			}
 		}
@@ -864,7 +854,7 @@ func (build *Builder) WidgetTreeView(key *Key) {
 	//
 
 	if len(key.AuthorizedValues) > 0 {
-		log.DEV("WidgetTreeView AuthorizedValues", key.AuthorizedValues)
+		build.log.Info("WidgetTreeView AuthorizedValues", key.AuthorizedValues)
 	}
 
 	// if (key.AuthorizedValues != NULL && key.AuthorizedValues[0] != NULL)
@@ -887,7 +877,7 @@ func (build *Builder) WidgetTreeView(key *Key) {
 		buttonUp.SetImage(imgUp)
 		buttonDn.SetImage(imgDn)
 
-		data := treeViewData{model, widget, nil}
+		data := treeViewData{build.log, model, widget, nil}
 
 		buttonUp.Connect("clicked", onTreeviewMoveUp, data) // Move selection up and down callbacks.
 		buttonDn.Connect("clicked", onTreeviewMoveDown, data)
@@ -1040,7 +1030,7 @@ func (build *Builder) WidgetLink(key *Key) {
 		text = tran.Slate("link")
 	}
 	widget, e := gtk.LinkButtonNewWithLabel(link, text)
-	log.Err(e, "linkbutton")
+	build.log.Err(e, "linkbutton")
 	build.addSubWidget(widget)
 }
 
@@ -1134,13 +1124,13 @@ func (build *Builder) WidgetStrings(key *Key) {
 //
 func (build *Builder) WidgetHandbook(key *Key) {
 	appletName, e := build.Conf.GetString(key.Group, key.Name)
-	widget := NewHandbook()
+	widget := NewHandbook(build.log)
 	widget.ShowVersion = true
 
 	book := build.data.Handbook(appletName)
 	// pack := build.data.AppletPackage(appletName)
 
-	if !log.Err(e, "WIDGET_HANDBOOK no key") {
+	if !build.log.Err(e, "WIDGET_HANDBOOK no key") {
 		if widget != nil {
 			if book != nil {
 				widget.SetPackage(book)
@@ -1161,7 +1151,7 @@ func (build *Builder) WidgetFrame(key *Key) {
 
 	value, img := "", ""
 	if key.AuthorizedValues[0] == "" {
-		log.DEV("WidgetFrame, need value case 1")
+		build.log.Info("WidgetFrame, need value case 1")
 		// value = g_key_file_get_string(pKeyFile, cGroupName, cKeyName, NULL) // utile ?
 	} else {
 		value = key.AuthorizedValues[0]
@@ -1177,7 +1167,7 @@ func (build *Builder) WidgetFrame(key *Key) {
 		build.pLabelContainer = build.pLabel
 	} else {
 		box, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, MarginIcon/2)
-		if icon, e := common.ImageNewFromFile(img, 20); !log.Err(e, "Frame icon") { // TODO: fix size : int(gtk.ICON_SIZE_MENU)
+		if icon, e := common.ImageNewFromFile(img, 20); !build.log.Err(e, "Frame icon") { // TODO: fix size : int(gtk.ICON_SIZE_MENU)
 			box.Add(icon)
 		}
 		box.Add(build.pLabel)

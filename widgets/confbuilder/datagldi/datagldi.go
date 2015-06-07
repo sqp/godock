@@ -10,7 +10,6 @@ import (
 	"github.com/sqp/godock/libs/packages"
 	"github.com/sqp/godock/libs/ternary"
 	"github.com/sqp/godock/libs/tran"
-	// "github.com/sqp/godock/libs/maindock"
 	"github.com/sqp/godock/widgets/confbuilder/datatype"
 	"github.com/sqp/godock/widgets/gtk/keyfile"
 
@@ -19,6 +18,7 @@ import (
 	"strconv"
 )
 
+//
 //--------------------------------------------------------[ ICONER GLDI ICON ]--
 
 // IconConf wraps a dock icon as Iconer for config data source.
@@ -78,9 +78,12 @@ func (icon *IconConf) Reload() {
 	}
 }
 
-// MoveAfterNext swaps the icon position with the previous one.
+// MoveBeforePrevious swaps the icon position with the previous one.
 //
 func (icon *IconConf) MoveBeforePrevious() {
+	if icon.GetContainer().IsDesklet() {
+		return
+	}
 	prev := icon.GetContainer().ToCairoDock().GetPreviousIcon(&icon.Icon)
 	if prev == nil {
 		return
@@ -91,6 +94,9 @@ func (icon *IconConf) MoveBeforePrevious() {
 // MoveAfterNext swaps the icon position with the next one.
 //
 func (icon *IconConf) MoveAfterNext() {
+	if icon.GetContainer().IsDesklet() {
+		return
+	}
 	next := icon.GetContainer().ToCairoDock().GetNextIcon(&icon.Icon)
 	if next != nil {
 		icon.MoveAfterIcon(icon.GetContainer().ToCairoDock(), next)
@@ -99,13 +105,16 @@ func (icon *IconConf) MoveAfterNext() {
 
 // GetGettextDomain returns the translation domain for the applet.
 //
-func (v *IconConf) GetGettextDomain() string {
-	mi := v.ModuleInstance()
+func (icon *IconConf) GetGettextDomain() string {
+	mi := icon.ModuleInstance()
 	if mi == nil {
 		return ""
 	}
 	return mi.Module().VisitCard().GetGettextDomain()
 }
+
+//
+//--------------------------------------------------------------[ APPLETCONF ]--
 
 // AppletConf wraps a dock module and visitcard as Appleter for config data source.
 //
@@ -332,6 +341,19 @@ func (v *AppletDownload) Uninstall() error {
 //
 //-------------------------------------------------------------[ DATA SOURCE ]--
 
+// HandbookDescTranslate improves Handbooker with a translated description.
+//
+type HandbookDescTranslate struct{ datatype.Handbooker }
+
+// GetDescription returns the book description.
+//
+func (dv *HandbookDescTranslate) GetDescription() string {
+	return tran.Slate(dv.Handbooker.GetDescription())
+}
+
+//
+//-------------------------------------------------------------[ DATA SOURCE ]--
+
 // Data provides a config Source interface based on the dock gldi backend.
 //
 type Data struct{ datatype.SourceCommon }
@@ -385,28 +407,88 @@ func (Data) ListDownloadApplets() map[string]datatype.Appleter {
 
 // ListIcons builds the list of all icons.
 //
-func (Data) ListIcons() map[string][]datatype.Iconer {
-	list := make(map[string][]datatype.Iconer)
-	icons := globals.Maindock().Icons()
+func (Data) ListIcons() *datatype.ListIcon {
+	list := datatype.NewListIcon()
+
+	// Add icons in docks.
 	taskbar := false
-	for _, icon := range icons {
-		parent := icon.GetParentDockName()
+	for _, dock := range gldi.GetAllAvailableDocks(nil, nil) {
+		// for _, dock := range gldi.ListDocksRoot() {
 
-		// Group taskbar icons and separators.
-		if icon.IsTaskbar() || icon.IsSeparatorAuto() {
-			if !taskbar {
-				ic := &datatype.IconSeparator{
-					Field:   datatype.Field{Key: globals.ConfigFile(), Name: "--[ Taskbar ]--"},
-					Taskbar: true}
+		var found []datatype.Iconer
+		for _, icon := range dock.Icons() {
+			if dock.GetRefCount() == 0 { // Maindock.
 
-				list[parent] = append(list[parent], ic)
-				taskbar = true
+				// Group taskbar icons and separators.
+				if icon.IsTaskbar() || icon.IsSeparatorAuto() {
+					if !taskbar {
+						ic := datatype.NewIconSimple(
+							globals.ConfigFile(),
+							"--[ Taskbar ]--",
+							globals.DirShareData("icons/icon-taskbar.png"))
+
+						ic.Taskbar = true
+
+						found = append(found, ic)
+						taskbar = true
+					}
+
+				} else {
+					found = append(found, &IconConf{*icon})
+				}
+
+			} else { // Subdock.
+				parentName := icon.GetParentDockName()
+				list.Subdocks[parentName] = append(list.Subdocks[parentName], &IconConf{*icon})
 			}
-			continue
 		}
 
-		list[parent] = append(list[parent], &IconConf{*icon})
+		if len(found) > 0 {
+			// Only maindocks after the first one have a config file.
+			file := ternary.String(dock.IsMainDock(), "", globals.CurrentThemePath(dock.GetDockName()+".conf"))
+			container := datatype.NewIconSimple(file, dock.GetDockName(), "")
+			list.Add(container, found)
+		}
 	}
+
+	// Add modules in desklets.
+	var desklets []datatype.Iconer
+	for _, desklet := range gldi.DeskletList() {
+		icon := desklet.GetIcon()
+		if icon != nil {
+			desklets = append(desklets, &IconConf{*icon})
+		}
+	}
+
+	if len(desklets) > 0 {
+		container := datatype.NewIconSimple(globals.ConfigFile(), "_desklets_", "")
+		list.Add(container, desklets)
+	}
+
+	// Add other modules (not in a dock or a desklet) : plug-in or detached applet.
+	var services []datatype.Iconer
+	for _, mod := range gldi.ModuleList() {
+		cat := mod.VisitCard().GetCategory()
+
+		if cat != gldi.CategoryBehavior && cat != gldi.CategoryTheme && !mod.IsAutoLoaded() {
+			for _, mi := range mod.InstancesList() {
+
+				if mi.Icon() == nil || (mi.Dock() != nil && mi.Icon().GetContainer() == nil) {
+					icon := datatype.NewIconSimple(
+						mi.GetConfFilePath(),
+						mod.VisitCard().GetTitle(),
+						mod.VisitCard().GetIconFilePath())
+
+					services = append(services, icon)
+				}
+			}
+		}
+	}
+	if len(services) > 0 {
+		container := datatype.NewIconSimple("_services_", tran.Slate("Services"), "") // TODO: find better key, and icon.
+		list.Add(container, services)
+	}
+
 	return list
 }
 
@@ -470,9 +552,15 @@ func (Data) ListScreens() (list []datatype.Field) {
 
 // ListViews returns the list of views.
 //
-func (Data) ListViews() (list []datatype.Field) {
+func (Data) ListViews() map[string]datatype.Handbooker {
+	list := make(map[string]datatype.Handbooker)
 	for key, rend := range gldi.CairoDockRendererList() {
-		list = append(list, displayerField(key, rend))
+		list[key] = &HandbookDescTranslate{&datatype.HandbookDescDisk{&datatype.HandbookSimple{
+			Key:         key,
+			Title:       ternary.String(rend.GetDisplayedName() != "", rend.GetDisplayedName(), key),
+			Description: rend.GetReadmeFilePath(),
+			Preview:     rend.GetPreviewFilePath(),
+		}}}
 	}
 	return list
 }
