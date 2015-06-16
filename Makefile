@@ -50,6 +50,9 @@ patch:
 	# Patch Dbus (for Notifications)
 	cd "$(GOPATH)/src/github.com/godbus/dbus" && git pull --commit --no-edit https://github.com/sqp/dbus fixeavesdrop
 
+	# Patch gettext (for dock)
+	cd "$(GOPATH)/src/github.com/gosexy/gettext" && git pull --commit --no-edit https://github.com/sqp/gettext nil_string
+
 install:
 	mkdir -p "$(PKGDIR)/usr/bin"
 	install -p -m755 "$(GOPATH)/bin/cdc" "$(PKGDIR)/usr/bin"

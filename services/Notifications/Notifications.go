@@ -9,9 +9,9 @@ package Notifications
 import (
 	"github.com/godbus/dbus"
 
-	"github.com/sqp/godock/libs/appdbus"
 	"github.com/sqp/godock/libs/cdtype"
-	"github.com/sqp/godock/libs/dock" // Connection to cairo-dock.
+	"github.com/sqp/godock/libs/dock"               // Connection to cairo-dock.
+	"github.com/sqp/godock/libs/srvdbus/dbuscommon" // EavesDrop
 
 	"strconv"
 	"strings"
@@ -246,7 +246,7 @@ func (notifs *Notifs) SetOnCount(call func(int)) {
 //
 func (notifs *Notifs) Start() error {
 	var e error
-	notifs.C, e = appdbus.EavesDrop(match)
+	notifs.C, e = dbuscommon.EavesDrop(match)
 	if e != nil {
 		return e
 	}

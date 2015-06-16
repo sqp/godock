@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"strings"
 )
 
 const (
@@ -29,6 +30,10 @@ type Source interface {
 	//MainConf returns the full path to the dock config file.
 	//
 	MainConf() string
+
+	// AppIcon returns the application icon path.
+	//
+	AppIcon() string
 
 	DirAppData() (string, error)
 
@@ -472,9 +477,10 @@ func (hs *HandbookSimple) GetGettextDomain() string { return "" }
 func (hs *HandbookSimple) GetModuleVersion() string { return "" }
 
 //
+//------------------------------------------------------[ HANDBOOK DESC DISK ]--
 
-// HandbookDescDisk improves HandbookSimple to read the description from disk, using the
-// current description value as source path (implements Handbooker).
+// HandbookDescDisk improves Handbooker to read the description from disk,
+// using the current description value as source path.
 //
 type HandbookDescDisk struct{ Handbooker }
 
@@ -483,6 +489,20 @@ type HandbookDescDisk struct{ Handbooker }
 func (dv *HandbookDescDisk) GetDescription() string {
 	body, _ := ioutil.ReadFile(dv.Handbooker.GetDescription())
 	return string(body)
+}
+
+//
+//-----------------------------------------------------[ HANDBOOK DESC SPLIT ]--
+
+// HandbookDescSplit improves Handbooker by replacing \n to EOL in description.
+//
+type HandbookDescSplit struct{ Handbooker }
+
+// GetDescription returns the book description.
+//
+func (dv *HandbookDescSplit) GetDescription() string {
+	desc := dv.Handbooker.GetDescription()
+	return strings.Replace(desc, "\\n", "\n", -1)
 }
 
 //

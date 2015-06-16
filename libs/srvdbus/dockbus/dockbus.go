@@ -1,33 +1,17 @@
-package appdbus
+package dockbus
 
 import (
 	"github.com/godbus/dbus"
 
 	"github.com/sqp/godock/libs/log"
 	"github.com/sqp/godock/libs/packages"
+	"github.com/sqp/godock/libs/srvdbus/dbuscommon"
+	"github.com/sqp/godock/libs/srvdbus/dockpath" // Path to main dock dbus service.
 
 	"path/filepath"
 	"sort"
 	"strings"
 )
-
-var busD *dbus.Object
-
-func busDock() *dbus.Object {
-	if busD == nil {
-		conn, err := dbus.SessionBus()
-		if err != nil {
-			log.Info("DBus Connect", err)
-			return nil
-		}
-		busD = conn.Object(DbusObject, DbusPathDock)
-	}
-	return busD
-}
-
-func dockCall(method string, args ...interface{}) error {
-	return busDock().Call(DbusInterfaceDock+"."+method, 0, args...).Err
-}
 
 //------------------------------------------------------------[ DOCK ACTIONS ]--
 
@@ -45,8 +29,8 @@ func dockCall(method string, args ...interface{}) error {
 //   Icon location (main or subdock name)     "container":"_MainDock_"
 //   Launcher application class               "class":"gjiten"
 //
-func DockAdd(args map[string]interface{}) error {
-	return dockCall("Add", toMapVariant(args))
+func DockAdd(args map[string]interface{}) func(*Client) error {
+	return func(client *Client) error { return client.Call("Add", dbuscommon.ToMapVariant(args)) }
 }
 
 // DockRemove removes an item from the Dock.
@@ -56,8 +40,8 @@ func DockAdd(args map[string]interface{}) error {
 //   Module                                    "type=Module & name=clock"
 //   Instance of a module                      "type=Module-Instance & config-file=clock.conf"
 //
-func DockRemove(arg string) error {
-	return dockCall("Remove", arg)
+func DockRemove(arg string) func(*Client) error {
+	return func(client *Client) error { return client.Call("Remove", arg) }
 }
 
 // func (cda *CdDbus) ActivateModule(module string, state bool) {
@@ -67,27 +51,27 @@ func DockRemove(arg string) error {
 
 // DockReboot reload the current theme of the Dock, as if you had quitted and restarted the dock.
 //
-func DockReboot() error {
-	return dockCall("Reboot")
+func DockReboot(client *Client) error {
+	return client.Call("Reboot")
 }
 
-// DockQuit closes the Dock program.
+// DockQuit sends the Quit action to the dock dbus.
 //
-func DockQuit() error {
-	return dockCall("Quit")
+func DockQuit(client *Client) error {
+	return client.Call("Quit")
 }
 
 // DockShow sets the dock visibility: 0 = HIDE, 1 = SHOW, 2 = TOGGLE.
 // If you have several docks, it will show/hide all of them.
 //
-func DockShow(mode int32) error {
-	return dockCall("ShowDock", mode)
+func DockShow(mode int32) func(*Client) error {
+	return func(client *Client) error { return client.Call("ShowDock", mode) }
 }
 
 // ShowDesklet TODO: need to complete this part.
 //
-func ShowDesklet(mode int32) error {
-	return dockCall("ShowDeslet", mode)
+func ShowDesklet(mode int32) func(*Client) error {
+	return func(client *Client) error { return client.Call("ShowDeslet", mode) }
 }
 
 // IconReload reloads an icon settings from disk.
@@ -95,8 +79,8 @@ func ShowDesklet(mode int32) error {
 //   "type=Module & name=weather"
 //   "config-file=full_path_to_config_or_desktop_file"
 //
-func IconReload(arg string) error {
-	return dockCall("Reload", arg)
+func IconReload(arg string) func(*Client) error {
+	return func(client *Client) error { return client.Call("Reload", arg) }
 }
 
 // DockProperties gets properties of different parts of the dock.
@@ -104,6 +88,7 @@ func IconReload(arg string) error {
 //
 //   "type=Launcher & class=firefox"
 //   "type=Module"
+//   "type=Module & name=clock"
 //   "type=Desklet"
 //
 //   var name, icon string
@@ -115,21 +100,25 @@ func IconReload(arg string) error {
 //   	}
 //   }
 func DockProperties(arg string) (vars []map[string]dbus.Variant) {
-	log.Err(busDock().Call("GetProperties", 0, arg).Store(&vars), "dbus GetProperties")
-	return
+	client, e := NewClient()
+	if log.Err(e, "dbus GetProperties") {
+		return
+	}
+	log.Err(client.Object.Call("GetProperties", 0, arg).Store(&vars), "dbus GetProperties")
+	return vars
 }
 
-//--------------------------------------------------[ GET SPECIAL PROPERTIES ]--
+// //--------------------------------------------------[ GET SPECIAL PROPERTIES ]--
 
 // AppletAdd adds an applet instance referenced by its name.
 //
-func AppletAdd(name string) error {
+func AppletAdd(name string) func(*Client) error {
 	return DockAdd(map[string]interface{}{"type": "Module", "module": name})
 }
 
 // AppletRemove removes an applet instance referenced by its config file.
 //
-func AppletRemove(configFile string) error {
+func AppletRemove(configFile string) func(*Client) error {
 	return DockRemove("type=Module-Instance & config-file=" + configFile)
 }
 
@@ -493,3 +482,36 @@ func parseApplet(props map[string]dbus.Variant) *packages.AppletPackage {
 // 	ActAsLauncher bool   `conf:"act as launcher"`
 
 // }
+
+//
+//------------------------------------------------------------------[ CLIENT ]--
+
+// Client defines a Dbus client connected to the dock server.
+//
+type Client struct {
+	*dbuscommon.Client
+}
+
+// NewClient creates a Client connected to the dock server.
+//
+func NewClient() (*Client, error) {
+	cl, e := dbuscommon.GetClient(dockpath.DbusObject, string(dockpath.DbusPathDock))
+	if e != nil {
+		return nil, e
+	}
+	return &Client{cl}, nil
+}
+
+// Send sends an action to the dock server.
+//
+func Send(action func(*Client) error) error {
+	client, e := NewClient()
+	if e != nil {
+		return e
+	}
+	return action(client) // we have a server, launch the provided action.
+}
+
+// Restart sends the Restart action to the dock dbus.
+//
+// func Restart(client *Client) error { return client.Call("Restart") }

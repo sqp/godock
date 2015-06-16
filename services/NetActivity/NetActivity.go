@@ -1,21 +1,23 @@
 // Package NetActivity is a monitoring and upload applet for Cairo-Dock.
 /*
 
-Benefit from original version:
+Improvements since original DropToShare version:
   Not using temp files.
-  New image upload site: http://pix.toile-libre.org
-  A lot of upload sites don't require external dependencies.
+  New image upload sites:
+    - http://pix.toile-libre.org
+    - http://postimage.org
+  Code simple and maintainable (350 lines for 12 backends).
 
 Dependencies:
-	xsel or xclip for clipboard interaction.
-
-	curl command is needed for those backends:
-	  Image: ImageShackUs, ImgurCom, UppixCom
-	  File:  FreeFr
-
-Compile:
-  libcurl-dev  (I'm using libcurl4-gnutls-dev)
   glib-2.0
+
+  xsel or xclip command for clipboard interaction when build without gtk.
+
+  curl is needed for those backends:
+    Text:  none
+    Image: all
+    Video: all
+    File:  all
 
 Not implemented (yet):
   Icon for the applet.
@@ -26,22 +28,16 @@ Not implemented (yet):
   Custom upload scripts.
   Url shortener (as I'm not fan of those, you better do it yourself if you want it).
 
-Unsure:
-  Dropbox and Ubuntu-One: copying files to a local folder and launching a sync tool
-    doesn't seem to fit in the applet description for me.
-    Ubuntu-one problem solved.
-
 */
 package NetActivity
 
 import (
-	"github.com/atotto/clipboard"
-
-	"github.com/sqp/godock/libs/cdtype"
-	"github.com/sqp/godock/libs/cdtype/bytesize"
-	"github.com/sqp/godock/libs/dock"      // Connection to cairo-dock.
-	"github.com/sqp/godock/libs/sysinfo"   // IOActivity.
-	"github.com/sqp/godock/libs/uptoshare" // Uploader service.
+	"github.com/sqp/godock/libs/cdtype"          // Applets types.
+	"github.com/sqp/godock/libs/cdtype/bytesize" // Human readable bytes.
+	"github.com/sqp/godock/libs/clipboard"       // Set clipboard content.
+	"github.com/sqp/godock/libs/dock"            // Connection to cairo-dock.
+	"github.com/sqp/godock/libs/sysinfo"         // IOActivity.
+	"github.com/sqp/godock/libs/uptoshare"       // Uploader service.
 
 	"fmt"
 )
@@ -72,7 +68,7 @@ func NewApplet() cdtype.AppInstance {
 	app.up.Log = app.Log()
 	app.up.SetPreCheck(func() { app.SetEmblem(app.FileLocation("icon"), EmblemAction) })
 	app.up.SetPostCheck(func() { app.SetEmblem("none", EmblemAction) })
-	app.up.SetOnResult(app.onUpload)
+	app.up.SetOnResult(app.onUploadDone)
 
 	// Network activity actions.
 	app.service = sysinfo.NewIOActivity(app)
@@ -150,7 +146,7 @@ func (app *Applet) OnBuildMenu(menu cdtype.Menuer) {
 		hist := hist
 		menu.AddEntry(hist["file"], "", func() {
 			app.Log().Info(hist["link"])
-			clipboard.WriteAll(hist["link"])
+			clipboard.Write(hist["link"])
 			// app.ShowDialog(link, 5)
 		})
 	}
@@ -163,6 +159,9 @@ func (app *Applet) OnDropData(data string) {
 	app.Upload(data)
 }
 
+//
+//-----------------------------------------------------------------[ SERVICE ]--
+
 // Upload data to a one-click site: file location or text.
 //
 func (app *Applet) Upload(data string) {
@@ -172,9 +171,9 @@ func (app *Applet) Upload(data string) {
 //
 //----------------------------------------------------------------[ CALLBACK ]--
 
-// onUpload is called with the list of links when an item has been uploaded.
+// onUploadDone is called with the list of links when an item has been uploaded.
 //
-func (app *Applet) onUpload(links uptoshare.Links) {
+func (app *Applet) onUploadDone(links uptoshare.Links) {
 	if e, ok := links["error"]; ok {
 		app.ShowDialog("Error: "+e, 10)
 		return
@@ -182,12 +181,12 @@ func (app *Applet) onUpload(links uptoshare.Links) {
 
 	if app.conf.DialogEnabled {
 		if link, ok := links["link"]; ok {
-			clipboard.WriteAll(link)
+			clipboard.Write(link)
 			app.ShowDialog(link, app.conf.DialogDuration)
 		}
 	}
 
-	for k, v := range links { // TMP TO DEL
+	for k, v := range links { // TODO: to improve.
 		app.Log().Info(k, v)
 	}
 }

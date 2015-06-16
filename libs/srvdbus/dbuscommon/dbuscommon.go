@@ -1,3 +1,4 @@
+// Package dbuscommon provides a common dbus server and client base to extend.
 package dbuscommon
 
 import (
@@ -21,8 +22,10 @@ type Client struct {
 
 // GetClient return a connection to the active instance of the internal Dbus
 // service if any. Return nil, nil if none found.
+// InterfacePath is an optional string to provide if the object use an interface
+// path different from SrvObj
 //
-func GetClient(SrvObj, SrvPath string) (*Client, error) {
+func GetClient(SrvObj, SrvPath string, InterfacePath ...string) (*Client, error) {
 	conn, ec := dbus.SessionBus()
 	if ec != nil {
 		return nil, ec
@@ -38,8 +41,12 @@ func GetClient(SrvObj, SrvPath string) (*Client, error) {
 		return nil, errors.New("no service found")
 	}
 
+	if len(InterfacePath) == 0 { // Set default interface path = object name.
+		InterfacePath = []string{SrvObj}
+	}
+
 	// Found active instance, return client.
-	return &Client{*conn.Object(SrvObj, dbus.ObjectPath(SrvPath)), SrvObj}, nil
+	return &Client{*conn.Object(SrvObj, dbus.ObjectPath(SrvPath)), InterfacePath[0]}, nil
 }
 
 // Call calls a method on a Dbus object.
@@ -126,4 +133,30 @@ func SessionBus() (*dbus.Conn, chan *dbus.Signal, error) {
 	c := make(chan *dbus.Signal, 10)
 	conn.Signal(c)
 	return conn, c, nil
+}
+
+// EavesDrop registers to receive Dbus events for custom parsing.
+//
+func EavesDrop(match string) (chan *dbus.Message, error) {
+	conn, e := dbus.SessionBus()
+	if e != nil {
+		return nil, e
+	}
+	e = conn.BusObject().Call("org.freedesktop.DBus.AddMatch", 0, match).Err
+	if e != nil {
+		return nil, e
+	}
+	c := make(chan *dbus.Message, 10)
+	conn.Eavesdrop(c)
+	return c, nil
+}
+
+// ToMapVariant recasts a list of args to map[string]dbus.Variant as requested by the DBus API.
+//
+func ToMapVariant(input map[string]interface{}) map[string]dbus.Variant {
+	vars := make(map[string]dbus.Variant)
+	for k, v := range input {
+		vars[k] = dbus.MakeVariant(v)
+	}
+	return vars
 }

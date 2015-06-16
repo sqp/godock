@@ -265,6 +265,28 @@ func PixToileLibreOrg(filepath, cLocalDir string, bAnonymous bool, limitRate int
 }
 
 //
+//-----------------------------------------------------------[ POSTIMAGE.ORG ]--
+
+// PostimageOrg settings.
+const URLPostimageOrg = "http://postimage.org/"
+
+// PostimageOrg uploads an image file to this website.
+//
+func PostimageOrg(filepath, cLocalDir string, bAnonymous bool, limitRate int) Links {
+	opts := []string{"adult=no"}
+	data, e := curlExec(URLPostimageOrg, limitRate, "upload[]", filepath, opts)
+	if e != nil {
+		return linkErr(e, "PostimageOrg")
+	}
+
+	list := NewLinks()
+	list.Add("link", findLink(data, "http://postimg.org/image/", "' "))
+	list.Add("thumb", findPrefix(data, "[img]", "[/img]"))
+	list.Add("del", findLink(data, "http://postimg.org/delete/", "<"))
+	return list
+}
+
+//
 //---------------------------------------------------------------[ UPPIX.COM ]--
 
 // UppixCom settings.

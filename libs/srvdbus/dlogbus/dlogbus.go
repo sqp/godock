@@ -4,9 +4,10 @@ import (
 	"github.com/godbus/dbus"
 	"github.com/godbus/dbus/introspect"
 
-	"github.com/sqp/godock/libs/appdbus"
 	"github.com/sqp/godock/libs/cdtype" // Logger type.
 	"github.com/sqp/godock/libs/srvdbus/dbuscommon"
+	"github.com/sqp/godock/libs/srvdbus/dockbus"
+	"github.com/sqp/godock/libs/srvdbus/dockpath" // Path to main dock dbus service.
 )
 
 // SrvObj is the Dbus object name for the service.
@@ -79,7 +80,8 @@ func (o *Server) DockStart() error {
 // DockStop stops the dock.
 //
 func (o *Server) DockStop() error {
-	return appdbus.DockQuit()
+	dockpath.DbusPathDock = "/org/cdc/Cdc"
+	return dockbus.Send(dockbus.DockQuit)
 }
 
 // DockRestart restarts the dock.

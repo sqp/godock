@@ -599,7 +599,7 @@ func (build *Builder) addKeyWidget(child gtk.IWidget, key *Key, f func() interfa
 	key.GetValues = append(key.GetValues, f)
 
 	// do {pSubWidgetList = g_slist_append (pSubWidgetList, pSubWidget);} while (0)
-	build.pWidgetBox.PackStart(child, false, false, 0)
+	build.pWidgetBox.PackStart(child, key.IsAlignedVertical, key.IsAlignedVertical, 0)
 }
 
 // _pack_hscale

@@ -1,4 +1,4 @@
-{{define "ShowVersionsDialog"}}{{range .}}<b>{{.Branch}}</b>: Version {{if .Zero}}Version {{.RevDist}}. Up to date.{{end}}{{if .Delta}}{{.RevLocal}} / {{.RevDist}}. <span fgcolor='red'>{{.Delta}} new</span>.{{end}}{{with .NewLocal}}You have {{.}} unmerged patch(s).{{end}}
+{{define "ShowVersionsDialog"}}{{range .}}<b>{{.Branch}}</b>: {{if .Zero}}Up to date.{{end}}{{if .Delta}}<span fgcolor='green'>{{.Delta}} new</span>.{{end}}{{with .NewLocal}}You have {{.}} unmerged patch(s).{{end}}
 {{with .Log}}
 <span size='x-small'><tt>{{.}}</tt></span>{{end}}
 {{end}}{{end}}

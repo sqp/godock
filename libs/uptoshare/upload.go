@@ -1,10 +1,12 @@
 // Package uptoshare uploads files to one-click hosting sites.
 package uptoshare
 
+/*
 // #include <stdlib.h>                 // free
 // #include <glib-2.0/glib/gstdio.h>   // g_filename_from_uri
 // #cgo pkg-config: glib-2.0
 import "C"
+*/
 
 import (
 	"github.com/robfig/config" // Config parser.
@@ -15,7 +17,6 @@ import (
 	"path"
 	"strconv"
 	"strings"
-	"unsafe"
 
 	"errors"
 	"io/ioutil"
@@ -25,6 +26,7 @@ import (
 	"os/exec"
 	"time"
 
+	// "unsafe"
 	// "path/filepath"
 	// "bytes"
 	// "fmt"
@@ -32,14 +34,25 @@ import (
 	// "mime/multipart"
 )
 
-// FileNameFromUri is a wrapper around g_filename_from_uri to convert a filepath to UTF-8.
+/*
+// FileNameFromURI is a wrapper around g_filename_from_uri to convert a filepath to UTF-8.
 //
-func FileNameFromUri(str string) string {
+func FileNameFromURI(str string) string {
 	cstr := C.CString(str)
 	defer C.free(unsafe.Pointer(cstr))
 	cFilePath := C.g_filename_from_uri((*C.gchar)(cstr), nil, nil)
 	defer C.free(unsafe.Pointer(cFilePath))
 	return C.GoString((*C.char)(cFilePath))
+}
+*/
+
+// FileNameFromURI strips file:// in front of a file path.
+//
+// TODO: check that we can safely use that really simplified version, removing
+// C and glib-2.0 dependency.
+//
+func FileNameFromURI(str string) string {
+	return strings.TrimPrefix(str, "file://")
 }
 
 // FileType defines the type of a backend.
@@ -66,6 +79,7 @@ var (
 		"ImageShack.us":       ImageShackUs,
 		"Imgur.com":           ImgurCom,
 		"pix.Toile-Libre.org": PixToileLibreOrg,
+		"Postimage.org":       PostimageOrg,
 		"Uppix.com":           UppixCom,
 	}
 
@@ -312,7 +326,7 @@ func (up *Uploader) uploadOne(data string) Links {
 	switch {
 	case strings.HasPrefix(data, "file://"): // input is a file reference.
 		isFile = true
-		filePath = FileNameFromUri(data)
+		filePath = FileNameFromURI(data)
 		fileType = getFileType(filePath)
 
 	case data[0] == '/': // use input as file location.

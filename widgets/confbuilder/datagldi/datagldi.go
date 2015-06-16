@@ -229,7 +229,8 @@ func findNewInstance(listold, listnew []*gldi.ModuleInstance) string {
 
 //----------------------------------------------------------[ APPLETDOWNLOAD ]--
 
-// AppletDownload wraps a dock module and visitcard as Appleter for config data source.
+// AppletDownload wraps a dock module and an external applet package as Appleter
+// for config data source.
 //
 type AppletDownload struct {
 	packages.AppletPackage
@@ -339,7 +340,7 @@ func (v *AppletDownload) Uninstall() error {
 }
 
 //
-//-------------------------------------------------------------[ DATA SOURCE ]--
+//-------------------------------------------------[ HANDBOOK DESC TRANSLATE ]--
 
 // HandbookDescTranslate improves Handbooker with a translated description.
 //
@@ -362,6 +363,12 @@ type Data struct{ datatype.SourceCommon }
 //
 func (Data) MainConf() string {
 	return globals.ConfigFile()
+}
+
+// AppIcon returns the application icon path.
+//
+func (Data) AppIcon() string {
+	return globals.DirShareData(globals.CairoDockIcon)
 }
 
 // DirShareData returns the path to the shared data dir.
@@ -684,7 +691,7 @@ func (Data) Handbook(name string) datatype.Handbooker {
 	if mod == nil {
 		return nil
 	}
-	return mod.VisitCard()
+	return &datatype.HandbookDescSplit{mod.VisitCard()}
 }
 
 // ManagerReload reloads the manager matching the given name.

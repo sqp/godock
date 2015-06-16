@@ -2,6 +2,7 @@ package Update
 
 import (
 	"github.com/sqp/godock/libs/cdtype"
+	"github.com/sqp/godock/libs/log/color"
 )
 
 const (
@@ -15,11 +16,13 @@ const (
 const defaultVersionPollingTimer = 60
 
 var (
-	// LocationLaunchpad defines the launchpad url that doesn't require auth to download.
-	LocationLaunchpad = "https+urllib://launchpad.net/"
+	grepCmdArgs = []string{"-r", "-I"} // -r: recursive, -I: ignore binaries.
 
-	// CmdBzr defines the command to get dock sources versions and upgrade.
-	CmdBzr = "bzr"
+	// Grep text format.
+	grepTitlePattern   = "\n   ---[ grep %s ]---\n"
+	grepTitleFormatter = color.Yellow
+	grepFileFormatter  = color.Green
+	grepQueryFormatter = color.Yellow
 )
 
 //
@@ -76,18 +79,17 @@ type groupActions struct {
 	VersionEmblemNew      string
 	IconMissing           string
 
-	CommandSudo string
+	CommandSudo  string
+	FlagsApplets string // for the full applets pack, to help enable or disable them.
 
-	DirCore           string
-	DirApplets        string
-	BranchCore        string
-	BranchApplets     string
-	ScriptName        string
-	ScriptLocation    string
-	LocationLaunchpad string
+	DirCore       string
+	DirApplets    string
+	BranchCore    string
+	BranchApplets string
+
+	SourceExtra string // additional repos to version check, separated by \n.
 
 	Debug bool
-	// Debug                 int // debug level. Still unused.
 }
 
 //
@@ -101,11 +103,13 @@ const (
 	ActionShowDiff
 	ActionShowVersions
 	ActionCheckVersions
+	ActionGrepTarget
 	ActionCycleTarget
 	ActionToggleUserMode
 	ActionToggleReload
 	ActionBuildTarget
 	ActionUpdateAll
+	ActionDownloadOthers
 	//~ 	GENERATE_REPORT // TODO
 	// ActionBuildAll
 	// ActionDownloadCore
@@ -120,11 +124,8 @@ const (
 //
 var menuTester = []int{
 	ActionShowVersions,
-	// ActionNone,
-	// ActionUpdateAll,
-	// ActionNone,
-	// ActionDownloadAll,
-	// ActionBuildAll,
+	ActionNone,
+	ActionUpdateAll,
 	ActionNone,
 	ActionToggleUserMode,
 }

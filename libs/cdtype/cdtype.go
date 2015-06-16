@@ -1,8 +1,11 @@
 package cdtype
 
-import "github.com/sqp/godock/libs/poller"
+import (
+	"github.com/sqp/godock/libs/poller"
 
-import "text/template"
+	"os/exec"
+	"text/template"
+)
 
 // Dock constants.
 const (
@@ -328,6 +331,7 @@ type Logger interface {
 	ExecShow(command string, args ...string) error
 	ExecSync(command string, args ...string) (string, error)
 	ExecAsync(command string, args ...string) error
+	ExecCmd(command string, args ...string) *exec.Cmd
 }
 
 // LogOut defines the interface for log forwarding.

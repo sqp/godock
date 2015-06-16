@@ -18,8 +18,8 @@ import (
 	"github.com/sqp/godock/services/allapps"
 
 	// loader
-	"github.com/sqp/godock/libs/appdbus" // hack dock dbus path
 	"github.com/sqp/godock/libs/srvdbus"
+	"github.com/sqp/godock/libs/srvdbus/dockpath" // hack dock dbus path
 
 	// web inspection.
 	// "github.com/pkg/profile"
@@ -210,7 +210,7 @@ func startDock() bool {
 // Start Loader.
 //
 func serviceDbus() (*srvdbus.Loader, error) {
-	appdbus.DbusPathDock = "/org/cdc/Cdc" // TODO: improve to autodetect.
+	dockpath.DbusPathDock = "/org/cdc/Cdc" // TODO: improve to autodetect.
 
 	loader := srvdbus.NewLoader(logger)
 	if loader == nil {

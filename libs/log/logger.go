@@ -212,14 +212,14 @@ func (l *Log) Write(p []byte) (n int, err error) {
 // ExecShow run a command with output forwarded to console and wait.
 //
 func (l *Log) ExecShow(command string, args ...string) error {
-	return l.execCmd(command, args...).Run()
+	return l.ExecCmd(command, args...).Run()
 }
 
 // ExecAsync run a command with output forwarded to console but don't wait for its completion.
 // Errors will be logged.
 //
 func (l *Log) ExecAsync(command string, args ...string) error {
-	return l.GetErr(l.execCmd(command, args...).Start(), "execute failed "+command)
+	return l.GetErr(l.ExecCmd(command, args...).Start(), "execute failed "+command)
 }
 
 // ExecSync run a command with and grab the output to return it when finished.
@@ -233,7 +233,9 @@ func (l *Log) ExecSync(command string, args ...string) (string, error) {
 	return string(out), e
 }
 
-func (l *Log) execCmd(command string, args ...string) *exec.Cmd {
+// ExecCmd provides a generic command with output forwarded to console.
+//
+func (l *Log) ExecCmd(command string, args ...string) *exec.Cmd {
 	cmd := exec.Command(command, args...)
 
 	if l.LogOut != nil {

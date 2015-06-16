@@ -1,17 +1,14 @@
 package build
 
 import (
-	"github.com/sqp/godock/libs/appdbus"
 	"github.com/sqp/godock/libs/cdtype"
 	"github.com/sqp/godock/libs/log/color"
+	"github.com/sqp/godock/libs/log/linesplit" // Parse command output.
 	"github.com/sqp/godock/libs/srvdbus/dlogbus"
 
-	"bufio"
 	"errors"
 	"fmt"
-	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -19,19 +16,45 @@ import (
 	"time"
 )
 
-var cdcpath = []string{"src", "github.com", "sqp", "godock"}
-
-// Log defines the package logger. Mandatory.
-var Log cdtype.Logger
-
-//
-//---------------------------------------------------------[ BUILDERS CONFIG ]--
-
 var (
+	cdcpath = []string{"github.com", "sqp", "godock"}
+
+	// Log defines the package logger. Mandatory.
+	//
+	Log cdtype.Logger
+
+	// IconMissing defines the optional path to the default icon package emblem.
+	//
+	IconMissing string
+
 	// CmdSudo defines the command used to get root access for installation.
+	//
 	CmdSudo = "gksudo"
 
+	labelCore    = "Core"
+	labelApplets = "Applets"
+	labelGodock  = "cdc"
+
 	errInProgress = errors.New("not finished")
+)
+
+// Set by the dock or external backend.
+var (
+	// AppletInfo returns an applet location and icon.
+	//
+	AppletInfo func(string) (dir, icon string)
+
+	// AppletRestart restarts an applet.
+	//
+	AppletRestart func(name string)
+
+	// dirDockData is the location of dock data for icons (overriden by gldi backend with real values).
+	//
+	dirShareData = "/usr/share/cairo-dock"
+
+	// iconCore defines the name of the dock icon (overriden by gldi backend with real values).
+	//
+	iconCore = "cairo-dock.svg"
 )
 
 // SourceType defines the type of a builder.
@@ -39,12 +62,13 @@ type SourceType int
 
 // Applets build types.
 const (
-	Core           SourceType = iota // Dock core.
-	Applets                          // Dock all internal applets (C).
-	AppletInternal                   // Dock one internal applet (C).
-	AppletScript                     // Dock one external applet script (bash, python, ruby).
-	AppletCompiled                   // Dock one external applet compiled (go, mono, vala).
-	Godock                           // New dock.
+	TypeNull           SourceType = iota // Do nothing.
+	TypeCore                             // Dock core.
+	TypeApplets                          // Dock all internal applets (C).
+	TypeAppletInternal                   // Dock one internal applet (C).
+	TypeAppletScript                     // Dock one external applet script (bash, python, ruby).
+	TypeAppletCompiled                   // Dock one external applet compiled (go, mono, vala).
+	TypeGodock                           // New dock.
 )
 
 // GetSourceType try to detect an applet type based on its location and content.
@@ -53,39 +77,87 @@ const (
 func GetSourceType(name string) SourceType {
 	switch name {
 	case "core":
-		return Core
+		return TypeCore
 	case "applets", "plug-ins":
-		return Applets
+		return TypeApplets
 	case "cdc":
-		return Godock
-
+		return TypeGodock
 	}
 
-	pack := appdbus.InfoApplet(name)
-	if pack != nil {
-		dir := pack.Dir()
-
-		if filepath.Base(filepath.Dir(dir)) != cdtype.AppletsDirName { // != "third-party" sounds hacky... (but work for current system and user external dirs)
-			return AppletInternal
+	dir, _ := AppletInfo(name)
+	if dir != "" {
+		if filepath.Base(filepath.Dir(dir)) != cdtype.AppletsDirName { // AppletsDirName is used for system and user external dirs.
+			return TypeAppletInternal
 		}
 
 		if _, e := os.Stat(filepath.Join(dir, "Makefile")); e == nil { // Got makefile => can build.
-			return AppletCompiled
+			return TypeAppletCompiled
 		}
-		return AppletScript // An external without makefile, nothing to do so consider it as a scripted applet.
+
+		return TypeAppletScript // An external without makefile, nothing to do so consider it as a scripted applet.
 	}
 
-	// Log.Info("buildType set to Internal for applet", name)
-	return AppletInternal // Finally it must be an internal one (non instanciable one like dock-rendering).
+	return TypeAppletInternal // Finally it must be an internal one (non instanciable one like dock-rendering).
+}
 
-	// if _, e := os.Stat(app.FileLocation("..", name)); e == nil { // Applet is in external dir.
-	// 	if _, e := os.Stat(app.FileLocation("..", name, "Makefile")); e == nil { // Got makefile => can build.
-	// 		return AppletCompiled
-	// 	}
-	// 	// Else it's a scripted (atm the only other module not scripted is in vala and is the previous version of this module).
-	// 	return AppletScript
-	// }
+//
+//------------------------------------------------------------[ BUILD TARGET ]--
 
+// Builder defines the common builder interface.
+//
+type Builder interface {
+	Label() string
+	Icon() string
+	Build() error
+	SourceDir() string
+	SetProgress(func(float64)) // Need values between 0 and 1 in the renderer.
+	Progress(float64)
+	SetIcon(icon string)
+	SetDir(dir string)
+}
+
+// NewBuilder creates the target renderer/builder.
+//
+func NewBuilder(target string) Builder {
+	switch GetSourceType(target) {
+
+	case TypeGodock:
+		return &BuilderGodock{}
+
+	case TypeCore:
+		build := &BuilderCore{}
+		return build
+
+	case TypeApplets:
+		build := &BuilderApplets{}
+		return build
+
+	case TypeAppletCompiled:
+		dir, icon := AppletInfo(target)
+		if dir == "" {
+			Log.NewErr("applet not found: "+target, "set build target")
+			return &BuilderNull{}
+		}
+
+		build := &BuilderCompiled{Module: target}
+		build.SetIcon(icon)
+		build.SetDir(dir)
+		return build
+
+	case TypeAppletInternal:
+		// Ask icon of module to the Dock as we can't guess its dir and icon name.
+		_, icon := AppletInfo(strings.Replace(target, "-", " ", -1))
+		if icon == "" {
+			icon = IconMissing
+		}
+
+		build := &BuilderInternal{Module: target}
+		build.SetIcon(icon)
+		return build
+	}
+
+	// ensure we have a valid target.
+	return &BuilderNull{}
 }
 
 //
@@ -154,27 +226,19 @@ type BuilderNull struct {
 
 // Icon returns the icon name (or path) of the builder.
 //
-func (build *BuilderNull) Icon() string {
-	return "none"
-}
+func (build *BuilderNull) Icon() string { return "none" }
 
 // Label returns the builder label.
 //
-func (build *BuilderNull) Label() string {
-	return ""
-}
+func (build *BuilderNull) Label() string { return "" }
 
 // SourceDir returns the source path of the builder.
 //
-func (build *BuilderNull) SourceDir() string {
-	return ""
-}
+func (build *BuilderNull) SourceDir() string { return "" }
 
 // Build builds the source code.
 //
-func (build *BuilderNull) Build() error {
-	return errInProgress
-}
+func (build *BuilderNull) Build() error { return errInProgress }
 
 //
 //----------------------------------------------------------[ BUILDER GODOCK ]--
@@ -190,19 +254,19 @@ type BuilderGodock struct {
 // Icon returns the icon name (or path) of the builder.
 //
 func (build *BuilderGodock) Icon() string {
-	return "/usr/share/cairo-dock/cairo-dock.svg"
+	return filepath.Join(dirShareData, iconCore) // TODO: improve with a dedicated icon.
 }
 
 // Label returns the builder label.
 //
 func (build *BuilderGodock) Label() string {
-	return "cdc"
+	return labelGodock
 }
 
 // SourceDir returns the source path of the builder.
 //
 func (build BuilderGodock) SourceDir() string {
-	path := append([]string{os.Getenv("GOPATH")}, cdcpath...)
+	path := append([]string{os.Getenv("GOPATH"), "src"}, cdcpath...)
 	return filepath.Join(path...)
 }
 
@@ -227,25 +291,19 @@ type BuilderCore struct {
 // Icon returns the icon name (or path) of the builder.
 //
 func (build *BuilderCore) Icon() string {
-	return "/usr/share/cairo-dock/cairo-dock.svg"
+	return filepath.Join(dirShareData, iconCore)
 }
 
 // Label returns the builder label.
 //
 func (build *BuilderCore) Label() string {
-	return "Core"
-}
-
-// SourceDir returns the source path of the builder.
-//
-func (build BuilderCore) SourceDir() string {
-	return filepath.Join(build.dir, "cairo-dock-core")
+	return labelCore
 }
 
 // Build builds the source code.
 //
 func (build *BuilderCore) Build() error {
-	return buildCmake(build.SourceDir(), build.BuilderProgress.f, build.MakeFlags)
+	return buildCSources(build.SourceDir(), build.BuilderProgress.f, build.MakeFlags)
 }
 
 //
@@ -262,25 +320,19 @@ type BuilderApplets struct {
 // Icon returns the icon name (or path) of the builder.
 //
 func (build *BuilderApplets) Icon() string {
-	return "/usr/share/cairo-dock/icons/icon-extensions.svg"
+	return filepath.Join(dirShareData, "icons", "icon-extensions.svg")
 }
 
 // Label returns the builder label.
 //
 func (build *BuilderApplets) Label() string {
-	return "Applets"
-}
-
-// SourceDir returns the source path of the builder.
-//
-func (build BuilderApplets) SourceDir() string {
-	return filepath.Join(build.dir, "cairo-dock-plug-ins")
+	return labelApplets
 }
 
 // Build builds the source code.
 //
 func (build *BuilderApplets) Build() error {
-	return buildCmake(build.SourceDir(), build.BuilderProgress.f, build.MakeFlags)
+	return buildCSources(build.SourceDir(), build.BuilderProgress.f, build.MakeFlags)
 }
 
 //
@@ -306,10 +358,11 @@ func (build *BuilderInternal) Label() string {
 //
 func (build *BuilderInternal) Build() error {
 	dir := filepath.Join(build.dir, "build", build.Module)
-	if e := os.Chdir(dir); e != nil {
+	e := makeBuild(dir, build.BuilderProgress.f)
+	if e != nil {
 		return e
 	}
-	return actionMakeAndInstall(build.BuilderProgress.f)
+	return makeInstall(dir)
 }
 
 //
@@ -333,118 +386,139 @@ func (build *BuilderCompiled) Label() string {
 // Build builds the source code.
 //
 func (build *BuilderCompiled) Build() error {
-	if e := os.Chdir(build.dir); e != nil {
-		return e
-	}
+	onStop := startActivityBar(build.BuilderProgress.f)
+	defer onStop()
 
-	t := time.NewTicker(100 * time.Millisecond)
-	quit := make(chan struct{})
-	defer func() {
-		t.Stop()
-		quit <- struct{}{}
-		close(quit)
-	}()
-
-	go activityBar(quit, t.C, build.BuilderProgress.f)
-
-	return Log.ExecShow("make")
+	cmd := Log.ExecCmd("make")
+	cmd.Dir = build.dir
+	return cmd.Run()
 }
 
 //
 //----------------------------------------------------[ BUILD FROM C SOURCES ]--
 
-func buildCmake(dir string, progress func(float64), makeFlags string) error {
-
-	if _, e := os.Stat(dir); e != nil { // No basedir.
+// buildCSources builds C sources from cmake to install.
+//
+// Progress is sent to the update callback provided.
+//
+func buildCSources(dir string, progress func(float64), makeFlags string) error {
+	if _, e := os.Stat(dir); e != nil { // basedir must exist.
 		return e
 	}
 
 	// Initialise build subdir. Create or clean previous compile.
-	dir += "/build"
-	if _, e := os.Stat(dir); e == nil { // Dir exists. Clean if needed.
-		if e = os.Chdir(dir); e != nil {
-			return e
-		}
-		actionMakeClean()
-	} else { // Create build dir and launch cmake.
-		Log.Info("Create build directory")
-		if e = os.Mkdir(dir, os.ModePerm); e != nil {
-			return e
-		}
-		if e = os.Chdir(dir); e != nil {
-			return e
-		}
+	dir = filepath.Join(dir, "build")
 
-		args := []string{"..", "-DCMAKE_INSTALL_PREFIX=/usr"}
-		if makeFlags != "" {
-			args = append(args, strings.Fields(makeFlags)...)
-		}
-		Log.Info("buildCmake args", args)
-		e = Log.ExecShow("cmake", args...)
-		if e != nil {
-			return e
-		}
+	e := cmake(dir, makeFlags)
+	if e != nil {
+		return e
 	}
 
-	return actionMakeAndInstall(progress)
+	e = makeBuild(dir, progress)
+	if e != nil {
+		return e
+	}
+	return makeInstall(dir)
+}
+
+// cmake creates the build subdir and launch cmake (like a ./configure).
+//
+// If the build subdir already exists, launch make clean.
+//
+//   dir must be the build subdir full path.
+//
+func cmake(dir string, makeFlags string) error {
+
+	if _, e := os.Stat(dir); e == nil { // Subdir exists. Clean if needed.
+		makeClean(dir)
+		return nil // Ignore clean error, can fail because it's already too clean.
+	}
+
+	// Create build dir and launch cmake.
+	Log.Info("Create build directory")
+	if e := os.Mkdir(dir, os.ModePerm); e != nil {
+		return e
+	}
+
+	args := []string{"..", "-DCMAKE_INSTALL_PREFIX=/usr"}
+	if makeFlags != "" {
+		args = append(args, strings.Fields(makeFlags)...)
+	}
+	Log.Info("cmake", args)
+	cmd := Log.ExecCmd("cmake", args...)
+	cmd.Dir = dir
+	return cmd.Run()
 
 	//~ PARAM_PLUG_INS:="-Denable-scooby-do=yes -Denable-mail=no -Denable-impulse=yes"
 }
 
-// Make clean in build dir.
+// makeClean cleans the build subdir.
 //
-func actionMakeClean() {
+func makeClean(dir string) error {
 	// if !*buildKeep { // Default is to clean build dir.
-	Log.Info("Clean build directory")
-	Log.ExecShow("make", "clean")
-	// }
+	Log.Debug("Clean build directory")
+
+	cmd := Log.ExecCmd("make", "clean")
+	cmd.Dir = dir
+	return cmd.Run()
 }
 
-// Compile and install a Cairo-Dock source dir.
+// makeBuild builds sources in the build subdir.
+//
 // Progress is sent to the update callback provided.
 //
-func actionMakeAndInstall(progress func(float64)) error {
-	jobs := runtime.NumCPU()
+func makeBuild(dir string, progress func(float64)) error {
+	jobs := strconv.Itoa(runtime.NumCPU())
 
-	cmd := exec.Command("make", "-j", strconv.Itoa(jobs))
-	stdout, _ := cmd.StdoutPipe()
-	cmd.Stderr = os.Stderr
+	Log.Info("make", "-j", jobs)
+	cmd := Log.ExecCmd("make", "-j", jobs)
+	cmd.Dir = dir
 
-	if err := cmd.Start(); err != nil {
-		Log.Err(err, "Execute make")
-		return err
-	}
-	r := bufio.NewReader(stdout)
-
-	line, err := r.ReadString('\n')
-	for err == nil {
-		if len(line) > 3 && line[0] == '[' {
-			current, e := trimInt(line[1:4])
-			if e == nil {
-				progress(float64(current) / 100)
-				fmt.Printf("%s %s", line[:6], color.Green(line[7:]))
-
-				// Log.Info(line[1:4], current)
-
+	lastvalue := 0
+	cmd.Stdout = linesplit.NewWriter(func(line string) {
+		curvalue, curstr, text := trimInt(line)
+		if curvalue > -1 {
+			if curvalue > lastvalue {
+				progress(float64(curvalue) / 100)
+				lastvalue = curvalue
 			}
+			fmt.Printf("%s %s\n", curstr, color.Green(text))
+
 		} else {
-			fmt.Fprint(os.Stdout, line)
+			println(line)
 		}
+	})
 
-		line, err = r.ReadString('\n')
+	e := cmd.Run()
+	if e != nil {
+		return e
 	}
 
-	cmd.Wait()
+	return makeInstall(dir)
+}
 
-	if !cmd.ProcessState.Success() {
-		if err != io.EOF {
-			Log.Err(err, "make error ?")
-			return err
-		}
-		return errors.New("build fail")
+// makeInstall installs sources from the build subdir.
+//
+func makeInstall(dir string) error {
+	cmd := Log.ExecCmd(CmdSudo, "make", "install")
+	cmd.Dir = dir
+	return cmd.Run()
+}
+
+//
+//-----------------------------------------------------------------[ HELPERS ]--
+
+func startActivityBar(render func(float64)) func() {
+	t := time.NewTicker(100 * time.Millisecond)
+	quit := make(chan struct{})
+
+	go activityBar(quit, t.C, render)
+
+	return func() {
+		t.Stop()
+		quit <- struct{}{}
+		close(quit)
 	}
-
-	return Log.ExecShow(CmdSudo, "make", "install")
 }
 
 func activityBar(quit chan struct{}, c <-chan time.Time, render func(float64)) {
@@ -465,9 +539,28 @@ func activityBar(quit chan struct{}, c <-chan time.Time, render func(float64)) {
 	}
 }
 
+// trimInt parses build output to find the progress percent.
 //
+// Recursive to return the last value if more than one has been found.
+//
+// input: "[ 42%] Building..."
+// output: 42, "[ 42%]", "Building..."
+func trimInt(line string) (curvalue int, curstr, text string) {
+	if len(line) < 6 || line[0] != '[' {
+		return -1, "", ""
+	}
 
-//
-func trimInt(str string) (int, error) {
-	return strconv.Atoi(strings.Trim(str, " \n"))
+	current, e := strconv.Atoi(strings.Trim(line[1:4], " "))
+	if e != nil {
+		return -1, "", ""
+	}
+
+	if len(line) > 7 && line[7] == '[' {
+		curvalue, curstr, text := trimInt(line[7:])
+		if curvalue > -1 {
+			return curvalue, curstr, text
+		}
+	}
+
+	return current, line[:6], strings.TrimLeft(line[7:], " ")
 }

@@ -17,6 +17,7 @@ import (
 	"github.com/conformal/gotk3/gtk"
 
 	"github.com/sqp/godock/libs/cdtype" // Logger type.
+	"github.com/sqp/godock/libs/tran"
 
 	"github.com/sqp/godock/widgets/confapplets"
 	"github.com/sqp/godock/widgets/confbuilder/datatype"
@@ -77,6 +78,8 @@ func NewConfigWindow(data datatype.Source, log cdtype.Logger) (*GuiConfigure, *g
 
 	win.SetTitle(WindowTitle)
 	win.SetWMClass(WindowClass, WindowTitle)
+
+	win.SetIconFromFile(data.AppIcon())
 
 	// win.Set("border-width", 4)
 
@@ -215,7 +218,7 @@ func NewGuiConfigure(source datatype.Source, log cdtype.Logger) *GuiConfigure {
 // AddPage adds a tab to the main config switcher with its widget.
 //
 func (widget *GuiConfigure) AddPage(saver Saver, name string, onShow, onHide func()) {
-	widget.stack.AddTitled(saver, name, name)
+	widget.stack.AddTitled(saver, name, tran.Slate(name))
 	widget.pages[name] = &Page{
 		Name:   name,
 		Widget: saver,
@@ -323,28 +326,28 @@ func (widget *GuiConfigure) SetActionNone() {
 // SetActionSave sets the action button with save text.
 //
 func (widget *GuiConfigure) SetActionSave() {
-	widget.Menu.Save.SetLabel("Save")
+	widget.Menu.Save.SetLabel(tran.Slate("Save"))
 	widget.Menu.Save.Show()
 }
 
 // SetActionAdd sets the action button with add text.
 //
 func (widget *GuiConfigure) SetActionAdd() {
-	widget.Menu.Save.SetLabel("Add")
+	widget.Menu.Save.SetLabel(tran.Slate("Add"))
 	widget.Menu.Save.Show()
 }
 
 // SetActionGrab sets the action button with grab text.
 //
 func (widget *GuiConfigure) SetActionGrab() {
-	widget.Menu.Save.SetLabel("Grab")
+	widget.Menu.Save.SetLabel(tran.Slate("Grab"))
 	widget.Menu.Save.Show()
 }
 
 // SetActionCancel sets the action button with cancel text.
 //
 func (widget *GuiConfigure) SetActionCancel() {
-	widget.Menu.Save.SetLabel("Cancel")
+	widget.Menu.Save.SetLabel(tran.Slate("Cancel"))
 	widget.Menu.Save.Show()
 }
 

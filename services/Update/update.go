@@ -8,7 +8,7 @@ users who want to stay up to date, or maybe on a distro without packages.
 package Update
 
 /*
-Copyright : (C) 2012 by SQP
+Copyright : (C) 2012-2015 by SQP
 E-mail    : sqp@glx-dock.org
 
 This program is free software; you can redistribute it and/or
@@ -24,17 +24,18 @@ http://www.gnu.org/licenses/licenses.html#GPL
 */
 
 import (
-	"github.com/sqp/godock/libs/cdtype"
-	"github.com/sqp/godock/libs/dock" // Connection to cairo-dock.
-	"github.com/sqp/godock/libs/packages/build"
+	"github.com/sqp/godock/libs/cdtype"         // Applets types.
+	"github.com/sqp/godock/libs/clipboard"      // Get clipboard content.
+	"github.com/sqp/godock/libs/dock"           // Connection to cairo-dock.
+	"github.com/sqp/godock/libs/log/linesplit"  // Parse command output.
+	"github.com/sqp/godock/libs/packages/build" // Sources builder.
 
+	"fmt"
 	"os"
 	"path"
 	"strconv"
 	"strings"
 )
-
-var log cdtype.Logger
 
 //------------------------------------------------------------------[ APPLET ]--
 
@@ -43,9 +44,9 @@ var log cdtype.Logger
 type Applet struct {
 	cdtype.AppBase // Applet base and dock connection.
 
-	conf    *updateConf // applet user configuration.
-	version *Versions   // applet data.
-	target  BuildTarget // build from sources interface.
+	conf    *updateConf   // applet user configuration.
+	version *Versions     // applet data.
+	target  build.Builder // build from sources interface.
 
 	targetID int // position of current target in BuildTargets list.
 	err      error
@@ -69,8 +70,7 @@ func NewApplet() cdtype.AppInstance {
 	// Set "working" emblem during version check. It should be removed or changed by the check.
 	poller.SetPreCheck(func() { app.SetEmblem(app.FileLocation("img", app.conf.VersionEmblemWork), EmblemVersion) })
 
-	log = app.Log()
-	build.Log = log
+	build.Log = app.Log()
 
 	return app
 }
@@ -100,16 +100,24 @@ func (app *Applet) Init(loadConf bool) {
 	}
 
 	// Branches for versions checking.
-	app.version.sources = []*Branch{
-		NewBranch(app.conf.BranchCore, path.Join(app.conf.SourceDir, app.conf.DirCore)),
-		NewBranch(app.conf.BranchApplets, path.Join(app.conf.SourceDir, app.conf.DirApplets))}
+	app.version.sources = []*Repo{
+		NewRepo(app.Log(), app.conf.BranchCore, path.Join(app.conf.SourceDir, app.conf.DirCore)),
+		NewRepo(app.Log(), app.conf.BranchApplets, path.Join(app.conf.SourceDir, app.conf.DirApplets)),
+	}
+	if app.conf.SourceExtra != "" {
+		sources := strings.Split(app.conf.SourceExtra, "\\n")
+		for _, src := range sources {
+			app.Log().Info(path.Base(src), src)
+			app.version.sources = append(app.version.sources, NewRepo(app.Log(), path.Base(src), src))
+		}
+	}
 
 	// Build targets. Allow actions on sources and displays emblem on top left for togglable target.
 	app.setBuildTarget()
 
 	// Build globals.
-	LocationLaunchpad = app.conf.LocationLaunchpad
 	build.CmdSudo = app.conf.CommandSudo
+	build.IconMissing = app.FileLocation("img", app.conf.IconMissing)
 
 	// Set booleans references for menu checkboxes.
 	app.ActionSetBool(ActionToggleUserMode, &app.conf.UserMode)
@@ -146,7 +154,11 @@ func (app *Applet) DefineEvents(events *cdtype.Events) {
 	//
 	events.OnBuildMenu = func(menu cdtype.Menuer) {
 		if app.conf.UserMode {
-			app.BuildMenu(menu, menuDev)
+			dev := menuDev
+			if len(app.version.sources) > 2 {
+				dev = append(dev, ActionDownloadOthers)
+			}
+			app.BuildMenu(menu, dev)
 		} else {
 			app.BuildMenu(menu, menuTester)
 		}
@@ -155,16 +167,16 @@ func (app *Applet) DefineEvents(events *cdtype.Events) {
 	// Scroll event: launch configured action if in dev mode.
 	//
 	events.OnScroll = func(scrollUp bool) {
-		log.Info("scroll", app.conf.UserMode, app.ActionCount(), app.ActionID(app.conf.DevMouseWheel))
+		// app.Log().Info("scroll", app.conf.UserMode, app.ActionCount(), app.ActionID(app.conf.DevMouseWheel))
 		if !app.conf.UserMode || app.ActionCount() > 0 { // Wheel action only for dev and if no threaded tasks running.
 			return
 		}
 		id := app.ActionID(app.conf.DevMouseWheel)
 		if id == ActionCycleTarget { // Cycle depends on wheel direction.
 			if scrollUp {
-				app.cycleTarget(1)
+				app.actionCycleTarget(1)
 			} else {
-				app.cycleTarget(-1)
+				app.actionCycleTarget(-1)
 			}
 		} else { // Other actions are simple toggle.
 			app.ActionLaunch(id)
@@ -184,15 +196,12 @@ func (app *Applet) DefineEvents(events *cdtype.Events) {
 
 	// Feature to test: rgrep of the dropped string on the source dir.
 	//
-	events.OnDropData = func(data string) {
-		log.Info("Grep " + data)
-		// log.ExecShow("grep", "-r", "--color", data, app.ShareDataDir)
-	}
+	events.OnDropData = app.actionGrepTarget
 }
 
 //----------------------------------------------------------------[ CALLBACK ]--
 
-// Got versions informations, Need to set a new emblem
+// onGotVersions is triggered after a version check, Need to set a new emblem.
 //
 func (app *Applet) onGotVersions(new int, e error) {
 	if new > 0 {
@@ -211,6 +220,7 @@ func (app *Applet) onGotVersions(new int, e error) {
 //-----------------------------------------------------------------[ ACTIONS ]--
 
 // Define applet actions.
+// Actions order in this list must match the order of defined actions numbers.
 //
 func (app *Applet) defineActions() {
 	app.ActionSetMax(1)
@@ -232,7 +242,6 @@ func (app *Applet) defineActions() {
 			Call:     func() { app.actionShowVersions(true) },
 			Threaded: true,
 		},
-
 		&cdtype.Action{
 			ID:       ActionCheckVersions,
 			Name:     "Check versions",
@@ -241,10 +250,17 @@ func (app *Applet) defineActions() {
 			Threaded: true,
 		},
 		&cdtype.Action{
+			ID:       ActionGrepTarget,
+			Name:     "Grep target",
+			Icon:     "view-refresh",
+			Call:     app.actionGrepTargetClip,
+			Threaded: false,
+		},
+		&cdtype.Action{
 			ID:       ActionCycleTarget,
 			Name:     "Cycle target",
 			Icon:     "view-refresh",
-			Call:     func() { go app.cycleTarget(1) }, // async as it require a dbus query (need ask and answer in internal mode).
+			Call:     func() { app.actionCycleTarget(1) },
 			Threaded: true,
 		},
 		&cdtype.Action{
@@ -301,7 +317,14 @@ func (app *Applet) defineActions() {
 			ID:       ActionUpdateAll,
 			Name:     "Update All",
 			Icon:     "network-workgroup",
-			Call:     app.actionUpdateAll,
+			Call:     func() { go app.actionUpdateAll() }, // Threaded as it blocks everything in dock mode.
+			Threaded: true,
+		},
+		&cdtype.Action{
+			ID:       ActionDownloadOthers,
+			Name:     "Download others",
+			Icon:     "network-workgroup",
+			Call:     app.actionUpdateOthers,
 			Threaded: true,
 		},
 	)
@@ -319,16 +342,57 @@ func (app *Applet) actionShowDiff() {
 
 	default: // Launch application.
 		if _, e := os.Stat(app.target.SourceDir()); e != nil {
-			log.NewWarn("Invalid source directory", "ShowDiff")
+			app.Log().NewWarn("Invalid source directory", "ShowDiff")
 		} else {
-			log.ExecAsync(app.conf.DiffCommand, app.target.SourceDir())
+			app.Log().ExecAsync(app.conf.DiffCommand, app.target.SourceDir())
 		}
 	}
 }
 
-// Change target and display the new one.
+// actionGrepTarget searches the directory for the given string.
 //
-func (app *Applet) cycleTarget(delta int) {
+func (app *Applet) actionGrepTarget(search string) {
+	if len(search) < 2 { // security, need to confirm or improve.
+		app.Log().NewErr("grep", "search query too short, need at least 2 chars")
+		return
+	}
+
+	// Print title.
+	fmt.Printf(grepTitlePattern, grepTitleFormatter(search))
+
+	// Prepare command.
+	cmd := app.Log().ExecCmd("grep", append(grepCmdArgs, search)...) // get the command with default args.
+	cmd.Dir = app.target.SourceDir()                                 // set command dir to reduce file path.
+	cmd.Stdout = linesplit.NewWriter(func(s string) {                // results display formatter.
+		sp := strings.SplitN(s, ":", 2)
+		if len(sp) == 2 {
+			print(grepFileFormatter(sp[0]) + ":	") // start line with percent and a tab.
+			colored := strings.Replace(sp[1], search, grepQueryFormatter(search), -1)
+			println(strings.TrimLeft(colored, " 	")) // remove space and tab.
+
+		} else {
+			println(s)
+		}
+	})
+
+	// Launch command.
+	e := cmd.Run()
+	app.Log().Err(e, "Grep target")
+}
+
+// actionGrepTargetClip searches the directory using the clipboard content as
+// search pattern.
+//
+func (app *Applet) actionGrepTargetClip() {
+	search, e := clipboard.Read()
+	if !app.Log().Err(e, "clipboard.Read") {
+		app.actionGrepTarget(search)
+	}
+}
+
+// actionCycleTarget changes the target and display the new one.
+//
+func (app *Applet) actionCycleTarget(delta int) {
 	app.targetID += delta
 	switch {
 	case app.targetID >= len(app.conf.BuildTargets):
@@ -359,8 +423,7 @@ func (app *Applet) actionCheckVersions() {
 	app.Poller().Restart()
 }
 
-// To improve : parse http://bazaar.launchpad.net/~cairo-dock-team/cairo-dock-core/cairo-dock/changes/
-// and maybe see to use as download tool : http://golang.org/src/cmd/go/vcs.go
+// Show new versions popup.
 //
 func (app *Applet) actionShowVersions(force bool) {
 	for _, v := range app.version.Sources() {
@@ -370,7 +433,7 @@ func (app *Applet) actionShowVersions(force bool) {
 	}
 	if force {
 		text, e := app.ExecuteTemplate(app.conf.VersionDialogTemplate, app.conf.VersionDialogTemplate, app.version.Sources())
-		if log.Err(e, "template "+app.conf.VersionDialogTemplate) {
+		if app.Log().Err(e, "template "+app.conf.VersionDialogTemplate) {
 			return
 		}
 
@@ -380,7 +443,7 @@ func (app *Applet) actionShowVersions(force bool) {
 			UseMarkup:  true,
 			// Buttons:    "document-open;cancel",
 		})
-		log.Err(e, "popup")
+		app.Log().Err(e, "popup")
 	}
 }
 
@@ -391,8 +454,8 @@ func (app *Applet) actionBuildTarget() {
 	defer app.AddDataRenderer("progressbar", 0, "")
 
 	// app.Animate("busy", 200)
-	if !log.Err(app.target.Build(), "Build") {
-		log.Info("Build", app.target.Label())
+	if !app.Log().Err(app.target.Build(), "Build") {
+		app.Log().Info("Build", app.target.Label())
 		app.restartTarget()
 	}
 }
@@ -404,38 +467,56 @@ func (app *Applet) actionDownloadCore()    {}
 func (app *Applet) actionDownloadApplets() {}
 func (app *Applet) actionDownloadAll()     {}
 
+// actionUpdateAll download and rebuild the dock core and all applets.
+//
 func (app *Applet) actionUpdateAll() {
 	app.AddDataRenderer("progressbar", 1, "")
 	defer app.AddDataRenderer("progressbar", 0, "")
 
-	log.Info("downloading core")
-	_, e := app.version.sources[0].update()
-	if log.Err(e, "update core") {
+	// Core.
+	_, _, e := app.version.sources[0].update()
+	if app.Log().Err(e, "update core") {
 		return
 	}
-	log.Info("updating core")
+
+	app.Log().Info("updating core")
 	core := &build.BuilderCore{}
 	core.SetDir(app.conf.SourceDir)
 	core.SetProgress(func(f float64) { app.RenderValues(f) })
-	log.Err(core.Build(), "build core")
-
-	log.Info("downloading applets")
-	_, e = app.version.sources[1].update()
-	if log.Err(e, "update applets") {
+	e = core.Build()
+	if app.Log().Err(e, "build core") {
 		return
 	}
-	log.Info("updating applets")
+
+	// Plug-ins.
+	_, _, e = app.version.sources[1].update()
+	if app.Log().Err(e, "update applets") {
+		return
+	}
+
+	app.Log().Info("updating applets")
 	applets := &build.BuilderApplets{}
 	applets.SetDir(app.conf.SourceDir)
 	applets.SetProgress(func(f float64) { app.RenderValues(f) })
 
 	applets.MakeFlags = "-Denable-Logout=no" // "-Denable-gmenu=no"
 
-	log.Err(applets.Build(), "build applets")
+	app.Log().Err(applets.Build(), "build applets")
 
 	app.Poller().Restart()
 }
 
+// actionUpdateOthers update extra git sources (hidden option, use key SourceExtra).
+//
+func (app *Applet) actionUpdateOthers() {
+	for _, src := range app.version.sources[2:] {
+		_, _, e := src.update()
+		app.Log().Err(e, "download", src.Name)
+	}
+	app.Poller().Restart()
+}
+
+//
 //------------------------------------------------------------------[ COMMON ]--
 
 // Get numeric part of a string and convert it to int.

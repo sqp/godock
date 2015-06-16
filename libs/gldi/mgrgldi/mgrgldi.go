@@ -429,6 +429,10 @@ func (o *AppManager) sendIconOrSub(icon *gldi.Icon, container *gldi.Container, m
 		appIcon = icon
 	}
 
+	if appIcon == nil { // TODO: need to check why.
+		return false
+	}
+
 	if appIcon.Ptr == icon.Ptr {
 		return o.sendApp(appIcon, mainEvent, data...) // Main Icon event.
 	}

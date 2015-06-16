@@ -1,4 +1,6 @@
 /*
+Package dist contains documentation and files to build distro packzges.
+
 Linux package installation.
 
 

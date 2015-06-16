@@ -215,7 +215,7 @@ auto-load.conf
 	author = AuthorName
 
 	# A short description of the applet and how to use it.
-	description = This is the description of the applet\nIt can be on several lines.
+	description = This is the description of the applet.\nIt can be on several lines.
 
 	# Category of the applet : 2 = files, 3 = internet, 4 = Desktop, 5 = accessory, 6 = system, 7 = fun
 	category = 5
@@ -233,12 +233,12 @@ applet.go
 	package main
 
 	import (
-		demo "demo/src"                        // Package with your applet source
-		"github.com/sqp/godock/libs/appdbus"   // Connection to cairo-dock.
+		demo "demo/src"                     // Package with your applet source.
+		"github.com/sqp/godock/libs/dock"   // Connection to cairo-dock.
 	)
 
 	func main() {
-		appdbus.StartApplet(demo.NewApplet())
+		dock.StartApplet(demo.NewApplet())
 	}
 
 Makefile
