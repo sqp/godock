@@ -2,48 +2,6 @@
 Package appdbus is the godock cairo-dock connector using DBus.
 
 Its goal is to connect the main Cairo-Dock Golang API, godock/libs/dock, to its parent.
-
-Actions on the main icon
-
-Examples:
-	app.SetQuickInfo("OK")
-	app.SetLabel("label changed")
-	app.SetIcon("/usr/share/icons/gnome/32x32/actions/media-playback-pause.png")
-	app.SetEmblem("/usr/share/icons/gnome/32x32/actions/go-down.png", cdtype.EmblemTopRight)
-	app.Animate("fire", 10)
-	app.DemandsAttention(true, "default")
-	app.ShowDialog("dialog string\n with time in second", 8)
-
-	app.BindShortkey("<Control><Shift>Y", "<Alt>K")
-	app.AddDataRenderer("gauge", 2, "Turbo-night-fuel")
-	app.RenderValues(0.2, 0.7})
-
-	app.AskText("Enter your name", "<my name>")
-	app.AskValue("How many?", 0, 42)
-	app.AskQuestion("Why?")
-
-	app.ControlAppli("devhelp")
-	app.ShowAppli(true)
-
-	properties, e := app.GetAll()
-
-Add SubIcons
-
-Some of the actions to play with SubIcons:
-
-	app.AddSubIcon(
-		"icon 1", "firefox-3.0",      "id1",
-		"text 2", "chromium-browser", "id2",
-		"1 more", "geany",            "id3",
-	)
-	app.RemoveSubIcon("id1")
-
-	app.SubIcon("id3").SetQuickInfo("OK")
-	app.SubIcon("id2").SetLabel("label changed")
-	app.SubIcon("id3").Animate("fire", 3)
-
-Still to do;
-	* Icon Actions missing: PopupDialog, AddMenuItems
 */
 package appdbus
 
@@ -307,11 +265,6 @@ func (cda *CDDbus) SetLabel(label string) error {
 }
 
 // SetIcon set the image of the icon, overwriting the previous one.
-// A lot of image formats are supported, including SVG.
-// You can refer to the image by either its name if it's an image from a icon theme, or by a path.
-//   app.SetIcon("gimp")
-//   app.SetIcon("go-up")
-//   app.SetIcon("/path/to/image")
 //
 func (cda *CDDbus) SetIcon(icon string) error {
 	return cda.dbusIcon.Call("SetIcon", icon)
@@ -320,31 +273,23 @@ func (cda *CDDbus) SetIcon(icon string) error {
 // SetEmblem set an emblem image on the icon. To remove it, you have to use
 // SetEmblem again with an empty string.
 //
-//   app.SetEmblem(app.FileLocation("img", "emblem-work.png"), cdtype.EmblemBottomLeft)
-//
 func (cda *CDDbus) SetEmblem(icon string, position cdtype.EmblemPosition) error {
 	return cda.dbusIcon.Call("SetEmblem", icon, int32(position))
 }
 
-// Animate animates the icon, with a given animation and for a given number of
-// rounds.
+// Animate animates the icon for a given number of rounds.
 //
 func (cda *CDDbus) Animate(animation string, rounds int32) error {
 	return cda.dbusIcon.Call("Animate", animation, rounds)
 }
 
-// DemandsAttention is like the Animate method, but will animate the icon
-// endlessly, and the icon will be visible even if the dock is hidden. If the
-// animation is an empty string, or "default", the animation used when an
-// application demands the attention will be used.
-// The first argument is true to start animation, or false to stop it.
+// DemandsAttention is an endless Animate method.
 //
 func (cda *CDDbus) DemandsAttention(start bool, animation string) error {
 	return cda.dbusIcon.Call("DemandsAttention", start, animation)
 }
 
 // ShowDialog pops up a simple dialog bubble on the icon.
-// The dialog can be closed by clicking on it.
 //
 func (cda *CDDbus) ShowDialog(message string, duration int32) error {
 	return cda.dbusIcon.Go(dockpath.DbusInterfaceApplet+".ShowDialog", 0, nil, message, duration).Err
@@ -352,7 +297,6 @@ func (cda *CDDbus) ShowDialog(message string, duration int32) error {
 
 // PopupDialog open a dialog box . See cdtype.AppIcon.
 //
-// func (cda *CDDbus) PopupDialog(dialog map[string]interface{}, widget map[string]interface{}) error {
 func (cda *CDDbus) PopupDialog(data cdtype.DialogData) error {
 	dialog := map[string]interface{}{
 		"message":     data.Message,
@@ -387,6 +331,21 @@ func (cda *CDDbus) PopupDialog(data cdtype.DialogData) error {
 			"max-label":     dw.MaxLabel,
 		}
 
+	case cdtype.DialogWidgetList:
+		widget = map[string]interface{}{
+			"widget-type": "list",
+			"editable":    dw.Editable,
+			"values":      dw.Values,
+		}
+
+		// Recast interface to real type so it won't crash in ToMapVariant.
+		switch v := dw.InitialValue.(type) {
+		case int32, string:
+			widget["initial-value"] = v
+			// case int:
+			// 	widget["initial-value"] = int32(v)
+		}
+
 	default:
 		widget = make(map[string]interface{})
 	}
@@ -397,33 +356,19 @@ func (cda *CDDbus) PopupDialog(data cdtype.DialogData) error {
 
 // AddDataRenderer add a graphic data renderer to the icon.
 //
-//  Renderer types: gauge, graph, progressbar.
-//  Themes for renderer Graph: "Line", "Plain", "Bar", "Circle", "Plain Circle"
-//
 func (cda *CDDbus) AddDataRenderer(typ string, nbval int32, theme string) error {
 	return cda.dbusIcon.Call("AddDataRenderer", typ, nbval, theme)
 }
 
 // RenderValues render new values on the icon.
-//   * You must have added a data renderer before with AddDataRenderer.
-//   * The number of values sent must match the number declared before.
-//   * Values are given between 0 and 1.
 //
 func (cda *CDDbus) RenderValues(values ...float64) error {
 	// return cda.dbusIcon.Call("RenderValues", dbus.FlagNoAutoStart, values).Err
 	return cda.dbusIcon.Call("RenderValues", values)
 }
 
-// ActOnAppli send an action on the application controlled by the icon (see ControlAppli).
-//
-//   "minimize"            to hide the window
-//   "show"                to show the window and give it focus
-//   "toggle-visibility"   to show or hide
-//   "maximize"            to maximize the window
-//   "restore"             to restore the window
-//   "toggle-size"         to maximize or restore
-//   "close"               to close the window (Note: some programs will just hide the window and stay in the systray)
-//   "kill"                to kill the X window
+// ActOnAppli send an action on the application controlled by the icon.
+// See cdtype.ActOnAppli.
 //
 func (cda *CDDbus) ActOnAppli(action string) error {
 	return cda.dbusIcon.Call("ActOnAppli", action)
@@ -431,9 +376,6 @@ func (cda *CDDbus) ActOnAppli(action string) error {
 
 // ControlAppli allow your applet to control the window of an external
 // application and can steal its icon from the Taskbar.
-//  *Use the xprop command find the class of the window you want to control.
-//  *Use "none" if you want to reset application control.
-//  *Controling an application enables the OnFocusChange callback.
 //
 func (cda *CDDbus) ControlAppli(applicationClass string) error {
 	return cda.dbusIcon.Call("ControlAppli", applicationClass)
@@ -456,13 +398,6 @@ func (cda *CDDbus) AddMenuItems(items ...map[string]interface{}) error {
 	return cda.dbusIcon.Call("AddMenuItems", data)
 }
 
-// PopulateMenu adds a list of entry to the default menu. An empty string will
-// add a separator. Can only be used in the OnBuildMenu callback.
-//
-// func (cda *CDDbus) PopulateMenu(items ...string) error {
-// 	return cda.dbusIcon.Call("PopulateMenu", items)
-// }
-
 // BindShortkey binds one or more keyboard shortcuts to your applet.
 //
 func (cda *CDDbus) BindShortkey(shortkeys ...cdtype.Shortkey) error {
@@ -475,15 +410,7 @@ func (cda *CDDbus) BindShortkey(shortkeys ...cdtype.Shortkey) error {
 	return cda.dbusIcon.Call("BindShortkey", list)
 }
 
-// Get a property of the icon of your applet. Current available properties are :
-//   x            int32     x position of the icon's center on the screen (starting from 0 on the left)
-//   y            int32     y position of the icon's center on the screen (starting from 0 at the top of the screen)
-//   width        int32     width of the icon, in pixels (this is the maximum width, when the icon is zoomed)
-//   height       int32     height of the icon, in pixels (this is the maximum height, when the icon is zoomed)
-//   container    uint32   type of container of the applet (DOCK, DESKLET)
-//   orientation  uint32   position of the container on the screen (BOTTOM, TOP, RIGHT, LEFT). A desklet has always an orientation of BOTTOM.
-//   Xid          uint64   ID of the application's window which is controlled by the applet, or 0 if none (this parameter can only be non nul if you used the method ControlAppli beforehand).
-//   has_focus    bool     Whether the application's window which is controlled by the applet is the current active window (it has the focus) or not. E.g.:
+// Get gets a property of the icon. See cdtype.Get
 //
 func (cda *CDDbus) Get(property string) (interface{}, error) {
 	var v dbus.Variant
@@ -491,7 +418,7 @@ func (cda *CDDbus) Get(property string) (interface{}, error) {
 	return v.Value(), e
 }
 
-// GetAll returns applet icon properties.
+// GetAll returns all applet icon properties.
 //
 func (cda *CDDbus) GetAll() *cdtype.DockProperties {
 	vars := make(map[string]dbus.Variant)
@@ -597,7 +524,14 @@ func (cdi *SubIcon) ShowDialog(message string, duration int32) error {
 //
 //-------------------------------------------------------------[ MENU SIMPLE ]--
 
-// Menu is a menu builder to store callbacks at creation to be sure the answer
+// MenuData stores the menu data to send, and callbacks to launch on return.
+//
+type MenuData struct {
+	actions []interface{} // Menu callbacks are saved to be sure we launch the good action (options can change).
+	items   []map[string]interface{}
+}
+
+// Menu is a menu builder, storing callbacks at creation to be sure the answer
 // match the user request.
 //
 type Menu struct {
@@ -608,77 +542,67 @@ type Menu struct {
 // AddEntry adds an item to the menu with its callback.
 //
 func (menu *Menu) AddEntry(label, iconPath string, call interface{}, userData ...interface{}) cdtype.MenuWidgeter {
-	menu.items = append(menu.items, map[string]interface{}{
-		"widget-type": cdtype.MenuEntry, //int32(0),
-		"label":       label,
-		"icon":        iconPath,
-		"menu":        menu.MenuID, //int32(0),
-		// "id":          int32(1),
-		"id": int32(len(menu.actions)),
-		// 	"tooltip":     "this is the tooltip that will appear when you hover this entry",
+	return menu.addOne(call, map[string]interface{}{
+		"type":  cdtype.MenuEntry,
+		"label": label,
+		"icon":  iconPath,
+		"menu":  menu.MenuID,
+		"id":    int32(len(menu.actions)),
 	})
-
-	menu.actions = append(menu.actions, call)
-	return nil
 }
 
 // Separator adds a separator to the menu.
 //
 func (menu *Menu) Separator() {
-	menu.items = append(menu.items, map[string]interface{}{
-		"widget-type": cdtype.MenuSeparator,
-		"id":          int32(len(menu.actions)),
+	menu.addOne(nil, map[string]interface{}{
+		"type": cdtype.MenuSeparator,
+		"menu": menu.MenuID,
+		"id":   int32(len(menu.actions)),
 	})
-
-	menu.actions = append(menu.actions, nil) // func() {})
 }
 
 // SubMenu adds a submenu to the menu.
 //
+// TODO: test if first entry (ID=0) really can't be a submenu.
+//
 func (menu *Menu) SubMenu(label, iconPath string) cdtype.Menuer {
-	menu.items = append(menu.items, map[string]interface{}{
-		"widget-type": int32(cdtype.MenuSubMenu),
-		"label":       label,
-		"icon":        iconPath,
-		// "menu":        int32(0),
-		"id": int32(len(menu.actions)),
-		// 	"tooltip":     "this is the tooltip that will appear when you hover this entry",
+	menu.addOne(nil, map[string]interface{}{
+		"type":  cdtype.MenuSubMenu,
+		"label": label,
+		"icon":  iconPath,
+		"menu":  menu.MenuID, //      int32(0),
+		"id":    int32(len(menu.actions)),
 	})
 
-	menu.actions = append(menu.actions, nil)
-	return &Menu{menu.MenuData, int32(-1)}
-	// return &Menu{menu.MenuData, int32(len(menu.actions) - 1)}
+	return &Menu{
+		MenuData: menu.MenuData,
+		MenuID:   int32(len(menu.actions) - 1), // MenuID is current item ID. Can't be 0 (main menu).
+	}
 }
 
 // AddCheckEntry adds a check entry to the menu.
 //
 func (menu *Menu) AddCheckEntry(label string, active bool, call interface{}, userData ...interface{}) cdtype.MenuWidgeter {
-	menu.items = append(menu.items, map[string]interface{}{
-		"widget-type": cdtype.MenuCheckBox,
-		"label":       label,
-		"state":       active,
-		"id":          int32(len(menu.actions)),
+	return menu.addOne(call, map[string]interface{}{
+		"type":  cdtype.MenuCheckBox,
+		"label": label,
+		"menu":  menu.MenuID,
+		"state": active,
+		"id":    int32(len(menu.actions)),
 	})
-	menu.actions = append(menu.actions, call)
+}
 
-	// menu.items = append(menu.items, map[string]interface{}{
-	// 	"widget-type": cdtype.MenuRadioButton,
-	// 	"label":       "1",
-	// 	"state":       true,
-	// 	"group":       int32(100),
-	// 	"id":          int32(len(menu.actions)),
-	// })
-
-	// menu.items = append(menu.items, map[string]interface{}{
-	// 	"widget-type": cdtype.MenuRadioButton,
-	// 	"label":       "2",
-	// 	"group":       int32(100),
-	// 	"id":          int32(len(menu.actions) + 1),
-	// })
-
-	// menu.actions = append(menu.actions, call)
-	// menu.actions = append(menu.actions, call)
-	return nil
+// AddRadioEntry adds a radio entry to the menu.
+//
+func (menu *Menu) AddRadioEntry(label string, active bool, group int, call interface{}, userData ...interface{}) cdtype.MenuWidgeter {
+	return menu.addOne(call, map[string]interface{}{
+		"type":  cdtype.MenuRadioButton,
+		"label": label,
+		"menu":  menu.MenuID,
+		"state": active,
+		"group": int32(group),
+		"id":    int32(len(menu.actions)),
+	})
 }
 
 // Launch calls the action referenced by its id.
@@ -698,9 +622,19 @@ func (menu *Menu) Clear() {
 	menu.MenuData = &MenuData{}
 }
 
-// MenuData stores the menu data to send, and callbacks to launch on return.
+func (menu *Menu) addOne(call interface{}, item map[string]interface{}) cdtype.MenuWidgeter {
+	menu.items = append(menu.items, item)
+	menu.actions = append(menu.actions, call)
+	return tooltiper(item)
+}
+
 //
-type MenuData struct {
-	actions []interface{} // Menu callbacks are saved to be sure we launch the good action (options can change).
-	items   []map[string]interface{}
+//---------------------------------------------------------------[ TOOLTIPER ]--
+
+// tooltiper provides a MenuWidgeter interface to set more menu options.
+//
+type tooltiper map[string]interface{}
+
+func (tt tooltiper) SetTooltipText(str string) {
+	tt["tooltip"] = str
 }

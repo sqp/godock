@@ -1,10 +1,11 @@
+// Package build builds cairo-dock or applets from sources.
 package build
 
 import (
 	"github.com/sqp/godock/libs/cdtype"
-	"github.com/sqp/godock/libs/log/color"
-	"github.com/sqp/godock/libs/log/linesplit" // Parse command output.
 	"github.com/sqp/godock/libs/srvdbus/dlogbus"
+	"github.com/sqp/godock/libs/text/color"
+	"github.com/sqp/godock/libs/text/linesplit" // Parse command output.
 
 	"errors"
 	"fmt"

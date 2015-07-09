@@ -27,8 +27,8 @@ import (
 	"github.com/sqp/godock/libs/cdtype"         // Applets types.
 	"github.com/sqp/godock/libs/clipboard"      // Get clipboard content.
 	"github.com/sqp/godock/libs/dock"           // Connection to cairo-dock.
-	"github.com/sqp/godock/libs/log/linesplit"  // Parse command output.
 	"github.com/sqp/godock/libs/packages/build" // Sources builder.
+	"github.com/sqp/godock/libs/text/linesplit" // Parse command output.
 
 	"fmt"
 	"os"

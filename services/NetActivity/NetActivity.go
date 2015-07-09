@@ -32,18 +32,25 @@ Not implemented (yet):
 package NetActivity
 
 import (
-	"github.com/sqp/godock/libs/cdtype"          // Applets types.
-	"github.com/sqp/godock/libs/cdtype/bytesize" // Human readable bytes.
-	"github.com/sqp/godock/libs/clipboard"       // Set clipboard content.
-	"github.com/sqp/godock/libs/dock"            // Connection to cairo-dock.
-	"github.com/sqp/godock/libs/sysinfo"         // IOActivity.
-	"github.com/sqp/godock/libs/uptoshare"       // Uploader service.
+	"github.com/sqp/godock/libs/cdtype"        // Applets types.
+	"github.com/sqp/godock/libs/clipboard"     // Set clipboard content.
+	"github.com/sqp/godock/libs/dock"          // Connection to cairo-dock.
+	"github.com/sqp/godock/libs/net/uptoshare" // Uploader service.
+	"github.com/sqp/godock/libs/net/videodl"   // Video downloader service.
+	"github.com/sqp/godock/libs/sysinfo"       // IOActivity.
+	"github.com/sqp/godock/libs/text/bytesize" // Human readable bytes.
 
 	"fmt"
+	"strings"
 )
 
-// EmblemAction is the position of the "upload in progress" emblem.
-const EmblemAction = cdtype.EmblemTopRight
+const (
+	// EmblemAction is the position of the "upload in progress" emblem.
+	EmblemAction = cdtype.EmblemTopRight
+
+	// EmblemDownload is the position of the "download in progress" emblem.
+	EmblemDownload = cdtype.EmblemTopLeft
+)
 
 //
 //------------------------------------------------------------------[ APPLET ]--
@@ -56,6 +63,7 @@ type Applet struct {
 	conf    *appletConf
 	service *sysinfo.IOActivity
 	up      *uptoshare.Uploader
+	video   *videodl.Manager
 }
 
 // NewApplet create a new applet instance.
@@ -69,6 +77,15 @@ func NewApplet() cdtype.AppInstance {
 	app.up.SetPreCheck(func() { app.SetEmblem(app.FileLocation("icon"), EmblemAction) })
 	app.up.SetPostCheck(func() { app.SetEmblem("none", EmblemAction) })
 	app.up.SetOnResult(app.onUploadDone)
+
+	// Video download actions.
+	ActionsVideoDL := 0
+	app.video = videodl.NewManager(app, app.Log())
+	app.video.SetBackend(videodl.BackendYoutubeDL)
+	app.video.SetPreCheck(func() error { return app.SetEmblem(app.FileLocation("img", "go-down.svg"), EmblemDownload) })
+	app.video.SetPostCheck(func() error { return app.SetEmblem("none", EmblemDownload) })
+	// app.up.SetOnResult(app.onUploadDone)
+	app.video.Actions(ActionsVideoDL, app.ActionAdd)
 
 	// Network activity actions.
 	app.service = sysinfo.NewIOActivity(app)
@@ -97,6 +114,13 @@ func (app *Applet) Init(loadConf bool) {
 	app.up.SiteText(app.conf.SiteText)
 	app.up.SiteVideo(app.conf.SiteVideo)
 	app.up.SiteFile(app.conf.SiteFile)
+
+	// Video download settings.
+	app.video.SetPath(app.conf.VideoDLPath)
+	app.video.SetQuality(videodl.Quality(app.conf.VideoDLQuality))
+	app.video.SetBlacklist(app.conf.VideoDLBlacklist)
+
+	app.Log().Info("init", app.video.Path)
 
 	// Settings for poller and IOActivity (force renderer reset in case of reload).
 	app.conf.UpdateDelay = cdtype.PollerInterval(app.conf.UpdateDelay, defaultUpdateDelay)
@@ -151,21 +175,40 @@ func (app *Applet) OnBuildMenu(menu cdtype.Menuer) {
 		})
 	}
 
+	// app.video.MenuQuality(menu)
 }
 
 // OnDropData uploads file(s) or text dropped on the icon.
 //
 func (app *Applet) OnDropData(data string) {
-	app.Upload(data)
+	if strings.HasPrefix(data, "http://") || strings.HasPrefix(data, "https://") {
+		if app.conf.VideoDLEnabled {
+			app.DownloadVideo(data)
+		}
+	} else {
+		app.Upload(data)
+	}
+}
+
+// DefineEvents set applet events callbacks.
+//
+func (app *Applet) DefineEvents(events *cdtype.Events) {
+	events.OnBuildMenu = app.video.MenuQuality
 }
 
 //
 //-----------------------------------------------------------------[ SERVICE ]--
 
-// Upload data to a one-click site: file location or text.
+// Upload uploads data to a one-click site: file location or text.
 //
 func (app *Applet) Upload(data string) {
 	app.up.Upload(data)
+}
+
+// DownloadVideo downloads the video from url.
+//
+func (app *Applet) DownloadVideo(data string) {
+	app.video.Download(data)
 }
 
 //

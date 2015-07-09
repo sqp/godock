@@ -1,5 +1,4 @@
 TARGET=GoGmail
-VERSION=0.0.3-1
 SOURCE=github.com/sqp/godock/applets
 
 %: build
@@ -19,15 +18,6 @@ stop:
 
 restart: start stop
 
-
-
-# Argument for archive is a golang linux arch: 386, amd64, arm.
-archives: archive-386 archive-amd64
-
-
-archive-%: build-%
-	@echo "Make archive ../$(TARGET)-$(VERSION)-$*.tar.xz"
-	@cd .. && tar cJfv $(TARGET)-$(VERSION)-$*.tar.xz $(TARGET)/  --exclude-vcs
 
 # must drop the libnotify file for cross compile as it require cgo which isn't available in that mode.
 build-386:

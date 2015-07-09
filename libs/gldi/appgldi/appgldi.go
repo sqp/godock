@@ -1,3 +1,6 @@
+// Package appgldi implements the dock applet API for go internal applets.
+//
+// Its goal is to connect the main Cairo-Dock Golang API, godock/libs/dock, to its parent.
 package appgldi
 
 import (
@@ -72,7 +75,7 @@ func (o *AppGldi) HaveMonitor() (haveApp bool, haveFocus bool) {
 //
 //------------------------------------------------------------[ ICON ACTIONS ]--
 
-// DemandsAttention is like the Animate method, but endlessly. See cdtype.AppIcon.
+// DemandsAttention is an endless Animate method. See cdtype.AppIcon.
 //
 func (o *AppGldi) DemandsAttention(start bool, animation string) error {
 	addIdle(func() {
@@ -250,12 +253,12 @@ func (o *AppGldi) ShowAppli(show bool) error {
 func (o *AppGldi) BindShortkey(shortkeys ...cdtype.Shortkey) error {
 	addIdle(func() {
 		for _, sk := range shortkeys {
-			if _, ok := o.shortkeys[sk.Group+sk.Key]; ok { // shortkey defined, rebind.
+			if _, ok := o.shortkeys[sk.ConfGroup+sk.ConfKey]; ok { // shortkey defined, rebind.
 				println("TODO: missing - rebind shortkeys")
 				// 		gldi_shortkey_rebind (pKeyBinding, cShortkey, NULL);
 
 			} else { // new shortkey.
-				o.shortkeys[sk.Group+sk.Key] = o.mi.NewShortkey(sk.Group, sk.Key, sk.Desc, sk.Shortkey, o.onShortkey)
+				o.shortkeys[sk.ConfGroup+sk.ConfKey] = o.mi.NewShortkey(sk.ConfGroup, sk.ConfKey, sk.Desc, sk.Shortkey, o.onShortkey)
 			}
 		}
 	})
@@ -317,7 +320,7 @@ func (o *AppGldi) Get(property string) (interface{}, error) {
 		if win == nil {
 			return 0, nil
 		}
-		return uint64(uintptr(unsafe.Pointer(win))), nil
+		return uint64(uintptr(unsafe.Pointer(win))), nil // TODO: maybe fix
 
 	case "has_focus":
 		return o.Icon.Window() != nil && o.Icon.Window().IsActive(), nil
@@ -329,19 +332,25 @@ func (o *AppGldi) Get(property string) (interface{}, error) {
 	return nil, nil
 }
 
-// Note: Not sure this deserved to be finished as the internal backend as so much more to provide.
-// func (o *AppGldi) GetAll() (interface{}, error) {
-// 	return &cdtype.DockProperties{
-// 		Xid:         v.Value().(uint64),
-// 		X:           v.Value().(int32),
-// 		Y:           v.Value().(int32),
-// 		Orientation: v.Value().(uint32),
-// 		Container:   v.Value().(uint32),
-// 		Width:       v.Value().(int32),
-// 		Height:      v.Value().(int32),
-// 		HasFocus:    v.Value().(bool),
-// 	}, nil
-// }
+// GetAll returns all applet icon properties.
+//
+func (o *AppGldi) GetAll() *cdtype.DockProperties {
+	props := &cdtype.DockProperties{}
+	xid, _ := o.Get("Xid")
+	props.Xid = xid.(uint64)
+
+	uncastX, _ := o.Get("x")
+	uncastY, _ := o.Get("y")
+	props.X = uncastX.(int32)
+	props.Y = uncastY.(int32)
+	// props.Orientation = v.Value().(uint32)
+	// props.Container = v.Value().(uint32)
+	w, h := o.Icon.IconExtent()
+	props.Width, props.Height = int32(w), int32(h)
+	props.HasFocus = o.Icon.Window() != nil && o.Icon.Window().IsActive()
+
+	return props
+}
 
 //
 //----------------------------------------------------------------[ SUBICONS ]--
@@ -447,7 +456,7 @@ func (o *IconBase) SetEmblem(iconPath string, position cdtype.EmblemPosition) er
 	return nil
 }
 
-// Animate animates the icon. See cdtype.AppIcon.
+// Animate animates the icon for a given number of rounds.
 //
 func (o *IconBase) Animate(animation string, rounds int32) error {
 	if !gldi.ObjectIsDock(o.Icon.GetContainer()) {

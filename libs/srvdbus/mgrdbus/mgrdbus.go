@@ -1,3 +1,4 @@
+// Package mgrdbus provides a Dbus service (and client) for external applets management.
 package mgrdbus
 
 import (
@@ -5,9 +6,9 @@ import (
 
 	"github.com/sqp/godock/libs/appdbus"            // Dock actions.
 	"github.com/sqp/godock/libs/cdtype"             // AppStarter.
-	"github.com/sqp/godock/libs/log/color"          // Colored text.
 	"github.com/sqp/godock/libs/srvdbus"            // Dbus paths.
 	"github.com/sqp/godock/libs/srvdbus/dbuscommon" // Dbus service.
+	"github.com/sqp/godock/libs/text/color"         // Colored text.
 
 	"strconv"
 	"strings"

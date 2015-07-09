@@ -9,7 +9,7 @@ import (
 	"github.com/sqp/godock/libs/gldi/globals"
 	"github.com/sqp/godock/libs/packages"
 	"github.com/sqp/godock/libs/ternary"
-	"github.com/sqp/godock/libs/tran"
+	"github.com/sqp/godock/libs/text/tran"
 	"github.com/sqp/godock/widgets/confbuilder/datatype"
 	"github.com/sqp/godock/widgets/gtk/keyfile"
 

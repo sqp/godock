@@ -1,4 +1,4 @@
-// -build dock
+// +build !dock
 
 package build
 

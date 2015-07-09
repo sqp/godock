@@ -212,7 +212,7 @@ func (app *Applet) menuAddDevices(menu cdtype.Menuer, selected dbus.ObjectPath, 
 //
 type AppPulse struct {
 	pulseaudio.Client                    // Parent API. Allow direct access to control methods.
-	icon              *Applet            // dock.RenderSimple // Dock icon renderer. To display updates on the icon.
+	icon              *Applet            // cdtype.RenderSimple // Dock icon renderer. To display updates on the icon.
 	sink              dbus.ObjectPath    // Selected sound card.
 	StreamIcons       bool               // whether we need to manage subicons for streams.
 	showText          func(string) error // Volume display callback.

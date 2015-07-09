@@ -29,8 +29,14 @@ type groupConfiguration struct {
 	// GraphColorBg   []float64
 	// GraphMix bool
 
-	UpdateDelay int
-	Devices     []string
+	MonitoringEnabled bool
+	UpdateDelay       int
+	Devices           []string
+
+	VideoDLEnabled   bool
+	VideoDLPath      string
+	VideoDLQuality   int
+	VideoDLBlacklist []string
 }
 
 type groupUpload struct {

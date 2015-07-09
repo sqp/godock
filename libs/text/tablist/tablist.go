@@ -1,8 +1,8 @@
-// Package term is a simple table formatter with colors for console.
-package term
+// Package tablist is a simple table formatter with colors for console.
+package tablist
 
 import (
-	colors "github.com/sqp/godock/libs/log/color"
+	"github.com/sqp/godock/libs/text/color"
 
 	"fmt"
 	"strconv"
@@ -162,10 +162,10 @@ func (line *Line) Set(row int, text string) *Line {
 
 // Colored set colored text content for given row.
 //
-func (line Line) Colored(row int, color, text string) {
+func (line Line) Colored(row int, newcolor, text string) {
 	origsize := len(text)
 	line.testmax(row, origsize) // Size of text without formating.
-	line.content[row] = colors.Colored(text, color)
+	line.content[row] = color.Colored(text, newcolor)
 	line.colorDelta[row] += len(line.content[row]) - origsize
 }
 

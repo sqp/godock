@@ -2,8 +2,7 @@ package sysinfo
 
 import (
 	"github.com/sqp/godock/libs/cdtype"
-	"github.com/sqp/godock/libs/cdtype/bytesize"
-	"github.com/sqp/godock/libs/dock" // Connection to cairo-dock.
+	"github.com/sqp/godock/libs/text/bytesize"
 
 	"fmt"
 )
@@ -24,7 +23,7 @@ type percent struct {
 type RenderPercent struct {
 	text   RenderOne
 	values []percent
-	App    dock.RenderSimple
+	App    cdtype.RenderSimple
 	Texts  map[cdtype.InfoPosition]RenderOne
 	cbText func(string) error // Display callback.
 
@@ -174,8 +173,8 @@ type IOActivity struct {
 
 	list     []*stat
 	interval uint64
-	info     ITextInfo         // Paired values text renderer.
-	app      dock.RenderSimple // Controler to the Cairo-Dock icon.
+	info     ITextInfo           // Paired values text renderer.
+	app      cdtype.RenderSimple // Controler to the Cairo-Dock icon.
 
 	FormatIcon  FormatIO
 	FormatLabel FormatIO
@@ -184,7 +183,7 @@ type IOActivity struct {
 
 // NewIOActivity create a new data store for IO activity monitoring.
 //
-func NewIOActivity(app dock.RenderSimple) *IOActivity {
+func NewIOActivity(app cdtype.RenderSimple) *IOActivity {
 	return &IOActivity{
 		app: app,
 	}
@@ -396,13 +395,13 @@ func (ti *TextInfo) SetCallFail(call func(dev string) string) {
 // TextIcon renders a paired value text on icon quickinfo.
 //
 type TextIcon struct {
-	app dock.RenderSimple // Controler to the Cairo-Dock icon.
+	app cdtype.RenderSimple // Controler to the Cairo-Dock icon.
 	TextInfo
 }
 
 // NewTextIcon creates a new paired value text renderer on icon quickinfo.
 //
-func NewTextIcon(app dock.RenderSimple) *TextIcon {
+func NewTextIcon(app cdtype.RenderSimple) *TextIcon {
 	return &TextIcon{app: app}
 }
 
@@ -415,13 +414,13 @@ func (ti *TextIcon) Display() {
 // TextLabel renders a paired value text on icon label.
 //
 type TextLabel struct {
-	app dock.RenderSimple // Controler to the Cairo-Dock icon.
+	app cdtype.RenderSimple // Controler to the Cairo-Dock icon.
 	TextInfo
 }
 
 // NewTextLabel creates a new paired value text renderer on icon label.
 //
-func NewTextLabel(app dock.RenderSimple) *TextLabel {
+func NewTextLabel(app cdtype.RenderSimple) *TextLabel {
 	return &TextLabel{app: app}
 }
 

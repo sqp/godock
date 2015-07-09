@@ -150,7 +150,7 @@ func (app *Applet) displayAll() {
 		Message:   msg,
 		UseMarkup: true,
 		Buttons:   "edit-clear;cancel",
-		Callback:  cdtype.DialogCallbackIsOK(app.ActionCallback(ActionClear)), // Clear notifs if the user press the 1st button.
+		Callback:  cdtype.DialogCallbackValidNoArg(app.ActionCallback(ActionClear)), // Clear notifs if the user press the 1st button.
 	})
 
 	// if self.config['clear'] else 4 + len(msg)/40 }  // if we're going to clear the history, show the dialog until the user closes it

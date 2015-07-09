@@ -1,3 +1,4 @@
+// Package tran translates user displayed text.
 package tran
 
 import (

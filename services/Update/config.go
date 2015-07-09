@@ -2,7 +2,7 @@ package Update
 
 import (
 	"github.com/sqp/godock/libs/cdtype"
-	"github.com/sqp/godock/libs/log/color"
+	"github.com/sqp/godock/libs/text/color"
 )
 
 const (

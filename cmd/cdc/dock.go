@@ -7,6 +7,7 @@ package main
 import "C"
 
 import (
+	"github.com/sqp/godock/libs/cdtype"
 	"github.com/sqp/godock/libs/gldi"
 	"github.com/sqp/godock/libs/gldi/backendgui"
 	"github.com/sqp/godock/libs/gldi/backendmenu"
@@ -15,6 +16,9 @@ import (
 	"github.com/sqp/godock/libs/gldi/maindock"
 	"github.com/sqp/godock/libs/gldi/menu"
 	"github.com/sqp/godock/libs/gldi/mgrgldi"
+	"github.com/sqp/godock/libs/ternary"
+	"github.com/sqp/godock/libs/text/color"
+	"github.com/sqp/godock/libs/text/strhelp"
 	"github.com/sqp/godock/services/allapps"
 
 	// loader
@@ -25,8 +29,6 @@ import (
 	// "github.com/pkg/profile"
 	"net/http"
 	_ "net/http/pprof"
-
-	// "github.com/sqp/godock/libs/gldi/maindock/views" // custom hacked view
 
 	"errors"
 	"fmt"
@@ -57,8 +59,7 @@ Options:
   -f          Safe mode: don't load any plug-ins.
   -W          Work around some bugs in Metacity Window-Manager
               (invisible dialogs or sub-docks)
-  -l level    Log verbosity (debug,message,warning,critical,error).
-              Default is warning.
+  -l level    Log verbosity: debug,message,warning,critical,error (def=warning).
   -F          Force to display some output messages with colors.
   -k          Lock the dock so that any modification is impossible for users.
   -a          Keep the dock above other windows.
@@ -70,7 +71,7 @@ Options:
   -H          Http debug server: http://localhost:6987/debug/pprof
   -D          Debug mode for the go part of the code (including applets).
 
-  -v          Print version.
+  -v          Print gldi version.
 
 This version lacks a lot of options and may not be considered usable for
 everybody at the moment.
@@ -150,6 +151,9 @@ var (
 	srvAppletsDisable *bool
 	srvHttpPprof      *bool
 	srvDebug          *bool
+
+	// Developer optional custom settings.
+	customHacks = func() {}
 )
 
 // runDock starts dock routines and locks the main thread with gtk.
@@ -178,11 +182,13 @@ func startDock() bool {
 	settings.Init()
 
 	gtkA, gtkB, gtkC := globals.GtkVersion()
-	logger.Info("Custom Dock", cdcVersion)
-	logger.Info("   gldi    ", globals.Version())
-	// logger.Info("Compiled date      ", C.__DATE__, C.__TIME__)
-	logger.Info("   GTK     ", fmt.Sprintf("%d.%d.%d", gtkA, gtkB, gtkC))
-	logger.Info("  OpenGL   ", gldi.GLBackendIsUsed())
+
+	printColor("Custom Dock", cdtype.Version)
+	printColor("   gldi    ", globals.Version())
+	printColor("   GTK     ", fmt.Sprintf("%d.%d.%d", gtkA, gtkB, gtkC))
+	printColor("  OpenGL   ", ternary.String(gldi.GLBackendIsUsed(), "Yes", "No"))
+	printColor("Build date ", cdtype.BuildDate)
+	printColor(" Git Hash  ", cdtype.GitHash)
 
 	appmgr := mgrgldi.Register(allapps.List(settings.Exclude), logger)
 
@@ -196,6 +202,15 @@ func startDock() bool {
 		dbus.SetManager(appmgr)
 	}
 
+	// HTTP listener for the pprof debug.
+	if *srvHttpPprof {
+
+		// p := profile.Start()
+		// defer p.Stop()
+
+		go func() { http.ListenAndServe("localhost:6987", nil) }()
+	}
+
 	customHacks()
 
 	backendgui.Register(gui.NewConnector(logger))
@@ -205,6 +220,10 @@ func startDock() bool {
 	settings.Start()
 
 	return true
+}
+
+func printColor(title, value string) {
+	println(strhelp.Bracket(color.Colored(title, color.FgGreen)), value)
 }
 
 // Start Loader.
@@ -228,17 +247,4 @@ func serviceDbus() (*srvdbus.Loader, error) {
 	go loader.StartLoop()
 
 	return loader, nil
-}
-
-func customHacks() {
-	// HTTP listener for the pprof debug.
-	if *srvHttpPprof {
-
-		// p := profile.Start()
-		// defer p.Stop()
-
-		go func() { http.ListenAndServe("localhost:6987", nil) }()
-	}
-
-	// views.RegisterPanel("spanel")
 }

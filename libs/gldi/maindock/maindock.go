@@ -1,8 +1,7 @@
 /*
 Package maindock is a cairo-dock C wrapper to build a dock interface.
 
-
-Files in the src dir are the same as in the cairo-dock-core tree. (or should be)
+C files in the dir are the same as in the cairo-dock-core tree. (or should be)
 
 */
 package maindock
@@ -23,10 +22,6 @@ package maindock
 
 gboolean g_bLocked;   // TODO: To remove (1 more use in interaction)
 
-
-#define CAIRO_DOCK_SHARE_THEMES_DIR "/usr/share/cairo-dock/themes"
-#define CAIRO_DOCK_LOCALE_DIR       "/usr/share/locale"
-
 */
 import "C"
 import (
@@ -39,7 +34,7 @@ import (
 	"github.com/sqp/godock/libs/gldi/dialog"  // Popup dialog.
 	"github.com/sqp/godock/libs/gldi/globals" // Global variables.
 	"github.com/sqp/godock/libs/ternary"      // Ternary operators.
-	"github.com/sqp/godock/libs/tran"         // Translate.
+	"github.com/sqp/godock/libs/text/tran"    // Translate.
 
 	"fmt"
 	"os"
@@ -50,7 +45,8 @@ import (
 )
 
 const (
-	CAIRO_DOCK_DATA_DIR = "cairo-dock" // Default config path in .config.
+	// Default config path in .config.
+	CAIRO_DOCK_DATA_DIR = "cairo-dock"
 
 	// Nom du repertoire des themes extras.
 	CAIRO_DOCK_EXTRAS_DIR = "extras"
@@ -69,6 +65,15 @@ const (
 
 	HiddenFile = ".cairo-dock"
 	Changelog  = "ChangeLog.txt"
+)
+
+// System dir locations. Can be overridden at build time.
+var (
+	// System dock themes (CAIRO_DOCK_SHARE_THEMES_DIR).
+	CairoDockShareThemesDir = "/usr/share/cairo-dock/themes"
+
+	// System dock locale (CAIRO_DOCK_LOCALE_DIR).
+	CairoDockLocaleDir = "/usr/share/locale"
 )
 
 var log cdtype.Logger
@@ -131,7 +136,7 @@ func (settings *DockSettings) Init() {
 	gtk.Init(nil)
 
 	//\___________________ internationalize the app.
-	tran.Scend(globals.CairoDockGettextPackage, C.CAIRO_DOCK_LOCALE_DIR, "UTF-8")
+	tran.Scend(globals.CairoDockGettextPackage, CairoDockLocaleDir, "UTF-8")
 
 	if settings.Verbosity != "" {
 		gldi.LogSetLevelFromName(settings.Verbosity)
@@ -191,7 +196,7 @@ func (settings *DockSettings) Init() {
 		CAIRO_DOCK_EXTRAS_DIR,
 		CAIRO_DOCK_THEMES_DIR,
 		CAIRO_DOCK_CURRENT_THEME_NAME,
-		C.CAIRO_DOCK_SHARE_THEMES_DIR,
+		CairoDockShareThemesDir,
 		CAIRO_DOCK_DISTANT_THEMES_DIR,
 		settings.ThemeServer)
 

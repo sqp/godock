@@ -5,8 +5,8 @@ import (
 	"github.com/sqp/godock/libs/log" // Display info in terminal.
 
 	"github.com/sqp/godock/libs/cdtype"
-	"github.com/sqp/godock/libs/cdtype/bytesize"
 	"github.com/sqp/godock/libs/config"
+	"github.com/sqp/godock/libs/text/bytesize"
 
 	"encoding/xml"
 	"errors"

@@ -9,7 +9,7 @@ import (
 	"github.com/conformal/gotk3/glib"
 	"github.com/conformal/gotk3/gtk"
 
-	"github.com/sqp/godock/libs/tran"
+	"github.com/sqp/godock/libs/text/tran"
 
 	"github.com/sqp/godock/widgets/common"
 	"github.com/sqp/godock/widgets/confbuilder/datatype"

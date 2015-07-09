@@ -1,7 +1,7 @@
 # Maintainer: SQP <sqp@glx-dock.org>
 
 pkgname=cairo-dock-rework
-pkgver=0.0.3.1
+pkgver=0.0.3.2
 pkgrel=1
 pkgdesc="Cairo-Dock reworked version with a new GUI and more applets (WIP)."
 arch=('x86_64' 'i686')
@@ -10,10 +10,11 @@ license=('GPL3')
 depends=('gtk3' 'gupnp-av' 'gobject-introspection') # also depends on the dock but it's removed so we could use a custom install.
 makedepends=('git' 'go')
 optdepends=(
-  'git: dock version check (Update)'
-  'xclip: clipboard control for uptoshare (NetActivity)'
-  'curl: upload files with uptoshare (NetActivity: all but text services)'
   'cairo-dock: the dock is mandatory but as optional it allow to use custom installs'
+  'curl: upload files with uptoshare (NetActivity: all but text services)'
+  'git: dock version check (Update)'
+  'cmake: build dock sources (Update)'
+  'gksudo: install dock files needs root access (Update)'
 )
 conflicts=('cairo-dock-rework')
 options=('!strip' '!emptydirs')

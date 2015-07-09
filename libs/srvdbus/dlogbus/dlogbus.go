@@ -1,3 +1,4 @@
+// Package dlogbus provides a Dbus service (and client) for a dock external launcher.
 package dlogbus
 
 import (
@@ -88,7 +89,8 @@ func (o *Server) DockStop() error {
 //
 func (o *Server) DockRestart() error {
 	o.Log.Info("build")
-	e := o.Log.ExecShow("go", "install", "-tags", "dock log all", "github.com/sqp/godock/cmd/cdc")
+	e := o.Log.ExecShow("make", "dock")
+	// e := o.Log.ExecShow("go", "install", "-tags", "dock log all", "github.com/sqp/godock/cmd/cdc")
 	if e != nil {
 		return e
 	}

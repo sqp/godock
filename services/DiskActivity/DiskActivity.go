@@ -3,9 +3,9 @@ package DiskActivity
 
 import (
 	"github.com/sqp/godock/libs/cdtype"
-	"github.com/sqp/godock/libs/cdtype/bytesize"
 	"github.com/sqp/godock/libs/dock" // Connection to cairo-dock.
 	"github.com/sqp/godock/libs/sysinfo"
+	"github.com/sqp/godock/libs/text/bytesize"
 
 	"fmt"
 )

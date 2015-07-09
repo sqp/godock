@@ -1,7 +1,7 @@
 # Maintainer: SQP <sqp@glx-dock.org>
 
 pkgname=cairo-dock-goapplets
-pkgver=0.0.3.1
+pkgver=0.0.3.2
 pkgrel=1
 pkgdesc="Cairo-Dock applets package (Audio GoGmail TVPlay...)."
 arch=('x86_64' 'i686')
@@ -10,12 +10,13 @@ license=('GPL3')
 depends=('gtk3' 'gupnp-av' 'gobject-introspection')
 makedepends=('git' 'go')
 optdepends=(
-  'git: dock version check (Update)'
-  'xclip: clipboard control for uptoshare (NetActivity)'
   'curl: upload files with uptoshare (NetActivity: all but text services)'
+  'xclip : clipboard interaction. Alternative: xsel (NetActivity, Update)'
+  'git: dock version check (Update)'
+  'cmake: build dock sources (Update)'
+  'gksudo: install dock files needs root access (Update)'
 )
 conflicts=('cairo-dock-rework')
-
 options=('!strip' '!emptydirs')
 
 srcpath=github.com/sqp/godock

@@ -31,7 +31,7 @@ import (
 	"github.com/conformal/gotk3/gtk"
 
 	"github.com/sqp/godock/libs/cdtype"
-	"github.com/sqp/godock/libs/tran"
+	"github.com/sqp/godock/libs/text/tran"
 
 	"github.com/sqp/godock/widgets/confbuilder/datatype"
 	"github.com/sqp/godock/widgets/confsettings"

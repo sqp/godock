@@ -21,7 +21,7 @@ import (
 	"github.com/sqp/godock/libs/gldi/dialog"     // Popup dialog.
 	"github.com/sqp/godock/libs/gldi/globals"    // Global variables.
 	"github.com/sqp/godock/libs/ternary"         // Helpers.
-	"github.com/sqp/godock/libs/tran"            // Translate.
+	"github.com/sqp/godock/libs/text/tran"       // Translate.
 
 	"github.com/sqp/godock/widgets/common"
 
@@ -177,7 +177,10 @@ type DockMenu struct {
 
 func WrapDockMenu(icon *gldi.Icon, container *gldi.Container, dock *gldi.CairoDock, menu *gtk.Menu) *DockMenu {
 	return &DockMenu{
-		Menu:      Menu{*menu},
+		Menu: Menu{
+			Menu:   *menu,
+			groups: make(map[int]*glib.SList),
+		},
 		Icon:      icon,
 		Container: container,
 		Dock:      dock}
@@ -994,11 +997,15 @@ func cbDialogIsOK(call func()) func(int, *gtk.Widget) {
 //
 type Menu struct {
 	gtk.Menu
+	groups map[int]*glib.SList // Radio items groups reference. Indexed by user given group key.
 }
 
 func NewMenu() *Menu {
 	gtkmenu, _ := gtk.MenuNew()
-	menu := &Menu{*gtkmenu}
+	menu := &Menu{
+		Menu:   *gtkmenu,
+		groups: make(map[int]*glib.SList),
+	}
 	return menu
 }
 
@@ -1022,6 +1029,33 @@ func (menu *Menu) AddCheckEntry(label string, active bool, call interface{}, use
 	item.SetActive(active)
 	if call != nil {
 		item.Connect("toggled", call, userData...)
+	}
+	menu.Append(item)
+	return item
+}
+
+func (menu *Menu) AddRadioEntry(label string, active bool, groupID int, call interface{}, userData ...interface{}) (item *gtk.RadioMenuItem) {
+	// var group *glib.SList
+	group, _ := menu.groups[groupID]
+
+	item, _ = gtk.RadioMenuItemNewWithLabel(group, label)
+	if group == nil {
+		var e error
+		group, e = item.GetGroup()
+		if e == nil {
+			menu.groups[groupID] = group
+		}
+	}
+	item.SetActive(active)
+	if call != nil {
+		item.Connect("toggled", func() {
+			if item.GetActive() {
+				switch f := call.(type) {
+				case func():
+					f()
+				}
+			}
+		}) //  userData...)
 	}
 	menu.Append(item)
 	return item

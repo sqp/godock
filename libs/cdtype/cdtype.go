@@ -13,20 +13,27 @@ const (
 	AppletsServerTag = "3.4.0"
 )
 
-// Events represents the list of events you can receive with a cairo-dock applet.
+// Variables set at build time.
+var (
+	Version   = "0.0.3.2-git"
+	GitHash   = ""
+	BuildDate = ""
+)
+
+// Events represents the list of events you can receive as a cairo-dock applet.
+//
 // They can be set in the optional DefineEvents call of your applet (see
 // DefineEventser).
-//   events.OnClick = func() { }
-//
-// Or they can be declared directly as methods of your applet.
-//   func (app *Applet) OnClick() { }
 //
 // All those events are optional but it's better to find something meaningful to
 // assign to them to improve your applet utility.
 //
 // Use with something like:
-//    app.Events.OnClick = func () {app.onClick()}
-//    app.Events.OnDropData = func (data string) {app.openWebpage(data)}
+//    app.Events.OnClick = func app.myActionLeftClick
+//    app.Events.OnDropData = func (data string) {app.openWebpage(data, ...)}
+//
+// They can also be declared directly as methods of your applet.
+//   func (app *Applet) OnClick(btnState uint) { }
 //
 // Reload event is optional. Here is the default call if you want to override it.
 //
@@ -106,47 +113,137 @@ type AppInstance interface {
 // AppBase groups methods provided to the applet with methods needed on start.
 //
 type AppBase interface {
+
+	// Extends AppIcon, so subicons actions are used the same way as the main icon.
+	// Those are the most common actions for an icon (label...)
 	AppIcon
 
 	// Actions.
+
+	// ActionAdd adds actions to the list.
+	//
 	ActionAdd(acts ...*Action)
+
+	// ActionCallback returns a callback to the given action ID.
+	//
 	ActionCallback(ID int) func()
+
+	// ActionCount returns the number of started actions.
+	//
 	ActionCount() int
+
+	// ActionID finds the ID matching given action name.
+	//
 	ActionID(name string) int
+
+	// ActionLaunch starts the desired action by ID.
+	//
 	ActionLaunch(ID int)
+
+	// ActionSetBool sets the pointer to the boolean value for a checkentry menu field.
+	//
 	ActionSetBool(ID int, boolPointer *bool)
+
+	// ActionSetMax sets the maximum number of actions that can be started at the same time.
+	//
 	ActionSetMax(max int)
+
+	// ActionSetIndicators set the pre and post action callbacks.
+	//
 	ActionSetIndicators(onStart, onStop func())
+
+	// BuildMenu fills the menu with the given actions list.
+	//
+	// MenuCheckBox: If Call isn't set, a default toggle callback will be used.
+	//
 	BuildMenu(menu Menuer, actionIds []int)
+
+	// BuildMenuCallback provides a fill menu callback with the given actions list.
+	//
 	BuildMenuCallback(actionIds []int) func(menu Menuer)
 
 	// Commands.
+
+	// CommandCallback returns a callback to a configured command to bind with event
+	// OnClick or OnMiddleClick.
+	//
 	CommandCallback(name string) func()
+
+	// CommandLaunch executes one of the configured command by its reference.
+	//
 	CommandLaunch(name string)
 
 	// Poller.
+
+	// AddPoller add a poller to handle in the main loop. Only one can be active ATM.
+	// API will almost guaranteed to change for the sub functions.
+	//
 	AddPoller(call func()) *poller.Poller
+
+	// Poller return the applet poller if any.
+	//
 	Poller() *poller.Poller
 
 	// Log.
+
+	// Log gives access to the applet logger.
+	//
 	Log() Logger
+
+	// SetDebug set the state of the debug reporting flood.
+	//
 	SetDebug(debug bool)
 
 	// Templates.
-	ExecuteTemplate(file, name string, data interface{}) (string, error)
-	Template(file string) *template.Template
+
+	// LoadTemplate load the provided list of template files. If error, it will just be be logged, so you must check
+	// that the template is valid. Map entry will still be created, just check if it
+	// isn't nil. *CDApplet.ExecuteTemplate does it for you.
+	//
+	// Templates must be in a subdir called templates in applet dir. If you really
+	// need a way to change this, ask for a new method.
+	//
 	LoadTemplate(names ...string)
 
+	// Template gives access to a loaded template by its name.
+	//
+	Template(file string) *template.Template
+
+	// ExecuteTemplate will run a pre-loaded template with the given data.
+	//
+	ExecuteTemplate(file, name string, data interface{}) (string, error)
+
 	// Config.
+
+	// LoadConfig will try to create and fill the given config struct with data from
+	// the configuration file. Log error and crash if something went wrong.
+	// Won't do anything if loadConf is false.
+	//
 	LoadConfig(loadConf bool, v interface{})
+
+	// ConfFile returns the config file location.
+	//
 	ConfFile() string // ConfFile returns the config file location.
 
 	// Files
+
+	// FileLocation return the full path to a file in the applet data dir.
+	//
 	FileLocation(filename ...string) string
-	FileDataDir(filename ...string) string // RootDataDir returns the path to the config root dir (~/.config/cairo-dock).
+
+	// FileDataDir returns the path to the config root dir (~/.config/cairo-dock).
+	//
+	FileDataDir(filename ...string) string // RootDataDir.
 
 	// Common.
+
+	// Name returns the applet name as known by the dock. As an external app = dir name.
+	//
 	Name() string // Name returns the applet name as known by the dock. As an external app = dir name.
+
+	// SetDefaults set basic defaults icon settings in one call. Empty fields will
+	// be reset, so this is better used in the Init() call.
+	//
 	SetDefaults(def Defaults)
 
 	// also include applet management methods as hidden for the doc.
@@ -157,14 +254,6 @@ type AppBase interface {
 //
 type AppIcon interface {
 	IconBase // Main icon also has the same actions as subicons.
-
-	// SubIcon returns the subicon object you can act on for the given key.
-	//
-	SubIcon(key string) IconBase
-
-	// RemoveSubIcons removes all subicons from the subdock.
-	//
-	RemoveSubIcons()
 
 	// HaveMonitor gives informations about the state of the monitored application.
 	// Those are usefull if this option is enabled. A monitored application, if
@@ -201,6 +290,7 @@ type AppIcon interface {
 	AddDataRenderer(typ string, nbval int32, theme string) error
 
 	// RenderValues render new values on the icon.
+	//
 	//   * You must have added a data renderer before with AddDataRenderer.
 	//   * The number of values sent must match the number declared before.
 	//   * Values are given between 0 and 1.
@@ -222,6 +312,7 @@ type AppIcon interface {
 
 	// ControlAppli allow your applet to control the window of an external
 	// application and can steal its icon from the Taskbar.
+	//
 	//  *Use the xprop command find the class of the window you want to control.
 	//  *Use "none" if you want to reset application control.
 	//  *Controling an application enables the OnFocusChange callback.
@@ -236,7 +327,22 @@ type AppIcon interface {
 	//
 	BindShortkey(shortkeys ...Shortkey) error
 
+	// Get gets a property of the icon. Current available properties are :
+	//
+	//   x            int32     x position of the icon's center on the screen (starting from 0 on the left)
+	//   y            int32     y position of the icon's center on the screen (starting from 0 at the top of the screen)
+	//   width        int32     width of the icon, in pixels (this is the maximum width, when the icon is zoomed)
+	//   height       int32     height of the icon, in pixels (this is the maximum height, when the icon is zoomed)
+	//   container    uint32   type of container of the applet (DOCK, DESKLET)
+	//   orientation  uint32   position of the container on the screen (BOTTOM, TOP, RIGHT, LEFT). A desklet has always an orientation of BOTTOM.
+	//   Xid          uint64   ID of the application's window which is controlled by the applet, or 0 if none (this parameter can only be non nul if you used the method ControlAppli beforehand).
+	//   has_focus    bool     Whether the application's window which is controlled by the applet is the current active window (it has the focus) or not. E.g.:
+	//
 	Get(property string) (interface{}, error)
+
+	// GetAll returns all applet icon properties.
+	//
+	GetAll() *DockProperties
 
 	// AddSubIcon adds subicons by pack of 3 strings : label, icon, ID.
 	//
@@ -246,6 +352,14 @@ type AppIcon interface {
 	// The option to remove all icons is "any".
 	//
 	RemoveSubIcon(id string) error
+
+	// RemoveSubIcons removes all subicons from the subdock.
+	//
+	RemoveSubIcons()
+
+	// SubIcon returns the subicon object you can act on for the given key.
+	//
+	SubIcon(key string) IconBase
 }
 
 // IconBase defines common actions for icons and subicons.
@@ -276,8 +390,7 @@ type IconBase interface {
 	//
 	SetEmblem(iconPath string, position EmblemPosition) error
 
-	// Animate animates the icon, with a given animation and for a given number of
-	// rounds.
+	// Animate animates the icon for a given number of rounds.
 	//
 	Animate(animation string, rounds int32) error
 
@@ -285,6 +398,17 @@ type IconBase interface {
 	// The dialog can be closed by clicking on it.
 	//
 	ShowDialog(message string, duration int32) error
+}
+
+// RenderSimple defines a subset of AppBase for simple renderers like data pollers.
+//
+type RenderSimple interface {
+	AddDataRenderer(string, int32, string) error
+	FileLocation(...string) string
+	RenderValues(...float64) error
+	SetIcon(string) error
+	SetLabel(string) error
+	SetQuickInfo(string) error
 }
 
 // DefineEventser defines the optional DefineEvents call to group applets events
@@ -316,22 +440,78 @@ type AppBackend interface {
 // Logger defines the interface for reporting information.
 //
 type Logger interface {
+	// SetDebug change the debug state of the logger.
+	// Only enable or disable messages send with the Debug command.
+	//
 	SetDebug(debug bool)
+
+	// GetDebug gets the debug state of the logger.
+	//
 	GetDebug() bool
+
+	// SetName set the displayed and forwarded name for the logger.
+	//
 	SetName(name string)
+
+	// SetLogOut connects the optional forwarder to the logger.
+	//
 	SetLogOut(LogOut)
+
+	// Debug is to be used every time a usefull step is reached in your module
+	// activity. It will display the flood to the user only when the debug flag is
+	// enabled.
+	//
 	Debug(msg string, more ...interface{})
+
+	// Info displays normal informations on the standard output, with the first param in green.
+	//
 	Info(msg string, more ...interface{})
+
+	// Render displays the msg argument in the given color.
+	// The colored message is passed with others to classic println.
+	//
 	Render(color, msg string, more ...interface{})
+
+	// Warn test and log the error as warning type. Return true if an error was found.
+	//
 	Warn(e error, msg ...string) (fail bool)
+
+	// NewWarn log a new warning.
+	//
 	NewWarn(e string, msg ...string)
+
+	// Err test and log the error as Error type. Return true if an error was found.
+	//
 	Err(e error, msg ...interface{}) (fail bool)
+
+	// NewErr log a new error.
+	//
 	NewErr(e string, msg ...interface{})
+
+	// GetErr test and logs the error, and return it for later use.
+	//
 	GetErr(e error, msg ...interface{}) error
+
+	// ExecShow run a command with output forwarded to console and wait.
+	//
 	ExecShow(command string, args ...string) error
+
+	// ExecSync run a command with and grab the output to return it when finished.
+	//
 	ExecSync(command string, args ...string) (string, error)
+
+	// ExecAsync run a command with output forwarded to console but don't wait for its completion.
+	// Errors will be logged.
+	//
 	ExecAsync(command string, args ...string) error
+
+	// ExecCmd provides a generic command with output forwarded to console.
+	//
 	ExecCmd(command string, args ...string) *exec.Cmd
+
+	// DEV is like Info, but to be used by the dev for his temporary tests.
+	//
+	DEV(msg string, more ...interface{})
 }
 
 // LogOut defines the interface for log forwarding.
@@ -346,10 +526,25 @@ type LogOut interface {
 // Menuer provides a common interface to build applets menu.
 //
 type Menuer interface {
+	// SubMenu adds a submenu to the menu.
+	//
 	SubMenu(label, iconPath string) Menuer
+
+	// Separator adds a separator to the menu.
+	//
 	Separator()
+
+	// AddEntry adds an item to the menu with its callback.
+	//
 	AddEntry(label, iconPath string, call interface{}, userData ...interface{}) MenuWidgeter
+
+	// AddCheckEntry adds a check entry to the menu.
+	//
 	AddCheckEntry(label string, active bool, call interface{}, userData ...interface{}) MenuWidgeter
+
+	// AddRadioEntry adds a radio entry to the menu.
+	//
+	AddRadioEntry(label string, active bool, group int, call interface{}, userData ...interface{}) MenuWidgeter
 }
 
 // MenuWidgeter provides a common interface to apply settings on menu entries.
@@ -383,12 +578,14 @@ type Defaults struct {
 // Action is an applet internal actions that can be used for callbacks or menu.
 //
 type Action struct {
-	ID   int
-	Name string
-	Call func()
-	Icon string
-	Menu MenuItemType
-	Bool *bool // reference to active value for checkitems.
+	ID      int
+	Name    string
+	Call    func()
+	Icon    string
+	Menu    MenuItemType
+	Bool    *bool  // reference to active value for checkitems.
+	Group   int    // Radio item group.
+	Tooltip string // Entry tooltip.
 
 	// in fact all actions are threaded in the go version, but we could certainly
 	// use this as a "add to actions queue" to prevent problems with settings
@@ -400,10 +597,10 @@ type Action struct {
 // Shortkey defines mandatory informations to register a shortkey.
 //
 type Shortkey struct {
-	Group    string
-	Key      string
-	Desc     string
-	Shortkey string
+	ConfGroup string
+	ConfKey   string
+	Desc      string
+	Shortkey  string
 }
 
 //
@@ -483,14 +680,25 @@ type DialogData struct {
 	Buttons string
 
 	// Callback when buttons are used.
-	//   The type of data depends on the widget provided:
-	//     - nil if no widget is provided.
-	//     - string for a DialogWidgetText.
-	//     - float64 for a DialogWidgetScale.
+	//
+	// The type of data depends on the widget provided:
+	//     nil         if no widget is provided.
+	//     string      for a DialogWidgetText.
+	//     float64     for a DialogWidgetScale.
+	//     int32       for a DialogWidgetList with Editable=false.
+	//     string      for a DialogWidgetList with Editable=true.
+	//
+	// Callback can be tested and asserted with one of the following functions.
+	// The callback will be triggered only if the first button or the enter key
+	// is pressed.
+	//     DialogCallbackValidNoArg       callback without arguments.
+	//     DialogCallbackValidInt         callback with an int.
+	//     DialogCallbackValidString      callback with a string.
+	//
 	Callback func(button int, data interface{})
 
 	// Optional custom widget.
-	// Can be of type DialogWidgetText, DialogWidgetScale
+	// Can be of type DialogWidgetText, DialogWidgetScale, DialogWidgetList.
 	Widget interface{}
 }
 
@@ -515,12 +723,21 @@ type DialogWidgetScale struct {
 	MaxLabel     string  // Label displayed on the right of the scale.
 }
 
-// Widget list attributes:
-//   editable       bool      true if a non-existing choice can be entered by the user (in this case, the content of the widget will be the selected text, and not the number of the selected line) (false by default)
-//   values         string    a list of values, separated by comma ";", used to fill the combo list.
-//   initial-value  string or int32 depending on the "editable" attribute :
-//        case editable=true:   string with the default text for the user entry of the widget (default=empty).
-//        case editable=false:  int with the selected line number (default=0).
+// DialogWidgetList defines options for the string list widget of a dialog.
+//
+type DialogWidgetList struct {
+	// Editable represents whether the user can enter a custom choice or not.
+	// If true, InitialValue and returned value are string.
+	// If false, InitialValue and returned value are int32.
+	Editable bool
+
+	// Values represents the combo list values, separated by comma ";".
+	Values string
+
+	// InitialValue defines the default value, presented to the user.
+	// Type:  string if editable=true, or int32 if editable=false.
+	InitialValue interface{}
+}
 
 // Dialog answer keys.
 const (
@@ -529,13 +746,39 @@ const (
 	DialogKeyEscape   = -2 // Answer when the user press escape.
 )
 
-// DialogCallbackIsOK prepares a dialog callback launched only on user confirmation.
+// DialogCallbackValidNoArg prepares a dialog callback launched only on user confirmation.
 // The provided call is triggerred if the user pressed the enter key or the first button.
 //
-func DialogCallbackIsOK(call func()) func(int, interface{}) {
+func DialogCallbackValidNoArg(call func()) func(int, interface{}) {
 	return func(clickedButton int, _ interface{}) {
 		if clickedButton == 0 || clickedButton == -1 {
 			call()
+		}
+	}
+}
+
+// DialogCallbackValidInt checks user answer of a dialog to launch the callback
+// with the value asserted as an int.
+// Will be triggered only by the first button pressed or the enter key.
+//
+func DialogCallbackValidInt(call func(data int)) func(int, interface{}) {
+	return func(clickedButton int, data interface{}) {
+		id, ok := data.(int32)
+		if ok && (clickedButton == DialogButtonFirst || clickedButton == DialogKeyEnter) {
+			call(int(id))
+		}
+	}
+}
+
+// DialogCallbackValidString checks user answer of a dialog to launch the callback
+// with the value asserted as a string.
+// Will be triggered only by the first button pressed or the enter key.
+//
+func DialogCallbackValidString(call func(data string)) func(int, interface{}) {
+	return func(clickedButton int, data interface{}) {
+		str, ok := data.(string)
+		if ok && (clickedButton == DialogButtonFirst || clickedButton == DialogKeyEnter) {
+			call(str)
 		}
 	}
 }
@@ -561,15 +804,18 @@ type DockProperties struct {
 //
 //---------------------------------------------------------------[ CONSTANTS ]--
 
-// ScreenPosition refers to the border of the screen the dock is attached to.
-type ScreenPosition int32
+// ContainerOrientation refers to the border of the screen the dock is attached to.
+//
+// A desklet has always an orientation of BOTTOM.
+//
+type ContainerOrientation int32
 
 // Dock position on screen.
 const (
-	ScreenBottom ScreenPosition = iota // Dock in the bottom.
-	ScreenTop                          // Dock in the top.
-	ScreenRight                        // Dock in the right.
-	ScreenLeft                         // Dock in the left.
+	ScreenBottom ContainerOrientation = iota // Dock in the bottom.
+	ScreenTop                                // Dock in the top.
+	ScreenRight                              // Dock in the right.
+	ScreenLeft                               // Dock in the left.
 )
 
 // ContainerType is the type of container that manages the applet.

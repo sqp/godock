@@ -1,3 +1,4 @@
+// Package mgrgldi manages go applets as internal applets.
 package mgrgldi
 
 // #cgo pkg-config: gldi
@@ -550,4 +551,8 @@ func (m *MenuerLike) AddEntry(label, iconPath string, call interface{}, userData
 
 func (m *MenuerLike) AddCheckEntry(label string, active bool, call interface{}, userData ...interface{}) cdtype.MenuWidgeter {
 	return m.DockMenu.AddCheckEntry(label, active, call, userData)
+}
+
+func (m *MenuerLike) AddRadioEntry(label string, active bool, group int, call interface{}, userData ...interface{}) cdtype.MenuWidgeter {
+	return m.DockMenu.AddRadioEntry(label, active, group, call, userData)
 }

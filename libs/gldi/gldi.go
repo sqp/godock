@@ -130,7 +130,7 @@ import (
 
 	"github.com/sqp/godock/libs/cdtype" // Dock types.
 	"github.com/sqp/godock/libs/packages"
-	"github.com/sqp/godock/libs/tran"
+	"github.com/sqp/godock/libs/text/tran"
 	"github.com/sqp/godock/widgets/gtk/keyfile"
 
 	"errors"

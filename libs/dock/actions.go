@@ -92,23 +92,35 @@ func (o *Actions) ActionSetIndicators(onStart, onStop func()) {
 func (o *Actions) BuildMenu(menu cdtype.Menuer, actionIds []int) {
 	for _, ID := range actionIds {
 		act := o.list[ID]
+		var entry cdtype.MenuWidgeter
 		switch act.Menu {
 		case cdtype.MenuEntry:
-			menu.AddEntry(act.Name, act.Icon, o.ActionCallback(act.ID))
+			entry = menu.AddEntry(act.Name, act.Icon, o.ActionCallback(act.ID))
 
 		case cdtype.MenuSeparator:
 			menu.Separator()
 
 		case cdtype.MenuCheckBox:
-			menu.AddCheckEntry(act.Name, *act.Bool, o.ActionCallback(act.ID))
+			entry = menu.AddCheckEntry(act.Name, *act.Bool, o.ActionCallback(act.ID))
+			if act.Call == nil {
+				act.Call = func() {
+					*act.Bool = !*act.Bool
+				}
+			}
 
-			// case cdtype.MenuRadioButton:
+		case cdtype.MenuRadioButton:
+			entry = menu.AddRadioEntry(act.Name, *act.Bool, act.Group, o.ActionCallback(act.ID))
+
 			// case cdtype.MenuSubMenu:
+		}
+
+		if entry != nil && act.Tooltip != "" {
+			entry.SetTooltipText(act.Tooltip)
 		}
 	}
 }
 
-// BuildMenuCallback fills the menu with the given actions list.
+// BuildMenuCallback provides a fill menu callback with the given actions list.
 //
 func (o *Actions) BuildMenuCallback(actionIds []int) func(menu cdtype.Menuer) {
 	return func(menu cdtype.Menuer) { o.BuildMenu(menu, actionIds) }

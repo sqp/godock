@@ -29,6 +29,7 @@ import (
 	"github.com/sqp/godock/libs/cdtype" // Applets types.
 	"github.com/sqp/godock/libs/gldi"
 
+	"strings"
 	"unsafe"
 )
 
@@ -143,7 +144,10 @@ func NewDialog(icon *gldi.Icon, container *gldi.Container, dialog cdtype.DialogD
 	attr.bForceAbove = cbool(dialog.ForceAbove)
 	attr.bUseMarkup = cbool(dialog.UseMarkup)
 
-	var widget *C.GtkWidget
+	attr.pUserData = C.intToPointer(1) // unused, but it seems it must be set so the onDialogDestroyed can be called.
+	attr.pFreeDataFunc = C.GFreeFunc(C.onDialogDestroyed)
+
+	var widget *gtk.Widget
 	var getValue = func() interface{} { return nil }
 	switch typed := dialog.Widget.(type) {
 
@@ -153,22 +157,21 @@ func NewDialog(icon *gldi.Icon, container *gldi.Container, dialog cdtype.DialogD
 	case cdtype.DialogWidgetScale:
 		widget, getValue = dialogWidgetScale(typed)
 
+	case cdtype.DialogWidgetList:
+		widget, getValue = dialogWidgetList(typed)
+
 		// default:
 		// return errors.New("PopupDialog: invalid widget type")
 	}
 
-	if dialog.Buttons != "" && dialog.Callback != nil {
-		dialogCall = func(clickedButton int, widget *gtk.Widget) { // No special widget, return button ID.
-			dialog.Callback(clickedButton, getValue())
-		}
+	if widget != nil {
+		attr.pInteractiveWidget = (*C.GtkWidget)(unsafe.Pointer(widget.Native()))
 	}
 
-	attr.pUserData = C.intToPointer(1) // unused, but it seems it must be set so the onDialogDestroyed can be called.
-	attr.pFreeDataFunc = C.GFreeFunc(C.onDialogDestroyed)
-
-	if widget != nil {
-		attr.pInteractiveWidget = widget
-		C.gtk_widget_grab_focus(widget)
+	if dialog.Buttons != "" && dialog.Callback != nil {
+		dialogCall = func(clickedButton int, _ *gtk.Widget) { // No special widget, return button ID.
+			dialog.Callback(clickedButton, getValue())
+		}
 	}
 
 	removeDialog()
@@ -180,7 +183,7 @@ func NewDialog(icon *gldi.Icon, container *gldi.Container, dialog cdtype.DialogD
 //
 //-------------------------------------------------------------[ WIDGET TEXT ]--
 
-func dialogWidgetText(data cdtype.DialogWidgetText) (*C.GtkWidget, func() interface{}) {
+func dialogWidgetText(data cdtype.DialogWidgetText) (*gtk.Widget, func() interface{}) {
 	var widget *gtk.Widget
 	var getValue func() interface{}
 
@@ -266,13 +269,14 @@ func dialogWidgetText(data cdtype.DialogWidgetText) (*C.GtkWidget, func() interf
 	// p := unsafe.Pointer(widget.GObject)
 	// C.g_object_set_data((*C.GObject)(p), cstr, C.gpointer(p))
 
-	return (*C.GtkWidget)(unsafe.Pointer(widget.Native())), getValue
+	widget.GrabFocus()
+	return widget, getValue
 }
 
 //
 //------------------------------------------------------------[ WIDGET SCALE ]--
 
-func dialogWidgetScale(data cdtype.DialogWidgetScale) (*C.GtkWidget, func() interface{}) {
+func dialogWidgetScale(data cdtype.DialogWidgetScale) (*gtk.Widget, func() interface{}) {
 	step := (data.MaxValue - data.MinValue) / 100
 	scale, _ := gtk.ScaleNewWithRange(gtk.ORIENTATION_HORIZONTAL, data.MinValue, data.MaxValue, step)
 	scale.SetValue(data.InitialValue)
@@ -284,7 +288,7 @@ func dialogWidgetScale(data cdtype.DialogWidgetScale) (*C.GtkWidget, func() inte
 	getValue := func() interface{} { return scale.GetValue() }
 
 	if data.MinLabel == "" && data.MaxLabel == "" {
-		return (*C.GtkWidget)(unsafe.Pointer(scale.Native())), getValue
+		return &scale.Widget, getValue
 	}
 
 	box, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
@@ -296,74 +300,47 @@ func dialogWidgetScale(data cdtype.DialogWidgetScale) (*C.GtkWidget, func() inte
 
 	// 	GtkWidget *pAlign = gtk_alignment_new (1., 1., 0., 0.); // used alignments for labels
 
-	return (*C.GtkWidget)(unsafe.Pointer(box.Native())), getValue
+	scale.GrabFocus()
+	return &box.Widget, getValue
 }
 
 //
 //-------------------------------------------------------------[ WIDGET LIST ]--
 
-func dialogWidgetList(data cdtype.DialogWidgetText) *C.GtkWidget {
-	var widget *gtk.Widget
+func dialogWidgetList(data cdtype.DialogWidgetList) (*gtk.Widget, func() interface{}) {
+	var getValue func() interface{}
+	widget, _ := gtk.ComboBoxTextNew()
 
-	// 					gboolean bEditable = FALSE;
-	// 					const gchar *cValues = NULL;
-	// 					gchar **cValuesList = NULL;
-	// 					const gchar *cInitialText = NULL;
-	// 					int iInitialValue = 0;
+	// Fill the list with user choices.
+	values := strings.Split(data.Values, ";")
+	for _, val := range values {
+		widget.AppendText(val)
+	}
 
-	// 					v = g_hash_table_lookup (hWidgetAttributes, "editable");
-	// 					if (v && G_VALUE_HOLDS_BOOLEAN (v))
-	// 						bEditable = g_value_get_boolean (v);
+	if data.Editable {
+		// Add entry manually so we don't have to recast it after a GetChild.
+		entry, _ := gtk.EntryNew()
+		widget.Add(entry)
+		widget.Connect("changed", func() { entry.SetText(widget.GetActiveText()) })
 
-	// 					v = g_hash_table_lookup (hWidgetAttributes, "values");
-	// 					if (v && G_VALUE_HOLDS_STRING (v))
-	// 						cValues = g_value_get_string (v);
+		getValue = func() interface{} { str, _ := entry.GetText(); return str }
 
-	// 					if (cValues != NULL)
-	// 						cValuesList = g_strsplit (cValues, ";", -1);
+		val, ok := data.InitialValue.(string)
+		if ok && val != "" {
+			entry.SetText(val)
+		}
 
-	// 					if (bEditable)
-	// 						pOneWidget = gtk_combo_box_text_new_with_entry ();
-	// 					else
-	// 						pOneWidget = gtk_combo_box_text_new ();
-	// 					pInteractiveWidget = pOneWidget;
+	} else {
+		getValue = func() interface{} { return int32(widget.GetActive()) }
 
-	// 					if (cValuesList != NULL)
-	// 					{
-	// 						int i;
-	// 						for (i = 0; cValuesList[i] != NULL; i ++)
-	// 						{
-	// 							gtk_combo_box_text_append_text (GTK_COMBO_BOX_TEXT (pInteractiveWidget), cValuesList[i]);
-	// 						}
-	// 					}
+		val, ok := data.InitialValue.(int32)
+		if ok {
+			widget.SetActive(int(val))
+		}
+	}
 
-	// 					v = g_hash_table_lookup (hWidgetAttributes, "initial-value");
-	// 					if (bEditable)
-	// 					{
-	// 						if (v && G_VALUE_HOLDS_STRING (v))
-	// 							cInitialText = g_value_get_string (v);
-	// 						if (cInitialText != NULL)
-	// 						{
-	// 							GtkWidget *pEntry = gtk_bin_get_child (GTK_BIN (pInteractiveWidget));
-	// 							gtk_entry_set_text (GTK_ENTRY (pEntry), cInitialText);
-	// 						}
-	// 					}
-	// 					else
-	// 					{
-	// 						if (v && G_VALUE_HOLDS_INT (v))
-	// 							iInitialValue = g_value_get_int (v);
-	// 						gtk_combo_box_set_active (GTK_COMBO_BOX (pInteractiveWidget), iInitialValue);
-	// 					}
-
-	// 					if (attr.cButtonsImage != NULL)
-	// 					{
-	// 						if (bEditable)
-	// 							attr.pActionFunc = (CairoDockActionOnAnswerFunc) cd_dbus_applet_emit_on_answer_combo_entry;
-	// 						else
-	// 							attr.pActionFunc = (CairoDockActionOnAnswerFunc) cd_dbus_applet_emit_on_answer_combo;
-	// 					}
-
-	return (*C.GtkWidget)(unsafe.Pointer(widget.Native()))
+	widget.GrabFocus()
+	return &widget.Widget, getValue
 }
 
 //

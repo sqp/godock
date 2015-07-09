@@ -182,7 +182,8 @@ func (widget *GuiIcons) Save() {
 	// 			pModuleInstance->pModule->pInterface->save_custom_widget (pModuleInstance, pKeyFile, pWidgetList);
 
 	widget.config.Save()
-	if e != nil {
+
+	if e == nil {
 		icon.Reload()
 	}
 

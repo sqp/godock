@@ -1,6 +1,6 @@
 TARGET=cdc
 SOURCE=github.com/sqp/godock
-VERSION=0.0.3.1
+VERSION=0.0.3.2
 APPLETS=Audio Cpu DiskActivity DiskFree GoGmail Mem NetActivity Update
 
 # unstable applets requires uncommited patches to build.
@@ -17,6 +17,22 @@ APPDIRGLDI=usr/share/cairo-dock/plug-ins/goapplets/
 APPDIRDBUS=usr/share/cairo-dock/plug-ins/Dbus/third-party/
 
 
+
+
+
+# Could be useful for some distro.
+# FLAGSHARETHEME=$(SOURCE)/libs/gldi/maindock.CairoDockShareThemesDir '/usr/share/cairo-dock/themes'
+# FLAGLOCALE=$(SOURCE)/libs/gldi/maindock.CairoDockLocaleDir '/usr/share/locale'
+
+FLAGVERSION=$(SOURCE)/libs/cdtype.Version '$(VERSION)'
+FLAGGITHASH=$(SOURCE)/libs/cdtype.GitHash '$(shell git rev-parse HEAD)'
+# git describe --tags
+FLAGBUILDDATE=$(SOURCE)/libs/cdtype.BuildDate '$(shell date --rfc-3339=seconds)'
+
+
+FLAGS=-ldflags "-X $(FLAGVERSION) -X $(FLAGBUILDDATE) -X $(FLAGGITHASH) "
+
+
 %: build
 
 archive-%:
@@ -26,13 +42,13 @@ archive-%:
 	rm applets/$(TARGET)
 
 build:
-	go install -tags '$(APPLETS)' $(SOURCE)/cmd/$(TARGET)
+	go install -tags '$(APPLETS)'  $(FLAGS) $(SOURCE)/cmd/$(TARGET)
 
 unstable:
-	go install -tags '$(APPLETS) $(UNSTABLE) $(UNSTABLE_TAGS)' $(SOURCE)/cmd/$(TARGET)
+	go install -tags '$(APPLETS) $(UNSTABLE) $(UNSTABLE_TAGS)' $(FLAGS) $(SOURCE)/cmd/$(TARGET)
 
 dock:
-	go install -tags '$(DOCK)' $(SOURCE)/cmd/$(TARGET)
+	go install -tags '$(DOCK)' $(FLAGS) $(SOURCE)/cmd/$(TARGET)
 
 patch:
 	# Patch GTK - unstable branch is required to build a dock.

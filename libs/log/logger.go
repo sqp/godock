@@ -38,7 +38,8 @@ package log
 
 import (
 	"github.com/sqp/godock/libs/cdtype"
-	"github.com/sqp/godock/libs/log/color"
+	"github.com/sqp/godock/libs/text/color"
+	"github.com/sqp/godock/libs/text/strhelp"
 
 	"log"
 	"os"
@@ -55,23 +56,10 @@ import (
 //
 //-----------------------------------------------------------[ TEXT WRAPPERS ]--
 
-// Parenthesis returns parenthesis added around text if any.
-func Parenthesis(msg string) string { return addAround("(", msg, ")") }
-
-// Bracket returns brackets added around text if any.
-func Bracket(msg string) string { return addAround("[", msg, "]") }
-
-func addAround(before, msg, after string) string {
-	if msg == "" {
-		return ""
-	}
-	return before + msg + after
-}
-
 // Format returns a formatted message in the given color with endline.
 //
 func Format(col, sender, msg string, more ...interface{}) string {
-	list := append([]interface{}{time.Now().Format("15:04:05"), color.Yellow(sender), Bracket(color.Colored(msg, col))}, more...)
+	list := append([]interface{}{time.Now().Format("15:04:05"), color.Yellow(sender), strhelp.Bracket(color.Colored(msg, col))}, more...)
 	return fmt.Sprintln(list...)
 }
 
@@ -148,6 +136,16 @@ func (l *Log) Info(msg string, more ...interface{}) {
 		l.LogOut.Info(l.name, msg, more...)
 	} else {
 		l.Render(color.FgGreen, msg, more...)
+	}
+}
+
+// DEV is like Info, but to be used by the dev for his temporary tests.
+//
+func (l *Log) DEV(msg string, more ...interface{}) {
+	if l.LogOut != nil {
+		l.LogOut.Info(l.name, msg, more...)
+	} else {
+		l.Render(color.Bright, msg, more...)
 	}
 }
 
@@ -423,7 +421,7 @@ func Debug(msg string, more ...interface{}) {
 //
 func Render(col, msg string, more ...interface{}) {
 	// println(, list...)
-	list := append([]interface{}{time.Now().Format("15:04:05"), color.Yellow(caller()), Bracket(color.Colored(msg, col))}, more...)
+	list := append([]interface{}{time.Now().Format("15:04:05"), color.Yellow(caller()), strhelp.Bracket(color.Colored(msg, col))}, more...)
 	fmt.Println(list...)
 	// log.Println(list...)
 }

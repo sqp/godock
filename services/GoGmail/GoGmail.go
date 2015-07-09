@@ -234,14 +234,10 @@ func (app *Applet) actionRegister() {
 			Editable: true,
 			Visible:  true,
 		},
-		Callback: func(button int, data interface{}) {
-			str, ok := data.(string)
-			if !ok || (button != cdtype.DialogButtonFirst && button != cdtype.DialogKeyEnter) {
-				return
-			}
+		Callback: cdtype.DialogCallbackValidString(func(str string) {
 			app.data.SaveLogin(str)
 			app.ActionLaunch(ActionCheckMail) // CheckMail will launch a check and reset the timer.
-		},
+		}),
 	})
 
 	log.Err(e, "popup")
@@ -346,8 +342,7 @@ func (app *Applet) mailPopup(nb, duration int, template string) {
 		TimeLength: duration,
 		UseMarkup:  true,
 		Buttons:    "document-open;cancel",
-		Callback:   cdtype.DialogCallbackIsOK(app.ActionCallback(ActionOpenClient)), // Open mail client if the user press the 1st button.
-		// Widget:     interface{} ,
+		Callback:   cdtype.DialogCallbackValidNoArg(app.ActionCallback(ActionOpenClient)), // Open mail client if the user press the 1st button.
 	})
 	log.Err(e, "popup")
 
@@ -391,13 +386,13 @@ func (rs *RenderedNone) Error(e error) {}
 // RenderedQuick displays mail count on the icon QuickInfo.
 //
 type RenderedQuick struct {
-	dock.RenderSimple // Controler to the Cairo-Dock icon.
-	pathDefault       string
+	cdtype.RenderSimple // Controler to the Cairo-Dock icon.
+	pathDefault         string
 }
 
 // NewRenderedQuick create a new text renderer for quick-info.
 //
-func NewRenderedQuick(app dock.RenderSimple) *RenderedQuick {
+func NewRenderedQuick(app cdtype.RenderSimple) *RenderedQuick {
 	return &RenderedQuick{
 		RenderSimple: app,
 		pathDefault:  app.FileLocation("img", "gmail-icon.svg"),
@@ -425,16 +420,16 @@ func (rs *RenderedQuick) Error(e error) {
 // RenderedNone will be returned, so a valid renderer will always be provided.
 //
 type RenderedSVG struct {
-	dock.RenderSimple // Controler to the Cairo-Dock icon.
-	pathDefault       string
-	pathTemp          string
-	pathError         string
-	iconSource        string
+	cdtype.RenderSimple // Controler to the Cairo-Dock icon.
+	pathDefault         string
+	pathTemp            string
+	pathError           string
+	iconSource          string
 }
 
 // NewRenderedSVG create a new SVG image renderer.
 //
-func NewRenderedSVG(app dock.RenderSimple, typ string) (RendererMail, error) {
+func NewRenderedSVG(app cdtype.RenderSimple, typ string) (RendererMail, error) {
 	size := strings.Split(string(typ), " ")[0]
 
 	source, e := ioutil.ReadFile(app.FileLocation("img", size+".svg"))

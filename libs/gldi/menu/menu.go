@@ -6,7 +6,7 @@ import (
 	"github.com/sqp/godock/libs/gldi/backendmenu" // Menu types.
 	"github.com/sqp/godock/libs/gldi/globals"     // Global variables.
 	"github.com/sqp/godock/libs/ternary"          // Helpers.
-	"github.com/sqp/godock/libs/tran"             // Translate.
+	"github.com/sqp/godock/libs/text/tran"        // Translate.
 )
 
 // BuildMenuContainer builds the dock container menu (1st line).

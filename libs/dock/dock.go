@@ -15,17 +15,6 @@ import (
 	"text/template"
 )
 
-// RenderSimple is a small interface to the Dock icon for simple renderers like data pollers.
-//
-type RenderSimple interface {
-	AddDataRenderer(string, int32, string) error
-	FileLocation(...string) string
-	RenderValues(...float64) error
-	SetIcon(string) error
-	SetLabel(string) error
-	SetQuickInfo(string) error
-}
-
 //
 //----------------------------------------------------------------[ CDAPPLET ]--
 

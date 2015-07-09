@@ -5,13 +5,18 @@ import (
 	"github.com/conformal/gotk3/glib"
 	"github.com/conformal/gotk3/gtk"
 
-	"github.com/sqp/gupnp/mediacp"        // upnp control point.
-	"github.com/sqp/gupnp/mediacp/guigtk" // upnp gui.
-	"github.com/sqp/gupnp/upnpcp"
+	// "github.com/sqp/gupnp/backendsonos" // go UPnP backend.
+	"github.com/sqp/gupnp/backendgupnp" // gupnp backend.
+
+	"github.com/sqp/gupnp"          // UPnP control point.
+	"github.com/sqp/gupnp/guigtk"   // UPnP gui.
+	"github.com/sqp/gupnp/upnptype" // UPnP common types.
 
 	"github.com/sqp/godock/libs/cdtype"
 	"github.com/sqp/godock/libs/dock" // Connection to cairo-dock.
 	"github.com/sqp/godock/libs/ternary"
+
+	"fmt"
 )
 
 // Applet data and controlers.
@@ -20,7 +25,7 @@ type Applet struct {
 	cdtype.AppBase // Applet base and dock connection.
 
 	conf *appletConf
-	cp   *mediacp.MediaControl
+	cp   upnptype.MediaControl
 	gui  *guigtk.TVGui
 	win  *gtk.Window
 }
@@ -31,12 +36,12 @@ func NewApplet() cdtype.AppInstance {
 	app := &Applet{AppBase: dock.NewCDApplet()} // Icon controler and interface to cairo-dock.
 	app.defineActions()
 
+	// Create the UPnP device manager.
 	var e error
-	app.cp, e = mediacp.New()
+	app.cp, e = gupnp.New(&logger{app.Log()})
 	app.Log().Err(e, "temp Dir")
 
-	app.createGui(false, false)
-
+	// Connect local tests.
 	hook := app.cp.SubscribeHook("applet")
 	hook.OnRendererFound = app.onMediaRendererFound
 	hook.OnServerFound = app.onMediaServerFound
@@ -46,14 +51,26 @@ func NewApplet() cdtype.AppInstance {
 	// hook.OnRendererSelected = gui.SetRenderer
 	// hook.OnServerSelected = gui.SetServer
 
-	// hook.OnTransportState = func(r *upnpcp.Renderer, state upnpcp.PlaybackState) { gui.SetPlaybackState(state) }
-	// hook.OnCurrentTrackDuration = func(r *upnpcp.Renderer, dur int) { gui.SetDuration(mediacp.TimeToString(dur)) }
-	// hook.OnCurrentTrackMetaData = func(r *upnpcp.Renderer, item *upnpcp.Item) { gui.SetTitle(item.Title) }
-	// hook.OnMute = func(r *upnpcp.Renderer, muted bool) { gui.SetMuted(muted) }
-	// hook.OnVolume = func(r *upnpcp.Renderer, vol uint) { gui.SetVolume(int(vol)) }
-	// hook.OnCurrentTime = func(r *upnpcp.Renderer, secs int, f float64) { gui.SetCurrentTime(secs, f*100) }
+	// hook.OnTransportState = func(r upnptype.Renderer, state upnptype.PlaybackState) { gui.SetPlaybackState(state) }
+	// hook.OnCurrentTrackDuration = func(r upnptype.Renderer, dur int) { gui.SetDuration(mediacp.TimeToString(dur)) }
+	// hook.OnCurrentTrackMetaData = func(r upnptype.Renderer, item upnptype.Item) { gui.SetTitle(item.Title) }
+	// hook.OnMute = func(r upnptype.Renderer, muted bool) { gui.SetMuted(muted) }
+	// hook.OnVolume = func(r upnptype.Renderer, vol uint) { gui.SetVolume(int(vol)) }
+	// hook.OnCurrentTime = func(r upnptype.Renderer, secs int, f float64) { gui.SetCurrentTime(secs, f*100) }
 	// hook.OnSetVolumeDelta = func(delta int) { gui.SetVolumeDelta(delta) }
 	// }
+
+	// Connect an UPnP backend to the manager.
+	// mgr := backendsonos.NewManager(&logger{app.Log()})
+	// mgr.SetEvents(app.cp.DefineEvents())
+	// go mgr.Start(true)
+
+	cp := backendgupnp.NewControlPoint()
+	cp.SetEvents(app.cp.DefineEvents())
+
+	// Create the control window.
+	// guigtk.WindowTitle = "Test"
+	app.createGui(false, true)
 
 	return app
 }
@@ -114,20 +131,20 @@ func (app *Applet) createGui(init, show bool) {
 	})
 }
 
-func (app *Applet) onMediaRendererFound(r *upnpcp.Renderer) {
-	app.Log().Info("Renderer Found", r.Name, "", r.Udn)
+func (app *Applet) onMediaRendererFound(r upnptype.Renderer) {
+	app.Log().Info("Renderer Found", r.Name(), "", r.UDN())
 }
 
-func (app *Applet) onMediaServerFound(srv *upnpcp.Server) {
-	app.Log().Info("Server Found", srv.Name, "", srv.Udn)
+func (app *Applet) onMediaServerFound(srv upnptype.Server) {
+	app.Log().Info("Server Found", srv.Name(), "", srv.UDN())
 }
 
-func (app *Applet) onMediaRendererLost(r *upnpcp.Renderer) {
-	app.Log().Info("Renderer Lost", r.Name, "", r.Udn)
+func (app *Applet) onMediaRendererLost(r upnptype.Renderer) {
+	app.Log().Info("Renderer Lost", r.Name(), "", r.UDN())
 }
 
-func (app *Applet) onMediaServerLost(srv *upnpcp.Server) {
-	app.Log().Info("Server Lost", srv.Name, "", srv.Udn)
+func (app *Applet) onMediaServerLost(srv upnptype.Server) {
+	app.Log().Info("Server Lost", srv.Name(), "", srv.UDN())
 }
 
 //
@@ -158,10 +175,10 @@ func (app *Applet) DefineEvents(events *cdtype.Events) {
 		var key int
 		switch app.conf.ActionMouseWheel {
 		case "Change volume":
-			key = ternary.Int(scrollUp, mediacp.ActionVolumeUp, mediacp.ActionVolumeDown)
+			key = ternary.Int(scrollUp, int(upnptype.ActionVolumeUp), int(upnptype.ActionVolumeDown))
 
 		case "Seek in track":
-			key = ternary.Int(scrollUp, mediacp.ActionSeekForward, mediacp.ActionSeekBackward)
+			key = ternary.Int(scrollUp, int(upnptype.ActionSeekForward), int(upnptype.ActionSeekBackward))
 		}
 
 		app.ActionLaunch(key)
@@ -174,25 +191,25 @@ func (app *Applet) DefineEvents(events *cdtype.Events) {
 	events.OnShortkey = func(key string) {
 		switch key {
 		case app.conf.ShortkeyMute:
-			app.ActionLaunch(mediacp.ActionToggleMute)
+			app.ActionLaunch(int(upnptype.ActionToggleMute))
 
 		case app.conf.ShortkeyVolumeDown:
-			app.ActionLaunch(mediacp.ActionVolumeDown)
+			app.ActionLaunch(int(upnptype.ActionVolumeDown))
 
 		case app.conf.ShortkeyVolumeUp:
-			app.ActionLaunch(mediacp.ActionVolumeUp)
+			app.ActionLaunch(int(upnptype.ActionVolumeUp))
 
 		case app.conf.ShortkeyPlayPause:
-			app.ActionLaunch(mediacp.ActionPlayPause)
+			app.ActionLaunch(int(upnptype.ActionPlayPause))
 
 		case app.conf.ShortkeyStop:
-			app.ActionLaunch(mediacp.ActionStop)
+			app.ActionLaunch(int(upnptype.ActionStop))
 
 		case app.conf.ShortkeySeekBackward:
-			app.ActionLaunch(mediacp.ActionSeekBackward)
+			app.ActionLaunch(int(upnptype.ActionSeekBackward))
 
 		case app.conf.ShortkeySeekForward:
-			app.ActionLaunch(mediacp.ActionSeekForward)
+			app.ActionLaunch(int(upnptype.ActionSeekForward))
 		}
 	}
 }
@@ -205,52 +222,67 @@ func (app *Applet) DefineEvents(events *cdtype.Events) {
 func (app *Applet) defineActions() {
 	app.ActionAdd(
 		&cdtype.Action{
-			ID:   mediacp.ActionNone,
+			ID:   int(upnptype.ActionNone),
 			Menu: cdtype.MenuSeparator,
 		},
 		&cdtype.Action{
-			ID:   mediacp.ActionToggleMute,
+			ID:   int(upnptype.ActionToggleMute),
 			Name: "Mute volume",
 			Icon: "dialog-information",
-			Call: func() { app.cp.Action(mediacp.ActionToggleMute) },
+			Call: func() { app.cp.Action(upnptype.ActionToggleMute) },
 		},
 		&cdtype.Action{
-			ID:   mediacp.ActionVolumeDown,
+			ID:   int(upnptype.ActionVolumeDown),
 			Name: "Volume down",
 			Icon: "go-down",
-			Call: func() { app.cp.Action(mediacp.ActionVolumeDown) },
+			Call: func() { app.cp.Action(upnptype.ActionVolumeDown) },
 		},
 		&cdtype.Action{
-			ID:   mediacp.ActionVolumeUp,
+			ID:   int(upnptype.ActionVolumeUp),
 			Name: "Volume up",
 			Icon: "go-up",
-			Call: func() { app.cp.Action(mediacp.ActionVolumeUp) },
+			Call: func() { app.cp.Action(upnptype.ActionVolumeUp) },
 		},
 		&cdtype.Action{
-			ID:   mediacp.ActionPlayPause,
+			ID:   int(upnptype.ActionPlayPause),
 			Name: "Play / pause",
 			Icon: "media-playback-start",
-			Call: func() { app.cp.Action(mediacp.ActionPlayPause) },
+			Call: func() { app.cp.Action(upnptype.ActionPlayPause) },
 		},
 		&cdtype.Action{
-			ID:   mediacp.ActionStop,
+			ID:   int(upnptype.ActionStop),
 			Name: "Stop",
 			Icon: "media-playback-stop",
-			Call: func() { app.cp.Action(mediacp.ActionStop) },
+			Call: func() { app.cp.Action(upnptype.ActionStop) },
 		},
 		&cdtype.Action{
-			ID:       mediacp.ActionSeekBackward,
+			ID:       int(upnptype.ActionSeekBackward),
 			Name:     "Seek backward",
 			Icon:     "go-previous",
-			Call:     func() { app.cp.Action(mediacp.ActionSeekBackward) },
+			Call:     func() { app.cp.Action(upnptype.ActionSeekBackward) },
 			Threaded: true,
 		},
 		&cdtype.Action{
-			ID:       mediacp.ActionSeekForward,
+			ID:       int(upnptype.ActionSeekForward),
 			Name:     "Seek forward",
 			Icon:     "go-next",
-			Call:     func() { app.cp.Action(mediacp.ActionSeekForward) },
+			Call:     func() { app.cp.Action(upnptype.ActionSeekForward) },
 			Threaded: true,
 		},
 	)
+}
+
+//
+//------------------------------------------------------------------[ LOGGER ]--
+
+type logger struct{ cdtype.Logger }
+
+func (l *logger) Infof(pattern string, args ...interface{}) {
+	str := fmt.Sprintf(pattern, args...)
+	l.Info("WTF", str)
+}
+
+func (l *logger) Warningf(pattern string, args ...interface{}) {
+	str := fmt.Sprintf(pattern, args...)
+	l.Info("WTF", str)
 }

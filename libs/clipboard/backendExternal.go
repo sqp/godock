@@ -1,4 +1,5 @@
-// -build gtk || dock
+// +build !gtk
+// +build !dock
 
 package clipboard
 

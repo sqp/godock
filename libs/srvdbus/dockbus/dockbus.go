@@ -1,3 +1,17 @@
+// Package dockbus provides a Dbus client for the main dock Dbus service.
+//
+// Use with caution when gldi is enabled as the client and server should be on
+// the same thread.
+//
+// Most functions in this package are unused, and some of them were made to
+// support widget/confbuilder/datadbus, the GUI data source from Dbus, which is
+// unused and unpublished (may be around 50% features, with missing API
+// evolutions).
+//
+// So if you need to use this package, which isn't grouped in the applet API due
+// to lack of use, and ideas to provide a common set for Dbus+Gldi, let us know
+// your needs, and if current methods are fine for you.
+//
 package dockbus
 
 import (

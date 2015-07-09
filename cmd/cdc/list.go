@@ -6,9 +6,9 @@ package main
 
 import (
 	"github.com/sqp/godock/libs/cdtype"
-	"github.com/sqp/godock/libs/log/color"
 	"github.com/sqp/godock/libs/packages"
-	"github.com/sqp/godock/libs/term"
+	"github.com/sqp/godock/libs/text/color"
+	"github.com/sqp/godock/libs/text/tablist"
 
 	"bufio"
 	"encoding/json"
@@ -115,7 +115,7 @@ func runList(cmd *Command, args []string) {
 // Format applet packages using simple table formater.
 //
 func printConsole(list packages.AppletPackages) {
-	lf := term.NewTableFormater([]term.ColInfo{
+	lf := tablist.NewTableFormater([]tablist.ColInfo{
 		{0, false, "Inst"},
 		{0, true, "[ Applet ]"},
 		{0, true, "Category"},

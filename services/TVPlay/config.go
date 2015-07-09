@@ -1,6 +1,6 @@
 package TVPlay
 
-import "github.com/sqp/gupnp/mediacp"
+import "github.com/sqp/gupnp/upnptype"
 
 type appletConf struct {
 	groupIcon          `group:"Icon"`
@@ -45,12 +45,12 @@ type groupActions struct {
 // Actions available in right click menu.
 //
 var dockMenu = []int{
-	mediacp.ActionToggleMute,
-	mediacp.ActionVolumeUp,
-	mediacp.ActionVolumeDown,
-	mediacp.ActionNone,
-	mediacp.ActionPlayPause,
-	mediacp.ActionStop,
-	mediacp.ActionSeekBackward,
-	mediacp.ActionSeekForward,
+	int(upnptype.ActionToggleMute),
+	int(upnptype.ActionVolumeUp),
+	int(upnptype.ActionVolumeDown),
+	int(upnptype.ActionNone),
+	int(upnptype.ActionPlayPause),
+	int(upnptype.ActionStop),
+	int(upnptype.ActionSeekBackward),
+	int(upnptype.ActionSeekForward),
 }

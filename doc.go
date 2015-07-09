@@ -5,39 +5,38 @@ External applets are small programs spawned by the dock to manage dedicated icon
 Once started, the program can use his icon to display informations and receive
 user interactions like mouse events and keyboard shortcuts.
 
-The best way to get started is to install the cdc command which also handles applets:
+The project is now also able to build a reworked version of cairo-dock. It's a
+binding for the C gldi library, the heart of the dock, and a rewrite in go of
+all the dock code that wasn't in that library (loader, events, menu, the big
+GUI...). Besides a few missing options, it should be usable by advanced users,
+as it has been the only dock/panel used by its dev for months.
 
-	go get -u -tags 'DiskActivity DiskFree GoGmail NetActivity Update' github.com/sqp/godock/cmd/cdc
+The goals of the project is to remain as much compatible with the original dock
+as possible, at least on the global behavior and for configuration files.
+But it will try to improve the user experience with a new GUI more focused on
+current needs.
 
-Then you can install the applets you need (you may have to restart your dock).
+Install
 
-	cd $GOPATH/src/github.com/sqp/godock/applets/DiskActivity
-	make link
+Documentation for install, build and package creation is on the dist page, with
+pre build packages repositories (Debian, Ubuntu, Archlinux).
 
-	cd $GOPATH/src/github.com/sqp/godock/applets/DiskFree
-	make link
+    http://godoc.org/github.com/sqp/godock/dist
 
-	cd $GOPATH/src/github.com/sqp/godock/applets/GoGmail
-	make link
+Applet creation and documentation
 
-	cd $GOPATH/src/github.com/sqp/godock/applets/NetActivity
-	make link
+If you want to create a new applet or learn more about them, most of their work
+is defined in the cdtype package, with their common types, actions, events...
 
-	cd $GOPATH/src/github.com/sqp/godock/applets/Update
-	make link
+    http://godoc.org/github.com/sqp/godock/libs/cdtype
 
-If you want to create a new applet or learn more about them, follow those links:
-	Main Cairo-Dock Applet API               http://godoc.org/github.com/sqp/godock/libs/dock
-	DBus methods to interact with the dock   http://godoc.org/github.com/sqp/godock/libs/appdbus
-	Common types and applet events           http://godoc.org/github.com/sqp/godock/libs/cdtype
-	Applets code repository (real examples)  http://github.com/sqp/godock/tree/master/services
-	Applets data repository (config files)   http://github.com/sqp/godock/tree/master/applets
-
-Current golang thread on cairo-dock: http://glx-dock.org/bg_topic.php?t=7638
+Current golang thread on cairo-dock forum: http://glx-dock.org/bg_topic.php?t=7638
 
 Cairo-Dock : http://glx-dock.org/
 
 
-Copyright (C) 2012-2014 SQP  <sqp@glx-dock.org>
+Copyright (C) 2012-2015 SQP  <sqp@glx-dock.org>
+
+License: Released under GPLv3
 */
 package godock
