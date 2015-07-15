@@ -5,10 +5,10 @@ import (
 	"github.com/godbus/dbus"
 	"github.com/godbus/dbus/introspect"
 
-	"github.com/sqp/godock/libs/cdtype" // Logger type.
-	"github.com/sqp/godock/libs/srvdbus/dbuscommon"
-	"github.com/sqp/godock/libs/srvdbus/dockbus"
-	"github.com/sqp/godock/libs/srvdbus/dockpath" // Path to main dock dbus service.
+	"github.com/sqp/godock/libs/cdtype"             // Logger type.
+	"github.com/sqp/godock/libs/srvdbus/dbuscommon" // Dbus base object.
+	"github.com/sqp/godock/libs/srvdbus/dockbus"    // Send dock restart.
+	"github.com/sqp/godock/libs/srvdbus/dockpath"   // Path to main dock dbus service.
 )
 
 // SrvObj is the Dbus object name for the service.
@@ -68,7 +68,7 @@ type Server struct {
 func NewServer(dockArgs []string, log cdtype.Logger) *Server {
 	return &Server{
 		Server:   dbuscommon.NewServer(SrvObj, SrvPath, log),
-		DockArgs: append([]string{"dock"}, dockArgs...),
+		DockArgs: dockArgs,
 	}
 }
 
@@ -88,17 +88,7 @@ func (o *Server) DockStop() error {
 // DockRestart restarts the dock.
 //
 func (o *Server) DockRestart() error {
-	o.Log.Info("build")
-	e := o.Log.ExecShow("make", "dock")
-	// e := o.Log.ExecShow("go", "install", "-tags", "dock log all", "github.com/sqp/godock/cmd/cdc")
-	if e != nil {
-		return e
-	}
-
-	e = o.DockStop()
-	// if e != nil {
-	// 	return e
-	// }
+	e := o.DockStop()
 	o.Log.Err(e, "StopDock")
 
 	return o.DockStart()

@@ -216,13 +216,13 @@ func (o *AppGldi) ActOnAppli(action string) error {
 //
 func (o *AppGldi) ControlAppli(applicationClass string) error {
 	applicationClass = strings.ToLower(applicationClass)
-
-	if applicationClass == o.Icon.GetClass() {
+	class := o.Icon.GetClass()
+	if applicationClass == class.String() { // test if already set.
 		return nil
 	}
 
 	addIdle(func() {
-		if o.Icon.GetClass() != "" {
+		if class.String() != "" {
 			o.Icon.DeinhibiteClass()
 		}
 		if applicationClass != "" {

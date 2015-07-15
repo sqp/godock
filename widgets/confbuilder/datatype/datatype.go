@@ -17,10 +17,46 @@ const (
 	//
 	KeyMainDock = "_MainDock_"
 
+	// KeyNewDock is the key name for a new dock to create.
+	//
+	KeyNewDock = "_New Dock_"
+)
+
+// Custom config groups for the Icons GUI.
+const (
+	// GroupServices is the key name for the services group.
+	//
+	GroupServices = "_services_"
+
+	// TitleServices is the displayed name for the services group (translatable).
+	//
+	TitleServices = "Services"
+
+	// GroupDesklets is the key name for the desklets group.
+	//
+	GroupDesklets = "Desklets"
+
+	// TitleDesklets is the displayed name for the desklets group (translatable).
+	//
+	TitleDesklets = "Desklets"
+
+	// FieldTaskBar is the key name for the taskbar field.
+	//
+	FieldTaskBar = "TaskBar"
+
+	// TitleTaskBar is the displayed name for the taskbar field (translatable).
+	//
+	TitleTaskBar = "--[ Taskbar ]--"
+)
+
+// Icons locations.
+const (
 	// DirIconsSystem is the location of desktop icons themes installed on the system.
+	//
 	DirIconsSystem = "/usr/share/icons"
 
 	// DirIconsUser is the name of desktop icons themes dir in the user home dir.
+	//
 	DirIconsUser = ".icons" // in $HOME
 )
 
@@ -49,7 +85,7 @@ type Source interface {
 
 	// ListDownloadApplets builds the list of downloadable user applets (installed or not).
 	//
-	ListDownloadApplets() map[string]Appleter
+	ListDownloadApplets() (map[string]Appleter, error)
 
 	// ListIconsMainDock builds the list of icons in the maindock.
 	//
@@ -101,6 +137,14 @@ type Source interface {
 	// ManagerReload reloads the manager matching the given name.
 	//
 	ManagerReload(name string, b bool, keyf *keyfile.KeyFile)
+
+	// CreateMainDock creates a new main dock to store a moved icon.
+	//
+	CreateMainDock() string
+
+	// DesktopClasser allows to get desktop class informations for a given name.
+	//
+	DesktopClasser(class string) DesktopClasser
 }
 
 // SourceCommon provides common methods for dock config data source.
@@ -282,14 +326,31 @@ type ListIconContainer struct {
 // Iconer defines the interface needed by icons provided as config source.
 //
 type Iconer interface {
+	// ConfigPath gives the full path to the icon config file.
+	//
 	ConfigPath() string
+
+	// OriginalConfigPath gives the full path to the icon original config file.
+	// This is the default unchanged config file.
+	//
+	OriginalConfigPath() string
+
 	DefaultNameIcon() (string, string) //applets map[string]*packages.AppletPackage) (string, string)
 	IsTaskbar() bool
 	IsLauncher() bool
 
 	IsStackIcon() bool
 
-	GetClassInfo(int) string
+	// ConfigGroup gives the config group to build if any.
+	// If no config file is set, it defines a special config key.
+	//
+	ConfigGroup() string
+
+	// GetClass returns the class defined for the icon, able to get all related
+	// desktop class informations.
+	//
+	GetClass() DesktopClasser
+
 	GetCommand() string
 	Reload()
 
@@ -331,6 +392,7 @@ type Iconer interface {
 // Field defines a simple data field for dock queries.
 //
 type Field struct {
+	Conf string
 	Key  string
 	Name string
 	Icon string
@@ -345,8 +407,9 @@ type IconSimple struct {
 
 // NewIconSimple creates a simple Iconer compatible object.
 //
-func NewIconSimple(key, name, icon string) *IconSimple {
+func NewIconSimple(conf, key, name, icon string) *IconSimple {
 	return &IconSimple{Field: Field{
+		Conf: conf,
 		Key:  key,
 		Name: name,
 		Icon: icon}}
@@ -355,6 +418,13 @@ func NewIconSimple(key, name, icon string) *IconSimple {
 // ConfigPath returns the key.
 //
 func (is *IconSimple) ConfigPath() string {
+	return is.Conf
+}
+
+// ConfigGroup gives the config group to build if any, or the special config key
+// if no config file is defined.
+//
+func (is *IconSimple) ConfigGroup() string {
 	return is.Key
 }
 
@@ -382,11 +452,14 @@ func (is *IconSimple) DefaultNameIcon() (string, string) {
 	return is.Name, is.Icon
 }
 
+// OriginalConfigPath is unused.
+func (is *IconSimple) OriginalConfigPath() string { return "" }
+
 // GetCommand is unused ATM.
 func (is *IconSimple) GetCommand() string { return "" }
 
-// GetClassInfo is unused ATM.
-func (is *IconSimple) GetClassInfo(int) string { return "" }
+// GetClass is unused ATM.
+func (is *IconSimple) GetClass() DesktopClasser { return DesktopClassNil{} }
 
 // Reload is unused ATM.
 func (is *IconSimple) Reload() {}
@@ -527,3 +600,50 @@ type Shortkeyer interface {
 type UpdateModuleStater interface {
 	UpdateModuleState(name string, active bool)
 }
+
+//
+//-----------------------------------------------------------[ DESKTOP CLASS ]--
+
+// DesktopClasser defines methods to get informations about a desktop class.
+//
+type DesktopClasser interface {
+	// String returns the desktop class as a string.
+	//
+	String() string
+
+	// Name returns the desktop class application name.
+	//
+	Name() string
+
+	// Command returns the desktop class command.
+	//
+	Command() string
+
+	// Icon returns the desktop class icon.
+	//
+	Icon() string
+
+	// MenuItems returns the list of extra commands for the class, by packs of 3
+	// strings: Name, Command, Icon.
+	//
+	MenuItems() [][]string
+}
+
+// DesktopClassNil provides an empty DesktopClasser.
+//
+type DesktopClassNil struct{}
+
+// String is unused.
+func (DesktopClassNil) String() string { return "" }
+
+// Name is unused.
+func (DesktopClassNil) Name() string { return "" }
+
+// Command is unused.
+func (DesktopClassNil) Command() string { return "" }
+
+// Icon is unused.
+func (DesktopClassNil) Icon() string { return "" }
+
+// MenuItems is unused.
+func (DesktopClassNil) MenuItems() [][]string { return nil }

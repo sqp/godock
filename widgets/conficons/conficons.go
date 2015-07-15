@@ -5,16 +5,14 @@ import (
 	"github.com/conformal/gotk3/gtk"
 
 	"github.com/sqp/godock/libs/cdtype"
-	"github.com/sqp/godock/libs/gldi"
 
 	"github.com/sqp/godock/widgets/common"
 	"github.com/sqp/godock/widgets/confbuilder"
 	"github.com/sqp/godock/widgets/confbuilder/datatype"
+	"github.com/sqp/godock/widgets/conficons/desktopclass"
 	"github.com/sqp/godock/widgets/pageswitch"
 
 	"errors"
-	"path/filepath"
-	"strings"
 )
 
 const iconSize = 24
@@ -138,68 +136,63 @@ func (widget *GuiIcons) Clear() string {
 // Save saves the current page configuration
 //
 func (widget *GuiIcons) Save() {
-	if widget.config == nil {
+	icon, e := widget.icons.SelectedIcon()
+	if widget.config == nil || widget.log.Err(e, "SelectedIcon") {
 		return
 	}
 
-	icon, e := widget.icons.SelectedIcon()
+	// Create new dock if needed for applets.
+	keyDockName := widget.config.Builder.GetKey("Icon", "dock name")
+	if keyDockName != nil {
+		dockname := keyDockName.GetValues[0]().(string)
+		keyDetached := widget.config.Builder.GetKey("Desklet", "initially detached")
+		if keyDetached != nil {
+			detached := keyDetached.GetValues[0]().(bool)
+			if !detached {
+				widget.newDock(dockname, keyDockName)
+			}
+		}
+	} else {
 
-	// applet
-	// 		// if the parent dock doesn't exist (new dock), add a conf file for it with a nominal name.
-	// 		if (g_key_file_has_key (pKeyFile, "Icon", "dock name", NULL))
-	// 		{
-	// 			gchar *cDockName = g_key_file_get_string (pKeyFile, "Icon", "dock name", NULL);
-	// 			gboolean bIsDetached = g_key_file_get_boolean (pKeyFile, "Desklet", "initially detached", NULL);
-	// 			if (!bIsDetached)
-	// 			{
-	// 				CairoDock *pDock = gldi_dock_get (cDockName);
-	// 				if (pDock == NULL)
-	// 				{
-	// 					gchar *cNewDockName = gldi_dock_add_conf_file ();
-	// 					g_key_file_set_string (pKeyFile, "Icon", "dock name", cNewDockName);
-	// 					g_free (cNewDockName);
-	// 				}
-	// 			}
-	// 			g_free (cDockName);
-	// 		}
-
-	// icon
-	// 		// if the parent dock doesn't exist (new dock), add a conf file for it with a nominal name.
-	// 		if (g_key_file_has_key (pKeyFile, "Desktop Entry", "Container", NULL))
-	// 		{
-	// 			gchar *cDockName = g_key_file_get_string (pKeyFile, "Desktop Entry", "Container", NULL);
-	// 			CairoDock *pDock = gldi_dock_get (cDockName);
-	// 			if (pDock == NULL)
-	// 			{
-	// 				gchar *cNewDockName = gldi_dock_add_conf_file ();
-	// 				g_key_file_set_string (pKeyFile, "Icon", "dock name", cNewDockName);
-	// 				g_free (cNewDockName);
-	// 			}
-	// 			g_free (cDockName);
-	// 		}
-
+		// Create new dock if needed for other icons.
+		keyDockName = widget.config.Builder.GetKey("Desktop Entry", "Container")
+		if keyDockName != nil {
+			dockname := keyDockName.GetValues[0]().(string)
+			widget.newDock(dockname, keyDockName)
+		}
+	}
 	// 		if (pModuleInstance->pModule->pInterface->save_custom_widget != NULL)
 	// 			pModuleInstance->pModule->pInterface->save_custom_widget (pModuleInstance, pKeyFile, pWidgetList);
 
 	widget.config.Save()
 
-	if e == nil {
-		icon.Reload()
+	// we reload in case the items place has changed (icon's container, detached...).
+	icon.Reload()
+
+	// 	_items_widget_reload (CD_WIDGET (pItemsWidget));  // we reload in case the items place has changed (icon's container, dock orientation, etc).}
+}
+
+// newDock creates a maindock to hold the icon if it was moved (dock not found).
+//
+func (widget *GuiIcons) newDock(dockname string, key *confbuilder.Key) {
+	if dockname == datatype.KeyNewDock { // was gldi.DockGet(dockname) == nil
+		dockname := widget.data.CreateMainDock()
+		key.GetValues = []func() interface{}{
+			func() interface{} { return dockname },
+		}
 	}
-
-	// 	_items_widget_reload (CD_WIDGET (pItemsWidget));  // we reload in case the items place has changed (icon's container, dock orientation, etc).
-
 }
 
 //
 //-------------------------------------------------------[ CONTROL CALLBACKS ]--
 
-// onSelect reacts when a row is selected. Creates a new config for the icon.
+// OnSelect reacts when a row is selected. Creates a new config for the icon.
 //
-func (widget *GuiIcons) onSelect(icon datatype.Iconer, ei error) {
+func (widget *GuiIcons) OnSelect(icon datatype.Iconer, ei error) {
 	widget.switcher.Clear()
 
 	if widget.config != nil {
+		widget.config.KeyFile().Free()
 		widget.config.Destroy()
 		widget.config = nil
 	}
@@ -208,69 +201,55 @@ func (widget *GuiIcons) onSelect(icon datatype.Iconer, ei error) {
 		return
 	}
 
+	if icon.ConfigPath() == "" {
+		switch icon.ConfigGroup() {
+		case datatype.KeyMainDock:
+
+		case datatype.GroupServices:
+		}
+		// widget.config, _ = gtk.LabelNew("TODO")
+		// widget.Pack2(widget.config, true, true)
+		return
+	}
+
+	// Build a custom config widget from a dock config file.
+
+	// Can be:
+	//   field icon     Applet, Launcher, Subdock, Separator.
+	//   field custom   TaskBar, Service (applet without icon).
+	//   group          Desklets, Alt maindock.
+
+	println("orig", icon.OriginalConfigPath())
 	build, e := confbuilder.NewGrouper(widget.data, widget.log, widget.data.GetWindow(), icon.ConfigPath(), icon.GetGettextDomain())
 	if widget.log.Err(e, "Load Keyfile "+icon.ConfigPath()) {
 		return
 	}
-	name, _ := icon.DefaultNameIcon()
 	switch {
-	case icon.IsTaskbar():
-		widget.config = build.BuildSingle("TaskBar")
-
-	case name == "_desklets_":
-		widget.config = build.BuildSingle("Desklets")
+	case icon.ConfigGroup() != "":
+		widget.config = build.BuildSingle(icon.ConfigGroup())
 
 	default:
 		widget.config = build.BuildAll(widget.switcher)
 
 		// Little hack for empty launchers, not sure it could go somewhere else.
 		if icon.IsLauncher() {
-			origins, _ := build.Conf.GetString("Desktop Entry", "Origin")
-			widget.config.PackStart(launcherMagic(icon, origins), false, false, 10)
-		}
-
-	}
-	widget.Pack2(widget.config, true, true)
-	widget.config.ShowAll()
-}
-
-func launcherMagic(icon datatype.Iconer, origins string) gtk.IWidget {
-	// println("comand", icon.GetCommand(), icon.GetDesktopFileName())
-
-	apps := strings.Split(origins, ";")
-
-	if len(apps) > 0 {
-		// Extract the path from the first item.
-		dir := filepath.Dir(apps[0])
-		apps[0] = filepath.Base(apps[0])
-
-		// Remove suffix from apps names and highlight the active one.
-		desktop := icon.GetClassInfo(gldi.ClassDesktopFile)
-		for k, v := range apps {
-			apps[k] = strings.TrimSuffix(apps[k], ".desktop")
-			if filepath.Join(dir, v) == desktop {
-				apps[k] = common.Bold(apps[k])
+			origins, e := build.Conf.GetString("Desktop Entry", "Origin")
+			if e == nil {
+				widget.config.PackStart(desktopclass.New(widget.data, icon.GetClass(), origins), false, false, 10)
 			}
 		}
 	}
 
-	str := "Magic launcher :" +
-		"\nName :\t\t" + icon.GetClassInfo(gldi.ClassName) + // Must not use gldi, those consts will have to move.
-		"\nIcon :\t\t" + icon.GetClassInfo(gldi.ClassIcon) +
-		"\nCommand :\t" + icon.GetClassInfo(gldi.ClassCommand) +
-		"\nDesktop file :\t" + strings.Join(apps, ", ")
-
-	label, _ := gtk.LabelNew(str)
-	label.Set("use-markup", true)
-	return label
+	widget.Pack2(widget.config, true, true)
+	widget.config.ShowAll()
 }
 
 //-------------------------------------------------------[ WIDGET ICONS LIST ]--
 
-// controlItems forwards events to other widgets.
+// ListControl forwards events to other widgets.
 //
-type controlItems interface {
-	onSelect(datatype.Iconer, error)
+type ListControl interface {
+	OnSelect(datatype.Iconer, error)
 }
 
 // List defines a dock icons management widget.
@@ -281,13 +260,13 @@ type List struct {
 
 	index map[*gtk.ListBoxRow]datatype.Iconer
 
-	control controlItems // link to higher level widgets.
+	control ListControl // link to higher level widgets.
 	log     cdtype.Logger
 }
 
 // NewList creates a dock icons management widget.
 //
-func NewList(control controlItems, log cdtype.Logger) *List {
+func NewList(control ListControl, log cdtype.Logger) *List {
 	scroll, _ := gtk.ScrolledWindowNew(nil, nil)
 	widget := &List{
 		ScrolledWindow: *scroll,
@@ -415,5 +394,5 @@ func (widget *List) Select(conf string) bool {
 // Selected line has changed. Forward the call to the controler.
 //
 func (widget *List) onSelectionChanged(box *gtk.ListBox, row *gtk.ListBoxRow) {
-	widget.control.onSelect(widget.SelectedIcon())
+	widget.control.OnSelect(widget.SelectedIcon())
 }

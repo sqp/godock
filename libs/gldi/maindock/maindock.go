@@ -1,7 +1,8 @@
 /*
 Package maindock is a cairo-dock C wrapper to build a dock interface.
 
-C files in the dir are the same as in the cairo-dock-core tree. (or should be)
+C files in the dir are the same as in the cairo-dock-core tree, or should be a
+stripped version of them. They are supposed to be rewritten.
 
 */
 package maindock
@@ -88,6 +89,8 @@ func SetLogger(l cdtype.Logger) {
 //----------------------------------------------------------------[ MAINDOCK ]--
 
 type DockSettings struct {
+	// --- Original Cairo-Dock settings ---
+	//
 	ForceCairo     bool
 	ForceOpenGL    bool
 	IndirectOpenGL bool
@@ -109,6 +112,13 @@ type DockSettings struct {
 	NoSticky   bool
 	ModulesDir string
 
+	// --- New Dock settings ---
+	//
+	HttpPprof      bool
+	AppletsDisable bool
+	Debug          bool
+
+	// auto loaded from original dock hidden file.
 	isFirstLaunch  bool
 	isNewVersion   bool
 	sessionWasUsed bool

@@ -10,8 +10,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
-	"sync"
 	"text/template"
 	"unicode"
 	"unicode/utf8"
@@ -19,140 +19,140 @@ import (
 
 // Commands lists the available commands and help topics.
 // The order here is the order in which they are printed by 'cdc help'.
-func Commands() []*Command {
-	all := []*Command{
-		cmdConfig,
-		cmdDebug,
-		cmdDock,
-		cmdInstall,
-		cmdList,
-		// cmdRun,
-		// cmdTest,
-		cmdRestart,
-		cmdService,
-		cmdUpload,
-		cmdBuild,
-		cmdVersion,
+var Commands = CommandList{
+	cmdDebug,
+	cmdExternal,
+	cmdUpload,
+	cmdBuild,
+	cmdVersion,
 
-		// helpGopath,
-		// helpPackages,
-		// helpRemote,
-		// helpTestflag,
-		// helpTestfunc,
-	}
-
-	// Special temp to remove optional config command.
-	var list []*Command
-	for _, cmd := range all {
-		if cmd != nil {
-			list = append(list, cmd)
-		}
-	}
-
-	return list
+	// helpGopath,
+	// helpPackages,
+	// helpRemote,
+	// helpTestflag,
+	// helpTestfunc,
 }
 
-var (
-	// Global variables for optional actions.
-	cmdConfig  *Command
-	cmdDock    *Command
-	cmdService *Command
-	cmdRestart *Command
+// Default command, set by the backend (dock or service).
+var cmdDefault *Command
 
-	cmdShortcuts = map[byte]string{
-		'c': "config",
-		'd': "debug",
-		'r': "restart",
-		's': "service",
-		'u': "upload",
-	}
-
-	// Global variables for internal settings.
-
-	logger = &log.Log{}
-
-	exitStatus = 0
-	exitMu     sync.Mutex
-)
-
-func setExitStatus(n int) {
-	exitMu.Lock()
-	if exitStatus < n {
-		exitStatus = n
-	}
-	exitMu.Unlock()
-}
+// Common logger for all services and actions.
+var logger = &log.Log{}
 
 func main() {
-	fl := flag.NewFlagSet(os.Args[0], flag.ContinueOnError)
-	fl.Usage = usage
+	// Get the command. Exit if fail.
+	cmd, args := parseArgsDefault(os.Args, cmdDefault)
 
-	args := setDefaultCommand("dock", os.Args[1:])
+	// Free unused.
+	Commands, cmdDefault = nil, nil
 
-	if len(args) == 0 {
-		usage()
-	}
-
-	fl.Parse(args)
-	// log.SetFlags(0)
-
-	args = fl.Args()
-
+	// Set logger.
 	logger.SetLogOut(log.Logs)
 	logger.SetName(os.Args[0])
 
-	if args[0] == "help" {
-		help(args[1:])
-		return
-	}
-
-	if len(args[0]) == 1 { // Command shortcut.
-		if name, ok := cmdShortcuts[args[0][0]]; ok {
-			args[0] = name
-		}
-	}
-
-	for _, cmd := range Commands() {
-		if cmd.Name() == args[0] && cmd.Run != nil {
-			cmd.Flag.Usage = func() { cmd.Usage() }
-			if cmd.CustomFlags {
-				args = args[1:]
-			} else {
-				cmd.Flag.Parse(args[1:])
-				args = cmd.Flag.Args()
-			}
-			cmd.Run(cmd, args)
-			exit()
-			return
-		}
-	}
-
-	fmt.Fprintf(os.Stderr, "cdc: unknown subcommand %q\nRun 'cdc help' for usage.\n", args[0])
-	setExitStatus(2)
-	exit()
-}
-
-func setDefaultCommand(cmd string, args []string) []string {
-	if cmdDock != nil { // open a dock as default action if available.
-		foundCommand := false
-		for _, str := range args {
-			if str[0] != '-' {
-				foundCommand = true
-			}
-		}
-		if !foundCommand {
-			args = append([]string{cmd}, args...)
-		}
-	}
-	return args
+	// And now we can start.
+	cmd.Run(cmd, args)
 }
 
 //
+//------------------------------------------------------------------[ COMMON ]--
+
+// parseArgsDefault returns the command and its args parsed from startArgs.
+// cmd will be used as default if no command name is provided by the user.
+//
+func parseArgsDefault(startArgs []string, cmd *Command) (*Command, []string) {
+	// Add common help features to the default command.
+	showHelpShort := cmdDefault.Flag.Bool("h", false, "")
+	showHelpLong := cmdDefault.Flag.Bool("help", false, "")
+
+	// Strip default command name from args of found.
+	if len(startArgs) > 1 && startArgs[1] == cmdDefault.Name() {
+		startArgs = append(startArgs[:1], startArgs[2:]...)
+	}
+
+	// Parse flags as if the default command has been set.
+	// No common flag have been set, it will help get the real command.
+	cmd.Flag.Parse(startArgs[1:])
+	// log.SetFlags(0)
+	args := cmd.Flag.Args()
+
+	if *showHelpShort || *showHelpLong {
+		help(nil)
+	}
+
+	// No command found, return the default one.
+	if len(args) == 0 {
+		return cmd, startArgs[1:] // return args (nil) ?
+	}
+
+	action := findCommandShortcut(startArgs[1])
+
+	// Help display and exit.
+	if action == "help" {
+		help(args[1:])
+	}
+
+	cmd = Commands.MustFind(action)
+
+	// A command has been provided, restore common command arguments parsing.
+	// fl := flag.NewFlagSet(startArgs[0], flag.ContinueOnError)
+	// fl.Usage = usage
+	// fl.Parse(startArgs[1:])
+	// args = fl.Args()
+
+	// Get command args, except for commands that will manage args themselves.
+	if cmd.CustomFlags {
+		args = startArgs[2:]
+	} else {
+		cmd.Flag.Usage = cmd.Usage
+		cmd.Flag.Parse(startArgs[2:])
+		args = cmd.Flag.Args()
+	}
+
+	// Get the command. Exit if fail.
+	return cmd, args
+}
+
+func findCommandShortcut(name string) string {
+	if len(name) != 1 { // Not a command shortcut.
+		return name
+	}
+
+	cmdShortcuts := map[byte]string{
+		'd': "debug",
+		'e': "external",
+		'h': "help",
+		'u': "upload",
+	}
+	newname, ok := cmdShortcuts[name[0]]
+	if !ok {
+		return name
+	}
+	return newname
+}
+
+//
+//------------------------------------------------------------------[ COMMON ]--
+
+func setPathAbsolute(path *string) {
+	if *path != "" {
+		newpath, e := filepath.Abs(*path)
+		if e != nil {
+			return
+		}
+		*path = newpath
+	}
+}
+
 //--------------------------------------------------------------------[ HELP ]--
 
-var usageTemplate = `cdc, Cairo-Dock Control, is a tool to manage a Cairo-Dock installation.
-It can also embed and manage multiple applets if compiled with their support.
-Most of the commands will require an active dock to work (with Dbus API).
+// documentation set by dock or service (whichever one is used).
+var (
+	usageHeader string
+	usageFlags  *string
+)
+
+var usageTemplate = `
 
 Usage:
 
@@ -212,19 +212,22 @@ func capitalize(s string) string {
 }
 
 func printUsage(w io.Writer) {
-	tmpl(w, usageTemplate, Commands())
+	fulltemplate := usageHeader + usageTemplate
+	if usageFlags != nil {
+		fulltemplate += *usageFlags
+	}
+	tmpl(w, fulltemplate, Commands)
 }
 
 // help implements the 'help' command.
 func help(args []string) {
 	if len(args) == 0 {
 		printUsage(os.Stdout)
-		// not exit 2: succeeded at 'cdc help'.
-		return
+		exit()
 	}
 	if len(args) != 1 {
 		fmt.Fprintf(os.Stderr, "usage: cdc help command\n\nToo many arguments given.\n")
-		os.Exit(2) // failed at 'cdc help'
+		exit(2) // failed at 'cdc help'
 	}
 
 	arg := args[0]
@@ -234,24 +237,52 @@ func help(args []string) {
 		buf := new(bytes.Buffer)
 		printUsage(buf)
 		usage := &Command{Long: buf.String()}
-		tmpl(os.Stdout, documentationTemplate, append([]*Command{usage}, Commands()...))
-		return
+		tmpl(os.Stdout, documentationTemplate, append([]*Command{usage}, Commands...))
+		exit()
 	}
 
-	for _, cmd := range Commands() {
+	arg = findCommandShortcut(arg) // Enable shortcuts for actions help.
+
+	for _, cmd := range Commands {
 		if cmd.Name() == arg {
 			tmpl(os.Stdout, helpTemplate, cmd)
 			// not exit 2: succeeded at 'cdc help cmd'.
-			return
+			exit()
 		}
 	}
 
 	fmt.Fprintf(os.Stderr, "Unknown help topic %#q.  Run 'cdc help'.\n", arg)
-	os.Exit(2) // failed at 'cdc help cmd'
+	exit(2) // failed at 'cdc help cmd'
 }
 
 //
 //-----------------------------------------------------------------[ COMMAND ]--
+
+// CommandList defines a list of commands with find by name methods.
+//
+type CommandList []*Command
+
+// Find returns the command associated with the given name.
+//
+func (cl CommandList) Find(name string) *Command {
+	for _, cmd := range cl {
+		if cmd.Name() == name && cmd.Run != nil {
+			return cmd
+		}
+	}
+	return nil
+}
+
+// MustFind returns the command associated with the given name. Exit if fail.
+//
+func (cl CommandList) MustFind(name string) *Command {
+	cmd := cl.Find(name)
+	if cmd == nil {
+		fmt.Fprintf(os.Stderr, "cdc: unknown subcommand %q\nRun 'cdc help' for usage.\n", name)
+		exit(2)
+	}
+	return cmd
+}
 
 // A Command is an implementation of a cdc command
 //
@@ -292,7 +323,7 @@ func (c *Command) Name() string {
 func (c *Command) Usage() {
 	fmt.Fprintf(os.Stderr, "usage: %s\n\n", c.UsageLine)
 	fmt.Fprintf(os.Stderr, "%s\n", strings.TrimSpace(c.Long))
-	os.Exit(2)
+	exit(2)
 }
 
 // Runnable reports whether the command can be run; otherwise
@@ -319,7 +350,7 @@ func exitIfFail(e error, msg string) {
 
 func exit(status ...int) {
 	if len(status) > 0 {
-		setExitStatus(status[0])
+		os.Exit(status[0])
 	}
-	os.Exit(exitStatus)
+	os.Exit(0)
 }

@@ -105,20 +105,14 @@ func (list ByName) Less(i, j int) bool {
 //
 //-----------------------------------------------------------[ LIST DOWNLOAD ]--
 
-// ListDownloadSorted builds a merged list of external packages in local and distant
-// sources with downloadable state, sorted by name.
+// ListDownloadSort sorts a list of applet packages.
 //
-func ListDownloadSorted(version string) (AppletPackages, error) {
-	filled, e := ListDownloadIndex(version)
-
-	// Prepare output slice with good size and fill it with packages.
-	sorted := make(AppletPackages, 0, len(filled))
-	for _, pack := range filled {
+func ListDownloadSort(list map[string]*AppletPackage) (sorted AppletPackages) {
+	for _, pack := range list {
 		sorted = append(sorted, pack)
 	}
-
 	sort.Sort(ByName{sorted}) // Easy to get the list sorted the way we want.
-	return sorted, e
+	return sorted
 }
 
 // ListDownloadIndex builds a merged list of external packages in local and distant
@@ -126,7 +120,7 @@ func ListDownloadSorted(version string) (AppletPackages, error) {
 // In case of multiple errors, the last one is returned.
 // (local access errors are more important than network errors)
 //
-func ListDownloadIndex(version string) (map[string]*AppletPackage, error) {
+func ListDownloadIndex(version string, externalUserDir string) (map[string]*AppletPackage, error) {
 	filled := make(map[string]*AppletPackage) // index by name so local packages will replace distant ones.
 
 	found, eRet := ListDistant(cdtype.AppletsDirName + "/" + version)
@@ -137,24 +131,22 @@ func ListDownloadIndex(version string) (map[string]*AppletPackage, error) {
 		}
 	}
 
-	// Get applets dir.
-	dir, eDir := DirExternal()
-	if eDir == nil {
-		local, eUsr := ListFromDir(dir, TypeUser, SourceApplet)
-		if eUsr == nil {
-			for _, pack := range local {
-				if _, ok := filled[pack.DisplayedName]; !ok {
-					// fmt.Println("found unknown package", pack.DisplayedName)
-					pack.Type = TypeInDev
-				}
-				filled[pack.DisplayedName] = pack
-				pack.SrvTag = version
-			}
-		} else {
-			eRet = eUsr
+	// Get local applets.
+	local, eUsr := ListFromDir(externalUserDir, TypeUser, SourceApplet)
+	if eUsr != nil {
+		return filled, eUsr
+	}
+
+	for _, pack := range local {
+		// Flag local packages that are unknown on the server as "dev by user"
+		// to prevent deletion.
+		if _, ok := filled[pack.DisplayedName]; !ok {
+			// fmt.Println("found unknown package", pack.DisplayedName)
+			pack.Type = TypeInDev
 		}
-	} else {
-		eRet = eDir
+
+		filled[pack.DisplayedName] = pack
+		pack.SrvTag = version
 	}
 
 	return filled, eRet
@@ -508,13 +500,7 @@ func (pack *AppletPackage) GetPreviewFilePath() string {
 // Install downloads and extract an external archive to package dir.
 // Optional tar settings can be passed.
 //
-func (pack *AppletPackage) Install(options string) error {
-	// Get applets dir.
-	dir, eDir := DirExternal()
-	if eDir != nil {
-		return eDir
-	}
-
+func (pack *AppletPackage) Install(externalUserDir, options string) error {
 	// Connect a reader to the archive on server.
 	resp, eNet := http.Get(DistantURL + cdtype.AppletsDirName + "/" + pack.SrvTag + "/" + pack.DisplayedName + "/" + pack.DisplayedName + ".tar.gz")
 	if eNet != nil {
@@ -524,7 +510,7 @@ func (pack *AppletPackage) Install(options string) error {
 
 	// Connect http reader to tar command.
 	cmd := exec.Command("tar", "xz"+options) // Tar extract zip.
-	cmd.Dir = dir                            // Extract in external applet directory.
+	cmd.Dir = externalUserDir                // Extract in external applet externalUserDirectory.
 	cmd.Stdin = resp.Body                    // Input is the http stream.
 	cmd.Stdout = os.Stdout                   // Display output and error to console.
 	cmd.Stderr = os.Stderr
@@ -533,18 +519,18 @@ func (pack *AppletPackage) Install(options string) error {
 	if eRun != nil {
 		return eRun
 	}
-	return pack.SetInstalled(dir)
+	return pack.SetInstalled(externalUserDir)
 }
 
 // SetInstalled updates package data with info from disk after download.
 //
-func (pack *AppletPackage) SetInstalled(dir string) error {
+func (pack *AppletPackage) SetInstalled(externalUserDir string) error {
 
 	// lastModif := time.Now().Format("20060102")
 	// file := filepath.Join(dir, pack.DisplayedName, "last-modif")
 	// log.Err(ioutil.WriteFile(file, []byte(lastModif), 0644), "Write last-modif")
 
-	newpack, e := NewAppletPackageUser(dir, pack.DisplayedName, TypeUser, SourceApplet)
+	newpack, e := NewAppletPackageUser(externalUserDir, pack.DisplayedName, TypeUser, SourceApplet)
 	if e != nil {
 		return e
 	}
@@ -565,30 +551,38 @@ func (pack *AppletPackage) SetInstalled(dir string) error {
 
 // Uninstall removes an external applet from disk.
 //
-func (pack *AppletPackage) Uninstall() error {
+func (pack *AppletPackage) Uninstall(externalUserDir string) error {
 	if pack.Type != TypeUser && pack.Type != TypeUpdated {
 		return errors.New("wrong package type " + pack.FormatState())
 	}
-	dir, eDir := DirExternal()
-	if eDir == nil && dir != "" && dir != "/" && pack.DisplayedName != "" {
-		pack.Type = TypeDistant
-		pack.Path = DistantURL + cdtype.AppletsDirName + "/" + pack.SrvTag + "/" + pack.DisplayedName
-
-		return os.RemoveAll(filepath.Join(dir, pack.DisplayedName))
+	appdir := filepath.Join(externalUserDir, pack.DisplayedName)
+	if externalUserDir == "" || externalUserDir == "/" || pack.DisplayedName == "" {
+		return errors.New("wrong package dir " + appdir)
 	}
-	return eDir
+
+	// return errors.New("DISABLED TEMP", appdir, pack.DisplayedName)
+
+	e := os.RemoveAll(appdir)
+	if e != nil {
+		return e
+	}
+	pack.Type = TypeDistant
+	pack.Path = DistantURL + cdtype.AppletsDirName + "/" + pack.SrvTag + "/" + pack.DisplayedName
+	return nil
 }
 
 //
 //--------------------------------------------------------------------[ DIRS ]--
 
-// DirExternal returns external applets location.
+// DirAppletsExternal returns external applets location.
 //
-func DirExternal() (dir string, e error) {
-	if home := os.Getenv("HOME"); home != "" {
-		return filepath.Join(home, ".config", "cairo-dock", cdtype.AppletsDirName), nil
+func DirAppletsExternal(configDir string) (string, error) {
+	dir, e := dirUserConfig(configDir)
+	if e != nil {
+		return "", e
 	}
-	return "", errors.New("can't get HOME directory")
+	return filepath.Join(dir, cdtype.AppletsDirName), nil
+
 }
 
 // DirTheme returns external theme location for the given theme type.
@@ -616,6 +610,21 @@ func MainConf() (filepat string, e error) {
 		return filepath.Join(home, ".config", "cairo-dock", "current_theme", "cairo-dock.conf"), nil
 	}
 	return "", errors.New("can't get HOME directory")
+}
+
+// dirUserConfig gets cairo-dock config directory, using the alternate config dir if
+// provided.
+//
+func dirUserConfig(configDir string) (dir string, e error) {
+	if configDir != "" {
+		return configDir, nil
+	}
+
+	home := os.Getenv("HOME")
+	if home == "" {
+		return "", errors.New("can't get HOME directory")
+	}
+	return filepath.Join(home, ".config", "cairo-dock"), nil
 }
 
 /*

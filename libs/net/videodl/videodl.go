@@ -409,7 +409,7 @@ func (d *Manager) MenuQuality(menu cdtype.Menuer) {
 	}
 	group := 42
 
-	sub := menu.SubMenu("Quality: "+d.Quality.String(), "video-x-generic")
+	sub := menu.AddSubMenu("Quality: "+d.Quality.String(), "video-x-generic")
 	sub.AddRadioEntry(
 		QualityAsk.String(),
 		d.Quality == QualityAsk,

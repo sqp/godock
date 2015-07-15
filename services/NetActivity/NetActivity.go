@@ -164,7 +164,7 @@ func (app *Applet) OnBuildMenu(menu cdtype.Menuer) {
 		needSep = true
 	}
 	if needSep {
-		menu.Separator()
+		menu.AddSeparator()
 	}
 	for _, hist := range app.up.ListHistory() {
 		hist := hist

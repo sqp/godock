@@ -192,9 +192,9 @@ func (app *Applet) menuAddDevices(menu cdtype.Menuer, selected dbus.ObjectPath, 
 	if len(sinks) < 2 { // Only show the sinks list if we have at least 2 devices to switch between.
 		return
 	}
-	menu.Separator()
+	menu.AddSeparator()
 	menu.AddEntry(title, "audio-card", nil)
-	menu.Separator()
+	menu.AddSeparator()
 	for _, sink := range sinks {
 		dev := app.pulse.Device(sink)
 		sink := sink // make static reference of sink for the callback (we're in a range).

@@ -2,109 +2,102 @@
 
 package main
 
-// #cgo pkg-config: gtk+-3.0
-// #include <gtk/gtk.h>
-import "C"
-
 import (
-	"github.com/sqp/godock/libs/cdtype"
-	"github.com/sqp/godock/libs/gldi"
-	"github.com/sqp/godock/libs/gldi/backendgui"
-	"github.com/sqp/godock/libs/gldi/backendmenu"
 	"github.com/sqp/godock/libs/gldi/globals"
-	"github.com/sqp/godock/libs/gldi/gui"
 	"github.com/sqp/godock/libs/gldi/maindock"
-	"github.com/sqp/godock/libs/gldi/menu"
-	"github.com/sqp/godock/libs/gldi/mgrgldi"
-	"github.com/sqp/godock/libs/ternary"
-	"github.com/sqp/godock/libs/text/color"
-	"github.com/sqp/godock/libs/text/strhelp"
-	"github.com/sqp/godock/services/allapps"
-
-	// loader
-	"github.com/sqp/godock/libs/srvdbus"
-	"github.com/sqp/godock/libs/srvdbus/dockpath" // hack dock dbus path
-
-	// web inspection.
-	// "github.com/pkg/profile"
-	"net/http"
-	_ "net/http/pprof"
-
-	"errors"
-	"fmt"
+	"github.com/sqp/godock/libs/gldi/startdock"
 )
 
 func init() {
-	cmdDock = &Command{
+	cmdDefault = &Command{
 		Run:       runDock,
 		UsageLine: "dock",
-		Short:     "dock starts a custom version of cairo-dock with a new config GUI.",
-		Long: `
-Dock starts a custom version of cairo-dock with a new GUI.
+		Short:     "cdc starts a custom version of cairo-dock with a new config GUI.",
+		Long: `Without command, the dock will be started with those arguments:
 
-Options:
+Backend:
   -c          Use Cairo backend.
   -o          Use OpenGL backend.
   -O          Use OpenGL backend with indirect rendering.
               There are very few case where this option should be used.
   -A          Ask again on startup which backend to use.
-  -e env      Force the dock to consider this environnement - use it with care.
+  -W          Work around some bugs in Metacity Window-Manager
+              (invisible dialogs or sub-docks)
 
+Desktop:
+  -k          Lock the dock so that any modification is impossible for users.
+  -e env      Force the dock to consider this environnement - use it with care.
+  -a          Keep the dock above other windows.
+  -s          Don't make the dock appear on all desktops.
+
+Paths override:
   -d path     Use a custom config directory. Default: ~/.config/cairo-dock
   -S url      Address of a server with additional themes (overrides default).
+  -M path     Ask the dock to load additionnal modules from this directory.
+              (though it is unsafe for your dock to load unnofficial modules).
 
+Debug:
   -w time     Wait for N seconds before starting; this is useful if you notice
               some problems when the dock starts with the session.
   -x appname  Exclude a given plug-in from activating (it is still loaded).
   -f          Safe mode: don't load any plug-ins.
-  -W          Work around some bugs in Metacity Window-Manager
-              (invisible dialogs or sub-docks)
   -l level    Log verbosity: debug,message,warning,critical,error (def=warning).
   -F          Force to display some output messages with colors.
-  -k          Lock the dock so that any modification is impossible for users.
-  -a          Keep the dock above other windows.
-  -s          Don't make the dock appear on all desktops.
-  -M path     Ask the dock to load additionnal modules from this directory.
-              (though it is unsafe for your dock to load unnofficial modules).
-
-  -N          Don't start the Dbus applets service.
-  -H          Http debug server: http://localhost:6987/debug/pprof
   -D          Debug mode for the go part of the code (including applets).
+  -N          Don't start Dbus and go applets services.
+  -H          Http debug server: http://localhost:6987/debug/pprof
 
+Versions:
   -v          Print gldi version.
+  -vv         Print all versions.
 
-This version lacks a lot of options and may not be considered usable for
-everybody at the moment.
-.`,
+This version still lacks some options and may not be considered usable for
+everybody at the moment. But it also needs to be tested now.
+`,
 	}
 
-	userForceCairo := cmdDock.Flag.Bool("c", false, "")
-	userForceOpenGL := cmdDock.Flag.Bool("o", false, "")
-	userIndirectOpenGL := cmdDock.Flag.Bool("O", false, "")
-	userAskBackend := cmdDock.Flag.Bool("A", false, "")
-	userEnv := cmdDock.Flag.String("e", "", "")
+	usageHeader = cmdDefault.Short
+	usageFlags = &cmdDefault.Long
 
-	userDir := cmdDock.Flag.String("d", "", "")
-	userThemeServer := cmdDock.Flag.String("S", "", "")
+	// Dock flags are declared at init.
 
-	userDelay := cmdDock.Flag.Int("w", 0, "")
+	userForceCairo := cmdDefault.Flag.Bool("c", false, "")
+	userForceOpenGL := cmdDefault.Flag.Bool("o", false, "")
+	userIndirectOpenGL := cmdDefault.Flag.Bool("O", false, "")
+	userAskBackend := cmdDefault.Flag.Bool("A", false, "")
+	userEnv := cmdDefault.Flag.String("e", "", "")
+
+	userDir := cmdDefault.Flag.String("d", "", "")
+	userThemeServer := cmdDefault.Flag.String("S", "", "")
+
+	userDelay := cmdDefault.Flag.Int("w", 0, "")
 	// maintenance
-	userExclude := cmdDock.Flag.String("x", "", "")
-	userSafeMode := cmdDock.Flag.Bool("f", false, "")
-	userMetacityWorkaround := cmdDock.Flag.Bool("W", false, "")
-	userVerbosity := cmdDock.Flag.String("l", "", "")
-	userForceColor := cmdDock.Flag.Bool("F", false, "")
-	userLocked := cmdDock.Flag.Bool("k", false, "")
-	userKeepAbove := cmdDock.Flag.Bool("a", false, "")
-	userNoSticky := cmdDock.Flag.Bool("s", false, "")
-	userModulesDir := cmdDock.Flag.String("M", "", "")
+	userExclude := cmdDefault.Flag.String("x", "", "")
+	userSafeMode := cmdDefault.Flag.Bool("f", false, "")
+	userMetacityWorkaround := cmdDefault.Flag.Bool("W", false, "")
+	userVerbosity := cmdDefault.Flag.String("l", "", "")
+	userForceColor := cmdDefault.Flag.Bool("F", false, "")
+	userLocked := cmdDefault.Flag.Bool("k", false, "")
+	userKeepAbove := cmdDefault.Flag.Bool("a", false, "")
+	userNoSticky := cmdDefault.Flag.Bool("s", false, "")
+	userModulesDir := cmdDefault.Flag.String("M", "", "")
 
-	userVersion = cmdDock.Flag.Bool("v", false, "")
-	srvAppletsDisable = cmdDock.Flag.Bool("N", false, "")
-	srvHttpPprof = cmdDock.Flag.Bool("H", false, "")
-	srvDebug = cmdDock.Flag.Bool("D", false, "")
+	// New dock settings.
+
+	newAppletsDisable := cmdDefault.Flag.Bool("N", false, "")
+	newHttpPprof := cmdDefault.Flag.Bool("H", false, "")
+	newDebug := cmdDefault.Flag.Bool("D", false, "")
+
+	// Local flags. (static as they do not even start a dock).
+
+	showVersionGldi = cmdDefault.Flag.Bool("v", false, "")
+	showVersionAll = cmdDefault.Flag.Bool("vv", false, "")
+
+	// And the returned callback only get the settings once filled.
 
 	dockSettings = func() maindock.DockSettings {
+		setPathAbsolute(userDir)
+
 		return maindock.DockSettings{
 			ForceCairo:     *userForceCairo,
 			ForceOpenGL:    *userForceOpenGL,
@@ -125,6 +118,10 @@ everybody at the moment.
 			KeepAbove:          *userKeepAbove,
 			NoSticky:           *userNoSticky,
 			ModulesDir:         *userModulesDir,
+
+			HttpPprof:      *newHttpPprof,
+			AppletsDisable: *newAppletsDisable,
+			Debug:          *newDebug,
 		}
 	}
 }
@@ -147,104 +144,25 @@ var (
 	// dockSettings returns maindock settings parsed from the command line.
 	dockSettings func() maindock.DockSettings
 
-	userVersion       *bool
-	srvAppletsDisable *bool
-	srvHttpPprof      *bool
-	srvDebug          *bool
+	// Local flags.
 
-	// Developer optional custom settings.
-	customHacks = func() {}
+	showVersionGldi *bool
+	showVersionAll  *bool
 )
 
 // runDock starts dock routines and locks the main thread with gtk.
 //
 func runDock(cmd *Command, args []string) {
-	if startDock() {
+	switch {
+	case *showVersionGldi:
+		println(globals.Version()) // -v option only prints gldi version.
+
+	case *showVersionAll:
+		startdock.PrintVersions() // -vv option only prints all versions.
+
+	case startdock.Run(logger, dockSettings):
+		dockSettings = nil // free
 		maindock.Lock()
 		maindock.Clean() // may be better with defer, but cause confused panic messages.
 	}
-}
-
-// startDock wraps all backends and clients to start a dock :
-// Dbus server, applets manager, GUI, menu and gldi.
-//
-func startDock() bool {
-	if *userVersion {
-		println(globals.Version()) // -v option only prints version.
-		return false
-	}
-
-	// Logger debug state.
-	logger.SetDebug(*srvDebug)
-	maindock.SetLogger(logger)
-
-	settings := dockSettings()
-	settings.Init()
-
-	gtkA, gtkB, gtkC := globals.GtkVersion()
-
-	printColor("Custom Dock", cdtype.Version)
-	printColor("   gldi    ", globals.Version())
-	printColor("   GTK     ", fmt.Sprintf("%d.%d.%d", gtkA, gtkB, gtkC))
-	printColor("  OpenGL   ", ternary.String(gldi.GLBackendIsUsed(), "Yes", "No"))
-	printColor("Build date ", cdtype.BuildDate)
-	printColor(" Git Hash  ", cdtype.GitHash)
-
-	appmgr := mgrgldi.Register(allapps.List(settings.Exclude), logger)
-
-	// Dbus service is enabled by default. Mandatory if enabled, to provide remote control.
-	// This will prevent launching a 2nd instance without the disable Dbus service option.
-	if !*srvAppletsDisable {
-		dbus, e := serviceDbus()
-		if logger.Err(e, "applets service") {
-			return false
-		}
-		dbus.SetManager(appmgr)
-	}
-
-	// HTTP listener for the pprof debug.
-	if *srvHttpPprof {
-
-		// p := profile.Start()
-		// defer p.Stop()
-
-		go func() { http.ListenAndServe("localhost:6987", nil) }()
-	}
-
-	customHacks()
-
-	backendgui.Register(gui.NewConnector(logger))
-	backendmenu.Register("dock", menu.BuildMenuContainer, menu.BuildMenuIcon)
-
-	settings.Prepare()
-	settings.Start()
-
-	return true
-}
-
-func printColor(title, value string) {
-	println(strhelp.Bracket(color.Colored(title, color.FgGreen)), value)
-}
-
-// Start Loader.
-//
-func serviceDbus() (*srvdbus.Loader, error) {
-	dockpath.DbusPathDock = "/org/cdc/Cdc" // TODO: improve to autodetect.
-
-	loader := srvdbus.NewLoader(logger)
-	if loader == nil {
-		return nil, errors.New("Dbus service failed to start")
-	}
-
-	active, e := loader.Start(loader, srvdbus.Introspect(""))
-	switch {
-	case e != nil:
-		return nil, e
-	case !active:
-		return nil, errors.New("service already active")
-	}
-
-	go loader.StartLoop()
-
-	return loader, nil
 }

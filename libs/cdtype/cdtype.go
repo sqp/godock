@@ -13,13 +13,6 @@ const (
 	AppletsServerTag = "3.4.0"
 )
 
-// Variables set at build time.
-var (
-	Version   = "0.0.3.2-git"
-	GitHash   = ""
-	BuildDate = ""
-)
-
 // Events represents the list of events you can receive as a cairo-dock applet.
 //
 // They can be set in the optional DefineEvents call of your applet (see
@@ -411,6 +404,9 @@ type RenderSimple interface {
 	SetQuickInfo(string) error
 }
 
+//
+//----------------------------------------------------------[ APP MANAGEMENT ]--
+
 // DefineEventser defines the optional DefineEvents call to group applets events
 // definition.
 //
@@ -437,6 +433,9 @@ type AppBackend interface {
 	SetOnEvent(func(string, ...interface{}) bool)
 }
 
+//
+//--------------------------------------------------------------------[ LOGS ]--
+
 // Logger defines the interface for reporting information.
 //
 type Logger interface {
@@ -451,7 +450,7 @@ type Logger interface {
 
 	// SetName set the displayed and forwarded name for the logger.
 	//
-	SetName(name string)
+	SetName(name string) Logger
 
 	// SetLogOut connects the optional forwarder to the logger.
 	//
@@ -523,16 +522,19 @@ type LogOut interface {
 	Err(e string, sender string, msg ...interface{})
 }
 
+//
+//--------------------------------------------------------------------[ MENU ]--
+
 // Menuer provides a common interface to build applets menu.
 //
 type Menuer interface {
-	// SubMenu adds a submenu to the menu.
+	// AddSubMenu adds a submenu to the menu.
 	//
-	SubMenu(label, iconPath string) Menuer
+	AddSubMenu(label, iconPath string) Menuer
 
-	// Separator adds a separator to the menu.
+	// AddSeparator adds a separator to the menu.
 	//
-	Separator()
+	AddSeparator()
 
 	// AddEntry adds an item to the menu with its callback.
 	//
@@ -804,18 +806,18 @@ type DockProperties struct {
 //
 //---------------------------------------------------------------[ CONSTANTS ]--
 
-// ContainerOrientation refers to the border of the screen the dock is attached to.
+// ContainerPosition refers to the border of the screen the dock is attached to.
 //
 // A desklet has always an orientation of BOTTOM.
 //
-type ContainerOrientation int32
+type ContainerPosition int32
 
 // Dock position on screen.
 const (
-	ScreenBottom ContainerOrientation = iota // Dock in the bottom.
-	ScreenTop                                // Dock in the top.
-	ScreenRight                              // Dock in the right.
-	ScreenLeft                               // Dock in the left.
+	ContainerPositionBottom ContainerPosition = iota // Dock in the bottom.
+	ContainerPositionTop                             // Dock in the top.
+	ContainerPositionRight                           // Dock in the right.
+	ContainerPositionLeft                            // Dock in the left.
 )
 
 // ContainerType is the type of container that manages the applet.
@@ -826,6 +828,18 @@ type ContainerType int32
 const (
 	ContainerDock    ContainerType = iota // Applet in a dock.
 	ContainerDesklet                      // Applet in a desklet.
+)
+
+// DeskletVisibility defines the visibility of a desklet.
+type DeskletVisibility int
+
+// Desklet visibility settings.
+const (
+	DeskletVisibilityNormal       DeskletVisibility = iota // Normal, like normal window
+	DeskletVisibilityKeepAbove                             // always above
+	DeskletVisibilityKeepBelow                             // always below
+	DeskletVisibilityWidgetLayer                           // on the Compiz widget layer
+	DeskletVisibilityReserveSpace                          // prevent other windows form overlapping it
 )
 
 // InfoPosition is the location to render text data for an applet.

@@ -97,6 +97,11 @@ func NewFromFile(file string, flags Flags) (*KeyFile, error) {
 	return kf, nil
 }
 
+// Free is a wrapper around g_key_file_free().
+func (this *KeyFile) Free() {
+	C.g_key_file_free(this.cKey)
+}
+
 // LoadFromFile is a wrapper around g_key_file_load_from_file().
 func (this *KeyFile) LoadFromFile(file string, flags Flags) (bool, error) {
 	var cstr *C.char = C.CString(file)

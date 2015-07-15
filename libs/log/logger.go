@@ -89,8 +89,9 @@ func NewLog(out cdtype.LogOut) *Log {
 
 // SetName set the displayed and forwarded name for the logger.
 //
-func (l *Log) SetName(name string) {
+func (l *Log) SetName(name string) cdtype.Logger {
 	l.name = name
+	return l
 }
 
 // SetLogOut connects the optional forwarder to the logger.

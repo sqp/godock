@@ -24,13 +24,13 @@ APPDIRDBUS=usr/share/cairo-dock/plug-ins/Dbus/third-party/
 # FLAGSHARETHEME=$(SOURCE)/libs/gldi/maindock.CairoDockShareThemesDir '/usr/share/cairo-dock/themes'
 # FLAGLOCALE=$(SOURCE)/libs/gldi/maindock.CairoDockLocaleDir '/usr/share/locale'
 
-FLAGVERSION=$(SOURCE)/libs/cdtype.Version '$(VERSION)'
-FLAGGITHASH=$(SOURCE)/libs/cdtype.GitHash '$(shell git rev-parse HEAD)'
+FLAGAPPVERSION=$(SOURCE)/libs/cdglobal.AppVersion '$(VERSION)'
+FLAGGITHASH=$(SOURCE)/libs/cdglobal.GitHash '$(shell git rev-parse HEAD)'
 # git describe --tags
-FLAGBUILDDATE=$(SOURCE)/libs/cdtype.BuildDate '$(shell date --rfc-3339=seconds)'
+FLAGBUILDDATE=$(SOURCE)/libs/cdglobal.BuildDate '$(shell date --rfc-3339=seconds)'
 
 
-FLAGS=-ldflags "-X $(FLAGVERSION) -X $(FLAGBUILDDATE) -X $(FLAGGITHASH) "
+FLAGS=-ldflags "-X $(FLAGAPPVERSION) -X $(FLAGBUILDDATE) -X $(FLAGGITHASH) "
 
 
 %: build

@@ -12,9 +12,9 @@ import (
 
 var cmdBuild = &Command{
 	UsageLine: "build [-k] [-r] [-h] target",
-	Short:     "build a cairo-dock package",
+	Short:     "build cairo-dock sources",
 	Long: `
-Build builds and install a Cairo-Dock package.
+Build builds and install Cairo-Dock sources.
 
 Targets:
   c or core        Build the dock core.

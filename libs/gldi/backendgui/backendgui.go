@@ -77,8 +77,8 @@ type GuiInterface interface {
 	UpdateModuleState(name string, active bool)
 	UpdateModuleInstanceContainer(instance *gldi.ModuleInstance, detached bool)
 	UpdateShortkeys()
-	// UpdateDeskletParams(*gldi.Desklet)
-	// UpdateDeskletVisibility(*gldi.Desklet)
+	UpdateDeskletParams(*gldi.Desklet)
+	UpdateDeskletVisibility(*gldi.Desklet)
 
 	// CORE BACKEND
 	SetStatusMessage(message string)
@@ -206,8 +206,9 @@ func notifReloadItems(_ C.gpointer, _ C.gpointer) C.gboolean {
 }
 
 //export notifConfigureDesklet
-func notifConfigureDesklet(_ C.gpointer, desklet *C.CairoDesklet) C.gboolean {
-	// UpdateDeskletParams(desklet)
+func notifConfigureDesklet(_ C.gpointer, cdesklet *C.CairoDesklet) C.gboolean {
+	desklet := gldi.NewDeskletFromNative(unsafe.Pointer(cdesklet))
+	UpdateDeskletParams(desklet)
 	return C.GLDI_NOTIFICATION_LET_PASS
 }
 
@@ -312,6 +313,20 @@ func UpdateShortkeys() {
 		return
 	}
 	dockGui.UpdateShortkeys()
+}
+
+func UpdateDeskletParams(desklet *gldi.Desklet) {
+	if dockGui == nil {
+		return
+	}
+	dockGui.UpdateDeskletParams(desklet)
+}
+
+func UpdateDeskletVisibility(desklet *gldi.Desklet) {
+	if dockGui == nil {
+		return
+	}
+	dockGui.UpdateDeskletVisibility(desklet)
 }
 
 // CORE BACKEND

@@ -19,7 +19,7 @@ var (
 	grepCmdArgs = []string{"-r", "-I"} // -r: recursive, -I: ignore binaries.
 
 	// Grep text format.
-	grepTitlePattern   = "\n   ---[ grep %s ]---\n"
+	grepTitlePattern   = "\n   ---[ grep %s  -  %s ]---\n"
 	grepTitleFormatter = color.Yellow
 	grepFileFormatter  = color.Green
 	grepQueryFormatter = color.Yellow

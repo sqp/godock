@@ -9,10 +9,10 @@ import (
 )
 
 func init() {
-	cmdService = &Command{
+	cmdDefault = &Command{
 		Run:       runService,
 		UsageLine: "service [applet arguments list]",
-		Short:     "list applets services",
+		Short:     "manage external Cairo-Dock applets services",
 		Long: `
 Service lists known and active applets.
 
@@ -33,8 +33,12 @@ applet binary to forward the call:
 
   !/bin/sh 
   cdc service $* "$(pwd)" &
-.`,
+`,
 	}
+
+	usageHeader = `cdc, Cairo-Dock Control, is a tool for Cairo-Dock.
+It can also embed and manage multiple applets if compiled with their support.
+Most of the commands will require an active dock to work (with Dbus API).`
 }
 
 var gtkStart func()

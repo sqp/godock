@@ -129,6 +129,18 @@ type UpdateShortkeyser interface {
 	UpdateShortkeys()
 }
 
+// UpdateDeskletVisibilityer defines the interface to update shortkeys of a config page.
+//
+type UpdateDeskletVisibilityer interface {
+	UpdateDeskletVisibility(icon datatype.Iconer)
+}
+
+// UpdateDeskletParamser defines the interface to update shortkeys of a config page.
+//
+type UpdateDeskletParamser interface {
+	UpdateDeskletParams(icon datatype.Iconer)
+}
+
 //-----------------------------------------------------------[ MAIN DOCK GUI ]--
 
 // GuiConfigure defines the main Cairo-Dock configuration widget.
@@ -354,6 +366,9 @@ func (widget *GuiConfigure) SetActionCancel() {
 //
 //------------------------------------------------------[ DOCK GUI CALLBACKS ]--
 
+// WARINING: Callbacks must use pages instead of current.
+// Widgets can be loaded but not visible. You must act on every needed page.
+
 // ReloadItems refreshes the icons page list (clear and reselect, or select cached).
 //
 func (widget *GuiConfigure) ReloadItems() {
@@ -401,7 +416,27 @@ func (widget *GuiConfigure) UpdateModuleState(name string, active bool) {
 //
 func (widget *GuiConfigure) UpdateShortkeys() {
 	w, ok := widget.pages[GroupConfig].Widget.(UpdateShortkeyser)
-	if ok { // Use pages instead of current as the widget can be loaded but not visible.
+	if ok {
 		w.UpdateShortkeys()
+	}
+}
+
+// UpdateDeskletParams updates applet desklet settings if it's loaded.
+//
+func (widget *GuiConfigure) UpdateDeskletParams(icon datatype.Iconer) {
+	widget.log.Info("TODO: UpdateDeskletParams")
+	w, ok := widget.pages[GroupIcons].Widget.(UpdateDeskletParamser)
+	if ok {
+		w.UpdateDeskletParams(icon)
+	}
+}
+
+// UpdateDeskletVisibility updates applet desklet settings if it's loaded.
+//
+func (widget *GuiConfigure) UpdateDeskletVisibility(icon datatype.Iconer) {
+	widget.log.Info("TODO: UpdateDeskletVisibility")
+	w, ok := widget.pages[GroupIcons].Widget.(UpdateDeskletVisibilityer)
+	if ok {
+		w.UpdateDeskletVisibility(icon)
 	}
 }

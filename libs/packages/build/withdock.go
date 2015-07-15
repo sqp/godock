@@ -4,6 +4,7 @@ package build
 
 import (
 	"github.com/sqp/godock/libs/gldi"
+	"github.com/sqp/godock/libs/gldi/backendgui"
 	"github.com/sqp/godock/libs/gldi/globals"
 )
 
@@ -31,4 +32,7 @@ func init() {
 		}
 		mod.Activate()
 	}
+
+	CloseGui = backendgui.CloseGui
+
 }

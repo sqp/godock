@@ -16,6 +16,10 @@ import (
 	"github.com/conformal/gotk3/glib"
 	"github.com/conformal/gotk3/gtk"
 
+	"github.com/bradfitz/iter" // easy for.
+
+	"github.com/sqp/godock/libs/cdtype"
+	"github.com/sqp/godock/libs/files"           // UpdateConfFile.
 	"github.com/sqp/godock/libs/gldi"            // Gldi access.
 	"github.com/sqp/godock/libs/gldi/backendgui" // GUI callbacks.
 	"github.com/sqp/godock/libs/gldi/dialog"     // Popup dialog.
@@ -24,10 +28,12 @@ import (
 	"github.com/sqp/godock/libs/text/tran"       // Translate.
 
 	"github.com/sqp/godock/widgets/common"
+	"github.com/sqp/godock/widgets/gtk/menus"
 
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"unsafe"
 )
 
@@ -40,13 +46,13 @@ const (
 //------------------------------------------------------------[ MENU BACKEND ]--
 
 var (
-	menuContainer map[string]func(*DockMenu) int
-	menuIcon      map[string]func(*DockMenu) int
+	menuContainer = make(map[string]func(*DockMenu) int)
+	menuIcon      = make(map[string]func(*DockMenu) int)
+	logger        cdtype.Logger
 )
 
-func init() {
-	menuContainer = make(map[string]func(*DockMenu) int)
-	menuIcon = make(map[string]func(*DockMenu) int)
+func SetLogger(log cdtype.Logger) {
+	logger = log
 }
 
 func Register(name string, menucontainer, menuicon func(*DockMenu) int) {
@@ -106,7 +112,6 @@ func convert(ic *C.Icon, cont *C.GldiContainer, cmenu *C.GtkWidget) *DockMenu {
 	menu := &gtk.Menu{gtk.MenuShell{gtk.Container{gtk.Widget{glib.InitiallyUnowned{obj}}}}}
 
 	return WrapDockMenu(icon, container, dock, menu)
-
 }
 
 //
@@ -139,6 +144,8 @@ const (
 	MenuLaunchNew
 	MenuLockIcons
 	MenuMakeLauncher
+	MenuMoveToDesktopClass
+	MenuMoveToDesktopWindow
 	MenuMoveToDock
 	MenuQuickHide
 	MenuQuit
@@ -167,7 +174,7 @@ const (
 )
 
 type DockMenu struct {
-	Menu
+	menus.Menu
 	Icon      *gldi.Icon
 	Container *gldi.Container
 	Dock      *gldi.CairoDock // just a pointer to container with type dock.
@@ -176,17 +183,25 @@ type DockMenu struct {
 }
 
 func WrapDockMenu(icon *gldi.Icon, container *gldi.Container, dock *gldi.CairoDock, menu *gtk.Menu) *DockMenu {
+	usermenu := menus.WrapMenu(menu)
+	usermenu.SetCallNewItem(gldi.MenuAddItem)
+	usermenu.SetCallNewSubMenu(gldi.MenuAddSubMenu)
+
 	return &DockMenu{
-		Menu: Menu{
-			Menu:   *menu,
-			groups: make(map[int]*glib.SList),
-		},
+		Menu:      *usermenu,
 		Icon:      icon,
 		Container: container,
 		Dock:      dock}
 }
 
-func (m *DockMenu) Entry(entry MenuEntry) {
+func (m *DockMenu) AddSubMenu(label, iconPath string) *DockMenu {
+	submenu := m.Menu.AddSubMenu(label, iconPath)
+	return WrapDockMenu(m.Icon, m.Container, m.Dock, &submenu.Menu)
+}
+
+// Entry adds a defined entry to the menu. Returns if a separator is needed.
+//
+func (m *DockMenu) Entry(entry MenuEntry) bool {
 	switch entry {
 
 	case MenuAbout:
@@ -257,25 +272,16 @@ func (m *DockMenu) Entry(entry MenuEntry) {
 			})
 
 	case MenuClassItems:
-	//\_________________________ class actions.
-
-	// const GList *pClassMenuItems = cairo_dock_get_class_menu_items (icon->cClass);
-	// if (pClassMenuItems != NULL)
-	// {
-	// 	if (bAddSeparator)
-	// 	{
-	// 		pMenuItem = gtk_separator_menu_item_new ();
-	// 		gtk_menu_shell_append (GTK_MENU_SHELL (menu), pMenuItem);
-	// 	}
-	// 	bAddSeparator = TRUE;
-	// 	gchar **pClassItem;
-	// 	const GList *m;
-	// 	for (m = pClassMenuItems; m != NULL; m = m->next)
-	// 	{
-	// 		pClassItem = m->data;
-	// 		pMenuItem = cairo_dock_add_in_menu_with_stock_and_data (pClassItem[0], pClassItem[2], G_CALLBACK (_cairo_dock_launch_class_action), menu, pClassItem[1]);
-	// 	}
-	// }
+		//\_________________________ class actions.
+		items := m.Icon.GetClass().MenuItems()
+		for _, it := range items {
+			cmd := strings.Fields(it[1])
+			m.AddEntry(
+				it[0], // name
+				it[2], // icon
+				func() { logger.ExecAsync(cmd[0], cmd[1:]...) }) // was gldi.LaunchCommand(cmd)
+		}
+		return len(items) > 0
 
 	case MenuConfigure:
 		m.AddEntry(
@@ -285,9 +291,9 @@ func (m *DockMenu) Entry(entry MenuEntry) {
 		).SetTooltipText(tran.Slate("Configure behaviour, appearance, and applets."))
 
 	case MenuCustomIconRemove:
-		classIcon := m.Icon.GetClassInfo(gldi.ClassIcon)
+		classIcon := m.Icon.GetClass().Icon()
 		if classIcon == "" {
-			classIcon = m.Icon.GetClass()
+			classIcon = m.Icon.GetClass().String()
 		}
 
 		path := filepath.Join(globals.DirCurrentIcons(), classIcon+".png")
@@ -334,82 +340,55 @@ func (m *DockMenu) Entry(entry MenuEntry) {
 			})
 
 	case MenuDeskletLock:
+		desklet := m.Container.ToDesklet()
 		m.AddCheckEntry(
 			tran.Slate("Lock position"),
-			m.Container.ToDesklet().PositionLocked(),
+			desklet.PositionLocked(),
 			func(c *gtk.CheckMenuItem) {
-				m.Container.ToDesklet().LockPosition(c.GetActive())
-				// cairo_dock_gui_update_desklet_visibility (pDesklet);
+				desklet.LockPosition(c.GetActive())
+				backendgui.UpdateDeskletVisibility(desklet)
 			})
 
 	case MenuDeskletSticky:
+		desklet := m.Container.ToDesklet()
 		m.AddCheckEntry(
 			tran.Slate("On all desktops"),
 			m.Container.ToDesklet().IsSticky(),
 			func(c *gtk.CheckMenuItem) {
-				m.Container.ToDesklet().SetSticky(c.GetActive())
+				desklet.SetSticky(c.GetActive())
 
 				// TODO: check why SetSticky isn't working...
-				println("set stick", c.GetActive())
-				println("get stick", m.Container.ToDesklet().IsSticky())
-				// 	desklet.UpdateVisibility()
-				// s_pMainGuiBackend->update_desklet_visibility_params (pDesklet);
-				// \--> cairo_dock_update_desklet_visibility_widgets  gui-commons.c
+				println("get stick", desklet.IsSticky())
 
+				backendgui.UpdateDeskletVisibility(desklet)
 			})
 
 	case MenuDeskletVisibility:
-		// accessibility := menu.AddSubMenu(tran.Slate("Visibility")) // GLDI_ICON_NAME_FIND
+		submenu := m.AddSubMenu(tran.Slate("Visibility"), globals.IconNameFind)
 
-		// desklet := container.ToDesklet()
+		desklet := m.Container.ToDesklet()
 
-		// 	static gpointer data[3];
-		// 	data[0] = icon;
-		// 	data[1] = pContainer;
-		// 	data[2] = menu;
-		// 	GtkWidget *pMenuItem;
+		callback := func(radio *gtk.RadioMenuItem, val cdtype.DeskletVisibility) {
+			if radio.GetActive() {
+				desklet.SetVisibility(val, true) // with true, also save to conf.
+				backendgui.UpdateDeskletVisibility(desklet)
+			}
+		}
 
-		// 		GSList *group = NULL;
+		group := 42
+		visibility := desklet.Visibility()
+		addRadio := func(vis cdtype.DeskletVisibility, label string) {
+			radio := submenu.AddRadioEntry(label, visibility == vis, group, nil)
+			radio.Connect("toggled", callback, vis)
+		}
 
-		// 		CairoDesklet *pDesklet = CAIRO_DESKLET (pContainer);
-		// 		CairoDeskletVisibility iVisibility = pDesklet->iVisibility;
-
-		// 		pMenuItem = gtk_radio_menu_item_new_with_label(group, _("Normal"));
-		// 		group = gtk_radio_menu_item_get_group(GTK_RADIO_menu_ITEM(pMenuItem));
-		// 		gtk_menu_shell_append(GTK_menu_SHELL(pSubMenuAccessibility), pMenuItem);
-		// 		gtk_check_menu_item_set_active(GTK_CHECK_menu_ITEM(pMenuItem), iVisibility == CAIRO_DESKLET_NORMAL/*bIsNormal*/);  // on coche celui-ci par defaut, il sera decoche par les suivants eventuellement.
-		// 		g_signal_connect(G_OBJECT(pMenuItem), "toggled", G_CALLBACK(_cairo_dock_keep_normal), data);
-
-		// 		pMenuItem = gtk_radio_menu_item_new_with_label(group, _("Always on top"));
-		// 		group = gtk_radio_menu_item_get_group(GTK_RADIO_MENU_ITEM(pMenuItem));
-		// 		gtk_menu_shell_append(GTK_MENU_SHELL(pSubMenuAccessibility), pMenuItem);
-		// 		if (iVisibility == CAIRO_DESKLET_KEEP_ABOVE)
-		// 			gtk_check_menu_item_set_active(GTK_CHECK_MENU_ITEM(pMenuItem), TRUE);
-		// 		g_signal_connect(G_OBJECT(pMenuItem), "toggled", G_CALLBACK(_cairo_dock_keep_above), data);
-
-		// 		pMenuItem = gtk_radio_menu_item_new_with_label(group, _("Always below"));
-		// 		group = gtk_radio_menu_item_get_group(GTK_RADIO_MENU_ITEM(pMenuItem));
-		// 		gtk_menu_shell_append(GTK_MENU_SHELL(pSubMenuAccessibility), pMenuItem);
-		// 		if (iVisibility == CAIRO_DESKLET_KEEP_BELOW)
-		// 			gtk_check_menu_item_set_active(GTK_CHECK_MENU_ITEM(pMenuItem), TRUE);
-		// 		g_signal_connect(G_OBJECT(pMenuItem), "toggled", G_CALLBACK(_cairo_dock_keep_below), data);
-
-		// 		if (gldi_desktop_can_set_on_widget_layer ())
-		// 		{
-		// 			pMenuItem = gtk_radio_menu_item_new_with_label(group, "Widget Layer");
-		// 			group = gtk  _radio_menu_item_get_group(GTK_RADIO_MENU_ITEM(pMenuItem));
-		// 			gtk_menu_shell_append(GTK_MENU_SHELL(pSubMenuAccessibility), pMenuItem);
-		// 			if (iVisibility == CAIRO_DESKLET_ON_WIDGET_LAYER)
-		// 				gtk_check_menu_item_set_active(GTK_CHECK_MENU_ITEM(pMenuItem), TRUE);
-		// 			g_signal_connect(G_OBJECT(pMenuItem), "toggled", G_CALLBACK(_cairo_dock_keep_on_widget_layer), data);
-		// 		}
-
-		// 		pMenuItem = gtk_radio_menu_item_new_with_label(group, _("Reserve space"));
-		// 		group = gtk_radio_menu_item_get_group(GTK_RADIO_MENU_ITEM(pMenuItem));
-		// 		gtk_menu_shell_append(GTK_MENU_SHELL(pSubMenuAccessibility), pMenuItem);
-		// 		if (iVisibility == CAIRO_DESKLET_RESERVE_SPACE)
-		// 			gtk_check_menu_item_set_active(GTK_CHECK_MENU_ITEM(pMenuItem), TRUE);
-		// 		g_signal_connect(G_OBJECT(pMenuItem), "toggled", G_CALLBACK(_cairo_dock_keep_space), data);
+		addRadio(cdtype.DeskletVisibilityNormal, tran.Slate("Normal"))
+		addRadio(cdtype.DeskletVisibilityKeepAbove, tran.Slate("Always on top"))
+		addRadio(cdtype.DeskletVisibilityKeepBelow, tran.Slate("Always below"))
+		if gldi.CanSetOnWidgetLayer() {
+			addRadio(cdtype.DeskletVisibilityWidgetLayer, tran.Slate("Widget Layer"))
+		}
+		addRadio(cdtype.DeskletVisibilityReserveSpace, tran.Slate("Reserve space"))
 
 	case MenuDetachApplet:
 		m.AddEntry(
@@ -451,11 +430,7 @@ func (m *DockMenu) Entry(entry MenuEntry) {
 		m.AddEntry(
 			tran.Slate("Configure this dock"),
 			globals.IconNameExecute,
-			func() {
-				if m.Dock.GetRefCount() != 0 {
-					backendgui.ShowItems(nil, m.Container, nil, 0)
-				}
-			},
+			func() { backendgui.ShowItems(nil, m.Container, nil, 0) },
 		).SetTooltipText(tran.Slate("Customize the position, visibility and appearance of this main dock."))
 
 	case MenuEditIcon:
@@ -476,7 +451,7 @@ func (m *DockMenu) Entry(entry MenuEntry) {
 		m.AddEntry(
 			tran.Slate("Applet's handbook"),
 			globals.IconNameAbout,
-			func() { gldi.PopupAboutApplet(m.Icon.ModuleInstance()) })
+			m.Icon.ModuleInstance().PopupAboutApplet)
 
 		// handbook + 5x to facto
 		// picon := icon
@@ -506,9 +481,7 @@ func (m *DockMenu) Entry(entry MenuEntry) {
 			globals.DocksParam.IsLockIcons(),
 			func() {
 				globals.DocksParam.SetLockIcons(!globals.DocksParam.IsLockIcons())
-				// cairo_dock_update_conf_file (g_cConfFile,
-				// 	G_TYPE_BOOLEAN, "Accessibility", "lock icons", myDocksParam.bLockIcons,
-				// 	G_TYPE_INVALID);
+				files.UpdateConfFile(globals.ConfigFile(), "Accessibility", "lock icons", globals.DocksParam.IsLockIcons())
 			},
 		).SetTooltipText(tran.Slate("This will (un)lock the position of the icons."))
 
@@ -520,8 +493,14 @@ func (m *DockMenu) Entry(entry MenuEntry) {
 				C._cairo_dock_make_launcher_from_appli((*C.Icon)(unsafe.Pointer(m.Icon.Ptr)), (*C.CairoDock)(unsafe.Pointer(m.Dock.Ptr)))
 			})
 
+	case MenuMoveToDesktopClass:
+		m.moveToDesktop(true)
+
+	case MenuMoveToDesktopWindow:
+		m.moveToDesktop(false)
+
 	case MenuMoveToDock:
-		sub := m.SubMenu(tran.Slate("Move to another dock"), globals.IconNameJumpTo)
+		sub := m.AddSubMenu(tran.Slate("Move to another dock"), globals.IconNameJumpTo)
 
 		docks := gldi.GetAllAvailableDocks(m.Icon.GetContainer().ToCairoDock(), m.Icon.GetSubDock())
 		docks = append(docks, nil)
@@ -531,14 +510,31 @@ func (m *DockMenu) Entry(entry MenuEntry) {
 			icon := ""
 			if dock == nil {
 				name = tran.Slate("New main dock")
-				icon = globals.IconNameNew
+				icon = globals.IconNameAdd // globals.IconNameNew
 			} else {
 				name = ternary.String(dock.GetReadableName() != "", dock.GetReadableName(), dock.GetDockName())
 				key = dock.GetDockName()
+
+				if dock.GetRefCount() == 0 { // Maindocks icon
+					switch dock.Container().ScreenBorder() {
+					case cdtype.ContainerPositionBottom:
+						icon = "go-down"
+					case cdtype.ContainerPositionTop:
+						icon = "go-up"
+					case cdtype.ContainerPositionLeft:
+						icon = "go-previous"
+					case cdtype.ContainerPositionRight:
+						icon = "go-next"
+					}
+				} else { // Subdocks icon.
+					dockicon := dock.SearchIconPointingOnDock(nil)
+					icon = dockicon.GetFileName()
+				}
+
 			}
 			sub.AddEntry(
 				name,
-				icon, // TODO: maybe add something at least for subdocks.
+				icon,
 				func() {
 					if key == "" {
 						key = gldi.DockAddConfFile()
@@ -575,7 +571,7 @@ func (m *DockMenu) Entry(entry MenuEntry) {
 			func() {
 				backendgui.CloseGui()
 
-				gtk.MainQuit() // TODO: remove SQP HACK, easy quit no confirm for tests.
+				// gtk.MainQuit() // TODO: remove SQP HACK, easy quit no confirm for tests.
 
 				dialog.DialogShowWithQuestion("Quit Cairo-Dock?",
 					GetIconForDesklet(m.Icon, m.Container),
@@ -765,6 +761,7 @@ func (m *DockMenu) Entry(entry MenuEntry) {
 			cbActionWindowToggle(m.Icon, (*gldi.WindowActor).SetSticky, (*gldi.WindowActor).IsSticky))
 
 	}
+	return false
 }
 
 func (m *DockMenu) Button(btn MenuBtn) {
@@ -813,93 +810,6 @@ func (m *DockMenu) Button(btn MenuBtn) {
 			cbActionSubWindows(m.Icon, (*gldi.WindowActor).Show))
 
 	}
-}
-
-//
-//-----------------------------------------------------------[ DOCKMENU FILL ]--
-
-func (m *DockMenu) SubMenu(label, iconPath string) *DockMenu {
-	submenu, _ := m.SubMenuFull(label, iconPath)
-	return submenu
-}
-
-func (m *DockMenu) SubMenuFull(label, iconPath string) (*DockMenu, *gldi.MenuItem) {
-	submenu, item := gldi.MenuAddSubMenu(&m.Menu.Menu, label, iconPath)
-	return WrapDockMenu(m.Icon, m.Container, m.Dock, submenu), item
-}
-
-func (m *DockMenu) AddButtonsEntry(str string) *ButtonsEntry {
-	item, _ := gtk.MenuItemNew()
-	m.Append(item)
-
-	item.Connect("button-press-event", onMenuItemPress)         // Forward click to inside buttons.
-	item.Connect("motion-notify-event", onMenuItemMotionNotify) // Highlight pointed button.
-	item.Connect("leave-notify-event", onMenuItemLeaveNotify)   // Highlight pointed button.
-	item.Connect("enter-notify-event", onMenuItemEnterNotify)   // Highlight pointed button.
-	item.Connect("draw", onMenuItemDraw)                        // Highlight pointed button.
-
-	// 	g_signal_connect (G_OBJECT (pMenuItem), "motion-notify-event",
-	// 		G_CALLBACK(_on_motion_notify_menu_item),
-	// 		NULL);  // we need to manually higlight the currently pointed button
-	// 	g_signal_connect (G_OBJECT (pMenuItem),
-	// 		"leave-notify-event",
-	// 		G_CALLBACK (_on_leave_menu_item),
-	// 		NULL);  // to turn off the highlighted button when we leave the menu-item (if we leave it quickly, a motion event won't be generated)
-	// 	g_signal_connect (G_OBJECT (pMenuItem),
-	// 		"enter-notify-event",
-	// 		G_CALLBACK (_on_enter_menu_item),
-	// 		NULL);  // to force the label to not highlight (it gets highlighted, even if we overwrite the motion_notify_event callback)
-	// 	g_signal_connect (G_OBJECT (pMenuItem),
-	// 		"draw",
-	// 		G_CALLBACK (_draw_menu_item),
-	// 		NULL);  // we don't want the whole menu-item to be higlighted, but only the currently pointed button; so we draw the menu-item ourselves.
-
-	box, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 1)
-	item.Add(box)
-
-	label, _ := gtk.LabelNew(str)
-	box.PackStart(label, false, false, 0)
-
-	m.btns = &ButtonsEntry{*box, nil}
-
-	return &ButtonsEntry{*box, nil}
-}
-
-// onPressMenuItem forwards the click on the menuitem to the buttons inside if needed.
-//
-func onMenuItemPress(m *gtk.MenuItem, ev *gdk.Event) bool {
-	return gobool(C._on_press_menu_item((*C.GtkWidget)(unsafe.Pointer(m.Native())), (*C.GdkEventButton)(unsafe.Pointer(ev.Native())), nil))
-}
-
-// onMenuItemMotionNotify
-//
-func onMenuItemMotionNotify(m *gtk.MenuItem, ev *gdk.Event) bool {
-	return gobool(C._on_motion_notify_menu_item((*C.GtkWidget)(unsafe.Pointer(m.Native())), (*C.GdkEventMotion)(unsafe.Pointer(ev.Native())), nil))
-}
-
-// onMenuItemLeaveNotify
-//
-func onMenuItemLeaveNotify(m *gtk.MenuItem, _ *gdk.Event) bool {
-	return gobool(C._on_leave_menu_item((*C.GtkWidget)(unsafe.Pointer(m.Native())), nil, nil))
-}
-
-// onMenuItemEnterNotify
-//
-func onMenuItemEnterNotify(m *gtk.MenuItem, _ *gdk.Event) bool {
-	return gobool(C._on_enter_menu_item((*C.GtkWidget)(unsafe.Pointer(m.Native())), nil, nil))
-}
-
-// onMenuItemDraw
-//
-func onMenuItemDraw(m *gtk.MenuItem, cr *cairo.Context) bool {
-	return gobool(C._draw_menu_item((*C.GtkWidget)(unsafe.Pointer(m.Native())), (*C.cairo_t)(unsafe.Pointer(cr.Native()))))
-}
-
-func gobool(b C.gboolean) bool {
-	if b == 1 {
-		return true
-	}
-	return false
 }
 
 //
@@ -984,90 +894,174 @@ func cbActionSubWindows(icon *gldi.Icon, call func(*gldi.WindowActor)) func() {
 //
 func cbDialogIsOK(call func()) func(int, *gtk.Widget) {
 	return func(clickedButton int, widget *gtk.Widget) {
-		if clickedButton == 0 || clickedButton == -1 {
+		if clickedButton == cdtype.DialogButtonFirst || clickedButton == cdtype.DialogKeyEnter {
 			call()
 		}
 	}
 }
 
 //
-//------------------------------------------------------------[ MENU BUILDER ]--
+//----------------------------------------------------------[ DESKTOP ENTRIES]--
 
-// Menu : a GtkMenu builder.
-//
-type Menu struct {
-	gtk.Menu
-	groups map[int]*glib.SList // Radio items groups reference. Indexed by user given group key.
-}
-
-func NewMenu() *Menu {
-	gtkmenu, _ := gtk.MenuNew()
-	menu := &Menu{
-		Menu:   *gtkmenu,
-		groups: make(map[int]*glib.SList),
+func (m *DockMenu) moveToDesktop(useAll bool) {
+	geo := gldi.GetDesktopGeometry()
+	if geo.NbDesktops() < 2 && geo.NbViewportX() < 2 && geo.NbViewportY() < 2 {
+		return
 	}
-	return menu
-}
 
-func (menu *Menu) Separator() {
-	sep, _ := gtk.SeparatorMenuItemNew()
-	menu.Append(sep)
-}
+	m.AddSeparator()
+	desktop := newMenuMoveToDesktop(m.Icon, useAll)
 
-func (menu *Menu) AddEntry(label, iconPath string, call interface{}, userData ...interface{}) *gtk.MenuItem {
-	item := gldi.MenuAddItem(&menu.Menu, label, iconPath)
-	if call == nil {
-		item.SetSensitive(false)
-	} else {
-		item.Connect("activate", call, userData...)
-	}
-	return item
-}
+	win := m.Icon.Window()
+	for i := range iter.N(geo.NbDesktops()) { // sort by desktop
 
-func (menu *Menu) AddCheckEntry(label string, active bool, call interface{}, userData ...interface{}) (item *gtk.CheckMenuItem) {
-	item, _ = gtk.CheckMenuItemNewWithLabel(label)
-	item.SetActive(active)
-	if call != nil {
-		item.Connect("toggled", call, userData...)
-	}
-	menu.Append(item)
-	return item
-}
+		for j := range iter.N(geo.NbViewportY()) { // and by columns.
 
-func (menu *Menu) AddRadioEntry(label string, active bool, groupID int, call interface{}, userData ...interface{}) (item *gtk.RadioMenuItem) {
-	// var group *glib.SList
-	group, _ := menu.groups[groupID]
+			for k := range iter.N(geo.NbViewportX()) { // then rows.
 
-	item, _ = gtk.RadioMenuItemNewWithLabel(group, label)
-	if group == nil {
-		var e error
-		group, e = item.GetGroup()
-		if e == nil {
-			menu.groups[groupID] = group
-		}
-	}
-	item.SetActive(active)
-	if call != nil {
-		item.Connect("toggled", func() {
-			if item.GetActive() {
-				switch f := call.(type) {
-				case func():
-					f()
+				entry := m.AddEntry(desktop.Format(i, j, k), "", desktop.MakeCallback(i, j, k))
+				if win != nil && win.IsOnDesktop(i, j, k) {
+					entry.SetSensitive(false)
 				}
 			}
-		}) //  userData...)
+		}
 	}
-	menu.Append(item)
-	return item
 }
 
-// func (menu *Menu) AddSubMenu(title string) *Menu {
-// 	gtkmenu := NewMenu()
-// 	gtkItem, _ := gtk.MenuItemNewWithLabel(title)
-// 	gtkItem.SetSubmenu(gtkmenu)
-// 	menu.Append(gtkItem)
-// 	return gtkmenu
-// }
+type menuMoveToDesktop struct {
+	format       string
+	mode         int
+	nbx          int
+	MakeCallback func(i, j, k int) func()
+}
+
+func newMenuMoveToDesktop(icon *gldi.Icon, useAll bool) *menuMoveToDesktop {
+	geo := gldi.GetDesktopGeometry()
+
+	// Create object and set work mode.
+	desk := &menuMoveToDesktop{nbx: geo.NbViewportX()}
+	switch {
+	case geo.NbDesktops() > 1 && (geo.NbViewportX() > 1 || geo.NbViewportY() > 1):
+		desk.mode = 2
+
+	case geo.NbDesktops() > 1:
+		desk.mode = 1
+	}
+
+	// Set label format string.
+	switch {
+	case desk.mode == 2 && useAll:
+		desk.format = tran.Slate("Move all to desktop %d - face %d")
+
+	case desk.mode == 2:
+		desk.format = tran.Slate("Move to desktop %d - face %d")
+
+	case desk.mode == 1 && useAll:
+		desk.format = tran.Slate("Move all to desktop %d")
+
+	case desk.mode == 1:
+		desk.format = tran.Slate("Move to desktop %d")
+
+	case desk.mode == 0 && useAll:
+		desk.format = tran.Slate("Move all to face %d")
+
+	case desk.mode == 0:
+		desk.format = tran.Slate("Move to face %d")
+	}
+
+	// Set the prepare callback method.
+	if useAll { // Mode class to desktop.
+		desk.MakeCallback = func(i, j, k int) func() {
+			return func() {
+				for _, ic := range icon.SubDockIcons() {
+					if ic.IsAppli() {
+						ic.Window().MoveToDesktop(i, j, k)
+					}
+				}
+			}
+		}
+
+	} else { // Move appli to desktop.
+		desk.MakeCallback = func(i, j, k int) func() {
+			return func() {
+				if icon.IsAppli() {
+					icon.Window().MoveToDesktop(i, j, k)
+				}
+			}
+		}
+	}
+
+	return desk
+}
+
+func (g *menuMoveToDesktop) Format(i, j, k int) string {
+	var args []interface{}
+	switch g.mode {
+	case 2:
+		args = []interface{}{i + 1, g.nbx*j + k + 1}
+
+	case 1:
+		args = []interface{}{i + 1}
+
+	case 0:
+		args = []interface{}{g.nbx*j + k + 1}
+	}
+
+	return fmt.Sprintf(g.format, args...)
+}
+
+//
+//-----------------------------------------------------------[ BUTTONS ENTRY ]--
+
+func (m *DockMenu) AddButtonsEntry(str string) *ButtonsEntry {
+	item, _ := gtk.MenuItemNew()
+	m.Append(item)
+
+	// Forward click to inside buttons.
+	item.Connect("button-press-event", func(m *gtk.MenuItem, ev *gdk.Event) bool {
+		widget := (*C.GtkWidget)(unsafe.Pointer(m.Native()))
+		return gobool(C._on_press_menu_item(widget, (*C.GdkEventButton)(unsafe.Pointer(ev.Native())), nil))
+	})
+
+	// Highlight pointed button.
+	item.Connect("motion-notify-event", func(m *gtk.MenuItem, ev *gdk.Event) bool {
+		widget := (*C.GtkWidget)(unsafe.Pointer(m.Native()))
+		eventmotion := (*C.GdkEventMotion)(unsafe.Pointer(ev.Native()))
+		return gobool(C._on_motion_notify_menu_item(widget, eventmotion, nil))
+	})
+
+	// Turn off highlight pointed button when we leave the menu-item.
+	// if we leave it quickly, a motion event won't be generated.
+	item.Connect("leave-notify-event", func(m *gtk.MenuItem, _ *gdk.Event) bool {
+		widget := (*C.GtkWidget)(unsafe.Pointer(m.Native()))
+		return gobool(C._on_leave_menu_item(widget, nil, nil))
+	})
+
+	// Force the label to not highlight.
+	// it gets highlighted, even if we overwrite the motion_notify_event callback.
+	item.Connect("enter-notify-event", func(m *gtk.MenuItem, _ *gdk.Event) bool {
+		widget := (*C.GtkWidget)(unsafe.Pointer(m.Native()))
+		return gobool(C._on_enter_menu_item(widget, nil, nil))
+	})
+
+	// We don't want to higlighted the whole menu-item , but only the currently
+	// pointed button; so we draw the menu-item ourselves.
+	item.Connect("draw", func(m *gtk.MenuItem, cr *cairo.Context) bool {
+		widget := (*C.GtkWidget)(unsafe.Pointer(m.Native()))
+		context := (*C.cairo_t)(unsafe.Pointer(cr.Native()))
+		return gobool(C._draw_menu_item(widget, context))
+	})
+
+	box, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 1)
+	item.Add(box)
+
+	label, _ := gtk.LabelNew(str)
+	box.PackStart(label, false, false, 0)
+
+	m.btns = &ButtonsEntry{*box, nil}
+
+	return &ButtonsEntry{*box, nil}
+}
 
 type ButtonsEntry struct {
 	gtk.Box
@@ -1136,4 +1130,11 @@ func (box *ButtonsEntry) onMenuItemMotionNotify(unused *gtk.Box, event *gdk.Even
 	// g_list_free (children);
 	// gtk_widget_queue_draw (pWidget);  // and redraw everything
 	// return FALSE;
+}
+
+func gobool(b C.gboolean) bool {
+	if b == 1 {
+		return true
+	}
+	return false
 }

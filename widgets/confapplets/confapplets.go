@@ -43,7 +43,7 @@ type ListInterface interface {
 type GUIControl interface {
 	SelectIcons(string)
 	ListKnownApplets() map[string]datatype.Appleter
-	ListDownloadApplets() map[string]datatype.Appleter
+	ListDownloadApplets() (map[string]datatype.Appleter, error)
 }
 
 // ConfApplet provides an applets list and preview widget.
@@ -107,8 +107,10 @@ func (widget *ConfApplet) Load() {
 		widget.applets.Load(applets)
 
 	case ListExternal:
-		applets := widget.control.ListDownloadApplets()
-		widget.applets.Load(applets)
+		applets, e := widget.control.ListDownloadApplets()
+		if !widget.log.Err(e, "external applets list") {
+			widget.applets.Load(applets)
+		}
 	}
 }
 

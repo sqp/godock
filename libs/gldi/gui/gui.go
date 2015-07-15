@@ -6,6 +6,7 @@ import (
 
 	"github.com/sqp/godock/libs/cdtype" // Logger type.
 	"github.com/sqp/godock/libs/gldi"
+	"github.com/sqp/godock/libs/gldi/globals"
 
 	"github.com/sqp/godock/widgets/confbuilder/datagldi"
 	"github.com/sqp/godock/widgets/confbuilder/datatype"
@@ -30,7 +31,8 @@ type Connector struct {
 func NewConnector(log cdtype.Logger) *Connector {
 	return &Connector{
 		Source: &datagldi.Data{},
-		Log:    log}
+		Log:    log,
+	}
 }
 
 // Create creates the config window.
@@ -61,7 +63,7 @@ func (gc *Connector) ShowMainGui() {
 	gc.Widget.Select(confgui.GroupConfig)
 }
 
-// ShowModuleGui opens the GUI and should display an applets config. TODO: Fix.
+// ShowModuleGui opens the GUI and should display an applets config. TODO: Fix. (used only for Help ATM)
 //
 func (gc *Connector) ShowModuleGui(appletName string) {
 	gc.Log.Info("ShowModuleGui", appletName)
@@ -73,13 +75,20 @@ func (gc *Connector) ShowModuleGui(appletName string) {
 // ShowItems opens the GUI and displays the given item icon config.
 //
 func (gc *Connector) ShowItems(icon *gldi.Icon, container *gldi.Container, moduleInstance *gldi.ModuleInstance, showPage int) {
-	gc.Log.Info("ShowGui", "icon", icon != nil, "- container", container != nil, "- moduleInstance", moduleInstance != nil, "- page", showPage)
-
-	gc.Create()
-
+	confpath := ""
 	if icon != nil {
-		confPath := icon.ConfigPath()
-		gc.Widget.SelectIcons(confPath)
+		confpath = icon.ConfigPath()
+
+	} else if container != nil { // A main dock that is not the first one. Use the dedicated conf file.
+		confpath = globals.CurrentThemePath(container.ToCairoDock().GetDockName() + ".conf")
+	}
+
+	if confpath == "" {
+		gc.Log.Info("ShowGui unmatched", "icon", icon != nil, "- container", container != nil, "- moduleInstance", moduleInstance != nil, "- page", showPage)
+
+	} else {
+		gc.Create()
+		gc.Widget.SelectIcons(confpath)
 	}
 	// cairo_dock_items_widget_select_item (ITEMS_WIDGET (pCategory->pCdWidget), pIcon, pContainer, pModuleInstance, iShowPage);
 }
@@ -138,8 +147,21 @@ func (gc *Connector) UpdateShortkeys() {
 	}
 }
 
-// func (gc *Connector) UpdateDeskletParams(*gldi.Desklet)                                          {gc.Log.Info("UpdateDeskletParams")}
-// func (gc *Connector) UpdateDeskletVisibility(*gldi.Desklet)                                      {gc.Log.Info("UpdateDeskletVisibility")}
+// UpdateDeskletParams forwards the dock event to the GUI.
+//
+func (gc *Connector) UpdateDeskletParams(desklet *gldi.Desklet) {
+	if gc.Widget != nil && desklet != nil {
+		gc.Widget.UpdateDeskletParams(&datagldi.IconConf{*desklet.GetIcon()})
+	}
+}
+
+// UpdateDeskletVisibility forwards the dock event to the GUI.
+//
+func (gc *Connector) UpdateDeskletVisibility(desklet *gldi.Desklet) {
+	if gc.Widget != nil && desklet != nil {
+		gc.Widget.UpdateDeskletVisibility(&datagldi.IconConf{*desklet.GetIcon()})
+	}
+}
 
 // CORE BACKEND
 

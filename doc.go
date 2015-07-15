@@ -23,6 +23,13 @@ pre build packages repositories (Debian, Ubuntu, Archlinux).
 
     http://godoc.org/github.com/sqp/godock/dist
 
+Usage
+
+Once installed (more than an applet), you can run the cdc command to start a
+dock (if enabled), or interact with the dock and its new applets.
+
+    http://godoc.org/github.com/sqp/godock/cmd/cdc
+
 Applet creation and documentation
 
 If you want to create a new applet or learn more about them, most of their work

@@ -21,7 +21,7 @@ func (app *Applet) setBuildTarget() {
 
 	} else {
 		name := app.conf.BuildTargets[app.targetID]
-		app.target = build.NewBuilder(name)
+		app.target = build.NewBuilder(name, app.Log())
 		app.target.SetProgress(func(f float64) { app.RenderValues(f) })
 		app.Log().Debug("setBuildTarget", app.target.Label())
 

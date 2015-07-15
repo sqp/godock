@@ -2,6 +2,7 @@
 package build
 
 import (
+	"github.com/sqp/godock/libs/cdglobal"
 	"github.com/sqp/godock/libs/cdtype"
 	"github.com/sqp/godock/libs/srvdbus/dlogbus"
 	"github.com/sqp/godock/libs/text/color"
@@ -18,12 +19,6 @@ import (
 )
 
 var (
-	cdcpath = []string{"github.com", "sqp", "godock"}
-
-	// Log defines the package logger. Mandatory.
-	//
-	Log cdtype.Logger
-
 	// IconMissing defines the optional path to the default icon package emblem.
 	//
 	IconMissing string
@@ -48,6 +43,8 @@ var (
 	// AppletRestart restarts an applet.
 	//
 	AppletRestart func(name string)
+
+	CloseGui = func() {}
 
 	// dirDockData is the location of dock data for icons (overriden by gldi backend with real values).
 	//
@@ -119,28 +116,33 @@ type Builder interface {
 
 // NewBuilder creates the target renderer/builder.
 //
-func NewBuilder(target string) Builder {
+func NewBuilder(target string, log cdtype.Logger) Builder {
 	switch GetSourceType(target) {
 
 	case TypeGodock:
-		return &BuilderGodock{}
+		build := &BuilderGodock{}
+		build.SetLogger(log)
+		return build
 
 	case TypeCore:
 		build := &BuilderCore{}
+		build.SetLogger(log)
 		return build
 
 	case TypeApplets:
 		build := &BuilderApplets{}
+		build.SetLogger(log)
 		return build
 
 	case TypeAppletCompiled:
 		dir, icon := AppletInfo(target)
 		if dir == "" {
-			Log.NewErr("applet not found: "+target, "set build target")
+			log.NewErr("applet not found: "+target, "set build target")
 			return &BuilderNull{}
 		}
 
 		build := &BuilderCompiled{Module: target}
+		build.SetLogger(log)
 		build.SetIcon(icon)
 		build.SetDir(dir)
 		return build
@@ -153,6 +155,7 @@ func NewBuilder(target string) Builder {
 		}
 
 		build := &BuilderInternal{Module: target}
+		build.SetLogger(log)
 		build.SetIcon(icon)
 		return build
 	}
@@ -162,7 +165,7 @@ func NewBuilder(target string) Builder {
 }
 
 //
-//----------------------------------------------------------------[ BUILDERS ]--
+//--------------------------------------------------------[ BUILDER PROGRESS ]--
 
 // BuilderProgress provides a callback handler for Builders.
 //
@@ -184,11 +187,15 @@ func (build *BuilderProgress) SetProgress(f func(float64)) {
 	build.f = f
 }
 
+//
+//------------------------------------------------------------[ BUILDER BASE ]--
+
 // BuilderBase provides basic informations about a build.
 //
 type BuilderBase struct {
 	icon string
 	dir  string
+	log  cdtype.Logger
 }
 
 // SetIcon sets the icon name (or path) for the builder.
@@ -213,6 +220,12 @@ func (build *BuilderBase) SourceDir() string {
 //
 func (build *BuilderBase) Icon() string {
 	return build.icon
+}
+
+// SetLogger sets the builder logger.
+//
+func (build *BuilderBase) SetLogger(log cdtype.Logger) {
+	build.log = log
 }
 
 //
@@ -267,14 +280,26 @@ func (build *BuilderGodock) Label() string {
 // SourceDir returns the source path of the builder.
 //
 func (build BuilderGodock) SourceDir() string {
-	path := append([]string{os.Getenv("GOPATH"), "src"}, cdcpath...)
-	return filepath.Join(path...)
+	return filepath.Join(cdglobal.AppBuildPathFull()...)
 }
 
 // Build builds the source code.
 //
 func (build *BuilderGodock) Build() error {
-	go dlogbus.Action((*dlogbus.Client).Restart) // No need to wait an answer, it blocks.
+	path := build.SourceDir()
+	if path == "" {
+		return errors.New("GOPATH is not set")
+	}
+
+	cmd := build.log.ExecCmd("make", "dock")
+	cmd.Dir = path
+	e := cmd.Run()
+	if e != nil {
+		return e
+	}
+
+	CloseGui()
+	go build.log.Err(dlogbus.Action((*dlogbus.Client).Restart), "restart") // No need to wait an answer, it blocks.
 	return nil
 }
 
@@ -304,7 +329,7 @@ func (build *BuilderCore) Label() string {
 // Build builds the source code.
 //
 func (build *BuilderCore) Build() error {
-	return buildCSources(build.SourceDir(), build.BuilderProgress.f, build.MakeFlags)
+	return build.buildCSources(build.SourceDir(), build.BuilderProgress.f, build.MakeFlags)
 }
 
 //
@@ -333,7 +358,7 @@ func (build *BuilderApplets) Label() string {
 // Build builds the source code.
 //
 func (build *BuilderApplets) Build() error {
-	return buildCSources(build.SourceDir(), build.BuilderProgress.f, build.MakeFlags)
+	return build.buildCSources(build.SourceDir(), build.BuilderProgress.f, build.MakeFlags)
 }
 
 //
@@ -359,11 +384,11 @@ func (build *BuilderInternal) Label() string {
 //
 func (build *BuilderInternal) Build() error {
 	dir := filepath.Join(build.dir, "build", build.Module)
-	e := makeBuild(dir, build.BuilderProgress.f)
+	e := build.makeBuild(dir, build.BuilderProgress.f)
 	if e != nil {
 		return e
 	}
-	return makeInstall(dir)
+	return build.makeInstall(dir)
 }
 
 //
@@ -390,7 +415,7 @@ func (build *BuilderCompiled) Build() error {
 	onStop := startActivityBar(build.BuilderProgress.f)
 	defer onStop()
 
-	cmd := Log.ExecCmd("make")
+	cmd := build.log.ExecCmd("make")
 	cmd.Dir = build.dir
 	return cmd.Run()
 }
@@ -402,7 +427,7 @@ func (build *BuilderCompiled) Build() error {
 //
 // Progress is sent to the update callback provided.
 //
-func buildCSources(dir string, progress func(float64), makeFlags string) error {
+func (build *BuilderBase) buildCSources(dir string, progress func(float64), makeFlags string) error {
 	if _, e := os.Stat(dir); e != nil { // basedir must exist.
 		return e
 	}
@@ -410,16 +435,16 @@ func buildCSources(dir string, progress func(float64), makeFlags string) error {
 	// Initialise build subdir. Create or clean previous compile.
 	dir = filepath.Join(dir, "build")
 
-	e := cmake(dir, makeFlags)
+	e := build.cmake(dir, makeFlags)
 	if e != nil {
 		return e
 	}
 
-	e = makeBuild(dir, progress)
+	e = build.makeBuild(dir, progress)
 	if e != nil {
 		return e
 	}
-	return makeInstall(dir)
+	return build.makeInstall(dir)
 }
 
 // cmake creates the build subdir and launch cmake (like a ./configure).
@@ -428,15 +453,15 @@ func buildCSources(dir string, progress func(float64), makeFlags string) error {
 //
 //   dir must be the build subdir full path.
 //
-func cmake(dir string, makeFlags string) error {
+func (build *BuilderBase) cmake(dir string, makeFlags string) error {
 
 	if _, e := os.Stat(dir); e == nil { // Subdir exists. Clean if needed.
-		makeClean(dir)
+		build.makeClean(dir)
 		return nil // Ignore clean error, can fail because it's already too clean.
 	}
 
 	// Create build dir and launch cmake.
-	Log.Info("Create build directory")
+	build.log.Info("Create build directory")
 	if e := os.Mkdir(dir, os.ModePerm); e != nil {
 		return e
 	}
@@ -445,8 +470,8 @@ func cmake(dir string, makeFlags string) error {
 	if makeFlags != "" {
 		args = append(args, strings.Fields(makeFlags)...)
 	}
-	Log.Info("cmake", args)
-	cmd := Log.ExecCmd("cmake", args...)
+	build.log.Info("cmake", args)
+	cmd := build.log.ExecCmd("cmake", args...)
 	cmd.Dir = dir
 	return cmd.Run()
 
@@ -455,11 +480,11 @@ func cmake(dir string, makeFlags string) error {
 
 // makeClean cleans the build subdir.
 //
-func makeClean(dir string) error {
+func (build *BuilderBase) makeClean(dir string) error {
 	// if !*buildKeep { // Default is to clean build dir.
-	Log.Debug("Clean build directory")
+	build.log.Debug("Clean build directory")
 
-	cmd := Log.ExecCmd("make", "clean")
+	cmd := build.log.ExecCmd("make", "clean")
 	cmd.Dir = dir
 	return cmd.Run()
 }
@@ -468,11 +493,11 @@ func makeClean(dir string) error {
 //
 // Progress is sent to the update callback provided.
 //
-func makeBuild(dir string, progress func(float64)) error {
+func (build *BuilderBase) makeBuild(dir string, progress func(float64)) error {
 	jobs := strconv.Itoa(runtime.NumCPU())
 
-	Log.Info("make", "-j", jobs)
-	cmd := Log.ExecCmd("make", "-j", jobs)
+	build.log.Info("make", "-j", jobs)
+	cmd := build.log.ExecCmd("make", "-j", jobs)
 	cmd.Dir = dir
 
 	lastvalue := 0
@@ -495,13 +520,13 @@ func makeBuild(dir string, progress func(float64)) error {
 		return e
 	}
 
-	return makeInstall(dir)
+	return build.makeInstall(dir)
 }
 
 // makeInstall installs sources from the build subdir.
 //
-func makeInstall(dir string) error {
-	cmd := Log.ExecCmd(CmdSudo, "make", "install")
+func (build *BuilderBase) makeInstall(dir string) error {
+	cmd := build.log.ExecCmd(CmdSudo, "make", "install")
 	cmd.Dir = dir
 	return cmd.Run()
 }

@@ -170,6 +170,18 @@ type Builder struct {
 	log           cdtype.Logger
 	win           *gtk.Window // Parent window.
 	gettextDomain string
+	originalConf  string // path to default config file.
+}
+
+// GetKey finds the key referenced by its config group and name.
+//
+func (build *Builder) GetKey(group, name string) *Key {
+	for _, key := range build.keys {
+		if key.Group == group && key.Name == name {
+			return key
+		}
+	}
+	return nil
 }
 
 // BuildPage builds a Cairo-Dock configuration page for the given group.

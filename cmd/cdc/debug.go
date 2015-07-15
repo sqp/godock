@@ -2,19 +2,21 @@ package main
 
 import "github.com/sqp/godock/libs/srvdbus"
 
+import "strings"
+
 var cmdDebug = &Command{
 	Run:       runDebug,
 	UsageLine: "debug appletname [false|no|0]",
-	Short:     "debug change the debug state of an applet",
+	Short:     "debug an active applet",
 	Long: `
-Debug change the debug state of an applet. 
+Debug sets the debug state of an applet.
 
 The first argument must be the applet name.
 
 Options:
   false, no, 0    Disable debug.
   (default)       Enable debug.
-.`,
+`,
 }
 
 func runDebug(cmd *Command, args []string) {
@@ -32,8 +34,8 @@ func runDebug(cmd *Command, args []string) {
 }
 
 func parseState(state string) bool {
-	switch state {
-	case "false", "False", "no", "0":
+	switch strings.ToLower(state) {
+	case "false", "no", "0":
 		return false
 	}
 	return true

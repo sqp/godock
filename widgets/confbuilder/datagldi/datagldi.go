@@ -6,6 +6,7 @@ import (
 
 	"github.com/sqp/godock/libs/cdtype"
 	"github.com/sqp/godock/libs/gldi"
+	"github.com/sqp/godock/libs/gldi/desktopclass"
 	"github.com/sqp/godock/libs/gldi/globals"
 	"github.com/sqp/godock/libs/packages"
 	"github.com/sqp/godock/libs/ternary"
@@ -39,7 +40,7 @@ func (icon *IconConf) DefaultNameIcon() (name, img string) {
 		return "--------", ""
 
 	case icon.IsLauncher(), icon.IsStackIcon(), icon.IsAppli(), icon.IsClassIcon():
-		name := icon.GetClassInfo(gldi.ClassName)
+		name := icon.GetClass().Name()
 		if name != "" {
 			return name, icon.GetFileName() // icon.GetClassInfo(ClassIcon)
 		}
@@ -111,6 +112,27 @@ func (icon *IconConf) GetGettextDomain() string {
 		return ""
 	}
 	return mi.Module().VisitCard().GetGettextDomain()
+}
+
+// ConfigGroup is unused on this backend.
+//
+func (icon *IconConf) ConfigGroup() string {
+	return ""
+}
+
+// GetClass returns the class defined for the icon, able to get all related
+// desktop class informations.
+//
+func (icon *IconConf) GetClass() datatype.DesktopClasser {
+	return icon.Icon.GetClass() // Just recast as common inferface.
+}
+
+// OriginalConfigPath gives the full path to the icon original config file.
+// This is the default unchanged config file.
+//
+func (icon *IconConf) OriginalConfigPath() string {
+	vc := icon.ModuleInstance().Module().VisitCard()
+	return filepath.Join(vc.GetShareDataDir(), vc.GetConfFileName())
 }
 
 //
@@ -322,8 +344,8 @@ func (v *AppletDownload) Install(options string) error {
 		return errors.New("install failed: v.DisplayedName")
 	}
 
-	dir, _ := packages.DirExternal()
-	v.SetInstalled(dir)
+	externalUserDir := globals.DirDockData(cdtype.AppletsDirName)
+	v.SetInstalled(externalUserDir)
 	return nil
 
 	// return v.AppletPackage.Install(options)
@@ -332,7 +354,8 @@ func (v *AppletDownload) Install(options string) error {
 // Uninstall downloads and extract an external archive to package dir.
 //
 func (v *AppletDownload) Uninstall() error {
-	e := v.AppletPackage.Uninstall()
+	externalUserDir := globals.DirDockData(cdtype.AppletsDirName)
+	e := v.AppletPackage.Uninstall(externalUserDir)
 	if e == nil {
 		v.app = nil
 	}
@@ -396,12 +419,12 @@ func (Data) ListKnownApplets() map[string]datatype.Appleter {
 
 // ListDownloadApplets builds the list of downloadable user applets (installed or not).
 //
-func (Data) ListDownloadApplets() map[string]datatype.Appleter {
-	packs, e := packages.ListDownloadIndex(cdtype.AppletsServerTag)
-	// if log.Err(e, "ListExternal applets") {
-	// 	return nil
-	// }
-	_ = e
+func (Data) ListDownloadApplets() (map[string]datatype.Appleter, error) {
+	externalUserDir := globals.DirDockData(cdtype.AppletsDirName)
+	packs, e := packages.ListDownloadIndex(cdtype.AppletsServerTag, externalUserDir)
+	if e != nil {
+		return nil, e
+	}
 
 	applets := gldi.ModuleList()
 	list := make(map[string]datatype.Appleter)
@@ -409,7 +432,7 @@ func (Data) ListDownloadApplets() map[string]datatype.Appleter {
 		list[k] = &AppletDownload{*v, applets[k]}
 	}
 
-	return list
+	return list, nil
 }
 
 // ListIcons builds the list of all icons.
@@ -418,26 +441,28 @@ func (Data) ListIcons() *datatype.ListIcon {
 	list := datatype.NewListIcon()
 
 	// Add icons in docks.
-	taskbar := false
+	taskbarSet := false
 	for _, dock := range gldi.GetAllAvailableDocks(nil, nil) {
 		// for _, dock := range gldi.ListDocksRoot() {
 
 		var found []datatype.Iconer
 		for _, icon := range dock.Icons() {
-			if dock.GetRefCount() == 0 { // Maindock.
+			if dock.GetRefCount() == 0 { // Maindocks.
 
 				// Group taskbar icons and separators.
-				if icon.IsTaskbar() || icon.IsSeparatorAuto() {
-					if !taskbar {
+				if icon.ConfigPath() == "" || icon.IsSeparatorAuto() {
+					// if icon.IsTaskbar() || icon.IsSeparatorAuto() {
+					if !taskbarSet {
+						taskbarSet = true
 						ic := datatype.NewIconSimple(
 							globals.ConfigFile(),
-							"--[ Taskbar ]--",
+							datatype.FieldTaskBar,
+							datatype.TitleTaskBar,
 							globals.DirShareData("icons/icon-taskbar.png"))
 
 						ic.Taskbar = true
 
 						found = append(found, ic)
-						taskbar = true
 					}
 
 				} else {
@@ -451,9 +476,24 @@ func (Data) ListIcons() *datatype.ListIcon {
 		}
 
 		if len(found) > 0 {
-			// Only maindocks after the first one have a config file.
-			file := ternary.String(dock.IsMainDock(), "", globals.CurrentThemePath(dock.GetDockName()+".conf"))
-			container := datatype.NewIconSimple(file, dock.GetDockName(), "")
+			var file, group string
+
+			if dock.IsMainDock() {
+				// Only maindocks after the first one have a config file.
+				// So the first maindock use a custom group.
+				group = datatype.KeyMainDock
+
+			} else {
+				// Other maindocks have a dedicated config file.
+				// So the group is empty to load all of them (auto find).
+				file = globals.CurrentThemePath(dock.GetDockName() + ".conf")
+			}
+			container := datatype.NewIconSimple(
+				file,
+				group,
+				dock.GetReadableName(),
+				"") // TODO: maybe get an icon for the maindock.
+
 			list.Add(container, found)
 		}
 	}
@@ -468,11 +508,17 @@ func (Data) ListIcons() *datatype.ListIcon {
 	}
 
 	if len(desklets) > 0 {
-		container := datatype.NewIconSimple(globals.ConfigFile(), "_desklets_", "")
+		container := datatype.NewIconSimple(
+			globals.ConfigFile(),
+			datatype.GroupDesklets,
+			datatype.TitleDesklets,
+			"") // TODO: maybe get an icon for the desklets group.
+
 		list.Add(container, desklets)
 	}
 
 	// Add other modules (not in a dock or a desklet) : plug-in or detached applet.
+	// We need to create custom icons for them.
 	var services []datatype.Iconer
 	for _, mod := range gldi.ModuleList() {
 		cat := mod.VisitCard().GetCategory()
@@ -483,6 +529,7 @@ func (Data) ListIcons() *datatype.ListIcon {
 				if mi.Icon() == nil || (mi.Dock() != nil && mi.Icon().GetContainer() == nil) {
 					icon := datatype.NewIconSimple(
 						mi.GetConfFilePath(),
+						"", // no group, we need all of them for an applet.
 						mod.VisitCard().GetTitle(),
 						mod.VisitCard().GetIconFilePath())
 
@@ -492,7 +539,12 @@ func (Data) ListIcons() *datatype.ListIcon {
 		}
 	}
 	if len(services) > 0 {
-		container := datatype.NewIconSimple("_services_", tran.Slate("Services"), "") // TODO: find better key, and icon.
+		container := datatype.NewIconSimple(
+			"", // no config file available.
+			datatype.GroupServices, // so we set a custom group.
+			tran.Slate(datatype.TitleServices),
+			"") // TODO: maybe get an icon for the services group.
+
 		list.Add(container, services)
 	}
 
@@ -624,7 +676,7 @@ func (Data) ListDocks(parent, subdock string) []datatype.Field {
 
 	for _, dock := range gldi.GetAllAvailableDocks(nil, sub) { // nil because we want the current parent dock in the list.
 		field := datatype.Field{Key: dock.GetDockName()}
-		if dock.IsMainDock() {
+		if dock.GetRefCount() == 0 { // Any maindock.
 			field.Name = dock.GetReadableName()
 		} else {
 			field.Name = dock.GetDockName()
@@ -698,4 +750,16 @@ func (Data) Handbook(name string) datatype.Handbooker {
 //
 func (Data) ManagerReload(name string, b bool, keyf *keyfile.KeyFile) {
 	gldi.ManagerReload(name, b, keyf)
+}
+
+// CreateMainDock creates a new main dock to store a moved icon.
+//
+func (Data) CreateMainDock() string {
+	return gldi.DockAddConfFile()
+}
+
+// DesktopClasser allows to get desktop class informations for a given name.
+//
+func (Data) DesktopClasser(class string) datatype.DesktopClasser {
+	return desktopclass.Info(class)
 }

@@ -164,9 +164,17 @@ func (load *Loader) Debug(applet string, state bool) *dbus.Error {
 		return nil
 	}
 
+	found := false
 	for _, app := range load.apps.GetApplets(applet) {
-		app.SetDebug(true)
+		app.SetDebug(state)
+		found = true
 	}
+	if found {
+		load.Log.Info("set debug", applet, state)
+	} else {
+		load.Log.NewWarn("applet not found = "+applet, "set debug")
+	}
+
 	return nil
 }
 

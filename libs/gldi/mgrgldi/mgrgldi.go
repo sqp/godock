@@ -430,7 +430,7 @@ func (o *AppManager) sendIconOrSub(icon *gldi.Icon, container *gldi.Container, m
 		appIcon = icon
 	}
 
-	if appIcon == nil { // TODO: need to check why.
+	if appIcon == nil || icon == nil || icon.Ptr == nil { // TODO: need to check why.
 		return false
 	}
 
@@ -541,8 +541,8 @@ type MenuerLike struct {
 	backendmenu.DockMenu
 }
 
-func (m *MenuerLike) SubMenu(label, iconPath string) cdtype.Menuer {
-	return &MenuerLike{*m.DockMenu.SubMenu(label, iconPath)}
+func (m *MenuerLike) AddSubMenu(label, iconPath string) cdtype.Menuer {
+	return &MenuerLike{*m.DockMenu.AddSubMenu(label, iconPath)}
 }
 
 func (m *MenuerLike) AddEntry(label, iconPath string, call interface{}, userData ...interface{}) cdtype.MenuWidgeter {

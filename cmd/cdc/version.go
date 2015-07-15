@@ -1,6 +1,6 @@
 package main
 
-import "github.com/sqp/godock/libs/cdtype"
+import "github.com/sqp/godock/libs/cdglobal"
 
 var cmdVersion = &Command{
 	Run:       runVersion,
@@ -14,5 +14,5 @@ func runVersion(cmd *Command, args []string) {
 		cmd.Usage()
 	}
 
-	println(cdtype.Version)
+	println(cdglobal.AppVersion)
 }

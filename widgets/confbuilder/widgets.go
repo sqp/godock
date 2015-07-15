@@ -384,11 +384,18 @@ func (build *Builder) WidgetDockList(key *Key) {
 		SubdockName, _ = build.Conf.GetString(key.Group, "Name") // It's a subdock, get its name to remove the selection of a recursive position (inside itself).
 	}
 
-	list := build.data.ListDocks("", SubdockName)                                 // Get the list of available docks. Keep parent, but remove itself from the list.
-	list = append(list, datatype.Field{Key: "_New Dock_", Name: "New main dock"}) // append create new.
+	list := build.data.ListDocks("", SubdockName) // Get the list of available docks. Keep parent, but remove itself from the list.
+	list = append(list, datatype.Field{
+		Key:  datatype.KeyNewDock,
+		Name: tran.Slate("New main dock")},
+	)
 
 	model, _ := newModelSimple()
 	current, _ := build.Conf.GetString(key.Group, key.Name)
+
+	if current == "" {
+		current = datatype.KeyMainDock
+	}
 
 	model.SetSortColumnId(RowName, gtk.SORT_ASCENDING)
 

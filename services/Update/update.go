@@ -70,8 +70,6 @@ func NewApplet() cdtype.AppInstance {
 	// Set "working" emblem during version check. It should be removed or changed by the check.
 	poller.SetPreCheck(func() { app.SetEmblem(app.FileLocation("img", app.conf.VersionEmblemWork), EmblemVersion) })
 
-	build.Log = app.Log()
-
 	return app
 }
 
@@ -357,27 +355,39 @@ func (app *Applet) actionGrepTarget(search string) {
 		return
 	}
 
-	// Print title.
-	fmt.Printf(grepTitlePattern, grepTitleFormatter(search))
+	// Escape ." chars (dot and quotes).
+	query := strings.Replace(search, "\"", "\\\"", -1)
+	query = strings.Replace(query, ".", "\\.", -1)
 
 	// Prepare command.
-	cmd := app.Log().ExecCmd("grep", append(grepCmdArgs, search)...) // get the command with default args.
-	cmd.Dir = app.target.SourceDir()                                 // set command dir to reduce file path.
-	cmd.Stdout = linesplit.NewWriter(func(s string) {                // results display formatter.
+	out := ""
+	count := 0
+	cmd := app.Log().ExecCmd("grep", append(grepCmdArgs, query)...) // get the command with default args.
+	cmd.Dir = app.target.SourceDir()                                // set command dir to reduce file path.
+	cmd.Stdout = linesplit.NewWriter(func(s string) {               // results display formatter.
+		count++
 		sp := strings.SplitN(s, ":", 2)
 		if len(sp) == 2 {
-			print(grepFileFormatter(sp[0]) + ":	") // start line with percent and a tab.
+			out += grepFileFormatter(sp[0]) + ":\t" // start line with percent and a tab.
 			colored := strings.Replace(sp[1], search, grepQueryFormatter(search), -1)
-			println(strings.TrimLeft(colored, " 	")) // remove space and tab.
+			out += strings.TrimLeft(colored, " \t") + "\n" // remove space and tab.
 
 		} else {
-			println(s)
+			out += s + "\n"
 		}
 	})
 
 	// Launch command.
 	e := cmd.Run()
 	app.Log().Err(e, "Grep target")
+
+	// Print title and list.
+	found := "none found"
+	if count > 0 {
+		found = fmt.Sprintf("count %d", count)
+	}
+	fmt.Printf(grepTitlePattern, grepTitleFormatter(search), found)
+	println(out)
 }
 
 // actionGrepTargetClip searches the directory using the clipboard content as

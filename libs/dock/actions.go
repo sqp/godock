@@ -98,7 +98,7 @@ func (o *Actions) BuildMenu(menu cdtype.Menuer, actionIds []int) {
 			entry = menu.AddEntry(act.Name, act.Icon, o.ActionCallback(act.ID))
 
 		case cdtype.MenuSeparator:
-			menu.Separator()
+			menu.AddSeparator()
 
 		case cdtype.MenuCheckBox:
 			entry = menu.AddCheckEntry(act.Name, *act.Bool, o.ActionCallback(act.ID))

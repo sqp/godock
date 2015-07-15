@@ -29,7 +29,7 @@ func BuildMenuContainer(m *backendmenu.DockMenu) int {
 	}
 
 	//\_________________________ First item is the Cairo-Dock sub-menu.
-	dockmenu := m.SubMenu("Cairo-Dock", globals.DirShareData(globals.CairoDockIcon))
+	dockmenu := m.AddSubMenu("Cairo-Dock", globals.DirShareData(globals.CairoDockIcon))
 
 	if !globals.DockIsLocked() {
 		dockmenu.Entry(backendmenu.MenuConfigure)
@@ -39,13 +39,13 @@ func BuildMenuContainer(m *backendmenu.DockMenu) int {
 			dockmenu.Entry(backendmenu.MenuDeleteDock)
 		}
 
-		// 	if backendgui.CanManageThemes () {// themes. Still to do.
+		// 	if backendgui.CanManageThemes () {// themes. won't have a menu entry.
 		// dockmenu.Entry(backendmenu.MenuThemes)
 		// 	}
 
 		// add new item
 		if m.Dock != nil {
-			sub := dockmenu.SubMenu(tran.Slate("Add"), globals.IconNameAdd)
+			sub := dockmenu.AddSubMenu(tran.Slate("Add"), globals.IconNameAdd)
 			sub.Entry(backendmenu.MenuAddSubDock)
 			sub.Entry(backendmenu.MenuAddMainDock)
 			sub.Entry(backendmenu.MenuAddSeparator)
@@ -53,7 +53,7 @@ func BuildMenuContainer(m *backendmenu.DockMenu) int {
 			sub.Entry(backendmenu.MenuAddApplet)
 		}
 
-		dockmenu.Separator()
+		dockmenu.AddSeparator()
 		dockmenu.Entry(backendmenu.MenuLockIcons)
 	}
 
@@ -63,7 +63,7 @@ func BuildMenuContainer(m *backendmenu.DockMenu) int {
 
 	if !globals.FullLock {
 		// dockmenu.Entry(backendmenu.MenuAutostart) // removed crap.
-		// dockmenu.Entry(backendmenu.MenuThirdParty)
+		// dockmenu.Entry(backendmenu.MenuThirdParty) // not needed with the download page.
 
 		dockmenu.Entry(backendmenu.MenuHelp) // Don't show if locked, because it would open the configuration window.
 	}
@@ -86,7 +86,7 @@ func BuildMenuContainer(m *backendmenu.DockMenu) int {
 
 	if m.Icon != nil && !m.Icon.IsSeparatorAuto() {
 
-		items := m.SubMenu(DefaultNameIcon(m.Icon))
+		items := m.AddSubMenu(DefaultNameIcon(m.Icon))
 
 		// 	GtkWidget *pItemSubMenu = _add_item_sub_menu (pIcon, menu);
 
@@ -145,7 +145,7 @@ func BuildMenuContainer(m *backendmenu.DockMenu) int {
 					items.Entry(backendmenu.MenuMoveToDock)
 				}
 
-				items.Separator()
+				items.AddSeparator()
 
 				items.Entry(backendmenu.MenuHandbook)
 
@@ -179,14 +179,17 @@ func BuildMenuIcon(m *backendmenu.DockMenu) int {
 	}
 
 	// 	//\_________________________ class actions.
-	if m.Icon != nil && m.Icon.GetClass() != "" && !m.Icon.GetIgnoreQuickList() {
-		m.Entry(backendmenu.MenuClassItems)
+	if m.Icon != nil && m.Icon.GetClass().String() != "" && !m.Icon.GetIgnoreQuickList() {
+		if needSeparator {
+			m.AddSeparator()
+		}
+		needSeparator = m.Entry(backendmenu.MenuClassItems)
 	}
 
 	//\_________________________ Actions on applications.
 	if m.Icon.IsAppli() {
 		if needSeparator {
-			m.Separator()
+			m.AddSeparator()
 		}
 		needSeparator = true
 
@@ -207,31 +210,28 @@ func BuildMenuIcon(m *backendmenu.DockMenu) int {
 			}
 		}
 
-		if appli.IsHidden() || !appli.IsActive() {
-			// 			 || !gldi_window_is_on_current_desktop (pAppli)))
-
+		if appli.IsHidden() || !appli.IsActive() || !appli.IsOnCurrentDesktop() {
 			m.Button(backendmenu.MenuWindowShow)
 		}
 
 		//\_________________________ Other actions
 
-		otherActions := m.SubMenu(tran.Slate("Other actions"), "")
+		otherActions := m.AddSubMenu(tran.Slate("Other actions"), "")
 
 		otherActions.Entry(backendmenu.MenuWindowMoveHere)
 		otherActions.Entry(backendmenu.MenuWindowFullScreen)
 		otherActions.Entry(backendmenu.MenuWindowBelow)
 		otherActions.Entry(backendmenu.MenuWindowAbove)
 		otherActions.Entry(backendmenu.MenuWindowSticky)
+		otherActions.Entry(backendmenu.MenuMoveToDesktopWindow)
 
-		// _add_desktops_entry (otherActions.Menu, FALSE, data)
-
-		otherActions.Separator()
+		otherActions.AddSeparator()
 
 		otherActions.Entry(backendmenu.MenuWindowKill)
 
 	} else if m.Icon.IsMultiAppli() { // Window management
 		if needSeparator {
-			m.Separator()
+			m.AddSeparator()
 		}
 		needSeparator = true
 
@@ -240,17 +240,16 @@ func BuildMenuIcon(m *backendmenu.DockMenu) int {
 		m.Button(backendmenu.MenuWindowMinAll)
 		m.Button(backendmenu.MenuWindowShowAll)
 
-		otherActions := m.SubMenu(tran.Slate("Other actions"), "")
+		otherActions := m.AddSubMenu(tran.Slate("Other actions"), "")
 		otherActions.Entry(backendmenu.MenuWindowMoveAllHere)
-
-		// 		_add_desktops_entry (pSubMenuOtherActions, TRUE, data);
+		otherActions.Entry(backendmenu.MenuMoveToDesktopClass)
 	}
 
 	//\_________________________ Desklet positioning actions.
 
 	if !globals.DockIsLocked() && m.Container.IsDesklet() {
 		if needSeparator {
-			m.Separator()
+			m.AddSeparator()
 		}
 		needSeparator = true
 
@@ -377,7 +376,7 @@ func DefaultNameIcon(icon *gldi.Icon) (name, img string) {
 		return "--------", ""
 
 	case icon.IsLauncher(), icon.IsStackIcon(), icon.IsAppli(), icon.IsClassIcon():
-		name := icon.GetClassInfo(gldi.ClassName)
+		name := icon.GetClass().Name()
 		if name != "" {
 			return name, icon.GetFileName() // icon.GetClassInfo(ClassIcon)
 		}

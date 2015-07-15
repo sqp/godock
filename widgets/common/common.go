@@ -107,7 +107,8 @@ func PixbufNewFromFile(iconName string, size int) (pixbuf *gdk.Pixbuf, e error) 
 	return nil, errors.New("PixbufNewFromFile: no match for " + iconName)
 }
 
-func Big(text string) string   { return "<big>" + text + "</big>" }
-func Bold(text string) string  { return "<b>" + text + "</b>" }
-func Small(text string) string { return "<small>" + text + "</small>" }
-func Mono(text string) string  { return "<tt>" + text + "</tt>" }
+func Big(text string) string      { return "<big>" + text + "</big>" }
+func Bold(text string) string     { return "<b>" + text + "</b>" }
+func Small(text string) string    { return "<small>" + text + "</small>" }
+func Mono(text string) string     { return "<tt>" + text + "</tt>" }
+func URI(uri, text string) string { return "<a href=\"" + uri + "\">" + text + "</a>" }
