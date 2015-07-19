@@ -26,6 +26,7 @@ import (
 	"github.com/sqp/godock/libs/ternary"         // Helpers.
 	"github.com/sqp/godock/libs/text/tran"       // Translate.
 
+	"github.com/sqp/godock/widgets/about"
 	"github.com/sqp/godock/widgets/gtk/menus"
 
 	"fmt"
@@ -204,9 +205,7 @@ func (m *DockMenu) Entry(entry MenuEntry) bool {
 		m.AddEntry(
 			tran.Slate("About"),
 			globals.IconNameAbout,
-			func() {
-				C._cairo_dock_about((*C.GldiContainer)(unsafe.Pointer(m.Container.Ptr)))
-			},
+			about.New,
 		).SetTooltipText(tran.Slate("This will hide the dock until you hover over it with the mouse."))
 
 	case MenuAddApplet:
