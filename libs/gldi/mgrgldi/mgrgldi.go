@@ -246,7 +246,7 @@ func (o *AppManager) startApplet(mi *gldi.ModuleInstance, kf *keyfile.KeyFile) {
 	app.Init(true)
 
 	if o.log.GetDebug() { // If the service debug is active, force it also on applets.
-		app.SetDebug(true)
+		app.Log().SetDebug(true)
 	}
 	app.Poller().Restart() // check poller now if it exists. Safe to use on nil poller.
 }
@@ -282,7 +282,7 @@ func (o *AppManager) reloadApplet(mi *gldi.ModuleInstance, oldContainer *gldi.Co
 	if o.log.GetDebug() { // If the service debug is active, force it also on applets.
 		app := o.actives[unsafe.Pointer(icon.Ptr)]
 		if app != nil {
-			app.SetDebug(true)
+			app.Log().SetDebug(true)
 		}
 	}
 
@@ -374,7 +374,7 @@ func (o *AppManager) reloadApplet(mi *gldi.ModuleInstance, oldContainer *gldi.Co
 //------------------------------------------------------------------[ EVENTS ]--
 
 func (o *AppManager) OnLeftClick(icon *gldi.Icon, container *gldi.Container, btnState uint) bool {
-	return o.sendIconOrSub(icon, container, "on_click", "on_click_sub_icon")
+	return o.sendIconOrSub(icon, container, "on_click", "on_click_sub_icon", int(btnState))
 }
 
 func (o *AppManager) OnMiddleClick(icon *gldi.Icon, container *gldi.Container) bool {

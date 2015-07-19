@@ -11,6 +11,11 @@ const EmblemMuted = cdtype.EmblemTopRight
 // DefaultIconMuted is the default emblem icon for muted streams.
 const DefaultIconMuted = "muted.svg"
 
+// Commands references.
+const (
+	cmdMixer = iota
+)
+
 //------------------------------------------------------------------[ CONFIG ]--
 
 type appletConf struct {

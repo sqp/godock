@@ -7,10 +7,6 @@ import (
 	"fmt"
 )
 
-// DockGraphType defines graph rendering types.
-//
-var DockGraphType = []string{"Line", "Plain", "Bar", "Circle", "Plain Circle"}
-
 // percent provides a couple of text and value to render.
 //
 type percent struct {
@@ -30,12 +26,12 @@ type RenderPercent struct {
 	DisplayText   cdtype.InfoPosition
 	DisplayValues int
 	GaugeTheme    string
-	GraphType     int
+	GraphType     cdtype.RendererGraphType
 }
 
 // Settings is a all in one method to apply applet settings.
 //
-func (rp *RenderPercent) Settings(textPosition cdtype.InfoPosition, renderer, graphType int, gaugeTheme string) {
+func (rp *RenderPercent) Settings(textPosition cdtype.InfoPosition, renderer int, graphType cdtype.RendererGraphType, gaugeTheme string) {
 	rp.DisplayValues = renderer
 	rp.GraphType = graphType
 	rp.GaugeTheme = gaugeTheme
@@ -57,15 +53,15 @@ func (rp *RenderPercent) Settings(textPosition cdtype.InfoPosition, renderer, gr
 // SetSize sets the number of values to render on icon.
 // Mandatory with and after Settings.
 //
-func (rp *RenderPercent) SetSize(size int32) {
-	rp.App.AddDataRenderer("", 0, "")
+func (rp *RenderPercent) SetSize(size int) {
+	rp.App.DataRenderer().Remove()
 
 	switch {
 	case rp.DisplayValues == 0:
-		rp.App.AddDataRenderer("gauge", size, rp.GaugeTheme)
+		rp.App.DataRenderer().Gauge(size, rp.GaugeTheme)
 
 	case rp.DisplayValues == 1:
-		rp.App.AddDataRenderer("graph", size, DockGraphType[rp.GraphType])
+		rp.App.DataRenderer().Graph(size, rp.GraphType)
 	}
 }
 
@@ -88,7 +84,7 @@ func (rp *RenderPercent) Display() {
 		values = append(values, v.value)
 		rp.text.Append(v.text, v.value*100)
 	}
-	rp.App.RenderValues(values...)
+	rp.App.DataRenderer().Render(values...)
 	rp.cbText(rp.text.Text())
 }
 
@@ -191,11 +187,11 @@ func NewIOActivity(app cdtype.RenderSimple) *IOActivity {
 
 // Settings is a all in one method to configure your IOActivity.
 //
-func (ioa *IOActivity) Settings(interval uint64, textPosition cdtype.InfoPosition, renderer, graphType int, gaugeTheme string, names ...string) {
+func (ioa *IOActivity) Settings(interval uint64, textPosition cdtype.InfoPosition, renderer int, graphType cdtype.RendererGraphType, gaugeTheme string, names ...string) {
 	ioa.interval = interval
 
 	ioa.list = []*stat{} // Clear list. Nothing must remain.
-	ioa.app.AddDataRenderer("", 0, "")
+	ioa.app.DataRenderer().Remove()
 
 	if len(names) > 0 {
 		for _, name := range names {
@@ -222,9 +218,9 @@ func (ioa *IOActivity) Settings(interval uint64, textPosition cdtype.InfoPositio
 
 		switch renderer {
 		case 0:
-			ioa.app.AddDataRenderer("gauge", 2*int32(len(ioa.list)), gaugeTheme)
+			ioa.app.DataRenderer().Gauge(2*len(ioa.list), gaugeTheme)
 		case 1:
-			ioa.app.AddDataRenderer("graph", 2*int32(len(ioa.list)), DockGraphType[graphType])
+			ioa.app.DataRenderer().Graph(2*len(ioa.list), graphType)
 		}
 	} else {
 		// log.DEV("no na ffs")
@@ -263,7 +259,7 @@ func (ioa *IOActivity) Check() {
 	ioa.info.Display()
 
 	if len(values) > 0 {
-		ioa.app.RenderValues(values...)
+		ioa.app.DataRenderer().Render(values...)
 	}
 }
 

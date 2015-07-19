@@ -23,31 +23,42 @@ import (
 // applets.
 //
 type CDApplet struct {
-	Actions // Actions handler. Where an applet can declare its list of actions.
-
 	appletName string // Applet name as known by the dock. As an external app = dir name.
 	confFile   string // Config file location.
 	// ParentAppName string // Application launching the applet.
 	shareDataDir string // Location of applet data files. As an external applet, it is the same as binary dir.
 	rootDataDir  string // Path to the config root dir (~/.config/cairo-dock).
 
-	events    cdtype.Events                 // Applet events callbacks (if DefineEvents was used).
-	hooker    *Hooker                       // Applet events callbacks (for applet self implemented methods).
-	poller    *poller.Poller                // Poller counter. If you want more than one, use a common denominator.
-	commands  cdtype.Commands               // Programs and locations configured by the user, including application monitor.
-	templates map[string]*template.Template // Templates for text formating.
-	log       cdtype.Logger                 // Applet logger.
+	events   cdtype.Events      // Applet events callbacks (if DefineEvents was used).
+	hooker   *Hooker            // Applet events callbacks (for applet self implemented methods).
+	action   cdtype.AppAction   // Actions handler. Where an applet can declare its list of actions.
+	poller   cdtype.AppPoller   // Poller counter. If you want more than one, use a common denominator.
+	command  cdtype.AppCommand  // Programs and locations configured by the user, including application monitor.
+	template cdtype.AppTemplate // Templates for text formating.
+	log      cdtype.Logger      // Applet logger.
 
-	cdtype.AppIcon // Dock applet connection, Can be Gldi or Dbus (will be Gldi with build dock tag).
+	cdtype.AppIcon // Dock applet connection, Can be Gldi or Dbus (will be Gldi with build tag dock).
 }
 
 // NewCDApplet creates a new applet manager.
 //
 func NewCDApplet() cdtype.AppBase {
-	return &CDApplet{
-		hooker:    NewHooker(dockCalls, dockTests),
+	app := &CDApplet{
+		action: &Actions{},
+		hooker: NewHooker(dockCalls, dockTests),
+		log:    log.NewLog(log.Logs),
+	}
+
+	app.command = &appCmd{
+		commands: make(cdtype.Commands),
+		app:      app,
+	}
+
+	app.template = &appTemplate{
 		templates: make(map[string]*template.Template),
-		log:       log.NewLog(log.Logs)}
+		app:       app,
+	}
+	return app
 }
 
 // SetBase sets the name, conf and dirs for the applet.
@@ -109,14 +120,19 @@ func (cda *CDApplet) SetDefaults(def cdtype.Defaults) {
 	cda.SetLabel(ternary.String(def.Label != "", def.Label, cda.Name()))
 	cda.SetQuickInfo(def.QuickInfo)
 	cda.BindShortkey(def.Shortkeys...)
-	cda.commands = def.Commands
-	cda.ControlAppli(cda.commands.FindMonitor())
 
-	if poller := cda.Poller(); poller != nil {
-		poller.SetInterval(def.PollerInterval)
+	cda.Command().Clear()
+	for key, cmd := range def.Commands {
+		cda.Command().Add(key, cmd)
+	}
+	cda.Window().SetAppliClass(cda.Command().FindMonitor())
+
+	if cda.Poller().Exists() {
+		cda.Poller().SetInterval(def.PollerInterval)
 	}
 
-	cda.LoadTemplate(def.Templates...)
+	cda.Template().Clear()
+	cda.Template().Load(def.Templates...)
 
 	cda.log.SetDebug(def.Debug)
 }
@@ -124,87 +140,161 @@ func (cda *CDApplet) SetDefaults(def cdtype.Defaults) {
 //
 //---------------------------------------------------------------[ TEMPLATES ]--
 
-// LoadTemplate load the provided list of template files. If error, it will just be be logged, so you must check
+// Template returns a manager of go text templates for applets
+//
+func (cda *CDApplet) Template() cdtype.AppTemplate {
+	return cda.template
+}
+
+// appTemplate implements cdtype.AppTemplate.
+type appTemplate struct {
+	templates map[string]*template.Template // Templates for text formating.
+	app       interface {
+		Log() cdtype.Logger
+		FileLocation(...string) string
+	}
+}
+
+// Load loads the provided list of template files. If error, it will just be be logged, so you must check
 // that the template is valid. Map entry will still be created, just check if it
 // isn't nil. *CDApplet.ExecuteTemplate does it for you.
 //
 // Templates must be in a subdir called templates in applet dir. If you really
 // need a way to change this, ask for a new method.
 //
-func (cda *CDApplet) LoadTemplate(names ...string) {
+func (o *appTemplate) Load(names ...string) {
 	for _, name := range names {
-		fileloc := cda.FileLocation("templates", name+".tmpl")
+		fileloc := o.app.FileLocation("templates", name+".tmpl")
 		template, e := template.ParseFiles(fileloc)
-		cda.log.Err(e, "Template")
-		cda.templates[name] = template
+		o.app.Log().Err(e, "Template")
+		o.templates[name] = template
 	}
 }
 
-// Template gives access to a loaded template by its name.
+// Get gives access to a loaded template by its name.
 //
-func (cda *CDApplet) Template(file string) *template.Template {
-	return cda.templates[file]
+func (o *appTemplate) Get(file string) *template.Template {
+	return o.templates[file]
 }
 
-// ExecuteTemplate will run a pre-loaded template with the given data.
+// Execute runs a pre-loaded template with the given data.
 //
-func (cda *CDApplet) ExecuteTemplate(file, name string, data interface{}) (string, error) {
-	if cda.templates[file] == nil {
+func (o *appTemplate) Execute(file, name string, data interface{}) (string, error) {
+	if o.templates[file] == nil {
 		return "", fmt.Errorf("missing template %s", file)
 	}
 
 	buff := bytes.NewBuffer([]byte(""))
-	if e := cda.templates[file].ExecuteTemplate(buff, name, data); cda.log.Err(e, "FormatDialog") {
+	if e := o.templates[file].ExecuteTemplate(buff, name, data); o.app.Log().Err(e, "FormatDialog") {
 		return "", e
 	}
 	return buff.String(), nil
 }
 
+func (o *appTemplate) Clear() {
+	o.templates = make(map[string]*template.Template)
+}
+
 //
 //------------------------------------------------------------------[ POLLER ]--
 
-// AddPoller add a poller to handle in the main loop. Only one can be active ATM.
-// API will almost guaranteed to change for the sub functions.
+// Poller return the applet poller if any.
 //
-func (cda *CDApplet) AddPoller(call func()) *poller.Poller {
-	cda.poller = poller.New(call)
+func (cda *CDApplet) Poller() cdtype.AppPoller {
+	if cda.poller == nil {
+		return poller.NewNil(func(call func()) cdtype.AppPoller {
+			cda.poller = poller.New(call)
+			return cda.poller
+		})
+	}
 	return cda.poller
 }
 
-// Poller return the applet poller if any.
 //
-func (cda *CDApplet) Poller() *poller.Poller {
-	return cda.poller
+//------------------------------------------------------------------[ ACTION ]--
+
+// Action returns a manager of launchable actions for applets
+//
+func (cda *CDApplet) Action() cdtype.AppAction {
+	return cda.action
 }
 
 //
 //----------------------------------------------------------------[ COMMANDS ]--
 
-// CommandLaunch executes one of the configured command by its reference.
+// Command returns a manager of launchable commands for applets
 //
-func (cda *CDApplet) CommandLaunch(name string) {
-	if cmd, ok := cda.commands[name]; ok {
+func (cda *CDApplet) Command() cdtype.AppCommand {
+	return cda.command
+}
+
+// appCmd implements cdtype.AppCommand.
+type appCmd struct {
+	commands cdtype.Commands // Programs and locations configured by the user, including application monitor.
+	app      interface {
+		Log() cdtype.Logger
+		Window() cdtype.IconWindow
+	}
+}
+
+func (ac *appCmd) Add(key int, cmd *cdtype.Command) {
+	ac.commands[key] = cmd
+}
+
+// Launch executes one of the configured command by its reference.
+//
+func (ac *appCmd) Launch(ID int) {
+	if cmd, ok := ac.commands[ID]; ok {
 		if cmd.Monitored {
-			haveMonitor, hasFocus := cda.HaveMonitor()
-			if haveMonitor { // Application monitored and opened.
-				cda.ShowAppli(!hasFocus)
+			if ac.app.Window().IsOpened() { // Application monitored and opened.
+				ac.app.Window().ToggleVisibility()
+				// cda.ShowAppli(!hasFocus)
 				return
 			}
 		}
+
+		if cmd.Name == "" {
+			ac.app.Log().NewErr("empty command", "CommandLaunch")
+			return
+		}
+
 		splitted := strings.Split(cmd.Name, " ")
+
 		if cmd.UseOpen {
-			cda.log.ExecAsync("xdg-open", splitted...)
+			ac.app.Log().ExecAsync("xdg-open", splitted...)
 		} else {
-			cda.log.ExecAsync(splitted[0], splitted[1:]...)
+			ac.app.Log().ExecAsync(splitted[0], splitted[1:]...)
 		}
 	}
 }
 
-// CommandCallback returns a callback to a configured command to bind with event
-// OnClick or OnMiddleClick.
+// CallbackNoArg returns a callback to a configured command to bind with event
+// OnMiddleClick.
 //
-func (cda *CDApplet) CommandCallback(name string) func() {
-	return func() { cda.CommandLaunch(name) }
+func (ac *appCmd) CallbackNoArg(ID int) func() {
+	return func() { ac.Launch(ID) }
+}
+
+func (ac *appCmd) CallbackInt(ID int) func(int) {
+	return func(int) { ac.Launch(ID) }
+}
+
+// FindMonitor return the configured window class for the command.
+//
+func (ac *appCmd) FindMonitor() string {
+	for _, cmd := range ac.commands {
+		if cmd.Monitored {
+			if cmd.Class != "" { // Class provided, use it.
+				return cmd.Class
+			}
+			return cmd.Name // Else use program name.
+		}
+	}
+	return "none" // None found, reset it.
+}
+
+func (ac *appCmd) Clear() {
+	ac.commands = make(cdtype.Commands)
 }
 
 //
@@ -212,9 +302,9 @@ func (cda *CDApplet) CommandCallback(name string) func() {
 
 // ConfFile returns the config file location.
 //
-func (cda *CDApplet) ConfFile() string {
-	return cda.confFile
-}
+// func (cda *CDApplet) ConfFile() string {
+// 	return cda.confFile
+// }
 
 // LoadConfig will try to create and fill the given config struct with data from
 // the configuration file. Log error and crash if something went wrong.
@@ -250,12 +340,6 @@ func (cda *CDApplet) FileLocation(filename ...string) string {
 //
 func (cda *CDApplet) Log() cdtype.Logger {
 	return cda.log
-}
-
-// SetDebug set the state of the debug reporting flood.
-//
-func (cda *CDApplet) SetDebug(debug bool) {
-	cda.log.SetDebug(debug)
 }
 
 //

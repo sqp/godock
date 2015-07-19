@@ -159,7 +159,7 @@ type Downloader interface {
 // Controler defines actions needed from a cdtype.AppBase.
 //
 type Controler interface {
-	BuildMenu(menu cdtype.Menuer, actionIds []int)
+	Action() cdtype.AppAction
 	PopupDialog(cdtype.DialogData) error
 }
 
@@ -402,10 +402,10 @@ func (d *Manager) Actions(firstID int, actionAdd func(acts ...*cdtype.Action)) {
 // MenuQuality fills an applet actions list with videodl actions.
 //
 func (d *Manager) MenuQuality(menu cdtype.Menuer) {
-	d.control.BuildMenu(menu, []int{d.firstID + ActionOpenFolder})
+	d.control.Action().BuildMenu(menu, []int{d.firstID + ActionOpenFolder})
 
 	if d.active {
-		d.control.BuildMenu(menu, []int{d.firstID + ActionCancelDownload})
+		d.control.Action().BuildMenu(menu, []int{d.firstID + ActionCancelDownload})
 	}
 	group := 42
 

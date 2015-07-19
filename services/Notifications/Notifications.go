@@ -70,11 +70,11 @@ func (app *Applet) Init(loadConf bool) {
 //
 func (app *Applet) DefineEvents(events *cdtype.Events) {
 
-	events.OnClick = app.ActionCallback(ActionShowAll)
+	events.OnClick = app.Action().CallbackInt(ActionShowAll)
 
-	events.OnMiddleClick = app.ActionCallback(ActionClear)
+	events.OnMiddleClick = app.Action().CallbackNoArg(ActionClear)
 
-	events.OnBuildMenu = app.BuildMenuCallback(menuUser)
+	events.OnBuildMenu = app.Action().CallbackMenu(menuUser)
 
 	events.OnShortkey = func(key string) {
 		// if key == app.conf.ShortkeyOpen {
@@ -95,7 +95,7 @@ func (app *Applet) DefineEvents(events *cdtype.Events) {
 // Define applet actions. Order must match actions const declaration order.
 //
 func (app *Applet) defineActions() {
-	app.ActionAdd(
+	app.Action().Add(
 		&cdtype.Action{
 			ID:   ActionNone,
 			Menu: cdtype.MenuSeparator,
@@ -141,7 +141,7 @@ func (app *Applet) displayAll() {
 	if len(messages) == 0 {
 		msg = "No recent notifications"
 	} else {
-		text, e := app.ExecuteTemplate("notif", "ListNotif", messages)
+		text, e := app.Template().Execute("notif", "ListNotif", messages)
 		app.Log().Err(e, "template")
 		msg = strings.TrimRight(text, "\n")
 	}
@@ -150,7 +150,7 @@ func (app *Applet) displayAll() {
 		Message:   msg,
 		UseMarkup: true,
 		Buttons:   "edit-clear;cancel",
-		Callback:  cdtype.DialogCallbackValidNoArg(app.ActionCallback(ActionClear)), // Clear notifs if the user press the 1st button.
+		Callback:  cdtype.DialogCallbackValidNoArg(app.Action().CallbackNoArg(ActionClear)), // Clear notifs if the user press the 1st button.
 	})
 
 	// if self.config['clear'] else 4 + len(msg)/40 }  // if we're going to clear the history, show the dialog until the user closes it

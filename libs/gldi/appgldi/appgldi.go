@@ -48,30 +48,6 @@ func (o *AppGldi) SetOnEvent(onEvent func(string, ...interface{}) bool) {
 	o.onEvent = onEvent
 }
 
-// SubIcon returns the subicon object you can act on for the given key.
-//
-func (o *AppGldi) SubIcon(key string) cdtype.IconBase {
-	return o.icons[key]
-}
-
-// RemoveSubIcons removes all subicons from the subdock.
-//
-func (o *AppGldi) RemoveSubIcons() {
-	for icon := range o.icons { // Remove old subicons.
-		o.RemoveSubIcon(icon)
-	}
-}
-
-// HaveMonitor gives the state of the monitored application. See cdtype.AppIcon.
-//
-func (o *AppGldi) HaveMonitor() (haveApp bool, haveFocus bool) {
-	win := o.Icon.Window()
-	if win == nil {
-		return false, false
-	}
-	return true, win.IsActive()
-}
-
 //
 //------------------------------------------------------------[ ICON ACTIONS ]--
 
@@ -90,7 +66,7 @@ func (o *AppGldi) DemandsAttention(start bool, animation string) error {
 	return nil
 }
 
-// PopupDialog open a dialog box . See cdtype.AppIcon.
+// PopupDialog opens a dialog box. See cdtype.AppIcon.
 //
 func (o *AppGldi) PopupDialog(data cdtype.DialogData) error {
 	addIdle(func() {
@@ -99,154 +75,8 @@ func (o *AppGldi) PopupDialog(data cdtype.DialogData) error {
 	return nil
 }
 
-// AddDataRenderer add a graphic data renderer to the icon. See cdtype.AppIcon.
 //
-func (o *AppGldi) AddDataRenderer(typ string, nbval int32, theme string) error {
-	if nbval < 1 {
-		addIdle(o.Icon.RemoveDataRenderer)
-		return nil
-	}
-
-	switch typ {
-	case "gauge":
-		attr := gldi.NewDataRendererAttributeGauge()
-		attr.Theme = theme
-
-		// SQP hack !
-		attr.RotateTheme = 1
-
-		attr.LatencyTime = 500
-		attr.NbValues = int(nbval)
-		addIdle(func() { o.Icon.AddNewDataRenderer(attr) })
-
-	case "graph":
-		attr := gldi.NewDataRendererAttributeGraph()
-		switch theme {
-		case "Line":
-			attr.Type = 0
-		case "Plain":
-			attr.Type = 1
-		case "Bar":
-			attr.Type = 2
-		case "Circle":
-			attr.Type = 3
-		case "Plain Circle":
-			attr.Type = 4
-		}
-
-		attr.HighColor = make([]float64, nbval*3)
-		attr.LowColor = make([]float64, nbval*3)
-		for i := range iter.N(int(nbval)) {
-			attr.HighColor[3*i] = 1  // High R
-			attr.LowColor[3*i+1] = 1 // Low G+B = yellow.
-			attr.LowColor[3*i+2] = 1
-		}
-
-		w, _ := o.Icon.IconExtent()
-		attr.MemorySize = ternary.Int(w > 1, w, 32)
-
-		attr.LatencyTime = 500
-		attr.NbValues = int(nbval)
-		addIdle(func() { o.Icon.AddNewDataRenderer(attr) })
-
-	case "progressbar":
-		attr := gldi.NewDataRendererAttributeProgressBar()
-
-		attr.LatencyTime = 500
-		attr.NbValues = int(nbval)
-		addIdle(func() { o.Icon.AddNewDataRenderer(attr) })
-
-	default: // Failed to provide a valid renderer. Removing old if any.
-		addIdle(o.Icon.RemoveDataRenderer)
-	}
-
-	return nil
-}
-
-// RenderValues render new values on the icon. See cdtype.AppIcon.
-//
-func (o *AppGldi) RenderValues(values ...float64) error {
-	addIdle(func() {
-		o.Icon.RenderNewData(values...)
-		o.Icon.Redraw()
-	})
-	return nil
-}
-
-// ActOnAppli send an action on the controlled application. See cdtype.AppIcon.
-//
-func (o *AppGldi) ActOnAppli(action string) error {
-	switch action {
-	case "minimize":
-		o.Icon.Window().Minimize()
-
-	case "show":
-		o.Icon.Window().Show()
-
-	case "toggle-visibility":
-		if o.Icon.Window().IsHidden() {
-			o.Icon.Window().Show()
-		} else {
-			o.Icon.Window().Minimize()
-		}
-
-	case "maximize":
-		o.Icon.Window().Maximize(true)
-
-	case "restore":
-		o.Icon.Window().Maximize(false)
-
-	case "toggle-size":
-		o.Icon.Window().Maximize(!o.Icon.Window().IsMaximized())
-
-	case "close":
-		o.Icon.Window().Close()
-
-	case "kill":
-		o.Icon.Window().Kill()
-
-	default:
-		return errors.New("ActOnAppli: invalid action=" + action)
-	}
-
-	return nil
-}
-
-// ControlAppli allow your applet to control a window.  See cdtype.AppIcon.
-//
-func (o *AppGldi) ControlAppli(applicationClass string) error {
-	applicationClass = strings.ToLower(applicationClass)
-	class := o.Icon.GetClass()
-	if applicationClass == class.String() { // test if already set.
-		return nil
-	}
-
-	addIdle(func() {
-		if class.String() != "" {
-			o.Icon.DeinhibiteClass()
-		}
-		if applicationClass != "" {
-			o.Icon.InhibiteClass(applicationClass)
-		}
-		if !gldi.DockIsLoading() && o.Icon.GetContainer() != nil {
-			o.Icon.Redraw()
-		}
-	})
-	return nil
-}
-
-// ShowAppli set the visible state of the controlled application. See cdtype.AppIcon.
-//
-func (o *AppGldi) ShowAppli(show bool) error {
-	addIdle(func() {
-		if show {
-			o.Icon.Window().Show()
-		} else {
-			o.Icon.Window().Minimize()
-		}
-	})
-	return nil
-}
+//---------------------------------------------------------------[ SHORTKEYS ]--
 
 // BindShortkey binds any number of keyboard shortcuts to your applet. See cdtype.Shortkey.
 //
@@ -258,7 +88,13 @@ func (o *AppGldi) BindShortkey(shortkeys ...cdtype.Shortkey) error {
 				// 		gldi_shortkey_rebind (pKeyBinding, cShortkey, NULL);
 
 			} else { // new shortkey.
-				o.shortkeys[sk.ConfGroup+sk.ConfKey] = o.mi.NewShortkey(sk.ConfGroup, sk.ConfKey, sk.Desc, sk.Shortkey, o.onShortkey)
+				o.shortkeys[sk.ConfGroup+sk.ConfKey] = o.mi.NewShortkey(
+					sk.ConfGroup,
+					sk.ConfKey,
+					sk.Desc,
+					sk.Shortkey,
+					func(shortkey string) { o.onEvent("on_shortkey", shortkey) },
+				)
 			}
 		}
 	})
@@ -266,94 +102,256 @@ func (o *AppGldi) BindShortkey(shortkeys ...cdtype.Shortkey) error {
 	return nil
 }
 
-// onShortkey is the shortkey callback, to forward events.
 //
-func (o *AppGldi) onShortkey(shortkey string) {
-	o.onEvent("on_shortkey", shortkey)
+//-----------------------------------------------------------[ DATA RENDERER ]--
+
+// DataRenderer manages the graphic data renderer of the icon.
+//
+func (o *AppGldi) DataRenderer() cdtype.IconRenderer {
+	return &dataRend{icon: o}
 }
 
-// Get a property of the icon of your applet. Current available properties are :
-//   x            int32     x position of the icon's center on the screen (starting from 0 on the left)
-//   y            int32     y position of the icon's center on the screen (starting from 0 at the top of the screen)
-//   width        int32     width of the icon, in pixels (this is the maximum width, when the icon is zoomed)
-//   height       int32     height of the icon, in pixels (this is the maximum height, when the icon is zoomed)
-//   container    uint32   type of container of the applet (DOCK, DESKLET)
-//   orientation  uint32   position of the container on the screen (BOTTOM, TOP, RIGHT, LEFT). A desklet has always an orientation of BOTTOM.
-//   Xid          uint64   ID of the application's window which is controlled by the applet, or 0 if none (this parameter can only be non nul if you used the method ControlAppli beforehand).
-//   has_focus    bool     Whether the application's window which is controlled by the applet is the current active window (it has the focus) or not. E.g.:
+// datarend implements cdtype.IconRenderer.
 //
-func (o *AppGldi) Get(property string) (interface{}, error) {
-	container := o.Icon.GetContainer()
-	switch property {
-	case "x":
-		if container.IsHorizontal() {
-			return float64(container.WindowPositionX()) + o.Icon.DrawX() + o.Icon.Width()*o.Icon.Scale()/2, nil
+type dataRend struct {
+	icon *AppGldi
+}
+
+func (o *dataRend) test(nbval int, call func() gldi.DataRendererAttributer) error {
+	if nbval < 1 {
+		addIdle(o.icon.RemoveDataRenderer)
+	} else {
+		attr := call()
+		addIdle(func() { o.icon.AddNewDataRenderer(attr) })
+	}
+	return nil
+}
+
+func (o *dataRend) Gauge(nbval int, themeName string) error {
+	return o.test(nbval, func() gldi.DataRendererAttributer {
+		attr := gldi.NewDataRendererAttributeGauge()
+		attr.Theme = themeName
+
+		// SQP hack !
+		attr.RotateTheme = 1
+
+		attr.LatencyTime = 500
+		attr.NbValues = int(nbval)
+		return attr
+	})
+}
+
+func (o *dataRend) Graph(nbval int, typ cdtype.RendererGraphType) error {
+	return o.test(nbval, func() gldi.DataRendererAttributer {
+		attr := gldi.NewDataRendererAttributeGraph()
+		attr.Type = typ
+		attr.HighColor = make([]float64, nbval*3)
+		attr.LowColor = make([]float64, nbval*3)
+		for i := range iter.N(int(nbval)) {
+			attr.HighColor[3*i] = 1  // High R
+			attr.LowColor[3*i+1] = 1 // Low G+B = yellow.
+			attr.LowColor[3*i+2] = 1
 		}
-		return float64(container.WindowPositionY()) + o.Icon.DrawY() + o.Icon.Height()*o.Icon.Scale()/2, nil
 
-	case "y":
-		if container.IsHorizontal() {
-			return float64(container.WindowPositionY()) + o.Icon.DrawY() + o.Icon.Height()*o.Icon.Scale()/2, nil
-		}
-		return float64(container.WindowPositionX()) + o.Icon.DrawX() + o.Icon.Width()*o.Icon.Scale()/2, nil
+		w, _ := o.icon.IconExtent()
+		attr.MemorySize = ternary.Int(w > 1, w, 32)
 
-	case "orientation":
-	// 		CairoDockPositionType iScreenBorder = ((! pContainer->bIsHorizontal) << 1) | (! pContainer->bDirectionUp);
-	// 		g_value_init (v, G_TYPE_UINT);
-	// 		g_value_set_uint (v, iScreenBorder);
+		attr.LatencyTime = 500
+		attr.NbValues = int(nbval)
+		return attr
+	})
+}
 
-	case "container":
-	// 		g_value_init (v, G_TYPE_UINT);
-	// 		int iType = _get_container_type (pContainer);
-	// 		g_value_set_uint (v, iType);
+func (o *dataRend) Progress(nbval int) error {
+	return o.test(nbval, func() gldi.DataRendererAttributer {
+		attr := gldi.NewDataRendererAttributeProgressBar()
 
-	case "width": // this is the dimension of the icon when it's hovered.
-		w, _ := o.Icon.IconExtent()
-		return w, nil
+		attr.LatencyTime = 500
+		attr.NbValues = int(nbval)
+		return attr
+	})
+}
 
-	case "height":
-		_, h := o.Icon.IconExtent()
-		return h, nil
+func (o *dataRend) Remove() error {
+	addIdle(o.icon.RemoveDataRenderer)
+	return nil
+}
 
-	case "Xid":
-		win := o.Icon.Window()
-		if win == nil {
-			return 0, nil
-		}
-		return uint64(uintptr(unsafe.Pointer(win))), nil // TODO: maybe fix
+func (o *dataRend) Render(values ...float64) error {
+	addIdle(func() {
+		o.icon.RenderNewData(values...)
+		o.icon.Redraw()
+	})
+	return nil
+}
 
-	case "has_focus":
-		return o.Icon.Window() != nil && o.Icon.Window().IsActive(), nil
+func (o *dataRend) GraphLine(nb int) error        { return o.Graph(nb, cdtype.RendererGraphLine) }
+func (o *dataRend) GraphPlain(nb int) error       { return o.Graph(nb, cdtype.RendererGraphPlain) }
+func (o *dataRend) GraphBar(nb int) error         { return o.Graph(nb, cdtype.RendererGraphBar) }
+func (o *dataRend) GraphCircle(nb int) error      { return o.Graph(nb, cdtype.RendererGraphCircle) }
+func (o *dataRend) GraphPlainCircle(nb int) error { return o.Graph(nb, cdtype.RendererGraphPlainCircle) }
 
-	default:
-		return nil, errors.New("Get: unknown property=" + property)
+//
+//----------------------------------------------------------[ WINDOW ACTIONS ]--
+
+// Window gives access to actions on the controlled window.
+//
+func (o *AppGldi) Window() cdtype.IconWindow { return &winAction{icon: o.Icon} }
+
+// winAction implements cdtype.IconWindow
+//
+type winAction struct {
+	icon *gldi.Icon
+}
+
+func (o *winAction) SetAppliClass(applicationClass string) error {
+	applicationClass = strings.ToLower(applicationClass)
+	class := o.icon.GetClass()
+	if applicationClass == class.String() { // test if already set.
+		return nil
 	}
 
-	return nil, nil
+	addIdle(func() {
+		if class.String() != "" {
+			o.icon.DeinhibiteClass()
+		}
+		if applicationClass != "" {
+			o.icon.InhibiteClass(applicationClass)
+		}
+		if !gldi.DockIsLoading() && o.icon.GetContainer() != nil {
+			o.icon.Redraw()
+		}
+	})
+	return nil
 }
 
-// GetAll returns all applet icon properties.
+// act sends an action to the application controlled by the icon.
 //
-func (o *AppGldi) GetAll() *cdtype.DockProperties {
-	props := &cdtype.DockProperties{}
-	xid, _ := o.Get("Xid")
-	props.Xid = xid.(uint64)
+func (o *winAction) act(call func(*gldi.WindowActor)) error {
+	if !o.icon.IsAppli() {
+		return errors.New("no application")
+	}
+	addIdle(func() {
+		call(o.icon.Window())
+	})
+	return nil
+}
 
-	uncastX, _ := o.Get("x")
-	uncastY, _ := o.Get("y")
-	props.X = uncastX.(int32)
-	props.Y = uncastY.(int32)
-	// props.Orientation = v.Value().(uint32)
-	// props.Container = v.Value().(uint32)
-	w, h := o.Icon.IconExtent()
-	props.Width, props.Height = int32(w), int32(h)
-	props.HasFocus = o.Icon.Window() != nil && o.Icon.Window().IsActive()
+func (o *winAction) IsOpened() bool             { return o.icon.Window() != nil }
+func (o *winAction) Minimize() error            { return o.act((*gldi.WindowActor).Minimize) }
+func (o *winAction) Show() error                { return o.act((*gldi.WindowActor).Show) }
+func (o *winAction) SetVisibility(b bool) error { return o.act(callVisibility(b)) }
+func (o *winAction) ToggleVisibility() error    { return o.act((*gldi.WindowActor).ToggleVisibility) }
+func (o *winAction) Maximize() error            { return o.act(winMaximize) }
+func (o *winAction) Restore() error             { return o.act(winRestore) }
+func (o *winAction) ToggleSize() error          { return o.act(winToggleSize) }
+func (o *winAction) Close() error               { return o.act((*gldi.WindowActor).Close) }
+func (o *winAction) Kill() error                { return o.act((*gldi.WindowActor).Kill) }
 
-	return props
+func winMaximize(win *gldi.WindowActor)   { win.Maximize(true) }
+func winRestore(win *gldi.WindowActor)    { win.Maximize(false) }
+func winToggleSize(win *gldi.WindowActor) { win.Maximize(!win.IsMaximized()) }
+
+func callVisibility(show bool) func(*gldi.WindowActor) {
+	return func(win *gldi.WindowActor) { win.SetVisibility(show) }
+}
+
+//
+//---------------------------------------------------------[ SINGLE PROPERTY ]--
+
+// IconProperty gets applet icon properties one by one.
+//
+func (o *AppGldi) IconProperty() cdtype.IconProperty {
+	props, _ := o.IconProperties()
+	return &iconProp{p: props}
+}
+
+// iconProp returns icon properties one by one, implements cdtype.IconProperty
+type iconProp struct {
+	p cdtype.IconProperties
+}
+
+func (o *iconProp) X() (int, error)                              { return o.p.X(), nil }
+func (o *iconProp) Y() (int, error)                              { return o.p.Y(), nil }
+func (o *iconProp) Width() (int, error)                          { return o.p.Width(), nil }
+func (o *iconProp) Height() (int, error)                         { return o.p.Height(), nil }
+func (o *iconProp) Xid() (uint64, error)                         { return o.p.Xid(), nil }
+func (o *iconProp) HasFocus() (bool, error)                      { return o.p.HasFocus(), nil }
+func (o *iconProp) ContainerType() (cdtype.ContainerType, error) { return o.p.ContainerType(), nil }
+
+func (o *iconProp) ContainerPosition() (cdtype.ContainerPosition, error) {
+	return o.p.ContainerPosition(), nil
+}
+
+//
+//----------------------------------------------------------[ ALL PROPERTIES ]--
+
+// IconProperties gets all applet icon properties at once.
+//
+func (o *AppGldi) IconProperties() (cdtype.IconProperties, error) {
+	return &iconProps{icon: o.mi.Icon()}, nil
+}
+
+// iconProps returns all icon properties at once, implements cdtype.IconProperties
+//
+type iconProps struct {
+	icon *gldi.Icon
+}
+
+func (o *iconProps) X() int {
+	container := o.icon.GetContainer()
+	if container.IsHorizontal() {
+		return int(float64(container.WindowPositionX()) + o.icon.DrawX() + o.icon.Width()*o.icon.Scale()/2)
+	}
+	return int(float64(container.WindowPositionY()) + o.icon.DrawY() + o.icon.Height()*o.icon.Scale()/2)
+}
+
+func (o *iconProps) Y() int {
+	container := o.icon.GetContainer()
+	if container.IsHorizontal() {
+		return int(float64(container.WindowPositionY()) + o.icon.DrawY() + o.icon.Height()*o.icon.Scale()/2)
+	}
+	return int(float64(container.WindowPositionX()) + o.icon.DrawX() + o.icon.Width()*o.icon.Scale()/2)
+}
+
+func (o *iconProps) Width() int {
+	w, _ := o.icon.IconExtent()
+	return w
+}
+
+func (o *iconProps) Height() int {
+	_, h := o.icon.IconExtent()
+	return h
+}
+
+func (o *iconProps) ContainerPosition() cdtype.ContainerPosition {
+	return o.icon.GetContainer().ScreenBorder()
+}
+
+func (o *iconProps) ContainerType() cdtype.ContainerType {
+	return o.icon.GetContainer().Type()
+}
+
+func (o *iconProps) Xid() uint64 {
+	win := o.icon.Window()
+	if win == nil {
+		return 0
+	}
+	return uint64(uintptr(unsafe.Pointer(win))) // TODO: maybe fix
+}
+
+func (o *iconProps) HasFocus() bool {
+	return o.icon.Window() != nil && o.icon.Window().IsActive()
 }
 
 //
 //----------------------------------------------------------------[ SUBICONS ]--
+
+// SubIcon returns the subicon object you can act on for the given key.
+//
+func (o *AppGldi) SubIcon(key string) cdtype.IconBase {
+	return o.icons[key]
+}
 
 // AddSubIcon adds subicons by pack of 3 strings : label, icon, ID. See cdtype.AppIcon.
 //
@@ -393,6 +391,14 @@ func (o *AppGldi) RemoveSubIcon(id string) error {
 	o.icons = make(map[string]*IconBase)
 	o.mi.RemoveAllIcons()
 	return nil
+}
+
+// RemoveSubIcons removes all subicons from the subdock.
+//
+func (o *AppGldi) RemoveSubIcons() {
+	for icon := range o.icons { // Remove old subicons.
+		o.RemoveSubIcon(icon)
+	}
 }
 
 //
@@ -482,6 +488,14 @@ func (o *IconBase) ShowDialog(message string, duration int32) error {
 	})
 	return nil
 }
+
+//
+//------------------------------------------------------[ INTERNAL APPLET API ]--
+
+// ... gives access to the underlying icon for a gldi applet.
+//
+// Can be expanded, there is currently no limit for a go internal applet.
+//
 
 //
 //------------------------------------------------------------[ IDLE ACTIONS ]--

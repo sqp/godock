@@ -55,7 +55,7 @@ func (app *Applet) Init(loadConf bool) {
 		Icon:  app.conf.Icon,
 		Label: app.conf.Name,
 		Commands: cdtype.Commands{
-			"mixer": cdtype.NewCommand(app.conf.LeftAction == 1, app.conf.MixerCommand, app.conf.MixerClass)},
+			cmdMixer: cdtype.NewCommand(app.conf.LeftAction == 1, app.conf.MixerCommand, app.conf.MixerClass)},
 		Shortkeys: []cdtype.Shortkey{
 			{"Actions", "MixerShortkey", "Open volume mixer", app.conf.MixerShortkey},
 		},
@@ -65,12 +65,13 @@ func (app *Applet) Init(loadConf bool) {
 	app.pulse.StreamIcons = app.conf.StreamIcons
 	app.RemoveSubIcons()
 
-	app.AddDataRenderer("", 0, "") // Remove renderer when settings changed to be sure.
+	app.DataRenderer().Remove() // Remove renderer when settings changed to be sure.
 	switch app.conf.DisplayValues {
 	case 0:
-		app.AddDataRenderer("progressbar", 1, "")
+		app.DataRenderer().Progress(1)
+
 	case 1:
-		app.AddDataRenderer("gauge", 1, app.conf.GaugeName)
+		app.DataRenderer().Gauge(1, app.conf.GaugeName)
 	}
 
 	switch app.conf.DisplayText {
@@ -91,11 +92,11 @@ func (app *Applet) Init(loadConf bool) {
 
 // OnClick tries to launch the configured action (left click).
 //
-func (app *Applet) OnClick() {
+func (app *Applet) OnClick(int) {
 	switch app.conf.LeftAction {
 	case 1:
 		if app.conf.MixerCommand != "" {
-			app.CommandLaunch("mixer")
+			app.Command().Launch(cmdMixer)
 		}
 	}
 }
@@ -123,7 +124,7 @@ func (app *Applet) OnBuildMenu(menu cdtype.Menuer) {
 	mute, _ := app.pulse.Device(app.pulse.sink).Bool("Mute")
 	menu.AddCheckEntry("Mute volume", mute, app.pulse.ToggleMute)
 	if app.conf.MixerCommand != "" {
-		menu.AddEntry("Open mixer", "multimedia-volume-control", func() { app.CommandLaunch("mixer") })
+		menu.AddEntry("Open mixer", "multimedia-volume-control", app.Command().CallbackNoArg(cmdMixer))
 	}
 	app.menuAddDevices(menu, app.pulse.sink, "Managed device", app.pulse.SetSink)
 }
@@ -132,7 +133,7 @@ func (app *Applet) OnBuildMenu(menu cdtype.Menuer) {
 //
 func (app *Applet) OnShortkey(string) {
 	if app.conf.MixerCommand != "" {
-		app.CommandLaunch("mixer")
+		app.Command().Launch(cmdMixer)
 	}
 }
 
@@ -326,11 +327,11 @@ func (ap *AppPulse) DisplayVolume(values []uint32) error {
 
 	if mute {
 		ap.showText(VolumeToPercent(value) + " - muted")
-		return ap.icon.RenderValues(0)
+		return ap.icon.DataRenderer().Render(0)
 	}
 
 	ap.showText(VolumeToPercent(value))
-	return ap.icon.RenderValues(value)
+	return ap.icon.DataRenderer().Render(value)
 
 }
 

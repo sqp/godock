@@ -18,6 +18,12 @@ var (
 	AppBuildPath = []string{"github.com", "sqp", "godock"}
 )
 
+// External applets constants.
+const (
+	AppletsDirName   = "third-party"
+	AppletsServerTag = "3.4.0"
+)
+
 // AppBuildPathFull returns a splitted path to the application build directory.
 //
 func AppBuildPathFull() []string {

@@ -4,7 +4,7 @@ package datagldi
 import (
 	"github.com/bradfitz/iter"
 
-	"github.com/sqp/godock/libs/cdtype"
+	"github.com/sqp/godock/libs/cdglobal"
 	"github.com/sqp/godock/libs/gldi"
 	"github.com/sqp/godock/libs/gldi/desktopclass"
 	"github.com/sqp/godock/libs/gldi/globals"
@@ -336,7 +336,7 @@ func (v *AppletDownload) Install(options string) error {
 	// Only way I found for now to interact with it and let it know it will have
 	// a new applet to handle. As a bonus, it also activate the applet, which
 	// will toggle the activated button with the UpdateModuleState signal.
-	url := packages.DistantURL + cdtype.AppletsDirName + "/" + v.SrvTag + "/" + v.DisplayedName + "/" + v.DisplayedName + ".tar.gz"
+	url := packages.DistantURL + cdglobal.AppletsDirName + "/" + v.SrvTag + "/" + v.DisplayedName + "/" + v.DisplayedName + ".tar.gz"
 	gldi.EmitSignalDropData(globals.Maindock().Container(), url, nil, 0)
 
 	v.app = gldi.ModuleGet(v.DisplayedName)
@@ -344,7 +344,7 @@ func (v *AppletDownload) Install(options string) error {
 		return errors.New("install failed: v.DisplayedName")
 	}
 
-	externalUserDir := globals.DirDockData(cdtype.AppletsDirName)
+	externalUserDir := globals.DirDockData(cdglobal.AppletsDirName)
 	v.SetInstalled(externalUserDir)
 	return nil
 
@@ -354,7 +354,7 @@ func (v *AppletDownload) Install(options string) error {
 // Uninstall downloads and extract an external archive to package dir.
 //
 func (v *AppletDownload) Uninstall() error {
-	externalUserDir := globals.DirDockData(cdtype.AppletsDirName)
+	externalUserDir := globals.DirDockData(cdglobal.AppletsDirName)
 	e := v.AppletPackage.Uninstall(externalUserDir)
 	if e == nil {
 		v.app = nil
@@ -420,8 +420,8 @@ func (Data) ListKnownApplets() map[string]datatype.Appleter {
 // ListDownloadApplets builds the list of downloadable user applets (installed or not).
 //
 func (Data) ListDownloadApplets() (map[string]datatype.Appleter, error) {
-	externalUserDir := globals.DirDockData(cdtype.AppletsDirName)
-	packs, e := packages.ListDownloadIndex(cdtype.AppletsServerTag, externalUserDir)
+	externalUserDir := globals.DirDockData(cdglobal.AppletsDirName)
+	packs, e := packages.ListDownloadIndex(cdglobal.AppletsServerTag, externalUserDir)
 	if e != nil {
 		return nil, e
 	}

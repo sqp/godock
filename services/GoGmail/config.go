@@ -34,6 +34,11 @@ const (
 	MailClientMonitor         // Open mail client as command and monitor it.
 )
 
+// Commands references.
+const (
+	cmdMailClient = iota
+)
+
 //------------------------------------------------------------------[ CONFIG ]--
 
 // Global struct conf.

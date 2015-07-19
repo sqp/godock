@@ -1,16 +1,9 @@
 package cdtype
 
 import (
-	"github.com/sqp/godock/libs/poller"
-
 	"os/exec"
 	"text/template"
-)
-
-// Dock constants.
-const (
-	AppletsDirName   = "third-party"
-	AppletsServerTag = "3.4.0"
+	"time"
 )
 
 // Events represents the list of events you can receive as a cairo-dock applet.
@@ -26,7 +19,7 @@ const (
 //    app.Events.OnDropData = func (data string) {app.openWebpage(data, ...)}
 //
 // They can also be declared directly as methods of your applet.
-//   func (app *Applet) OnClick(btnState uint) { }
+//   func (app *Applet) OnClick(btnState int) { }
 //
 // Reload event is optional. Here is the default call if you want to override it.
 //
@@ -40,7 +33,7 @@ const (
 //
 type Events struct {
 	// Action when the user clicks on the icon.
-	OnClick func()
+	OnClick func(btnState int)
 
 	// Action when the user use the middle-click on the icon.
 	OnMiddleClick func()
@@ -70,7 +63,7 @@ type Events struct {
 	// for the id of the clicked icon.
 	//
 	// Action when the user clicks on the subicon.
-	OnSubClick func(icon string, state int32)
+	OnSubClick func(icon string, btnState int)
 
 	// Action when the user use the middle-click on the subicon.
 	OnSubMiddleClick func(icon string)
@@ -107,129 +100,12 @@ type AppInstance interface {
 //
 type AppBase interface {
 
-	// Extends AppIcon, so subicons actions are used the same way as the main icon.
-	// Those are the most common actions for an icon (label...)
+	// Extends AppIcon, for all interactions with the dock icon.
+	//
 	AppIcon
 
-	// Actions.
-
-	// ActionAdd adds actions to the list.
+	// --- Common ---
 	//
-	ActionAdd(acts ...*Action)
-
-	// ActionCallback returns a callback to the given action ID.
-	//
-	ActionCallback(ID int) func()
-
-	// ActionCount returns the number of started actions.
-	//
-	ActionCount() int
-
-	// ActionID finds the ID matching given action name.
-	//
-	ActionID(name string) int
-
-	// ActionLaunch starts the desired action by ID.
-	//
-	ActionLaunch(ID int)
-
-	// ActionSetBool sets the pointer to the boolean value for a checkentry menu field.
-	//
-	ActionSetBool(ID int, boolPointer *bool)
-
-	// ActionSetMax sets the maximum number of actions that can be started at the same time.
-	//
-	ActionSetMax(max int)
-
-	// ActionSetIndicators set the pre and post action callbacks.
-	//
-	ActionSetIndicators(onStart, onStop func())
-
-	// BuildMenu fills the menu with the given actions list.
-	//
-	// MenuCheckBox: If Call isn't set, a default toggle callback will be used.
-	//
-	BuildMenu(menu Menuer, actionIds []int)
-
-	// BuildMenuCallback provides a fill menu callback with the given actions list.
-	//
-	BuildMenuCallback(actionIds []int) func(menu Menuer)
-
-	// Commands.
-
-	// CommandCallback returns a callback to a configured command to bind with event
-	// OnClick or OnMiddleClick.
-	//
-	CommandCallback(name string) func()
-
-	// CommandLaunch executes one of the configured command by its reference.
-	//
-	CommandLaunch(name string)
-
-	// Poller.
-
-	// AddPoller add a poller to handle in the main loop. Only one can be active ATM.
-	// API will almost guaranteed to change for the sub functions.
-	//
-	AddPoller(call func()) *poller.Poller
-
-	// Poller return the applet poller if any.
-	//
-	Poller() *poller.Poller
-
-	// Log.
-
-	// Log gives access to the applet logger.
-	//
-	Log() Logger
-
-	// SetDebug set the state of the debug reporting flood.
-	//
-	SetDebug(debug bool)
-
-	// Templates.
-
-	// LoadTemplate load the provided list of template files. If error, it will just be be logged, so you must check
-	// that the template is valid. Map entry will still be created, just check if it
-	// isn't nil. *CDApplet.ExecuteTemplate does it for you.
-	//
-	// Templates must be in a subdir called templates in applet dir. If you really
-	// need a way to change this, ask for a new method.
-	//
-	LoadTemplate(names ...string)
-
-	// Template gives access to a loaded template by its name.
-	//
-	Template(file string) *template.Template
-
-	// ExecuteTemplate will run a pre-loaded template with the given data.
-	//
-	ExecuteTemplate(file, name string, data interface{}) (string, error)
-
-	// Config.
-
-	// LoadConfig will try to create and fill the given config struct with data from
-	// the configuration file. Log error and crash if something went wrong.
-	// Won't do anything if loadConf is false.
-	//
-	LoadConfig(loadConf bool, v interface{})
-
-	// ConfFile returns the config file location.
-	//
-	ConfFile() string // ConfFile returns the config file location.
-
-	// Files
-
-	// FileLocation return the full path to a file in the applet data dir.
-	//
-	FileLocation(filename ...string) string
-
-	// FileDataDir returns the path to the config root dir (~/.config/cairo-dock).
-	//
-	FileDataDir(filename ...string) string // RootDataDir.
-
-	// Common.
-
 	// Name returns the applet name as known by the dock. As an external app = dir name.
 	//
 	Name() string // Name returns the applet name as known by the dock. As an external app = dir name.
@@ -239,6 +115,50 @@ type AppBase interface {
 	//
 	SetDefaults(def Defaults)
 
+	// --- Files ---
+	//
+	// FileLocation returns the full path to a file in the applet data dir.
+	//
+	FileLocation(filename ...string) string
+
+	// FileDataDir returns the path to the config root dir (~/.config/cairo-dock).
+	//
+	FileDataDir(filename ...string) string // RootDataDir.
+
+	// --- Config ---
+	//
+	// LoadConfig will try to create and fill the given config struct with data from
+	// the configuration file. Log error and crash if something went wrong.
+	// Won't do anything if loadConf is false.
+	//
+	LoadConfig(loadConf bool, v interface{})
+
+	// ConfFile returns the config file location.
+	//
+	// ConfFile() string // ConfFile returns the config file location.
+
+	// --- Grouped Interfaces ---
+	//
+	// Action returns a manager of launchable actions for applets
+	//
+	Action() AppAction
+
+	// Command returns a manager of launchable commands for applets
+	//
+	Command() AppCommand
+
+	// Poller returns the applet poller if any.
+	//
+	Poller() AppPoller
+
+	// Template returns a manager of go text templates for applets
+	//
+	Template() AppTemplate
+
+	// Log gives access to the applet logger.
+	//
+	Log() Logger
+
 	// also include applet management methods as hidden for the doc.
 	appManagement
 }
@@ -246,16 +166,10 @@ type AppBase interface {
 // AppIcon defines all methods that can be used on a dock icon (with IconBase too).
 //
 type AppIcon interface {
-	IconBase // Main icon also has the same actions as subicons.
-
-	// HaveMonitor gives informations about the state of the monitored application.
-	// Those are usefull if this option is enabled. A monitored application, if
-	// opened, is supposed to have its visibility state toggled by the user event.
+	// Extends IconBase. The main icon also has the same actions as subicons,
+	// so subicons are used the same way as the main icon.
 	//
-	//  haveApp:   true if the monitored application is opened. (Xid > 0)
-	//  HaveFocus: true if the monitored application is the one with the focus.
-	//
-	HaveMonitor() (haveApp bool, haveFocus bool)
+	IconBase
 
 	// DemandsAttention is like the Animate method, but will animate the icon
 	// endlessly, and the icon will be visible even if the dock is hidden. If the
@@ -265,7 +179,7 @@ type AppIcon interface {
 	//
 	DemandsAttention(start bool, animation string) error
 
-	// PopupDialog open a dialog box .
+	// PopupDialog opens a dialog box.
 	// The dialog can contain a message, an icon, some buttons, and a widget the
 	// user can act on.
 	//
@@ -275,67 +189,28 @@ type AppIcon interface {
 	//
 	PopupDialog(DialogData) error
 
-	// AddDataRenderer add a graphic data renderer to the icon.
+	// DataRenderer manages the graphic data renderer of the icon.
 	//
-	//  Renderer types: gauge, graph, progressbar.
-	//  Themes for renderer Graph: "Line", "Plain", "Bar", "Circle", "Plain Circle"
+	// You must add a renderer (Gauge, Graph, Progress) before you can Render
+	// a list of floats values (from 0 lowest, to 1 highest).
 	//
-	AddDataRenderer(typ string, nbval int32, theme string) error
+	DataRenderer() IconRenderer
 
-	// RenderValues render new values on the icon.
+	// Window gives access to actions on the controlled window.
 	//
-	//   * You must have added a data renderer before with AddDataRenderer.
-	//   * The number of values sent must match the number declared before.
-	//   * Values are given between 0 and 1.
-	//
-	RenderValues(values ...float64) error
-
-	// ActOnAppli send an action on the application controlled by the icon (see ControlAppli).
-	//
-	//   "minimize"            to hide the window
-	//   "show"                to show the window and give it focus
-	//   "toggle-visibility"   to show or hide
-	//   "maximize"            to maximize the window
-	//   "restore"             to restore the window
-	//   "toggle-size"         to maximize or restore
-	//   "close"               to close the window (Note: some programs will just hide the window and stay in the systray)
-	//   "kill"                to kill the X window
-	//
-	ActOnAppli(action string) error
-
-	// ControlAppli allow your applet to control the window of an external
-	// application and can steal its icon from the Taskbar.
-	//
-	//  *Use the xprop command find the class of the window you want to control.
-	//  *Use "none" if you want to reset application control.
-	//  *Controling an application enables the OnFocusChange callback.
-	//
-	ControlAppli(applicationClass string) error
-
-	// ShowAppli set the visible state of the application controlled by the icon.
-	//
-	ShowAppli(show bool) error
+	Window() IconWindow
 
 	// BindShortkey binds any number of keyboard shortcuts to your applet.
 	//
 	BindShortkey(shortkeys ...Shortkey) error
 
-	// Get gets a property of the icon. Current available properties are :
+	// IconProperties gets all applet icon properties at once.
 	//
-	//   x            int32     x position of the icon's center on the screen (starting from 0 on the left)
-	//   y            int32     y position of the icon's center on the screen (starting from 0 at the top of the screen)
-	//   width        int32     width of the icon, in pixels (this is the maximum width, when the icon is zoomed)
-	//   height       int32     height of the icon, in pixels (this is the maximum height, when the icon is zoomed)
-	//   container    uint32   type of container of the applet (DOCK, DESKLET)
-	//   orientation  uint32   position of the container on the screen (BOTTOM, TOP, RIGHT, LEFT). A desklet has always an orientation of BOTTOM.
-	//   Xid          uint64   ID of the application's window which is controlled by the applet, or 0 if none (this parameter can only be non nul if you used the method ControlAppli beforehand).
-	//   has_focus    bool     Whether the application's window which is controlled by the applet is the current active window (it has the focus) or not. E.g.:
-	//
-	Get(property string) (interface{}, error)
+	IconProperties() (IconProperties, error)
 
-	// GetAll returns all applet icon properties.
+	// IconProperty gets applet icon properties one by one.
 	//
-	GetAll() *DockProperties
+	IconProperty() IconProperty
 
 	// AddSubIcon adds subicons by pack of 3 strings : label, icon, ID.
 	//
@@ -358,7 +233,6 @@ type AppIcon interface {
 // IconBase defines common actions for icons and subicons.
 //
 type IconBase interface {
-
 	// SetQuickInfo change the quickinfo text displayed on the subicon.
 	//
 	SetQuickInfo(info string) error
@@ -396,12 +270,388 @@ type IconBase interface {
 // RenderSimple defines a subset of AppBase for simple renderers like data pollers.
 //
 type RenderSimple interface {
-	AddDataRenderer(string, int32, string) error
+	DataRenderer() IconRenderer
 	FileLocation(...string) string
-	RenderValues(...float64) error
 	SetIcon(string) error
 	SetLabel(string) error
 	SetQuickInfo(string) error
+}
+
+//
+//-----------------------------------------------------------[ ICON RENDERER ]--
+
+// RendererGraphType defines the type of display for a renderer graph.
+type RendererGraphType int
+
+// Types of display for renderer graph.
+const (
+	RendererGraphLine RendererGraphType = iota
+	RendererGraphPlain
+	RendererGraphBar
+	RendererGraphCircle
+	RendererGraphPlainCircle
+)
+
+// IconRenderer defines interactions with the graphic data renderer of the icon.
+//
+type IconRenderer interface {
+	Gauge(nbval int, themeName string) error // sets a gauge data renderer.
+	Progress(nbval int) error                // sets a progress data renderer.
+
+	Graph(nbval int, typ RendererGraphType) error // sets a graph data renderer.
+	GraphLine(nbval int) error                    // sets a graph of type RendererGraphLine.
+	GraphPlain(nbval int) error                   // sets a graph of type RendererGraphPlain.
+	GraphBar(nbval int) error                     // sets a graph of type RendererGraphBar.
+	GraphCircle(nbval int) error                  // sets a graph of type RendererGraphCircle.
+	GraphPlainCircle(nbval int) error             // sets a graph of type RendererGraphPlainCircle.
+
+	Remove() error // removes the data renderer.
+
+	// Render renders new values on the icon.
+	//
+	//   * You must have set a data renderer before.
+	//   * The number of values sent must match the number declared before.
+	//   * Values are given between 0 and 1.
+	//
+	Render(values ...float64) error
+}
+
+//
+//-----------------------------------------------------------[ WINDOW ACTION ]--
+
+// IconWindow defines interactions with the controlled window.
+//
+type IconWindow interface {
+	// SetAppliClass allow your applet to control the window of an external
+	// application and to steal its icon from the Taskbar.
+	//
+	//  *Use the xprop command find the class of the window you want to control.
+	//  *Use "none" if you want to reset application control.
+	//  *Controling an application enables the OnChangeFocus callback.
+	//
+	SetAppliClass(applicationClass string) error // Sets the monitored class name.
+
+	IsOpened() bool // Returns true if the monitored application is opened.
+
+	Minimize() error               // Hide the window.
+	Show() error                   // Show the window and give it focus.
+	SetVisibility(show bool) error // Set the visible state of the window.
+	ToggleVisibility() error       // Send Show or Minimize.
+
+	Maximize() error   // Sets the window in full size.
+	Restore() error    // Removes the maximized size of the window.
+	ToggleSize() error // Send Maximize or Restore.
+
+	Close() error // Close the window (some programs will just hide in the systray).
+	Kill() error  // Kill the X window.
+}
+
+//
+//--------------------------------------------------------------[ PROPERTIES ]--
+
+// IconProperty defines properties of an applet icon.
+//
+type IconProperty interface {
+	// X gets the position of the icon's on the horizontal axis.
+	// Starting from 0 on the left.
+	//
+	X() (int, error)
+
+	// Y gets the position of the icon's on the vertical axis.
+	// Starting from 0 at the top of the screen.
+	//
+	Y() (int, error)
+
+	// Width gets the width of the icon, in pixels.
+	// This is the maximum width, when the icon is zoomed.
+	//
+	Width() (int, error)
+
+	// Height gets the height of the icon, in pixels.
+	// This is the maximum height, when the icon is zoomed.
+	//
+	Height() (int, error)
+
+	//ContainerPosition gets the position of the container on the screen.
+	// (bottom, top, right, left). A desklet has always an orientation of bottom.
+	//
+	ContainerPosition() (ContainerPosition, error)
+
+	// ContainerType gets the type of the applet's container (DOCK, DESKLET).
+	//
+	ContainerType() (ContainerType, error)
+
+	// Xid gets the ID of the application's window controlled by the applet,
+	//  or 0 if none (this parameter can only be non nul if you used the method
+	// ControlAppli beforehand).
+	//
+	Xid() (uint64, error)
+
+	// HasFocus gets whether the application's window which is controlled by the
+	// applet is the current active window (it has the focus) or not.
+	//
+	HasFocus() (bool, error)
+}
+
+// IconProperties defines basic informations about a dock icon.
+//
+type IconProperties interface {
+	// X gets the position of the icon's on the horizontal axis.
+	//
+	X() int
+
+	// Y gets the position of the icon's on the vertical axis.
+	//
+	Y() int
+
+	// Width gets the width of the icon, in pixels.
+	//
+	Width() int
+
+	// Height gets the height of the icon, in pixels.
+	//
+	Height() int
+
+	//ContainerPosition gets the position of the container on the screen.
+	//
+	ContainerPosition() ContainerPosition
+
+	// ContainerType gets the type of the applet's container (DOCK, DESKLET).
+	//
+	ContainerType() ContainerType
+
+	// Xid gets the ID of the application's window controlled by the applet,
+	//
+	Xid() uint64
+
+	// HasFocus gets whether the application's window has the focus or not.
+	//
+	HasFocus() bool
+}
+
+//
+//----------------------------------------------------------------[ COMMANDS ]--
+
+// AppTemplate defines interactions with common templates actions.
+//
+type AppTemplate interface {
+
+	// Load loads the provided list of template files. If error, it will just be be logged, so you must check
+	// that the template is valid. Map entry will still be created, just check if it
+	// isn't nil. *CDApplet.ExecuteTemplate does it for you.
+	//
+	// Templates must be in a subdir called templates in applet dir. If you really
+	// need a way to change this, ask for a new method.
+	//
+	Load(names ...string)
+
+	// Get gives access to a loaded template by its name.
+	//
+	Get(file string) *template.Template
+
+	// Execute runs a pre-loaded template with the given data.
+	//
+	Execute(file, name string, data interface{}) (string, error)
+
+	// Clear clears the templates list.
+	//
+	Clear()
+}
+
+//
+//-----------------------------------------------------------------[ ACTIONS ]--
+
+// AppAction defines a launcher of manageable actions for applets.
+//
+type AppAction interface {
+	// Add adds actions to the list.
+	//
+	Add(acts ...*Action)
+
+	// CallbackNoArg returns a callback to the given action ID.
+	//
+	CallbackNoArg(ID int) func()
+
+	// CallbackInt returns a callback to the given action ID with an int input,
+	// for left click events.
+	//
+	CallbackInt(ID int) func(int)
+
+	// Count returns the number of started actions.
+	//
+	Count() int
+
+	// ID finds the ID matching given action name.
+	//
+	ID(name string) int
+
+	// Launch starts the desired action by ID.
+	//
+	Launch(ID int)
+
+	// SetBool sets the pointer to the boolean value for a checkentry menu field.
+	//
+	SetBool(ID int, boolPointer *bool)
+
+	// SetMax sets the maximum number of actions that can be started at the same time.
+	//
+	SetMax(max int)
+
+	// SetIndicators set the pre and post action callbacks.
+	//
+	SetIndicators(onStart, onStop func())
+
+	// BuildMenu fills the menu with the given actions list.
+	//
+	// MenuCheckBox: If Call isn't set, a default toggle callback will be used.
+	//
+	BuildMenu(menu Menuer, actionIds []int)
+
+	// CallbackMenu provides a fill menu callback with the given actions list.
+	//
+	CallbackMenu(actionIds []int) func(menu Menuer)
+}
+
+// Action is an applet internal actions that can be used for callbacks or menu.
+//
+type Action struct {
+	ID      int
+	Name    string
+	Call    func()
+	Icon    string
+	Menu    MenuItemType
+	Bool    *bool  // reference to active value for checkitems.
+	Group   int    // Radio item group.
+	Tooltip string // Entry tooltip.
+
+	// in fact all actions are threaded in the go version, but we could certainly
+	// use this as a "add to actions queue" to prevent problems with settings
+	// changed while working, or double launch.
+	//
+	Threaded bool
+}
+
+//
+//----------------------------------------------------------------[ COMMANDS ]--
+
+// AppCommand defines a launcher of manageable commands for applets.
+//
+type AppCommand interface {
+	// Add adds a command to the list.
+	//
+	Add(key int, cmd *Command)
+
+	// CallbackNoArg returns a callback to the given command ID.
+	// To bind with event OnMiddleClick.
+	//
+	CallbackNoArg(ID int) func()
+
+	// CallbackInt returns a callback to the given command ID with an int input,
+	// To bind with event OnClick.
+	//
+	CallbackInt(ID int) func(int)
+
+	// Launch executes one of the configured command by its reference.
+	//
+	Launch(ID int)
+
+	// FindMonitor return the configured window class for the command.
+	//
+	FindMonitor() string
+
+	// Clear clears the commands list.
+	//
+	Clear()
+}
+
+// Commands handles a list of Command.
+//
+type Commands map[int]*Command
+
+// Command is the description of a standard command launcher.
+//
+type Command struct {
+	Name      string // Command or location to open.
+	UseOpen   bool   // If true, open with xdg-open.
+	Monitored bool   // If true, the window will be monitored by the dock. (don't work wit UseOpen)
+	Class     string // Window class if needed.
+}
+
+// NewCommand creates a standard command launcher.
+//
+func NewCommand(monitored bool, name string, class ...string) *Command {
+	cmd := &Command{
+		Monitored: monitored,
+		Name:      name,
+	}
+	if len(class) > 0 {
+		cmd.Class = class[0]
+	}
+	return cmd
+}
+
+// NewCommandStd creates a command launcher from configuration options.
+//
+//   action: 0=open location, 1=open program, 2=monitor program.
+//
+func NewCommandStd(action int, name string, class ...string) *Command {
+	cmd := NewCommand(action == 3, name, class...)
+	cmd.UseOpen = (action == 1)
+	return cmd
+}
+
+//
+//------------------------------------------------------------------[ POLLER ]--
+
+// AppPoller defines an optional applet regular polling actions.
+//
+type AppPoller interface {
+	// Exists returns true if the poller exists (isn't nil).
+	//
+	Exists() bool
+
+	// Add adds a poller to handle in the main loop. Only one can be active.
+	// Multiple calls will just override the action called.
+	//
+	Add(call func()) AppPoller
+
+	// SetPreCheck callback actions to launch before the polling job.
+	//
+	SetPreCheck(onStarted func())
+
+	// SetPostCheck callback actions to launch after the polling job.
+	//
+	SetPostCheck(onFinished func())
+
+	// SetInterval sets the polling interval time, in seconds. You can add a default
+	// value as a second argument to be sure you will have a valid value (> 0).
+	//
+	SetInterval(delay ...int) int
+
+	// Start enables the polling ticker.
+	//
+	Start()
+
+	// Restart resets the counter and launch Action in a goroutine.
+	// Safe to use on nil poller.
+	//
+	Restart()
+
+	// Stop disables the polling ticker.
+	//
+	Stop()
+
+	// Wait return a channel that will be triggered after the defined poller interval.
+	// You will have to call it on every loop as it not a real ticker.
+	// It's just a single use chan.
+	//
+	Wait() <-chan time.Time
+
+	// Plop increase the counter and launch the action if it reached the interval.
+	// The counter is also reset if the action is launched.
+	// Safe to use on nil poller.
+	//
+	Plop() bool
 }
 
 //
@@ -508,7 +758,7 @@ type Logger interface {
 	//
 	ExecCmd(command string, args ...string) *exec.Cmd
 
-	// DEV is like Info, but to be used by the dev for his temporary tests.
+	// DEV is like Info, but to be used by the dev for his temporary tests (easier to grep).
 	//
 	DEV(msg string, more ...interface{})
 }
@@ -577,25 +827,6 @@ type Defaults struct {
 	Debug     bool // Enable debug flood.
 }
 
-// Action is an applet internal actions that can be used for callbacks or menu.
-//
-type Action struct {
-	ID      int
-	Name    string
-	Call    func()
-	Icon    string
-	Menu    MenuItemType
-	Bool    *bool  // reference to active value for checkitems.
-	Group   int    // Radio item group.
-	Tooltip string // Entry tooltip.
-
-	// in fact all actions are threaded in the go version, but we could certainly
-	// use this as a "add to actions queue" to prevent problems with settings
-	// changed while working, or double launch.
-	//
-	Threaded bool
-}
-
 // Shortkey defines mandatory informations to register a shortkey.
 //
 type Shortkey struct {
@@ -603,57 +834,6 @@ type Shortkey struct {
 	ConfKey   string
 	Desc      string
 	Shortkey  string
-}
-
-//
-//----------------------------------------------------------------[ COMMANDS ]--
-
-// Commands handles a list of Command.
-//
-type Commands map[string]*Command
-
-// FindMonitor return the configured window class for the command.
-//
-func (commands Commands) FindMonitor() string {
-	for _, cmd := range commands {
-		if cmd.Monitored {
-			if cmd.Class != "" { // Class provided, use it.
-				return cmd.Class
-			}
-			return cmd.Name // Else use program name.
-		}
-	}
-	return "none" // None found, reset it.
-}
-
-// Command is the description of a standard command launcher.
-//
-type Command struct {
-	Name      string // Command or location to open.
-	UseOpen   bool   // If true, open with xdg-open.
-	Monitored bool   // If true, the window will be monitored by the dock. (don't work wit UseOpen)
-	Class     string // Window class if needed.
-}
-
-// NewCommand creates a standard command launcher.
-//
-func NewCommand(monitored bool, name string, class ...string) *Command {
-	cmd := &Command{
-		Monitored: monitored,
-		Name:      name,
-	}
-	if len(class) > 0 {
-		cmd.Class = class[0]
-	}
-	return cmd
-}
-
-// NewCommandStd creates a command launcher from configuration options.
-//
-func NewCommandStd(action int, name string, class ...string) *Command {
-	cmd := NewCommand(action == 3, name, class...)
-	cmd.UseOpen = (action == 1)
-	return cmd
 }
 
 //
@@ -786,24 +966,6 @@ func DialogCallbackValidString(call func(data string)) func(int, interface{}) {
 }
 
 //
-//--------------------------------------------------------------[ PROPERTIES ]--
-
-// DockProperties defines basic informations about a dock icon.
-//
-type DockProperties struct {
-	X      int32 // Distance from the left of the screen.
-	Y      int32 // Distance from the bottom of the screen.
-	Width  int32 // Width of the icon.
-	Height int32 // Height of the icon.
-
-	Orientation uint32 // Dock orientation.
-	Container   uint32 // Container type
-
-	HasFocus bool   // True if the monitored window has the cursor focus.
-	Xid      uint64 // Xid of the monitored window. Value > 0 if a window is monitored.
-}
-
-//
 //---------------------------------------------------------------[ CONSTANTS ]--
 
 // ContainerPosition refers to the border of the screen the dock is attached to.
@@ -820,14 +982,17 @@ const (
 	ContainerPositionLeft                            // Dock in the left.
 )
 
-// ContainerType is the type of container that manages the applet.
+// ContainerType is the type of container that manages the icon.
 //
 type ContainerType int32
 
-// Applet container type.
+// Icon container type.
 const (
-	ContainerDock    ContainerType = iota // Applet in a dock.
+	ContainerUnknown ContainerType = iota // just in case.
+	ContainerDock                         // Applet in a dock.
 	ContainerDesklet                      // Applet in a desklet.
+	ContainerDialog
+	ContainerFlying
 )
 
 // DeskletVisibility defines the visibility of a desklet.

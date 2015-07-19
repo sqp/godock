@@ -6,6 +6,12 @@ const (
 	defaultUpdateDelay = 60 // every minute.
 )
 
+// Commands references.
+const (
+	cmdLeft = iota
+	cmdMiddle
+)
+
 //------------------------------------------------------------------[ CONFIG ]--
 
 type appletConf struct {

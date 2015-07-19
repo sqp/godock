@@ -24,6 +24,8 @@ type groupConfiguration struct {
 	DialogTimer   int
 	AnimName      string
 	AnimDuration  int
+
+	WindowVisibility int
 }
 
 type groupActions struct {

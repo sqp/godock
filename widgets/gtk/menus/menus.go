@@ -2,9 +2,14 @@
 package menus
 
 import (
+	"github.com/conformal/gotk3/cairo"
+	"github.com/conformal/gotk3/gdk"
 	"github.com/conformal/gotk3/glib"
 	"github.com/conformal/gotk3/gtk"
 
+	"github.com/sqp/godock/widgets/common"
+
+	"errors"
 	"reflect"
 )
 
@@ -228,4 +233,181 @@ type Check struct {
 	Title  string
 	Call   interface{}
 	Active bool
+}
+
+//
+//-----------------------------------------------------------[ BUTTONS ENTRY ]--
+
+// AddButtonsEntry adds a button entry to the menu.
+//
+func (menu *Menu) AddButtonsEntry(label string) *ButtonsEntry {
+	entry := NewButtonsEntry(label)
+	menu.Append(entry)
+	return entry
+}
+
+// ButtonsEntry defines a menu entry with buttons inside.
+//
+type ButtonsEntry struct {
+	gtk.MenuItem // extends MenuItem, the main widget.
+
+	box   *gtk.Box      // main content box.
+	label *gtk.Label    // widget label.
+	list  []*gtk.Button // list of buttons.
+	img   []*gtk.Image  // list of images inside buttons (same key).
+}
+
+// NewButtonsEntry creates a menu entry with buttons management.
+//
+func NewButtonsEntry(text string) *ButtonsEntry {
+	item, _ := gtk.MenuItemNew()
+	box, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 1)
+	label, _ := gtk.LabelNew(text)
+
+	be := &ButtonsEntry{
+		MenuItem: *item,
+		box:      box,
+		label:    label,
+	}
+
+	// Packing.
+	item.Add(box)
+	box.PackStart(label, false, false, 0)
+
+	// Forward click to inside buttons.
+	item.Connect("button-press-event", be.onMenuItemPress)
+
+	// Highlight pointed button.
+	item.Connect("motion-notify-event", be.onMenuItemMotionNotify)
+
+	// Turn off highlight pointed button when we leave the menu-item.
+	// if we leave it quickly, a motion event won't be generated.
+	item.Connect("leave-notify-event", be.onMenuItemLeave)
+
+	// Force the label to not highlight.
+	// it gets highlighted, even if we overwrite the motion_notify_event callback.
+	item.Connect("enter-notify-event", be.onMenuItemEnter)
+
+	// We don't want to higlighted the whole menu-item , but only the currently
+	// pointed button; so we draw the menu-item ourselves, with a propagate to
+	// childs and intercept signal.
+	item.Connect("draw", func(_ *gtk.MenuItem, cr *cairo.Context) bool {
+		be.PropagateDraw(box, cr)
+		return true
+	})
+
+	return be
+}
+
+// AddButton adds a button to the entry.
+//
+func (o *ButtonsEntry) AddButton(tooltip, img string, call interface{}) *gtk.Button {
+	btn, _ := gtk.ButtonNew()
+	btn.SetTooltipText(tooltip)
+	btn.Connect("clicked", call)
+	o.box.PackEnd(btn, false, false, 0)
+
+	if img != "" {
+
+		// 		if (*gtkStock == '/')
+		// 			int size = cairo_dock_search_icon_size (GTK_ICON_SIZE_MENU);
+
+		image, e := common.ImageNewFromFile(img, 12) // TODO: icon size
+		if e == nil {
+			btn.SetImage(image)
+		}
+		o.img = append(o.img, image)
+	} else {
+		o.img = append(o.img, nil)
+	}
+
+	o.list = append(o.list, btn)
+	return btn
+}
+
+func (o *ButtonsEntry) onMenuItemPress(_ *gtk.MenuItem, event *gdk.Event) bool { // GdkEventCrossing
+	// Position of the mouse relatively to the menu-item.
+	eventBtn := &gdk.EventButton{event}
+	mouseX, mouseY := int(eventBtn.X()), int(eventBtn.Y())
+
+	sel, e := o.findButtonHovered(mouseX, mouseY)
+	if e == nil {
+		for i, btn := range o.list {
+			if i == sel {
+				o.setStateBtn(i, gtk.STATE_FLAG_ACTIVE)
+				btn.Clicked()
+
+			} else {
+				o.setStateBtn(i, gtk.STATE_FLAG_NORMAL)
+			}
+		}
+		o.QueueDraw()
+	}
+	return true
+}
+
+// Mouse entered the widget, force the label to be in a normal state.
+func (o *ButtonsEntry) onMenuItemEnter(_ *gtk.MenuItem, event *gdk.Event) bool { // GdkEventCrossing
+	o.label.SetStateFlags(gtk.STATE_FLAG_NORMAL, true)
+	o.label.QueueDraw()
+	return false
+}
+
+func (o *ButtonsEntry) onMenuItemLeave(_ *gtk.MenuItem, event *gdk.Event) bool { // GdkEventCrossing
+	for i := range o.list {
+		o.setStateBtn(i, gtk.STATE_FLAG_NORMAL)
+	}
+	o.box.QueueDraw()
+	return false
+}
+
+func (o *ButtonsEntry) onMenuItemMotionNotify(_ *gtk.MenuItem, event *gdk.Event) bool {
+	// Position of the mouse relatively to the menu-item.
+	eventBtn := &gdk.EventButton{event} // GdkEventMotion
+	mouseX, mouseY := int(eventBtn.X()), int(eventBtn.Y())
+
+	sel, e := o.findButtonHovered(mouseX, mouseY)
+	if e != nil {
+		for i := range o.list {
+			if i == sel {
+				// the mouse is inside the button -> select it
+				o.setStateBtn(i, gtk.STATE_FLAG_PRELIGHT)
+
+			} else {
+				// else deselect it, in case it was selected
+				o.setStateBtn(i, gtk.STATE_FLAG_NORMAL)
+			}
+		}
+
+		// needed ?
+		// force the label to be in a normal state
+		o.label.SetStateFlags(gtk.STATE_FLAG_NORMAL, true)
+		o.label.QueueDraw()
+	}
+	return false
+}
+
+func (o *ButtonsEntry) findButtonHovered(mouseX, mouseY int) (int, error) {
+	for i, btn := range o.list {
+		// Position of the top-left corner of the button relatively to the menu-item.
+		x, y, e := btn.TranslateCoordinates(o, 0, 0)
+		w, h := btn.GetAllocatedWidth(), btn.GetAllocatedHeight()
+		if e != nil {
+			// if logger.Err(e, "MenuItemMotionNotify btn", i) {
+			continue
+		}
+
+		if x < mouseX && mouseX < x+w && y < mouseY && mouseY < y+h {
+			// the mouse is inside the button -> select it
+			return i, nil
+		}
+	}
+	return -1, errors.New("button not found")
+}
+
+func (o *ButtonsEntry) setStateBtn(key int, state gtk.StateFlags) {
+	o.list[key].SetStateFlags(state, true)
+	if o.img[key] != nil {
+		o.img[key].SetStateFlags(state, true)
+	}
 }

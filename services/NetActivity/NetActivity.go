@@ -44,14 +44,6 @@ import (
 	"strings"
 )
 
-const (
-	// EmblemAction is the position of the "upload in progress" emblem.
-	EmblemAction = cdtype.EmblemTopRight
-
-	// EmblemDownload is the position of the "download in progress" emblem.
-	EmblemDownload = cdtype.EmblemTopLeft
-)
-
 //
 //------------------------------------------------------------------[ APPLET ]--
 
@@ -85,7 +77,7 @@ func NewApplet() cdtype.AppInstance {
 	app.video.SetPreCheck(func() error { return app.SetEmblem(app.FileLocation("img", "go-down.svg"), EmblemDownload) })
 	app.video.SetPostCheck(func() error { return app.SetEmblem("none", EmblemDownload) })
 	// app.up.SetOnResult(app.onUploadDone)
-	app.video.Actions(ActionsVideoDL, app.ActionAdd)
+	app.video.Actions(ActionsVideoDL, app.Action().Add)
 
 	// Network activity actions.
 	app.service = sysinfo.NewIOActivity(app)
@@ -94,7 +86,7 @@ func NewApplet() cdtype.AppInstance {
 	app.service.FormatLabel = formatLabel
 	app.service.GetData = sysinfo.GetNetActivity
 
-	app.AddPoller(app.service.Check)
+	app.Poller().Add(app.service.Check)
 
 	return app
 }
@@ -131,36 +123,24 @@ func (app *Applet) Init(loadConf bool) {
 		Label:          app.conf.Name,
 		PollerInterval: app.conf.UpdateDelay,
 		Commands: cdtype.Commands{
-			"left":   cdtype.NewCommandStd(app.conf.LeftAction, app.conf.LeftCommand, app.conf.LeftClass),
-			"middle": cdtype.NewCommandStd(app.conf.MiddleAction, app.conf.MiddleCommand)},
+			cmdLeft:   cdtype.NewCommandStd(app.conf.LeftAction, app.conf.LeftCommand, app.conf.LeftClass),
+			cmdMiddle: cdtype.NewCommandStd(app.conf.MiddleAction, app.conf.MiddleCommand)},
 		Debug: app.conf.Debug})
 }
 
 //
 //------------------------------------------------------------------[ EVENTS ]--
 
-// OnClick launch the configured action on user click.
-//
-func (app *Applet) OnClick() {
-	app.CommandLaunch("left")
-}
-
-// OnMiddleClick launch the configured action on user middle click.
-//
-func (app *Applet) OnMiddleClick() {
-	app.CommandLaunch("middle")
-}
-
 // OnBuildMenu fills the menu with left and middle click actions if they're set.
 //
 func (app *Applet) OnBuildMenu(menu cdtype.Menuer) {
 	needSep := false
 	if app.conf.LeftAction > 0 && app.conf.LeftCommand != "" {
-		menu.AddEntry("Action left click", "system-run", app.OnClick)
+		menu.AddEntry("Action left click", "system-run", app.Command().CallbackNoArg(cmdLeft))
 		needSep = true
 	}
 	if app.conf.MiddleAction > 0 && app.conf.MiddleCommand != "" {
-		menu.AddEntry("Action middle click", "system-run", app.OnMiddleClick)
+		menu.AddEntry("Action middle click", "system-run", app.Command().CallbackNoArg(cmdMiddle))
 		needSep = true
 	}
 	if needSep {
@@ -193,6 +173,8 @@ func (app *Applet) OnDropData(data string) {
 // DefineEvents set applet events callbacks.
 //
 func (app *Applet) DefineEvents(events *cdtype.Events) {
+	events.OnClick = app.Command().CallbackInt(cmdLeft)
+	events.OnMiddleClick = app.Command().CallbackNoArg(cmdMiddle)
 	events.OnBuildMenu = app.video.MenuQuality
 }
 

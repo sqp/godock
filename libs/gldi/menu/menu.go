@@ -196,23 +196,25 @@ func BuildMenuIcon(m *backendmenu.DockMenu) int {
 		appli := m.Icon.Window()
 		canMin, canMax, canClose := appli.CanMinMaxClose()
 
-		m.AddButtonsEntry(tran.Slate("Window"))
+		var btns []backendmenu.MenuBtn
 		if canClose {
-			m.Button(backendmenu.MenuWindowClose)
+			btns = append(btns, backendmenu.MenuWindowClose)
 		}
 
 		if !appli.IsHidden() {
 			if canMax {
-				m.Button(backendmenu.MenuWindowMax)
+				btns = append(btns, backendmenu.MenuWindowMax)
 			}
 			if canMin {
-				m.Button(backendmenu.MenuWindowMin)
+				btns = append(btns, backendmenu.MenuWindowMin)
 			}
 		}
 
 		if appli.IsHidden() || !appli.IsActive() || !appli.IsOnCurrentDesktop() {
-			m.Button(backendmenu.MenuWindowShow)
+			btns = append(btns, backendmenu.MenuWindowShow)
 		}
+
+		m.AddButtonsEntry(tran.Slate("Window"), btns...)
 
 		//\_________________________ Other actions
 
@@ -235,10 +237,11 @@ func BuildMenuIcon(m *backendmenu.DockMenu) int {
 		}
 		needSeparator = true
 
-		m.AddButtonsEntry("Windows")
-		m.Button(backendmenu.MenuWindowCloseAll)
-		m.Button(backendmenu.MenuWindowMinAll)
-		m.Button(backendmenu.MenuWindowShowAll)
+		m.AddButtonsEntry("Windows",
+			backendmenu.MenuWindowCloseAll,
+			backendmenu.MenuWindowMinAll,
+			backendmenu.MenuWindowShowAll,
+		)
 
 		otherActions := m.AddSubMenu(tran.Slate("Other actions"), "")
 		otherActions.Entry(backendmenu.MenuWindowMoveAllHere)

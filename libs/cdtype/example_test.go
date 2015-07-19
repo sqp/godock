@@ -56,30 +56,33 @@ func (app *AppTest) ExampleAppIcon_howTo() {
 
 	// Renderer (gauge, graph, progress-bar).
 
-	app.AddDataRenderer("gauge", 2, "Turbo-night-fuel")
-	app.RenderValues(0.2, 0.7)
+	app.DataRenderer().Gauge(2, "Turbo-night-fuel")
+	app.DataRenderer().Render(0.2, 0.7)
 
 	// Application monitoring.
 
-	app.ControlAppli("devhelp")
-	haveApp, haveFocus := app.HaveMonitor()
-	if haveApp {
-		app.ShowAppli(!haveFocus)
-		app.ActOnAppli("close")
+	app.Window().SetAppliClass("devhelp") // in Init.
+
+	// on click
+	if app.Window().IsOpened() { // Window opened.
+		app.Window().ToggleVisibility()
 	}
+
+	app.Window().Close() // on other event...
 
 	// Icon and dock settings.
 
-	uncast, e := app.Get("orientation")
-	if !app.Log().Err(e, "get orientation") {
-		orientation, ok := uncast.(cdtype.ContainerOrientation)
-		if ok {
-			app.Log().Info("container orientation", orientation)
-		}
+	pos, e := app.IconProperty().ContainerPosition()
+	if !app.Log().Err(e, "IconProperty ContainerPosition") {
+		app.Log().Info("Container position", pos)
 	}
 
-	properties := app.GetAll()
-	app.Log().Info("container orientation", properties.Orientation)
+	properties, e := app.IconProperties()
+	if !app.Log().Err(e, "IconProperties") {
+		app.Log().Info("Container position", properties.ContainerPosition())
+		app.Log().Info("Icon width", properties.Width())
+		app.Log().Info("Icon height", properties.Height())
+	}
 
 	// Add, remove and play with SubIcons:
 

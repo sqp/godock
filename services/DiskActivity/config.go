@@ -1,10 +1,18 @@
 package DiskActivity
 
+import "github.com/sqp/godock/libs/cdtype"
+
 const (
 	defaultUpdateDelay = 3
 
 	// BlockSize is the disk block size.
 	BlockSize = 512
+)
+
+// Commands references.
+const (
+	cmdLeft = iota
+	cmdMiddle
 )
 
 //------------------------------------------------------------------[ CONFIG ]--
@@ -26,7 +34,7 @@ type groupConfiguration struct {
 	GaugeName string
 	// GaugeRotate bool
 
-	GraphType int
+	GraphType cdtype.RendererGraphType
 	// GraphColorHigh []float64
 	// GraphColorLow  []float64
 	// GraphColorBg   []float64

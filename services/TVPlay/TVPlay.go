@@ -68,10 +68,6 @@ func NewApplet() cdtype.AppInstance {
 	cp := backendgupnp.NewControlPoint()
 	cp.SetEvents(app.cp.DefineEvents())
 
-	// Create the control window.
-	// guigtk.WindowTitle = "Test"
-	app.createGui(false, true)
-
 	return app
 }
 
@@ -80,15 +76,11 @@ func NewApplet() cdtype.AppInstance {
 func (app *Applet) Init(loadConf bool) {
 	app.LoadConfig(loadConf, &app.conf) // Load config will crash if fail. Expected.
 
-	if app.win != nil {
-		app.win.SetIconFromFile(app.FileLocation("icon")) // TODO: debug  path.Join(localDir, "data/icon.png")
-	}
-
 	// Set defaults to dock icon: display and controls.
 	app.SetDefaults(cdtype.Defaults{
 		Icon: app.conf.Icon,
 		Commands: cdtype.Commands{
-			"left": cdtype.NewCommand(true, "", app.Name())},
+			0: cdtype.NewCommand(true, "", app.Name())}, // Declare monitoring for our GUI.
 		Shortkeys: []cdtype.Shortkey{
 			{"Actions", "ShortkeyMute", "Mute volume", app.conf.ShortkeyMute},
 			{"Actions", "ShortkeyVolumeDown", "Lower volume", app.conf.ShortkeyVolumeDown},
@@ -99,7 +91,14 @@ func (app *Applet) Init(loadConf bool) {
 			{"Actions", "ShortkeySeekForward", "Seek forward", app.conf.ShortkeySeekForward}},
 		Debug: app.conf.Debug})
 
-	app.cpInit()
+	// Create the control window if needed.
+	if app.conf.WindowVisibility == 0 {
+		if app.win != nil {
+			app.Window().Close()
+		}
+	} else {
+		app.createGui(true, app.conf.WindowVisibility == 2)
+	}
 }
 
 // initialise the control point.
@@ -112,6 +111,13 @@ func (app *Applet) cpInit() {
 }
 
 func (app *Applet) createGui(init, show bool) {
+	if app.gui != nil {
+		glib.IdleAdd(func() {
+			app.Window().SetVisibility(show)
+		})
+		return
+	}
+
 	glib.IdleAdd(func() {
 		app.gui, app.win = guigtk.NewGui(app.cp)
 		if app.gui == nil {
@@ -119,6 +125,7 @@ func (app *Applet) createGui(init, show bool) {
 		}
 		app.gui.Load()
 
+		app.win.SetIconFromFile(app.FileLocation("icon")) // TODO: debug  path.Join(localDir, "data/icon.png")
 		app.win.Connect("delete-event", func() bool { app.gui, app.win = nil, nil; return false })
 		// app.win.Connect("delete-event", func() bool { window.Iconify(); return true })
 
@@ -156,10 +163,9 @@ func (app *Applet) DefineEvents(events *cdtype.Events) {
 
 	// Left click: open and manage the gui window.
 	//
-	events.OnClick = func() {
-		haveMonitor, hasFocus := app.HaveMonitor()
-		if haveMonitor { // Window opened.
-			app.ShowAppli(!hasFocus)
+	events.OnClick = func(int) {
+		if app.Window().IsOpened() { // Window opened.
+			app.Window().ToggleVisibility()
 		} else {
 			app.createGui(true, true)
 		}
@@ -168,7 +174,7 @@ func (app *Applet) DefineEvents(events *cdtype.Events) {
 	// Middle click: launch configured action.
 	//
 	events.OnMiddleClick = func() {
-		app.ActionLaunch(app.ActionID(app.conf.ActionClickMiddle))
+		app.Action().Launch(app.Action().ID(app.conf.ActionClickMiddle))
 	}
 
 	events.OnScroll = func(scrollUp bool) {
@@ -181,35 +187,41 @@ func (app *Applet) DefineEvents(events *cdtype.Events) {
 			key = ternary.Int(scrollUp, int(upnptype.ActionSeekForward), int(upnptype.ActionSeekBackward))
 		}
 
-		app.ActionLaunch(key)
+		app.Action().Launch(key)
 	}
 
 	events.OnBuildMenu = func(menu cdtype.Menuer) {
-		app.BuildMenu(menu, dockMenu)
+		app.Action().BuildMenu(menu, dockMenu)
 	}
 
 	events.OnShortkey = func(key string) {
 		switch key {
 		case app.conf.ShortkeyMute:
-			app.ActionLaunch(int(upnptype.ActionToggleMute))
+			app.Action().Launch(int(upnptype.ActionToggleMute))
 
 		case app.conf.ShortkeyVolumeDown:
-			app.ActionLaunch(int(upnptype.ActionVolumeDown))
+			app.Action().Launch(int(upnptype.ActionVolumeDown))
 
 		case app.conf.ShortkeyVolumeUp:
-			app.ActionLaunch(int(upnptype.ActionVolumeUp))
+			app.Action().Launch(int(upnptype.ActionVolumeUp))
 
 		case app.conf.ShortkeyPlayPause:
-			app.ActionLaunch(int(upnptype.ActionPlayPause))
+			app.Action().Launch(int(upnptype.ActionPlayPause))
 
 		case app.conf.ShortkeyStop:
-			app.ActionLaunch(int(upnptype.ActionStop))
+			app.Action().Launch(int(upnptype.ActionStop))
 
 		case app.conf.ShortkeySeekBackward:
-			app.ActionLaunch(int(upnptype.ActionSeekBackward))
+			app.Action().Launch(int(upnptype.ActionSeekBackward))
 
 		case app.conf.ShortkeySeekForward:
-			app.ActionLaunch(int(upnptype.ActionSeekForward))
+			app.Action().Launch(int(upnptype.ActionSeekForward))
+		}
+	}
+
+	events.End = func() {
+		if app.win != nil {
+			glib.IdleAdd(app.win.Destroy)
 		}
 	}
 }
@@ -220,7 +232,7 @@ func (app *Applet) DefineEvents(events *cdtype.Events) {
 // Define applet actions.
 //
 func (app *Applet) defineActions() {
-	app.ActionAdd(
+	app.Action().Add(
 		&cdtype.Action{
 			ID:   int(upnptype.ActionNone),
 			Menu: cdtype.MenuSeparator,

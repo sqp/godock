@@ -5,7 +5,7 @@
 package main
 
 import (
-	"github.com/sqp/godock/libs/cdtype"
+	"github.com/sqp/godock/libs/cdglobal"
 	"github.com/sqp/godock/libs/packages"
 	"github.com/sqp/godock/libs/text/color"
 	"github.com/sqp/godock/libs/text/tablist"
@@ -123,11 +123,11 @@ func installOrRemoveApplets(list []string, remove bool) {
 			options = "v" // Tar command verbose option.
 		}
 		action = func(appname string, pack *packages.AppletPackage) bool {
-			pack.SrvTag = cdtype.AppletsServerTag
+			pack.SrvTag = cdglobal.AppletsServerTag
 			e := pack.Install(externalUserDir, options)
 			return testErr(e, "install", "Applet installed", appname)
 		}
-		packs, e = packages.ListDistant(cdtype.AppletsDirName + "/" + cdtype.AppletsServerTag)
+		packs, e = packages.ListDistant(cdglobal.AppletsDirName + "/" + cdglobal.AppletsServerTag)
 	}
 	exitIfFail(e, "get applets list") // Ensure we have the server list.
 
@@ -160,7 +160,7 @@ func listPackages() (list packages.AppletPackages, e error) {
 
 	// List server only.
 	if *listServer {
-		return packages.ListDistant(cdtype.AppletsDirName + "/" + cdtype.AppletsServerTag)
+		return packages.ListDistant(cdglobal.AppletsDirName + "/" + cdglobal.AppletsServerTag)
 	}
 
 	// Get applets dir.
@@ -175,7 +175,7 @@ func listPackages() (list packages.AppletPackages, e error) {
 	}
 
 	// List default (merged both).
-	packs, e := packages.ListDownloadIndex(cdtype.AppletsServerTag, externalUserDir)
+	packs, e := packages.ListDownloadIndex(cdglobal.AppletsServerTag, externalUserDir)
 	if e != nil {
 		return nil, e
 	}

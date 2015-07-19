@@ -42,7 +42,7 @@ func NewApplet() cdtype.AppInstance {
 	app.data = NewFeed(app.updateDisplay)
 
 	// The poller will check for new mails on a timer, with a small emblem during the polling.
-	poller := app.AddPoller(app.data.Check)
+	poller := app.Poller().Add(app.data.Check)
 	poller.SetPreCheck(func() { app.SetEmblem(app.FileLocation("img", "go-down.svg"), cdtype.EmblemTopLeft) })
 	poller.SetPostCheck(func() { app.SetEmblem("none", cdtype.EmblemTopLeft) })
 
@@ -81,7 +81,7 @@ func (app *Applet) Init(loadConf bool) {
 		Templates:      []string{DialogTemplate},
 		PollerInterval: cdtype.PollerInterval(app.conf.UpdateDelay*60, defaultUpdateDelay),
 		Commands: cdtype.Commands{
-			"mailClient": cdtype.NewCommandStd(app.conf.MailClientAction+1, app.conf.MailClientName, app.conf.MailClientClass)}, // Add 1 to action as we don't provide the none option.
+			cmdMailClient: cdtype.NewCommandStd(app.conf.MailClientAction+1, app.conf.MailClientName, app.conf.MailClientClass)}, // Add 1 to action as we don't provide the none option.
 		Shortkeys: []cdtype.Shortkey{
 			{"Actions", "ShortkeyOpen", "Open mail client", app.conf.ShortkeyOpen},
 			{"Actions", "ShortkeyCheck", "Check mails now", app.conf.ShortkeyCheck}},
@@ -111,29 +111,28 @@ func (app *Applet) DefineEvents(events *cdtype.Events) {
 
 	// Left click: try to launch configured action.
 	//
-	events.OnClick = func() {
-		app.testAction(app.ActionID(app.conf.ActionClickLeft))
+	events.OnClick = func(int) {
+		app.testAction(app.Action().ID(app.conf.ActionClickLeft))
 	}
 
 	// Middle click: try to launch configured action.
 	//
 	events.OnMiddleClick = func() {
-		app.testAction(app.ActionID(app.conf.ActionClickMiddle))
+		app.testAction(app.Action().ID(app.conf.ActionClickMiddle))
 	}
 
 	// Right click menu. Provide actions list or registration request.
 	//
 	events.OnBuildMenu = func(menu cdtype.Menuer) {
-		haveApp, _ := app.HaveMonitor()
 		switch {
 		case !app.data.IsValid(): // No running loop =  no registration. User will do as expected !
-			app.BuildMenu(menu, menuRegister)
+			app.Action().BuildMenu(menu, menuRegister)
 
-		case haveApp: // Monitored application opened.
-			app.BuildMenu(menu, menuFull[1:]) // Drop "Open client" option, already provided as window action by the dock.
+		case app.Window().IsOpened(): // Monitored application opened.
+			app.Action().BuildMenu(menu, menuFull[1:]) // Drop "Open client" option, already provided as window action by the dock.
 
 		default:
-			app.BuildMenu(menu, menuFull)
+			app.Action().BuildMenu(menu, menuFull)
 		}
 	}
 
@@ -155,7 +154,7 @@ func (app *Applet) DefineEvents(events *cdtype.Events) {
 // Define applet actions. Order must match actions const declaration order.
 //
 func (app *Applet) defineActions() {
-	app.ActionAdd(
+	app.Action().Add(
 		&cdtype.Action{
 			ID:   ActionNone,
 			Menu: cdtype.MenuSeparator,
@@ -195,9 +194,9 @@ func (app *Applet) defineActions() {
 //
 func (app *Applet) testAction(id int) {
 	if app.data.IsValid() {
-		app.ActionLaunch(id)
+		app.Action().Launch(id)
 	} else {
-		app.ActionLaunch(ActionRegister) // No running loop = no registration. User must comply !
+		app.Action().Launch(ActionRegister) // No running loop = no registration. User must comply !
 	}
 }
 
@@ -205,7 +204,7 @@ func (app *Applet) testAction(id int) {
 // the user activated the application monitoring option.
 //
 func (app *Applet) actionOpenClient() {
-	app.CommandLaunch("mailClient")
+	app.Command().Launch(cmdMailClient)
 }
 
 // Send the refresh event to the poller. It will reset our timer and
@@ -236,7 +235,7 @@ func (app *Applet) actionRegister() {
 		},
 		Callback: cdtype.DialogCallbackValidString(func(str string) {
 			app.data.SaveLogin(str)
-			app.ActionLaunch(ActionCheckMail) // CheckMail will launch a check and reset the timer.
+			app.Action().Launch(ActionCheckMail) // CheckMail will launch a check and reset the timer.
 		}),
 	})
 
@@ -332,7 +331,7 @@ func (app *Applet) mailPopup(nb, duration int, template string) {
 	}
 
 	// if app.conf.DialogType == dialogInternal {
-	text, e := app.ExecuteTemplate(DialogTemplate, template, feed)
+	text, e := app.Template().Execute(DialogTemplate, template, feed)
 	if log.Err(e, "Template ListMailsNew") {
 		return
 	}
@@ -342,7 +341,7 @@ func (app *Applet) mailPopup(nb, duration int, template string) {
 		TimeLength: duration,
 		UseMarkup:  true,
 		Buttons:    "document-open;cancel",
-		Callback:   cdtype.DialogCallbackValidNoArg(app.ActionCallback(ActionOpenClient)), // Open mail client if the user press the 1st button.
+		Callback:   cdtype.DialogCallbackValidNoArg(app.Action().CallbackNoArg(ActionOpenClient)), // Open mail client if the user press the 1st button.
 	})
 	log.Err(e, "popup")
 

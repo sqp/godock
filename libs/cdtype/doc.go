@@ -99,9 +99,10 @@ SetDefaults will help you as it reset everything it handles, even if not set
 			Label: app.conf.Name,
 			Icon: app.conf.Icon,
 			Commands: cdtype.Commands{
-				"left":   cdtype.NewCommandStd(app.conf.LeftAction, app.conf.LeftCommand, app.conf.LeftClass),
-				"middle": cdtype.NewCommandStd(app.conf.MiddleAction, app.conf.MiddleCommand)},
-			Debug: app.conf.Debug})
+				0:   cdtype.NewCommandStd(app.conf.LeftAction, app.conf.LeftCommand, app.conf.LeftClass),
+				1: cdtype.NewCommandStd(app.conf.MiddleAction, app.conf.MiddleCommand)},
+			Debug: app.conf.Debug,
+		})
 	}
 
 Applet events
@@ -117,8 +118,11 @@ See cdtype.Events for the full list with arguments.
 	// Define applet events callbacks.
 	//
 	func (app *Applet) DefineEvents(events cdtype.Events) {
-		events.OnClick = app.CommandCallback("left")          // To forward a click event to the defined command launcher.
-		events.OnMiddleClick = app.CommandCallback("middle")
+		// To forward click events to the defined command launcher.
+		// It would be better to use consts instead of 0 and 1 like in this example.
+
+		events.OnClick       = app.Command().CallbackInt(0)
+		events.OnMiddleClick = app.Command().CallbackNoArg(1)
 
 		events.OnDropData = func(data string) { // For simple callbacks event, use a closure.
 			app.Log().Info("dropped", data)
@@ -126,7 +130,7 @@ See cdtype.Events for the full list with arguments.
 
 		events.OnBuildMenu = func(menu cdtype.Menuer) {
 			menu.AddEntry("disabled entry", "", nil)
-			menu.Separator()
+			menu.AddSeparator()
 			menu.AddEntry("my action", "system-run", func() {app.Log().Info("clicked") })
 		}
 	}
@@ -163,7 +167,7 @@ Create your poller with the applet.
 	func NewApplet() cdtype.AppBase {
 		// ...
 		app.service = NewService(app)    // This will depend on your applet polling service.
-		app.AddPoller(app.service.Check) // Create poller and set action callback.
+		app.Poller().Add(app.service.Check) // Create poller and set action callback.
 		// ...
 	}
 
@@ -266,7 +270,6 @@ applet.go
 	}
 
 Makefile
-
 	TARGET=demo
 	SOURCE=github.com/sqp/godock/applets
 

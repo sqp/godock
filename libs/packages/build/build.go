@@ -84,7 +84,7 @@ func GetSourceType(name string) SourceType {
 
 	dir, _ := AppletInfo(name)
 	if dir != "" {
-		if filepath.Base(filepath.Dir(dir)) != cdtype.AppletsDirName { // AppletsDirName is used for system and user external dirs.
+		if filepath.Base(filepath.Dir(dir)) != cdglobal.AppletsDirName { // AppletsDirName is used for system and user external dirs.
 			return TypeAppletInternal
 		}
 

@@ -11,7 +11,6 @@ extern gboolean buildMenuContainer(gpointer, Icon*, GldiContainer*, GtkWidget*, 
 */
 import "C"
 import (
-	"github.com/conformal/gotk3/cairo"
 	"github.com/conformal/gotk3/gdk"
 	"github.com/conformal/gotk3/glib"
 	"github.com/conformal/gotk3/gtk"
@@ -27,7 +26,6 @@ import (
 	"github.com/sqp/godock/libs/ternary"         // Helpers.
 	"github.com/sqp/godock/libs/text/tran"       // Translate.
 
-	"github.com/sqp/godock/widgets/common"
 	"github.com/sqp/godock/widgets/gtk/menus"
 
 	"fmt"
@@ -178,8 +176,6 @@ type DockMenu struct {
 	Icon      *gldi.Icon
 	Container *gldi.Container
 	Dock      *gldi.CairoDock // just a pointer to container with type dock.
-
-	btns *ButtonsEntry
 }
 
 func WrapDockMenu(icon *gldi.Icon, container *gldi.Container, dock *gldi.CairoDock, menu *gtk.Menu) *DockMenu {
@@ -528,7 +524,9 @@ func (m *DockMenu) Entry(entry MenuEntry) bool {
 					}
 				} else { // Subdocks icon.
 					dockicon := dock.SearchIconPointingOnDock(nil)
-					icon = dockicon.GetFileName()
+					if dockicon != nil {
+						icon = dockicon.GetFileName()
+					}
 				}
 
 			}
@@ -713,14 +711,14 @@ func (m *DockMenu) Entry(entry MenuEntry) bool {
 		m.AddEntry(
 			ternary.String(flag, tran.Slate("Don't keep above"), tran.Slate("Keep above")),
 			ternary.String(flag, globals.IconNameGotoBottom, globals.IconNameGotoTop),
-			cbActionWindowToggle(m.Icon, (*gldi.WindowActor).SetAbove, (*gldi.WindowActor).IsAbove))
+			m.Icon.CallbackActionWindowToggle((*gldi.WindowActor).SetAbove, (*gldi.WindowActor).IsAbove))
 
 	case MenuWindowBelow:
 		if !m.Icon.Window().IsHidden() { // this could be a button in the menu, if we find an icon that doesn't look too much like the "minimise" one
 			m.AddEntry(
 				tran.Slate("Below other windows")+actionMiddleClick(m.Icon, 4),
 				globals.DirShareData("icons", "icon-lower.svg"),
-				cbActionWindow(m.Icon, (*gldi.WindowActor).Lower))
+				m.Icon.CallbackActionWindow((*gldi.WindowActor).Lower))
 		}
 
 	case MenuWindowFullScreen:
@@ -728,24 +726,24 @@ func (m *DockMenu) Entry(entry MenuEntry) bool {
 		m.AddEntry(
 			ternary.String(flag, tran.Slate("Not Fullscreen"), tran.Slate("Fullscreen")),
 			ternary.String(flag, globals.IconNameLeaveFullScreen, globals.IconNameFullScreen),
-			cbActionWindowToggle(m.Icon, (*gldi.WindowActor).SetFullScreen, (*gldi.WindowActor).IsFullScreen))
+			m.Icon.CallbackActionWindowToggle((*gldi.WindowActor).SetFullScreen, (*gldi.WindowActor).IsFullScreen))
 
 	case MenuWindowKill:
 		m.AddEntry(
 			tran.Slate("Kill"),
 			globals.IconNameClose,
-			cbActionWindow(m.Icon, (*gldi.WindowActor).Kill))
+			m.Icon.CallbackActionWindow((*gldi.WindowActor).Kill))
 
 	case MenuWindowMoveAllHere:
 		m.AddEntry(
 			tran.Slate("Move all to this desktop"),
 			globals.IconNameJumpTo,
-			cbActionSubWindows(m.Icon, (*gldi.WindowActor).MoveToCurrentDesktop))
+			m.Icon.CallbackActionSubWindows((*gldi.WindowActor).MoveToCurrentDesktop))
 
 	case MenuWindowMoveHere:
 		var callback func()
 		if !m.Icon.Window().IsOnCurrentDesktop() {
-			callback = cbActionWindow(m.Icon, func(win *gldi.WindowActor) {
+			callback = m.Icon.CallbackActionWindow(func(win *gldi.WindowActor) {
 				win.MoveToCurrentDesktop()
 				if !win.IsHidden() {
 					win.Show()
@@ -758,58 +756,68 @@ func (m *DockMenu) Entry(entry MenuEntry) bool {
 		m.AddEntry(
 			ternary.String(m.Icon.Window().IsSticky(), tran.Slate("Visible only on this desktop"), tran.Slate("Visible on all desktops")),
 			globals.IconNameJumpTo,
-			cbActionWindowToggle(m.Icon, (*gldi.WindowActor).SetSticky, (*gldi.WindowActor).IsSticky))
+			m.Icon.CallbackActionWindowToggle((*gldi.WindowActor).SetSticky, (*gldi.WindowActor).IsSticky))
 
 	}
 	return false
 }
 
-func (m *DockMenu) Button(btn MenuBtn) {
-	switch btn {
-	case MenuWindowClose:
-		m.btns.AddButton(
-			tran.Slate("Close")+actionMiddleClick(m.Icon, 1),
-			globals.DirShareData("icons", "icon-close.svg"),
-			cbActionWindow(m.Icon, (*gldi.WindowActor).Close))
+//
+//-----------------------------------------------------------[ BUTTONS ENTRY ]--
 
-	case MenuWindowCloseAll:
-		m.btns.AddButton(
-			tran.Slate("Close all")+actionMiddleClick(m.Icon, 1),
-			globals.DirShareData("icons", "icon-close.svg"),
-			cbActionSubWindows(m.Icon, (*gldi.WindowActor).Close))
+func (m *DockMenu) AddButtonsEntry(label string, btns ...MenuBtn) *menus.ButtonsEntry {
+	entry := m.Menu.AddButtonsEntry(label)
 
-	case MenuWindowMax:
-		max := m.Icon.Window().IsMaximized()
-		m.btns.AddButton(
-			ternary.String(max, tran.Slate("Unmaximise"), tran.Slate("Maximise")),
-			globals.DirShareData("icons", ternary.String(max, "icon-restore.svg", "icon-maximize.svg")),
-			cbActionWindowToggle(m.Icon, (*gldi.WindowActor).Maximize, (*gldi.WindowActor).IsMaximized))
+	for _, btnID := range btns {
+		switch btnID {
+		case MenuWindowClose:
+			entry.AddButton(
+				tran.Slate("Close")+actionMiddleClick(m.Icon, 1),
+				globals.DirShareData("icons", "icon-close.svg"),
+				m.Icon.CallbackActionWindow((*gldi.WindowActor).Close))
 
-	case MenuWindowMin:
-		m.btns.AddButton(
-			tran.Slate("Minimise")+actionMiddleClick(m.Icon, 2),
-			globals.DirShareData("icons", "icon-minimize.svg"),
-			cbActionWindow(m.Icon, (*gldi.WindowActor).Minimize))
+		case MenuWindowCloseAll:
+			entry.AddButton(
+				tran.Slate("Close all")+actionMiddleClick(m.Icon, 1),
+				globals.DirShareData("icons", "icon-close.svg"),
+				m.Icon.CallbackActionSubWindows((*gldi.WindowActor).Close))
 
-	case MenuWindowMinAll:
-		m.btns.AddButton(
-			tran.Slate("Minimise all")+actionMiddleClick(m.Icon, 2),
-			globals.DirShareData("icons", "icon-minimize.svg"),
-			cbActionSubWindows(m.Icon, (*gldi.WindowActor).Minimize))
+		case MenuWindowMax:
+			max := m.Icon.Window().IsMaximized()
+			entry.AddButton(
+				ternary.String(max, tran.Slate("Unmaximise"), tran.Slate("Maximise")),
+				globals.DirShareData("icons", ternary.String(max, "icon-restore.svg", "icon-maximize.svg")),
+				m.Icon.CallbackActionWindowToggle((*gldi.WindowActor).Maximize, (*gldi.WindowActor).IsMaximized))
 
-	case MenuWindowShow:
-		m.btns.AddButton(
-			tran.Slate("Show"),
-			globals.IconNameFind,
-			cbActionWindow(m.Icon, (*gldi.WindowActor).Show))
+		case MenuWindowMin:
+			entry.AddButton(
+				tran.Slate("Minimise")+actionMiddleClick(m.Icon, 2),
+				globals.DirShareData("icons", "icon-minimize.svg"),
+				m.Icon.CallbackActionWindow((*gldi.WindowActor).Minimize))
 
-	case MenuWindowShowAll:
-		m.btns.AddButton(
-			tran.Slate("Show all"),
-			globals.IconNameFind,
-			cbActionSubWindows(m.Icon, (*gldi.WindowActor).Show))
+		case MenuWindowMinAll:
+			entry.AddButton(
+				tran.Slate("Minimise all")+actionMiddleClick(m.Icon, 2),
+				globals.DirShareData("icons", "icon-minimize.svg"),
+				m.Icon.CallbackActionSubWindows((*gldi.WindowActor).Minimize))
 
+		case MenuWindowShow:
+			entry.AddButton(
+				tran.Slate("Show"),
+				globals.IconNameFind,
+				m.Icon.CallbackActionWindow((*gldi.WindowActor).Show))
+
+		case MenuWindowShowAll:
+			entry.AddButton(
+				tran.Slate("Show all"),
+				globals.IconNameFind,
+				m.Icon.CallbackActionSubWindows((*gldi.WindowActor).Show))
+
+		default:
+			logger.NewWarn(fmt.Sprintf("invalid id: %d", btnID), "AddButtonsEntry")
+		}
 	}
+	return entry
 }
 
 //
@@ -860,37 +868,7 @@ func nextOrder(icon *gldi.Icon, dock *gldi.CairoDock) float64 {
 //
 //-------------------------------------------------------[ PREPARE CALLBACKS ]--
 
-// Returns a func to use as gtk callback. On event, it will test the icon still
-// has a valid window and launch the provided action on this window.
-//
-func cbActionWindow(icon *gldi.Icon, call func(*gldi.WindowActor)) func() {
-	return func() {
-		if icon.IsAppli() {
-			call(icon.Window())
-		}
-	}
-}
-
-func cbActionWindowToggle(icon *gldi.Icon, call func(*gldi.WindowActor, bool), getvalue func(*gldi.WindowActor) bool) func() {
-	return cbActionWindow(icon, func(win *gldi.WindowActor) {
-		v := getvalue(win)
-		call(win, !v)
-	})
-}
-
-// same as cbActionWindow but launch the action on all subdock windows.
-//
-func cbActionSubWindows(icon *gldi.Icon, call func(*gldi.WindowActor)) func() {
-	return func() {
-		for _, ic := range icon.SubDockIcons() {
-			if ic.IsAppli() {
-				call(ic.Window())
-			}
-		}
-	}
-}
-
-// Prepare a callback for DialogWithQuestion to launch on user confirmation.
+// cbDialogIsOK prepares a callback for DialogWithQuestion to launch on user confirmation.
 //
 func cbDialogIsOK(call func()) func(int, *gtk.Widget) {
 	return func(clickedButton int, widget *gtk.Widget) {
@@ -910,16 +888,18 @@ func (m *DockMenu) moveToDesktop(useAll bool) {
 	}
 
 	m.AddSeparator()
-	desktop := newMenuMoveToDesktop(m.Icon, useAll)
-
 	win := m.Icon.Window()
+
+	moveto := newMenuMoveToDesktop(m.Icon, useAll)
+
 	for i := range iter.N(geo.NbDesktops()) { // sort by desktop
 
 		for j := range iter.N(geo.NbViewportY()) { // and by columns.
 
 			for k := range iter.N(geo.NbViewportX()) { // then rows.
 
-				entry := m.AddEntry(desktop.Format(i, j, k), "", desktop.MakeCallback(i, j, k))
+				entry := m.AddEntry(moveto.Label(i, j, k), "", moveto.Callback(i, j, k))
+
 				if win != nil && win.IsOnDesktop(i, j, k) {
 					entry.SetSensitive(false)
 				}
@@ -929,10 +909,10 @@ func (m *DockMenu) moveToDesktop(useAll bool) {
 }
 
 type menuMoveToDesktop struct {
-	format       string
-	mode         int
-	nbx          int
-	MakeCallback func(i, j, k int) func()
+	format   string
+	mode     int
+	nbx      int
+	cbAction func(call func(*gldi.WindowActor)) func()
 }
 
 func newMenuMoveToDesktop(icon *gldi.Icon, useAll bool) *menuMoveToDesktop {
@@ -969,32 +949,19 @@ func newMenuMoveToDesktop(icon *gldi.Icon, useAll bool) *menuMoveToDesktop {
 		desk.format = tran.Slate("Move to face %d")
 	}
 
-	// Set the prepare callback method.
-	if useAll { // Mode class to desktop.
-		desk.MakeCallback = func(i, j, k int) func() {
-			return func() {
-				for _, ic := range icon.SubDockIcons() {
-					if ic.IsAppli() {
-						ic.Window().MoveToDesktop(i, j, k)
-					}
-				}
-			}
-		}
-
-	} else { // Move appli to desktop.
-		desk.MakeCallback = func(i, j, k int) func() {
-			return func() {
-				if icon.IsAppli() {
-					icon.Window().MoveToDesktop(i, j, k)
-				}
-			}
-		}
+	// Set the window action method.
+	if useAll {
+		desk.cbAction = icon.CallbackActionSubWindows // All windows of class.
+	} else {
+		desk.cbAction = icon.CallbackActionWindow // One window.
 	}
 
 	return desk
 }
 
-func (g *menuMoveToDesktop) Format(i, j, k int) string {
+// Label returns the formated text for the label (move to desktop x).
+//
+func (g *menuMoveToDesktop) Label(i, j, k int) string {
 	var args []interface{}
 	switch g.mode {
 	case 2:
@@ -1010,131 +977,8 @@ func (g *menuMoveToDesktop) Format(i, j, k int) string {
 	return fmt.Sprintf(g.format, args...)
 }
 
+// Callback returns a move to action callback.
 //
-//-----------------------------------------------------------[ BUTTONS ENTRY ]--
-
-func (m *DockMenu) AddButtonsEntry(str string) *ButtonsEntry {
-	item, _ := gtk.MenuItemNew()
-	m.Append(item)
-
-	// Forward click to inside buttons.
-	item.Connect("button-press-event", func(m *gtk.MenuItem, ev *gdk.Event) bool {
-		widget := (*C.GtkWidget)(unsafe.Pointer(m.Native()))
-		return gobool(C._on_press_menu_item(widget, (*C.GdkEventButton)(unsafe.Pointer(ev.Native())), nil))
-	})
-
-	// Highlight pointed button.
-	item.Connect("motion-notify-event", func(m *gtk.MenuItem, ev *gdk.Event) bool {
-		widget := (*C.GtkWidget)(unsafe.Pointer(m.Native()))
-		eventmotion := (*C.GdkEventMotion)(unsafe.Pointer(ev.Native()))
-		return gobool(C._on_motion_notify_menu_item(widget, eventmotion, nil))
-	})
-
-	// Turn off highlight pointed button when we leave the menu-item.
-	// if we leave it quickly, a motion event won't be generated.
-	item.Connect("leave-notify-event", func(m *gtk.MenuItem, _ *gdk.Event) bool {
-		widget := (*C.GtkWidget)(unsafe.Pointer(m.Native()))
-		return gobool(C._on_leave_menu_item(widget, nil, nil))
-	})
-
-	// Force the label to not highlight.
-	// it gets highlighted, even if we overwrite the motion_notify_event callback.
-	item.Connect("enter-notify-event", func(m *gtk.MenuItem, _ *gdk.Event) bool {
-		widget := (*C.GtkWidget)(unsafe.Pointer(m.Native()))
-		return gobool(C._on_enter_menu_item(widget, nil, nil))
-	})
-
-	// We don't want to higlighted the whole menu-item , but only the currently
-	// pointed button; so we draw the menu-item ourselves.
-	item.Connect("draw", func(m *gtk.MenuItem, cr *cairo.Context) bool {
-		widget := (*C.GtkWidget)(unsafe.Pointer(m.Native()))
-		context := (*C.cairo_t)(unsafe.Pointer(cr.Native()))
-		return gobool(C._draw_menu_item(widget, context))
-	})
-
-	box, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 1)
-	item.Add(box)
-
-	label, _ := gtk.LabelNew(str)
-	box.PackStart(label, false, false, 0)
-
-	m.btns = &ButtonsEntry{*box, nil}
-
-	return &ButtonsEntry{*box, nil}
-}
-
-type ButtonsEntry struct {
-	gtk.Box
-	list []*gtk.Button
-}
-
-func (box *ButtonsEntry) AddButton(tooltip, img string, call interface{}) *gtk.Button {
-	btn, _ := gtk.ButtonNew()
-	btn.SetTooltipText(tooltip)
-	btn.Connect("clicked", call)
-	box.PackEnd(btn, false, false, 0)
-
-	if img != "" {
-
-		// 		if (*gtkStock == '/')
-		// 			int size = cairo_dock_search_icon_size (GTK_ICON_SIZE_MENU);
-
-		image, e := common.ImageNewFromFile(img, 12) // TODO: icon size
-		if e == nil {
-			btn.SetImage(image)
-		}
-	}
-
-	box.list = append(box.list, btn)
-	return btn
-}
-
-func (box *ButtonsEntry) onMenuItemMotionNotify(unused *gtk.Box, event *gdk.Event) {
-
-	// GdkEventMotion
-
-	// for _, btn := range box.list {
-	// }
-
-	// GtkWidget *hbox = gtk_bin_get_child (GTK_BIN (pWidget));
-	// GList *children = gtk_container_get_children (GTK_CONTAINER (hbox));
-	// int x = pEvent->x, y = pEvent->y;  // position of the mouse relatively to the menu-item
-	// int xb, yb;  // position of the top-left corner of the button relatively to the menu-item
-	// GtkWidget* pButton;
-	// GList* c;
-	// for (c = children->next; c != NULL; c = c->next)  // skip the label
-	// {
-	// 	pButton = GTK_WIDGET (c->data);
-	// 	GtkAllocation alloc;
-	// 	gtk_widget_get_allocation (pButton, &alloc);
-	// 	gtk_widget_translate_coordinates (pButton, pWidget,
-	// 		0, 0, &xb, &yb);
-	// 	if (x >= xb && x < (xb + alloc.width)
-	// 	&& y >= yb && y < (yb + alloc.height))  // the mouse is inside the button -> select it
-	// 	{
-	// 		gtk_widget_set_state_flags (pButton, GTK_STATE_FLAG_PRELIGHT, TRUE);
-	// 		gtk_widget_set_state_flags (
-	// 			gtk_bin_get_child(GTK_BIN(pButton)),
-	// 			GTK_STATE_FLAG_PRELIGHT, TRUE);
-	// 	}
-	// 	else  // else deselect it, in case it was selected
-	// 	{
-	// 		gtk_widget_set_state_flags (pButton, GTK_STATE_FLAG_NORMAL, TRUE);
-	// 		gtk_widget_set_state_flags (
-	// 			gtk_bin_get_child(GTK_BIN(pButton)),
-	// 			GTK_STATE_FLAG_NORMAL, TRUE);
-	// 	}
-	// }
-	// GtkWidget *pLabel = children->data;  // force the label to be in a normal state
-	// gtk_widget_set_state_flags (pLabel, GTK_STATE_FLAG_NORMAL, TRUE);
-	// g_list_free (children);
-	// gtk_widget_queue_draw (pWidget);  // and redraw everything
-	// return FALSE;
-}
-
-func gobool(b C.gboolean) bool {
-	if b == 1 {
-		return true
-	}
-	return false
+func (g *menuMoveToDesktop) Callback(i, j, k int) func() {
+	return g.cbAction(func(win *gldi.WindowActor) { win.MoveToDesktop(i, j, k) })
 }

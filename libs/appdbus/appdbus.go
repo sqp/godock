@@ -14,6 +14,7 @@ import (
 
 	"errors"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -143,20 +144,6 @@ func (cda *CDDbus) RemoveSubIcons() {
 	}
 }
 
-// HaveMonitor gives the state of the monitored application. See cdtype.AppIcon.
-//
-func (cda *CDDbus) HaveMonitor() (haveApp bool, haveFocus bool) {
-	Xid, e := cda.Get("Xid")
-	cda.log.Err(e, "Xid")
-
-	if id, ok := Xid.(uint64); ok {
-		haveApp = id > 0
-	}
-
-	HasFocus, _ := cda.Get("has_focus")
-	return haveApp, HasFocus.(bool)
-}
-
 //
 //------------------------------------------------------------[ DBUS CONNECT ]--
 
@@ -211,6 +198,9 @@ func (cda *CDDbus) OnSignal(s *dbus.Signal) (exit bool) {
 	name := strings.TrimPrefix(string(s.Name), dockpath.DbusInterfaceApplet+".")
 	if name != s.Name { // dbus interface matched.
 		switch name {
+		case "on_click": // Recast to int.
+			return cda.onEvent(name, int(s.Body[0].(int32)))
+
 		case "on_answer_dialog": // Callback is already provided.
 			if cda.dialogCall != nil && len(s.Body) > 1 {
 				value := s.Body[1].(dbus.Variant).Value()
@@ -234,7 +224,11 @@ func (cda *CDDbus) OnSignal(s *dbus.Signal) (exit bool) {
 
 	name = strings.TrimPrefix(string(s.Name), dockpath.DbusInterfaceSubapplet+".")
 	if name != s.Name { // dbus subicons interface matched.
-		if name == "on_build_menu_sub_icon" { // Provide the simple menu builder.
+		switch name {
+		case "on_click_sub_icon": // Recast to int.
+			return cda.onEvent(name, int(s.Body[0].(int32)), s.Body[1])
+
+		case "on_build_menu_sub_icon": // Provide the simple menu builder.
 			cda.menu.Clear()
 			cda.onEvent(name, cdtype.Menuer(cda.menu), s.Body[0].(string))
 			cda.AddMenuItems(cda.menu.items...)
@@ -354,39 +348,6 @@ func (cda *CDDbus) PopupDialog(data cdtype.DialogData) error {
 	return cda.dbusIcon.Call("PopupDialog", dbuscommon.ToMapVariant(dialog), dbuscommon.ToMapVariant(widget))
 }
 
-// AddDataRenderer add a graphic data renderer to the icon.
-//
-func (cda *CDDbus) AddDataRenderer(typ string, nbval int32, theme string) error {
-	return cda.dbusIcon.Call("AddDataRenderer", typ, nbval, theme)
-}
-
-// RenderValues render new values on the icon.
-//
-func (cda *CDDbus) RenderValues(values ...float64) error {
-	// return cda.dbusIcon.Call("RenderValues", dbus.FlagNoAutoStart, values).Err
-	return cda.dbusIcon.Call("RenderValues", values)
-}
-
-// ActOnAppli send an action on the application controlled by the icon.
-// See cdtype.ActOnAppli.
-//
-func (cda *CDDbus) ActOnAppli(action string) error {
-	return cda.dbusIcon.Call("ActOnAppli", action)
-}
-
-// ControlAppli allow your applet to control the window of an external
-// application and can steal its icon from the Taskbar.
-//
-func (cda *CDDbus) ControlAppli(applicationClass string) error {
-	return cda.dbusIcon.Call("ControlAppli", applicationClass)
-}
-
-// ShowAppli set the visible state of the application controlled by the icon.
-//
-func (cda *CDDbus) ShowAppli(show bool) error {
-	return cda.dbusIcon.Call("ShowAppli", interface{}(show))
-}
-
 // AddMenuItems adds a list of items to the menu triggered by OnBuildMenu.
 //
 func (cda *CDDbus) AddMenuItems(items ...map[string]interface{}) error {
@@ -410,45 +371,227 @@ func (cda *CDDbus) BindShortkey(shortkeys ...cdtype.Shortkey) error {
 	return cda.dbusIcon.Call("BindShortkey", list)
 }
 
-// Get gets a property of the icon. See cdtype.Get
 //
-func (cda *CDDbus) Get(property string) (interface{}, error) {
+//-----------------------------------------------------------[ DATA RENDERER ]--
+
+// DataRenderer manages the graphic data renderer of the icon.
+//
+func (cda *CDDbus) DataRenderer() cdtype.IconRenderer {
+	return &dataRend{icon: cda}
+}
+
+// datarend implements cdtype.IconRenderer.
+//
+type dataRend struct {
+	icon *CDDbus
+}
+
+func (o *dataRend) Gauge(nbval int, themeName string) error {
+	return o.icon.dbusIcon.Call("AddDataRenderer", "gauge", int32(nbval), themeName)
+}
+
+func (o *dataRend) Graph(nbval int, typ cdtype.RendererGraphType) error {
+	return o.icon.dbusIcon.Call("AddDataRenderer", "graph", int32(nbval), strconv.Itoa(int(typ)))
+}
+
+func (o *dataRend) Progress(nbval int) error {
+	return o.icon.dbusIcon.Call("AddDataRenderer", "progress", int32(nbval), "")
+}
+
+func (o *dataRend) Remove() error {
+	return o.icon.dbusIcon.Call("AddDataRenderer", "", int32(0), "")
+}
+
+func (o *dataRend) Render(values ...float64) error {
+	return o.icon.dbusIcon.Call("RenderValues", values)
+}
+
+func (o *dataRend) GraphLine(nb int) error        { return o.Graph(nb, cdtype.RendererGraphLine) }
+func (o *dataRend) GraphPlain(nb int) error       { return o.Graph(nb, cdtype.RendererGraphPlain) }
+func (o *dataRend) GraphBar(nb int) error         { return o.Graph(nb, cdtype.RendererGraphBar) }
+func (o *dataRend) GraphCircle(nb int) error      { return o.Graph(nb, cdtype.RendererGraphCircle) }
+func (o *dataRend) GraphPlainCircle(nb int) error { return o.Graph(nb, cdtype.RendererGraphPlainCircle) }
+
+//
+//----------------------------------------------------------[ WINDOW ACTIONS ]--
+
+// Window gives access to actions on the controlled window.
+//
+func (cda *CDDbus) Window() cdtype.IconWindow { return &winAction{icon: cda} }
+
+// winAction implements cdtype.IconWindow
+//
+type winAction struct {
+	icon *CDDbus
+}
+
+func (o *winAction) SetAppliClass(applicationClass string) error {
+	return o.icon.dbusIcon.Call("ControlAppli", applicationClass)
+}
+
+// actOnAppli sends an action to the application controlled by the icon.
+//
+func (o *winAction) actOnAppli(action string) error {
+	return o.icon.dbusIcon.Call("ActOnAppli", action)
+}
+
+func (o *winAction) IsOpened() bool          { xid, _ := o.icon.IconProperty().Xid(); return xid > 0 }
+func (o *winAction) Minimize() error         { return o.actOnAppli("minimize") }
+func (o *winAction) Show() error             { return o.actOnAppli("show") }
+func (o *winAction) ToggleVisibility() error { return o.actOnAppli("toggle-visibility") }
+func (o *winAction) Maximize() error         { return o.actOnAppli("maximize") }
+func (o *winAction) Restore() error          { return o.actOnAppli("restore") }
+func (o *winAction) ToggleSize() error       { return o.actOnAppli("toggle-size") }
+func (o *winAction) Close() error            { return o.actOnAppli("close") }
+func (o *winAction) Kill() error             { return o.actOnAppli("kill") }
+
+func (o *winAction) SetVisibility(show bool) error {
+	return o.icon.dbusIcon.Call("ShowAppli", interface{}(show))
+}
+
+//
+//---------------------------------------------------------[ SINGLE PROPERTY ]--
+
+// IconProperty returns applet icon properties one by one.
+//
+func (cda *CDDbus) IconProperty() cdtype.IconProperty {
+	return &iconProp{*cda}
+}
+
+// iconProp returns icon properties one by one, implements cdtype.IconProperty
+type iconProp struct {
+	CDDbus
+}
+
+func (o *iconProp) get(property string) (interface{}, error) {
 	var v dbus.Variant
-	e := cda.dbusIcon.Object.Call("Get", 0, property).Store(&v)
+	e := o.dbusIcon.Object.Call("Get", 0, property).Store(&v)
 	return v.Value(), e
 }
 
-// GetAll returns all applet icon properties.
+func (o *iconProp) X() (int, error) {
+	v, e := o.get("x")
+	if e != nil {
+		return 0, e
+	}
+	return int(v.(int32)), e
+}
+
+func (o *iconProp) Y() (int, error) {
+	v, e := o.get("y")
+	if e != nil {
+		return 0, e
+	}
+	return int(v.(int32)), e
+}
+
+func (o *iconProp) Width() (int, error) {
+	v, e := o.get("width")
+	if e != nil {
+		return 0, e
+	}
+	return int(v.(int32)), e
+}
+
+func (o *iconProp) Height() (int, error) {
+	v, e := o.get("height")
+	if e != nil {
+		return 0, e
+	}
+	return int(v.(int32)), e
+}
+
+func (o *iconProp) ContainerPosition() (cdtype.ContainerPosition, error) {
+	v, e := o.get("orientation")
+	if e != nil {
+		return 0, e
+	}
+	return cdtype.ContainerPosition(v.(uint32)), e
+}
+
+func (o *iconProp) ContainerType() (cdtype.ContainerType, error) {
+	v, e := o.get("container")
+	if e != nil {
+		return cdtype.ContainerUnknown, e
+	}
+	return cdtype.ContainerType(v.(uint32) + 1), e // +1 as we have an unknown as 0 in this version.
+}
+
+func (o *iconProp) Xid() (uint64, error) {
+	v, e := o.get("Xid")
+	if e != nil {
+		return 0, e
+	}
+	return v.(uint64), e
+}
+
+func (o *iconProp) HasFocus() (bool, error) {
+	v, e := o.get("has_focus")
+	if e != nil {
+		return false, e
+	}
+	return v.(bool), e
+}
+
 //
-func (cda *CDDbus) GetAll() *cdtype.DockProperties {
+//----------------------------------------------------------[ ALL PROPERTIES ]--
+
+// IconProperties returns all applet icon properties at once.
+//
+func (cda *CDDbus) IconProperties() (cdtype.IconProperties, error) {
 	vars := make(map[string]dbus.Variant)
-	if cda.log.Err(cda.dbusIcon.Object.Call("GetAll", 0).Store(&vars), "dbus GetAll") {
-		return nil
+	e := cda.dbusIcon.Object.Call("GetAll", 0).Store(&vars)
+	if e != nil {
+		return nil, e
 	}
 
-	props := &cdtype.DockProperties{}
+	props := &iconProps{}
 	for k, v := range vars {
 		switch k {
 		case "Xid":
-			props.Xid = v.Value().(uint64)
+			props.xid = v.Value().(uint64)
 		case "x":
-			props.X = v.Value().(int32)
+			props.x = int(v.Value().(int32))
 		case "y":
-			props.Y = v.Value().(int32)
+			props.y = int(v.Value().(int32))
 		case "orientation":
-			props.Orientation = v.Value().(uint32)
+			props.containerPosition = cdtype.ContainerPosition(v.Value().(uint32))
 		case "container":
-			props.Container = v.Value().(uint32)
+			props.containerType = cdtype.ContainerType(v.Value().(uint32) + 1) // +1 as we have an unknown as 0 in this version.
 		case "width":
-			props.Width = v.Value().(int32)
+			props.width = int(v.Value().(int32))
 		case "height":
-			props.Height = v.Value().(int32)
+			props.height = int(v.Value().(int32))
 		case "has_focus":
-			props.HasFocus = v.Value().(bool)
+			props.hasFocus = v.Value().(bool)
 		}
 	}
-	return props
+	return props, nil
 }
+
+// iconProps returns all icon properties at once, implements cdtype.IconProperties
+//
+type iconProps struct {
+	x      int // Distance from the left of the screen.
+	y      int // Distance from the bottom of the screen.
+	width  int // Width of the icon.
+	height int // Height of the icon.
+
+	containerPosition cdtype.ContainerPosition // bottom, top, right, left.
+	containerType     cdtype.ContainerType     // Dock, desklet...
+
+	xid      uint64 // Xid of the monitored window. Value > 0 if a window is monitored.
+	hasFocus bool   // True if the monitored window has the cursor focus.
+}
+
+func (o *iconProps) X() int                                      { return o.x }
+func (o *iconProps) Y() int                                      { return o.y }
+func (o *iconProps) Width() int                                  { return o.width }
+func (o *iconProps) Height() int                                 { return o.height }
+func (o *iconProps) Xid() uint64                                 { return o.xid }
+func (o *iconProps) HasFocus() bool                              { return o.hasFocus }
+func (o *iconProps) ContainerPosition() cdtype.ContainerPosition { return o.containerPosition }
+func (o *iconProps) ContainerType() cdtype.ContainerType         { return o.containerType }
 
 //
 //--------------------------------------------------------[ SUBICONS ACTIONS ]--
@@ -551,9 +694,9 @@ func (menu *Menu) AddEntry(label, iconPath string, call interface{}, userData ..
 	})
 }
 
-// Separator adds a separator to the menu.
+// AddSeparator adds a separator to the menu.
 //
-func (menu *Menu) Separator() {
+func (menu *Menu) AddSeparator() {
 	menu.addOne(nil, map[string]interface{}{
 		"type": cdtype.MenuSeparator,
 		"menu": menu.MenuID,
@@ -561,11 +704,11 @@ func (menu *Menu) Separator() {
 	})
 }
 
-// SubMenu adds a submenu to the menu.
+// AddSubMenu adds a submenu to the menu.
 //
 // TODO: test if first entry (ID=0) really can't be a submenu.
 //
-func (menu *Menu) SubMenu(label, iconPath string) cdtype.Menuer {
+func (menu *Menu) AddSubMenu(label, iconPath string) cdtype.Menuer {
 	menu.addOne(nil, map[string]interface{}{
 		"type":  cdtype.MenuSubMenu,
 		"label": label,

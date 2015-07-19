@@ -4,7 +4,7 @@ package packages
 import (
 	"github.com/sqp/godock/libs/log" // Display info in terminal.
 
-	"github.com/sqp/godock/libs/cdtype"
+	"github.com/sqp/godock/libs/cdglobal"
 	"github.com/sqp/godock/libs/config"
 	"github.com/sqp/godock/libs/text/bytesize"
 
@@ -123,7 +123,7 @@ func ListDownloadSort(list map[string]*AppletPackage) (sorted AppletPackages) {
 func ListDownloadIndex(version string, externalUserDir string) (map[string]*AppletPackage, error) {
 	filled := make(map[string]*AppletPackage) // index by name so local packages will replace distant ones.
 
-	found, eRet := ListDistant(cdtype.AppletsDirName + "/" + version)
+	found, eRet := ListDistant(cdglobal.AppletsDirName + "/" + version)
 	if eRet == nil {
 		for _, pack := range found {
 			filled[pack.DisplayedName] = pack
@@ -502,7 +502,7 @@ func (pack *AppletPackage) GetPreviewFilePath() string {
 //
 func (pack *AppletPackage) Install(externalUserDir, options string) error {
 	// Connect a reader to the archive on server.
-	resp, eNet := http.Get(DistantURL + cdtype.AppletsDirName + "/" + pack.SrvTag + "/" + pack.DisplayedName + "/" + pack.DisplayedName + ".tar.gz")
+	resp, eNet := http.Get(DistantURL + cdglobal.AppletsDirName + "/" + pack.SrvTag + "/" + pack.DisplayedName + "/" + pack.DisplayedName + ".tar.gz")
 	if eNet != nil {
 		return eNet
 	}
@@ -567,7 +567,7 @@ func (pack *AppletPackage) Uninstall(externalUserDir string) error {
 		return e
 	}
 	pack.Type = TypeDistant
-	pack.Path = DistantURL + cdtype.AppletsDirName + "/" + pack.SrvTag + "/" + pack.DisplayedName
+	pack.Path = DistantURL + cdglobal.AppletsDirName + "/" + pack.SrvTag + "/" + pack.DisplayedName
 	return nil
 }
 
@@ -581,7 +581,7 @@ func DirAppletsExternal(configDir string) (string, error) {
 	if e != nil {
 		return "", e
 	}
-	return filepath.Join(dir, cdtype.AppletsDirName), nil
+	return filepath.Join(dir, cdglobal.AppletsDirName), nil
 
 }
 

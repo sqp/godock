@@ -1,7 +1,23 @@
 package NetActivity
 
+import "github.com/sqp/godock/libs/cdtype"
+
 const defaultUpdateDelay = 3
 const historyFile = "appdata/uptoshare_history.txt"
+
+const (
+	// EmblemAction is the position of the "upload in progress" emblem.
+	EmblemAction = cdtype.EmblemTopRight
+
+	// EmblemDownload is the position of the "download in progress" emblem.
+	EmblemDownload = cdtype.EmblemTopLeft
+)
+
+// Commands references.
+const (
+	cmdLeft = iota
+	cmdMiddle
+)
 
 //------------------------------------------------------------------[ CONFIG ]--
 
@@ -23,7 +39,7 @@ type groupConfiguration struct {
 	GaugeName string
 	// GaugeRotate bool
 
-	GraphType int
+	GraphType cdtype.RendererGraphType
 	// GraphColorHigh []float64
 	// GraphColorLow  []float64
 	// GraphColorBg   []float64

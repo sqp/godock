@@ -31,7 +31,7 @@ func (cda *CDApplet) OnEvent(event string, data ...interface{}) (exit bool) {
 		}
 	case "on_click":
 		if cda.events.OnClick != nil {
-			go cda.events.OnClick()
+			go cda.events.OnClick(data[0].(int))
 		}
 	case "on_middle_click":
 		if cda.events.OnMiddleClick != nil {
@@ -62,7 +62,7 @@ func (cda *CDApplet) OnEvent(event string, data ...interface{}) (exit bool) {
 
 	case "on_click_sub_icon":
 		if cda.events.OnSubClick != nil {
-			go cda.events.OnSubClick(data[1].(string), data[0].(int32))
+			go cda.events.OnSubClick(data[1].(string), data[0].(int))
 		}
 	case "on_middle_click_sub_icon":
 		if cda.events.OnSubMiddleClick != nil {
@@ -111,7 +111,7 @@ func (cda *CDApplet) UnregisterEvents(obj interface{}) {
 
 // DefineOnClick is an interface to the OnClick method.
 type DefineOnClick interface {
-	OnClick()
+	OnClick(int)
 }
 
 // DefineOnMiddleClick is an interface to the OnMiddleClick method.
@@ -156,7 +156,7 @@ type DefineOnStopModule interface {
 
 // DefineOnSubClick is an interface to the OnSubClick method.
 type DefineOnSubClick interface {
-	OnSubClick(string, int32)
+	OnSubClick(string, int)
 }
 
 // DefineOnSubMiddleClick is an interface to the OnSubMiddleClick method.
@@ -183,10 +183,9 @@ type DefineOnSubBuildMenu interface {
 //--------------------------------------------------------[ CALLBACK METHODS ]--
 
 // dockCalls defines callbacks methods for matching objects with type-asserted arguments.
-// Public so it can be hacked before the first Register.
 //
 var dockCalls = Calls{
-	"on_click":         func(m Msg) { m.O.(DefineOnClick).OnClick() },
+	"on_click":         func(m Msg) { m.O.(DefineOnClick).OnClick(m.D[0].(int)) },
 	"on_middle_click":  func(m Msg) { m.O.(DefineOnMiddleClick).OnMiddleClick() },
 	"on_build_menu":    func(m Msg) { m.O.(DefineOnBuildMenu).OnBuildMenu(m.D[0].(cdtype.Menuer)) },
 	"on_scroll":        func(m Msg) { m.O.(DefineOnScroll).OnScroll(m.D[0].(bool)) },
@@ -196,7 +195,7 @@ var dockCalls = Calls{
 	"on_reload_module": func(m Msg) { m.O.(DefineOnReload).OnReload(m.D[0].(bool)) },
 	"on_stop_module":   func(m Msg) { m.O.(DefineOnStopModule).OnStopModule() },
 
-	"on_click_sub_icon":        func(m Msg) { m.O.(DefineOnSubClick).OnSubClick(m.D[1].(string), m.D[0].(int32)) },
+	"on_click_sub_icon":        func(m Msg) { m.O.(DefineOnSubClick).OnSubClick(m.D[1].(string), m.D[0].(int)) },
 	"on_middle_click_sub_icon": func(m Msg) { m.O.(DefineOnSubMiddleClick).OnSubMiddleClick(m.D[0].(string)) },
 	"on_scroll_sub_icon":       func(m Msg) { m.O.(DefineOnSubScroll).OnSubScroll(m.D[1].(string), m.D[0].(bool)) },
 	"on_drop_data_sub_icon":    func(m Msg) { m.O.(DefineOnSubDropData).OnSubDropData(m.D[1].(string), m.D[0].(string)) },
@@ -204,7 +203,6 @@ var dockCalls = Calls{
 }
 
 // dockTests defines callbacks to test if objects are implementing the callback interface.
-// Public so it can be hacked before the first Register.
 //
 var dockTests = Types{
 	"on_click":         reflect.TypeOf((*DefineOnClick)(nil)).Elem(),

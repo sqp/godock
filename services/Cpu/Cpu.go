@@ -29,7 +29,7 @@ func NewApplet() cdtype.AppInstance {
 		service: NewCPU(),
 	}
 
-	app.AddPoller(app.service.Check)
+	app.Poller().Add(app.service.Check)
 
 	app.service.App = app
 	app.service.Texts = map[cdtype.InfoPosition]sysinfo.RenderOne{
@@ -56,8 +56,8 @@ func (app *Applet) Init(loadConf bool) {
 		Label:          app.conf.Name,
 		PollerInterval: app.service.interval,
 		Commands: cdtype.Commands{
-			"left":   cdtype.NewCommandStd(app.conf.LeftAction, app.conf.LeftCommand, app.conf.LeftClass),
-			"middle": cdtype.NewCommandStd(app.conf.MiddleAction, app.conf.MiddleCommand)},
+			cmdLeft:   cdtype.NewCommandStd(app.conf.LeftAction, app.conf.LeftCommand, app.conf.LeftClass),
+			cmdMiddle: cdtype.NewCommandStd(app.conf.MiddleAction, app.conf.MiddleCommand)},
 		Debug: app.conf.Debug})
 }
 
@@ -66,14 +66,14 @@ func (app *Applet) Init(loadConf bool) {
 
 // OnClick launch the configured action on user click.
 //
-func (app *Applet) OnClick() {
-	app.CommandLaunch("left")
+func (app *Applet) OnClick(int) {
+	app.Command().Launch(cmdLeft)
 }
 
 // OnMiddleClick launch the configured action on user middle click.
 //
 func (app *Applet) OnMiddleClick() {
-	app.CommandLaunch("middle")
+	app.Command().Launch(cmdMiddle)
 }
 
 // OnBuildMenu fills the menu with left and middle click actions if they're set.

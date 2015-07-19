@@ -65,7 +65,7 @@ func NewApplet() cdtype.AppInstance {
 	}
 
 	// The poller will check for new versions on a timer.
-	poller := app.AddPoller(app.version.Check)
+	poller := app.Poller().Add(app.version.Check)
 
 	// Set "working" emblem during version check. It should be removed or changed by the check.
 	poller.SetPreCheck(func() { app.SetEmblem(app.FileLocation("img", app.conf.VersionEmblemWork), EmblemVersion) })
@@ -85,7 +85,7 @@ func (app *Applet) Init(loadConf bool) {
 		Templates:      []string{app.conf.VersionDialogTemplate},
 		PollerInterval: cdtype.PollerInterval(app.conf.VersionPollingTimer*60, defaultVersionPollingTimer*60),
 		Commands: cdtype.Commands{
-			"showDiff": cdtype.NewCommand(app.conf.DiffMonitored, app.conf.DiffCommand)},
+			cmdShowDiff: cdtype.NewCommand(app.conf.DiffMonitored, app.conf.DiffCommand)},
 		Shortkeys: []cdtype.Shortkey{
 			{"Actions", "ShortkeyOneKey", "Action one", app.conf.ShortkeyOneKey},
 			{"Actions", "ShortkeyTwoKey", "Action two", app.conf.ShortkeyTwoKey}},
@@ -118,8 +118,8 @@ func (app *Applet) Init(loadConf bool) {
 	build.IconMissing = app.FileLocation("img", app.conf.IconMissing)
 
 	// Set booleans references for menu checkboxes.
-	app.ActionSetBool(ActionToggleUserMode, &app.conf.UserMode)
-	app.ActionSetBool(ActionToggleReload, &app.conf.BuildReload)
+	app.Action().SetBool(ActionToggleUserMode, &app.conf.UserMode)
+	app.Action().SetBool(ActionToggleReload, &app.conf.BuildReload)
 }
 
 //------------------------------------------------------------------[ EVENTS ]--
@@ -130,11 +130,11 @@ func (app *Applet) DefineEvents(events *cdtype.Events) {
 
 	// Left click: launch configured action for current user mode.
 	//
-	events.OnClick = func() {
+	events.OnClick = func(int) {
 		if app.conf.UserMode {
-			app.ActionLaunch(app.ActionID(app.conf.DevClickLeft))
+			app.Action().Launch(app.Action().ID(app.conf.DevClickLeft))
 		} else {
-			app.ActionLaunch(app.ActionID(app.conf.TesterClickLeft))
+			app.Action().Launch(app.Action().ID(app.conf.TesterClickLeft))
 		}
 	}
 
@@ -142,9 +142,9 @@ func (app *Applet) DefineEvents(events *cdtype.Events) {
 	//
 	events.OnMiddleClick = func() {
 		if app.conf.UserMode {
-			app.ActionLaunch(app.ActionID(app.conf.DevClickMiddle))
+			app.Action().Launch(app.Action().ID(app.conf.DevClickMiddle))
 		} else {
-			app.ActionLaunch(app.ActionID(app.conf.TesterClickMiddle))
+			app.Action().Launch(app.Action().ID(app.conf.TesterClickMiddle))
 		}
 	}
 
@@ -156,9 +156,9 @@ func (app *Applet) DefineEvents(events *cdtype.Events) {
 			if len(app.version.sources) > 2 {
 				dev = append(dev, ActionDownloadOthers)
 			}
-			app.BuildMenu(menu, dev)
+			app.Action().BuildMenu(menu, dev)
 		} else {
-			app.BuildMenu(menu, menuTester)
+			app.Action().BuildMenu(menu, menuTester)
 		}
 	}
 
@@ -166,10 +166,10 @@ func (app *Applet) DefineEvents(events *cdtype.Events) {
 	//
 	events.OnScroll = func(scrollUp bool) {
 		// app.Log().Info("scroll", app.conf.UserMode, app.ActionCount(), app.ActionID(app.conf.DevMouseWheel))
-		if !app.conf.UserMode || app.ActionCount() > 0 { // Wheel action only for dev and if no threaded tasks running.
+		if !app.conf.UserMode || app.Action().Count() > 0 { // Wheel action only for dev and if no threaded tasks running.
 			return
 		}
-		id := app.ActionID(app.conf.DevMouseWheel)
+		id := app.Action().ID(app.conf.DevMouseWheel)
 		if id == ActionCycleTarget { // Cycle depends on wheel direction.
 			if scrollUp {
 				app.actionCycleTarget(1)
@@ -177,7 +177,7 @@ func (app *Applet) DefineEvents(events *cdtype.Events) {
 				app.actionCycleTarget(-1)
 			}
 		} else { // Other actions are simple toggle.
-			app.ActionLaunch(id)
+			app.Action().Launch(id)
 		}
 	}
 
@@ -185,10 +185,10 @@ func (app *Applet) DefineEvents(events *cdtype.Events) {
 	//
 	events.OnShortkey = func(key string) {
 		if key == app.conf.ShortkeyOneKey {
-			app.ActionLaunch(app.ActionID(app.conf.ShortkeyOneAction))
+			app.Action().Launch(app.Action().ID(app.conf.ShortkeyOneAction))
 		}
 		if key == app.conf.ShortkeyTwoKey {
-			app.ActionLaunch(app.ActionID(app.conf.ShortkeyTwoAction))
+			app.Action().Launch(app.Action().ID(app.conf.ShortkeyTwoAction))
 		}
 	}
 
@@ -221,8 +221,8 @@ func (app *Applet) onGotVersions(new int, e error) {
 // Actions order in this list must match the order of defined actions numbers.
 //
 func (app *Applet) defineActions() {
-	app.ActionSetMax(1)
-	app.ActionAdd(
+	app.Action().SetMax(1)
+	app.Action().Add(
 		&cdtype.Action{
 			ID:   ActionNone,
 			Menu: cdtype.MenuSeparator,
@@ -333,10 +333,9 @@ func (app *Applet) defineActions() {
 // Open diff command, or toggle window visibility if application is monitored and opened.
 //
 func (app *Applet) actionShowDiff() {
-	haveMonitor, hasFocus := app.HaveMonitor()
 	switch {
-	case app.conf.DiffMonitored && haveMonitor: // Application monitored and open.
-		app.ShowAppli(!hasFocus)
+	case app.conf.DiffMonitored && app.Window().IsOpened(): // Application monitored and open.
+		app.Window().ToggleVisibility()
 
 	default: // Launch application.
 		if _, e := os.Stat(app.target.SourceDir()); e != nil {
@@ -442,7 +441,7 @@ func (app *Applet) actionShowVersions(force bool) {
 		}
 	}
 	if force {
-		text, e := app.ExecuteTemplate(app.conf.VersionDialogTemplate, app.conf.VersionDialogTemplate, app.version.Sources())
+		text, e := app.Template().Execute(app.conf.VersionDialogTemplate, app.conf.VersionDialogTemplate, app.version.Sources())
 		if app.Log().Err(e, "template "+app.conf.VersionDialogTemplate) {
 			return
 		}
@@ -460,8 +459,8 @@ func (app *Applet) actionShowVersions(force bool) {
 // Build current target.
 //
 func (app *Applet) actionBuildTarget() {
-	app.AddDataRenderer("progressbar", 1, "")
-	defer app.AddDataRenderer("progressbar", 0, "")
+	app.DataRenderer().Progress(1)
+	defer app.DataRenderer().Remove()
 
 	// app.Animate("busy", 200)
 	if !app.Log().Err(app.target.Build(), "Build") {
@@ -480,8 +479,8 @@ func (app *Applet) actionDownloadAll()     {}
 // actionUpdateAll download and rebuild the dock core and all applets.
 //
 func (app *Applet) actionUpdateAll() {
-	app.AddDataRenderer("progressbar", 1, "")
-	defer app.AddDataRenderer("progressbar", 0, "")
+	app.DataRenderer().Progress(1)
+	defer app.DataRenderer().Remove()
 
 	// Core.
 	_, _, e := app.version.sources[0].update()
@@ -492,7 +491,7 @@ func (app *Applet) actionUpdateAll() {
 	app.Log().Info("updating core")
 	core := &build.BuilderCore{}
 	core.SetDir(app.conf.SourceDir)
-	core.SetProgress(func(f float64) { app.RenderValues(f) })
+	core.SetProgress(func(f float64) { app.DataRenderer().Render(f) })
 	e = core.Build()
 	if app.Log().Err(e, "build core") {
 		return
@@ -507,7 +506,7 @@ func (app *Applet) actionUpdateAll() {
 	app.Log().Info("updating applets")
 	applets := &build.BuilderApplets{}
 	applets.SetDir(app.conf.SourceDir)
-	applets.SetProgress(func(f float64) { app.RenderValues(f) })
+	applets.SetProgress(func(f float64) { app.DataRenderer().Render(f) })
 
 	applets.MakeFlags = "-Denable-Logout=no" // "-Denable-gmenu=no"
 

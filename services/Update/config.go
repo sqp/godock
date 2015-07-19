@@ -15,6 +15,11 @@ const (
 
 const defaultVersionPollingTimer = 60
 
+// Commands references.
+const (
+	cmdShowDiff = iota
+)
+
 var (
 	grepCmdArgs = []string{"-r", "-I"} // -r: recursive, -I: ignore binaries.
 

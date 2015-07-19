@@ -22,7 +22,11 @@ and evolution of our applets:
 */
 package poller
 
-import "time"
+import (
+	"github.com/sqp/godock/libs/cdtype"
+
+	"time"
+)
 
 //------------------------------------------------------------------[ POLLER ]--
 
@@ -53,6 +57,19 @@ func New(callCheck func()) *Poller {
 		enabled:   true,
 		// restart:   make(chan bool),
 	}
+	return poller
+}
+
+// Exists returns true if the poller exists (isn't nil).
+//
+func (poller *Poller) Exists() bool {
+	return poller != nil
+}
+
+// Add only replaces the action called method.
+//
+func (poller *Poller) Add(callCheck func()) cdtype.AppPoller {
+	poller.callCheck = callCheck
 	return poller
 }
 
@@ -118,13 +135,13 @@ func (poller *Poller) SetChanRestart(c chan string, name string) {
 // You will have to call it on every loop as it not a real ticker. It's just a
 // single use chan.
 //
-// func (poller *Poller) Wait() <-chan bool {
 func (poller *Poller) Wait() <-chan time.Time {
-	if poller.enabled && poller.delay > 0 {
-		poller.active = true
-		return time.After(time.Duration(poller.delay) * time.Second)
+	if poller == nil || poller.delay <= 0 || !poller.enabled {
+		return nil
 	}
-	return nil
+
+	poller.active = true
+	return time.After(time.Duration(poller.delay) * time.Second)
 }
 
 // Restart resets the counter and launch Action in a goroutine.
@@ -186,3 +203,31 @@ func (poller *Poller) Plop() bool {
 	go poller.Action()
 	return true
 }
+
+//--------------------------------------------------------------[ NIL POLLER ]--
+
+// NewNil creates an empty poller with the ability to replace himself with a
+// real poller when using the Add method.
+//
+// Set the add method with a call that will create a real poller.
+//
+func NewNil(add func(call func()) cdtype.AppPoller) cdtype.AppPoller {
+	return &nilPoller{add: add}
+}
+
+// nilPoller defines an empty poller. Implements cdtype.AppPoller
+//
+type nilPoller struct {
+	add func(call func()) cdtype.AppPoller
+}
+
+func (o *nilPoller) Add(call func()) cdtype.AppPoller { return o.add(call) }
+func (o *nilPoller) Exists() bool                     { return false }
+func (o *nilPoller) SetPreCheck(onStarted func())     {}
+func (o *nilPoller) SetPostCheck(onFinished func())   {}
+func (o *nilPoller) SetInterval(delay ...int) int     { return 0 }
+func (o *nilPoller) Start()                           {}
+func (o *nilPoller) Restart()                         {}
+func (o *nilPoller) Stop()                            {}
+func (o *nilPoller) Wait() <-chan time.Time           { return nil }
+func (o *nilPoller) Plop() bool                       { return false }

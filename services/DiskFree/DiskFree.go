@@ -30,7 +30,7 @@ type Applet struct {
 //
 func NewApplet() cdtype.AppInstance {
 	app := &Applet{AppBase: dock.NewCDApplet()} // Icon controler and interface to cairo-dock.
-	app.AddPoller(app.service.Check)
+	app.Poller().Add(app.service.Check)
 
 	app.service.App = app
 	app.service.log = app.Log()
@@ -57,8 +57,8 @@ func (app *Applet) Init(loadConf bool) {
 		Label:          app.conf.Name,
 		PollerInterval: cdtype.PollerInterval(app.conf.UpdateDelay, defaultUpdateDelay),
 		Commands: cdtype.Commands{
-			"left":   cdtype.NewCommandStd(app.conf.LeftAction, app.conf.LeftCommand, app.conf.LeftClass),
-			"middle": cdtype.NewCommandStd(app.conf.MiddleAction, app.conf.MiddleCommand)},
+			cmdLeft:   cdtype.NewCommandStd(app.conf.LeftAction, app.conf.LeftCommand, app.conf.LeftClass),
+			cmdMiddle: cdtype.NewCommandStd(app.conf.MiddleAction, app.conf.MiddleCommand)},
 		Debug: app.conf.Debug})
 }
 
@@ -67,14 +67,14 @@ func (app *Applet) Init(loadConf bool) {
 
 // OnClick launch the configured action on user click.
 //
-func (app *Applet) OnClick() {
-	app.CommandLaunch("left")
+func (app *Applet) OnClick(int) {
+	app.Command().Launch(cmdLeft)
 }
 
 // OnMiddleClick launch the configured action on user middle click.
 //
 func (app *Applet) OnMiddleClick() {
-	app.CommandLaunch("middle")
+	app.Command().Launch(cmdMiddle)
 }
 
 // OnBuildMenu fills the menu with left and middle click actions if they're set.
@@ -110,7 +110,7 @@ func (disks *DiskFree) SetParts(parts []string, autoDetect bool) {
 	disks.autoDetect = autoDetect
 
 	disks.nbValues = len(parts) + len(disks.findOthers())
-	disks.SetSize(int32(disks.nbValues))
+	disks.SetSize(disks.nbValues)
 
 	if disks.nbValues == 0 {
 		disks.log.NewErr("none", "disk found")
@@ -137,7 +137,7 @@ func (disks *DiskFree) Check() {
 	if newcount := len(parts); newcount != disks.nbValues {
 		disks.log.Debug("Number of partitions changed. Resizing", disks.nbValues, "=>", newcount)
 		disks.nbValues = newcount
-		disks.SetSize(int32(newcount))
+		disks.SetSize(newcount)
 	}
 
 	disks.Display()

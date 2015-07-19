@@ -25,6 +25,7 @@ package gldi
 #include "cairo-dock-dock-facility.h"            // cairo_dock_get_available_docks
 #include "cairo-dock-dock-manager.h"             // gldi_dock_get_readable_name
 #include "cairo-dock-file-manager.h"             // CAIRO_DOCK_GNOME...
+#include "cairo-dock-flying-container.h"         // myFlyingObjectMgr
 #include "cairo-dock-gauge.h"                    // CairoGaugeAttribute
 #include "cairo-dock-graph.h"                    // CairoGraphAttribute
 #include "cairo-dock-icon-factory.h"             // Icon
@@ -584,8 +585,34 @@ func (o *Container) ToDesklet() *Desklet {
 	return NewDeskletFromNative(unsafe.Pointer(o.Ptr))
 }
 
+func (o *Container) Type() cdtype.ContainerType {
+	switch {
+	case ObjectIsDock(o):
+		return cdtype.ContainerDock
+
+	case o.IsDesklet():
+		return cdtype.ContainerDesklet
+
+	case o.IsDialog():
+		return cdtype.ContainerDialog
+
+	case o.IsFlyingContainer():
+		return cdtype.ContainerFlying
+	}
+
+	return cdtype.ContainerUnknown
+}
+
 func (o *Container) IsDesklet() bool {
 	return ObjectIsManagerChild(o, &C.myDeskletObjectMgr)
+}
+
+func (o *Container) IsDialog() bool {
+	return ObjectIsManagerChild(o, &C.myDialogObjectMgr)
+}
+
+func (o *Container) IsFlyingContainer() bool {
+	return ObjectIsManagerChild(o, &C.myFlyingObjectMgr)
 }
 
 func (o *Container) MouseX() int {
@@ -1064,6 +1091,38 @@ func (icon *Icon) MoveAfterIcon(container *CairoDock, target *Icon) {
 	C.cairo_dock_move_icon_after_icon(container.Ptr, icon.Ptr, target.Ptr)
 }
 
+// CallbackActionWindow returns a func to use as gtk callback.
+// On event, it will test if the icon still has a valid window and launch the
+// provided action on this window.
+//
+func (icon *Icon) CallbackActionWindow(call func(*WindowActor)) func() {
+	return func() {
+		if icon.IsAppli() {
+			call(icon.Window())
+		}
+	}
+}
+
+// CallbackActionSubWindows is the same as CallbackActionWindow but launch the
+// action on all subdock windows.
+//
+func (icon *Icon) CallbackActionSubWindows(call func(*WindowActor)) func() {
+	return func() {
+		for _, ic := range icon.SubDockIcons() {
+			if ic.IsAppli() {
+				call(ic.Window())
+			}
+		}
+	}
+}
+
+func (icon *Icon) CallbackActionWindowToggle(call func(*WindowActor, bool), getvalue func(*WindowActor) bool) func() {
+	return icon.CallbackActionWindow(func(win *WindowActor) {
+		v := getvalue(win)
+		call(win, !v)
+	})
+}
+
 //
 //--------------------------------------------------[ DATARENDERERATTRIBUTES ]--
 
@@ -1145,7 +1204,7 @@ func (o *DataRendererAttributeGauge) ToAttribute() (*C.CairoDataRendererAttribut
 
 type DataRendererAttributeGraph struct {
 	DataRendererAttributeCommon
-	Type            int
+	Type            cdtype.RendererGraphType
 	MixGraphs       bool
 	HighColor       []float64
 	LowColor        []float64
@@ -1163,9 +1222,8 @@ func NewDataRendererAttributeGraph() *DataRendererAttributeGraph {
 func (o *DataRendererAttributeGraph) ToAttribute() (*C.CairoDataRendererAttribute, func()) {
 	attr := new(C.CairoGraphAttribute)
 
-	attr.iType = C.CairoDockTypeGraph(o.Type)
+	attr.iType = C.CairoDockTypeGraph(int(o.Type))
 	attr.bMixGraphs = cbool(o.MixGraphs)
-
 	attr.fHighColor = cListGdouble(o.HighColor)
 	attr.fLowColor = cListGdouble(o.LowColor)
 
@@ -1597,6 +1655,21 @@ func (o *WindowActor) SetSticky(sticky bool) {
 
 func (o *WindowActor) Show() {
 	C.gldi_window_show(o.Ptr)
+}
+
+func (o *WindowActor) SetVisibility(show bool) {
+	if show {
+		o.Show()
+	}
+	o.Minimize()
+}
+
+func (o *WindowActor) ToggleVisibility() {
+	if o.IsHidden() {
+		o.Show()
+	} else {
+		o.Minimize()
+	}
 }
 
 func (o *WindowActor) GetAppliIcon() *Icon {
