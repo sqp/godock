@@ -53,12 +53,10 @@ func (cs *ConfigSettings) loadConf(file string) error {
 
 // Init will try to load the own config data from the file, and create it if missing.
 //
-func Init(dirAppdata string, e error) error {
+func Init(file string, e error) error {
 	if e != nil {
 		return e
 	}
-
-	file := filepath.Join(dirAppdata, GuiFilename)
 
 	// Create file if needed.
 	if _, e = os.Stat(file); e != nil {

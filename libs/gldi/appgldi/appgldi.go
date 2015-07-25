@@ -1,6 +1,7 @@
 // Package appgldi implements the dock applet API for go internal applets.
 //
-// Its goal is to connect the main Cairo-Dock Golang API, godock/libs/dock, to its parent.
+// Its goal is to connect the main Cairo-Dock Golang applet object,
+// godock/libs/cdapplet, to its parent, the dock.
 package appgldi
 
 import (
@@ -360,7 +361,7 @@ func (o *AppGldi) AddSubIcon(fields ...string) error {
 		return errors.New("AddSubIcon: bad arguments count (must use 3 string per icon)")
 	}
 
-	list, clist := gldi.PrepareNewIcons(fields)
+	list, clist := o.ModuleInstance().PrepareNewIcons(fields)
 	for id, icon := range list {
 		o.icons[id] = &IconBase{icon, id}
 	}

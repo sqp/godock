@@ -32,9 +32,10 @@ Not implemented (yet):
 package NetActivity
 
 import (
-	"github.com/sqp/godock/libs/cdtype"        // Applets types.
+	"github.com/sqp/godock/libs/cdapplet"      // Applet base.
+	"github.com/sqp/godock/libs/cdglobal"      // Global consts.
+	"github.com/sqp/godock/libs/cdtype"        // Applet types.
 	"github.com/sqp/godock/libs/clipboard"     // Set clipboard content.
-	"github.com/sqp/godock/libs/dock"          // Connection to cairo-dock.
 	"github.com/sqp/godock/libs/net/uptoshare" // Uploader service.
 	"github.com/sqp/godock/libs/net/videodl"   // Video downloader service.
 	"github.com/sqp/godock/libs/sysinfo"       // IOActivity.
@@ -61,7 +62,7 @@ type Applet struct {
 // NewApplet create a new applet instance.
 //
 func NewApplet() cdtype.AppInstance {
-	app := &Applet{AppBase: dock.NewCDApplet()} // Icon controler and interface to cairo-dock.
+	app := &Applet{AppBase: cdapplet.New()} // Icon controler and interface to cairo-dock.
 
 	// Uptoshare actions
 	app.up = uptoshare.New()
@@ -97,7 +98,7 @@ func (app *Applet) Init(loadConf bool) {
 	app.LoadConfig(loadConf, &app.conf) // Load config will crash if fail. Expected.
 
 	// Uptoshare settings.
-	app.up.SetHistoryFile(app.FileDataDir(historyFile))
+	app.up.SetHistoryFile(app.FileDataDir(cdglobal.DirUserAppData, uptoshare.HistoryFile))
 	app.up.SetHistorySize(app.conf.UploadHistory)
 	app.up.LimitRate = app.conf.UploadRateLimit
 	app.up.PostAnonymous = app.conf.PostAnonymous

@@ -168,6 +168,7 @@ func (widget *Shortkeys) updateShortkey(accel string) {
 
 	file := sk.GetConfFilePath()
 	if file == "" {
+		widget.log.NewErr("shortkeys wrong filepath", sk.GetConfFilePath())
 		return
 	}
 
@@ -176,13 +177,12 @@ func (widget *Shortkeys) updateShortkey(accel string) {
 		return
 	}
 
-	// TODO: improve code.
-	pKeyF := keyfile.New()
-	_, e := pKeyF.LoadFromFile(file, keyfile.FlagsKeepComments|keyfile.FlagsKeepTranslations)
-	if widget.log.Err(e, "Update shortkey to file") {
-		// pKeyF.Free()
+	// TODO: improve code. need to use files.UpdateConfFile(file, sk.GetGroupName(), sk.GetKeyName(), accel)
+	pKeyF, e := keyfile.NewFromFile(file, keyfile.FlagsKeepComments|keyfile.FlagsKeepTranslations)
+	if widget.log.Err(e, "Update shortkey in file") {
 		return
 	}
+	defer pKeyF.Free()
 	pKeyF.Set(sk.GetGroupName(), sk.GetKeyName(), accel)
 
 	_, str, _ := pKeyF.ToData()

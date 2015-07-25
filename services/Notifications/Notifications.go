@@ -9,8 +9,8 @@ package Notifications
 import (
 	"github.com/godbus/dbus"
 
-	"github.com/sqp/godock/libs/cdtype"
-	"github.com/sqp/godock/libs/dock"               // Connection to cairo-dock.
+	"github.com/sqp/godock/libs/cdapplet"           // Applet base.
+	"github.com/sqp/godock/libs/cdtype"             // Applet types.
 	"github.com/sqp/godock/libs/srvdbus/dbuscommon" // EavesDrop
 
 	"strconv"
@@ -29,7 +29,7 @@ type Applet struct {
 // NewApplet creates a new Notifications applet instance.
 //
 func NewApplet() cdtype.AppInstance {
-	app := &Applet{AppBase: dock.NewCDApplet()} // Icon controler and interface to cairo-dock.
+	app := &Applet{AppBase: cdapplet.New()} // Icon controler and interface to cairo-dock.
 
 	app.notifs = &Notifs{}
 	app.notifs.SetOnCount(app.UpdateCount)

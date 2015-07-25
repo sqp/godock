@@ -14,23 +14,20 @@ import (
 	"strings"
 )
 
-// CairoConfig builds Cairo-Dock configuration page widgets.
+// CDConfig builds Cairo-Dock configuration page widgets.
 //
-type CairoConfig struct {
+type CDConfig struct {
 	keyfile.KeyFile
 	File string
 }
 
-// LoadFile loads a Cairo-Dock configuration file as *CairoConfig.
-func LoadFile(configFile string) (*CairoConfig, error) {
-	pKeyF := keyfile.New()
-
-	_, e := pKeyF.LoadFromFile(configFile, keyfile.FlagsKeepComments|keyfile.FlagsKeepTranslations) // (bool, error)
+// LoadFile loads a Cairo-Dock configuration file as *CDConfig.
+func LoadFile(configFile string) (*CDConfig, error) {
+	pKeyF, e := keyfile.NewFromFile(configFile, keyfile.FlagsKeepComments|keyfile.FlagsKeepTranslations)
 	if e != nil {
-		// pKeyF.Free()
 		return nil, e
 	}
-	conf := &CairoConfig{
+	conf := &CDConfig{
 		KeyFile: *pKeyF,
 		File:    configFile,
 	}
@@ -39,7 +36,7 @@ func LoadFile(configFile string) (*CairoConfig, error) {
 
 // List lists keys defined in the configuration file.
 //
-func (conf *CairoConfig) List(cGroupName string) (list []*Key) {
+func (conf *CDConfig) List(cGroupName string) (list []*Key) {
 	_, keys, _ := conf.GetKeys(cGroupName) // (uint64, []string, error)
 	for _, cKeyName := range keys {
 		cKeyComment, _ := conf.GetComment(cGroupName, cKeyName)
@@ -60,18 +57,22 @@ func (conf *CairoConfig) List(cGroupName string) (list []*Key) {
 
 // Builder returns a builder ready to create a configuration gui for the keyfile.
 //
-func (conf *CairoConfig) Builder(source datatype.Source, log cdtype.Logger, win *gtk.Window, gettextDomain string) *Grouper {
+func (conf *CDConfig) Builder(source datatype.Source, log cdtype.Logger, win *gtk.Window, originalConf, gettextDomain string) *Grouper {
 	box, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
-	build := &Builder{
+	box.Connect("destroy", conf.KeyFile.Free)
+	return &Grouper{Builder{
 		Box:           *box,
 		Conf:          conf,
 		data:          source,
 		log:           log,
 		win:           win,
+		originalConf:  originalConf,
 		gettextDomain: gettextDomain,
-	}
-	return &Grouper{*build}
+	}}
 }
+
+//
+//-----------------------------------------------------------------[ GROUPER ]--
 
 // Grouper builds config pages from the Builder.
 //
@@ -79,31 +80,46 @@ type Grouper struct{ Builder }
 
 // NewGrouper creates a config page builder from the file.
 //
-func NewGrouper(source datatype.Source, log cdtype.Logger, win *gtk.Window, configFile, gettextDomain string) (*Grouper, error) {
-	keyfile, e := LoadFile(configFile)
+func NewGrouper(source datatype.Source, log cdtype.Logger, win *gtk.Window, configFile, originalConf, gettextDomain string) (*Grouper, error) {
+	cdConf, e := LoadFile(configFile)
 	if e != nil {
 		return nil, e
 	}
-	return keyfile.Builder(source, log, win, gettextDomain), nil
+	return cdConf.Builder(source, log, win, originalConf, gettextDomain), nil
 }
 
 // BuildSingle builds a single page config for the given group.
 //
 func (build *Grouper) BuildSingle(group string) *Grouper {
-	build.PackStart(build.BuildPage(group), true, true, 0)
+	keys := build.Conf.List(group)
+	build.buildGroups = append(build.buildGroups, group)
+	build.buildKeys = append(build.buildKeys, keys)
+	widget := build.BuildPage(keys)
+
+	build.PackStart(widget, true, true, 0)
 	build.ShowAll()
 	return build
 }
 
-// BuildAll builds a Cairo-Dock configuration gui page directly from file.
-// Too much magic to be described here. Need to find the links.
+// BuildAll builds a dock configuration widget with all groups.
 //
-func (build *Grouper) BuildAll(switcher *pageswitch.Switcher) *Grouper { //(build *Builder, e error) {
+func (build *Grouper) BuildAll(switcher *pageswitch.Switcher, tweaks ...func(*Builder)) *Grouper {
+	// Load keys.
+	_, build.buildGroups = build.Conf.GetGroups()
+	for _, group := range build.buildGroups {
+		keys := build.Conf.List(group)
+		build.buildKeys = append(build.buildKeys, keys) // keys sorted by group
+	}
 
+	// Apply tweaks.
+	for _, tw := range tweaks {
+		tw(&build.Builder)
+	}
+
+	// Build groups.
 	first := true
-	_, groups := build.Conf.GetGroups()
-	for _, group := range groups {
-		w := build.BuildPage(group)
+	for i, group := range build.buildGroups {
+		w := build.BuildPage(build.buildKeys[i])
 
 		switcher.AddPage(&pageswitch.Page{
 			Name:    group,
@@ -118,7 +134,7 @@ func (build *Grouper) BuildAll(switcher *pageswitch.Switcher) *Grouper { //(buil
 	}
 
 	// Single group, hide the switcher. Multi groups, display it.
-	switcher.Set("visible", len(groups) > 1)
+	switcher.Set("visible", len(build.buildGroups) > 1)
 
 	return build
 }
@@ -149,7 +165,7 @@ func ParseKeyComment(cKeyComment string) *Key {
 		return nil
 	}
 
-	key := &Key{Type: cUsefulComment[0]}
+	key := &Key{Type: WidgetType(cUsefulComment[0])}
 	cUsefulComment = cUsefulComment[1:]
 
 	for i, c := range cUsefulComment {

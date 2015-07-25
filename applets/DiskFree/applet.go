@@ -27,7 +27,7 @@ Copyright : (C) 2014 by SQP.
 package main
 
 import (
-	"github.com/sqp/godock/libs/dock" // Connection to cairo-dock.
+	"github.com/sqp/godock/libs/appdbus" // Connection to cairo-dock.
 	"github.com/sqp/godock/services/DiskFree"
 )
 
@@ -36,5 +36,5 @@ import (
 // Program launched. Create and activate applet.
 //
 func main() {
-	dock.StartApplet(DiskFree.NewApplet())
+	appdbus.StartApplet(DiskFree.NewApplet())
 }

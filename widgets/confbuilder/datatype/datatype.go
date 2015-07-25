@@ -63,17 +63,25 @@ const (
 // Source defines external data needed by the config builder.
 //
 type Source interface {
-	//MainConf returns the full path to the dock config file.
+	//MainConfigFile returns the full path to the dock config file.
 	//
-	MainConf() string
+	MainConfigFile() string
+
+	//MainConfigDefault returns the full path to the dock config file.
+	//
+	MainConfigDefault() string
 
 	// AppIcon returns the application icon path.
 	//
 	AppIcon() string
 
-	DirAppData() (string, error)
+	// DirUserAppData returns the path to user applet common data in ~/.config/cairo-dock/
+	//
+	DirUserAppData(path ...string) (string, error)
 
-	DirShareData() string
+	// DirShareData returns the path to the shared data dir (/usr/share/cairo-dock/).
+	//
+	DirShareData(path ...string) string
 
 	// ListIcons builds the list of all icons.
 	//
@@ -124,6 +132,24 @@ type Source interface {
 	//
 	ListIconTheme() []Field
 
+	// ListDockThemes builds the list of dock themes local and distant.
+	//
+	ListDockThemeLoad() (map[string]Appleter, error)
+
+	// ListDockThemes builds the list of dock themes local only.
+	//
+	ListDockThemeSave() []Field
+
+	// CurrentThemeSave saves the current dock theme.
+	//
+	CurrentThemeSave(themeName string, saveBehaviour, saveLaunchers, needPackage bool, dirPackage string) error
+
+	// CurrentThemeLoad imports and loads a dock theme.
+	//
+	CurrentThemeLoad(themeName string, useBehaviour, useLaunchers bool) error
+
+	// Handbook creates a handbook (description) for the given applet name.
+	//
 	Handbook(appletName string) Handbooker
 
 	// ListThemeXML builds a list of icon theme in system and user dir.
@@ -237,15 +263,15 @@ func (SourceCommon) ListIconTheme() []Field {
 				continue
 			}
 
-			kf := keyfile.New()
-			ok, _ := kf.LoadFromFile(file, keyfile.FlagsNone) // Keyfile required.
-			if !ok {
+			kf, e := keyfile.NewFromFile(file, keyfile.FlagsNone) // Keyfile required.
+			if e != nil {
 				continue
 			}
 
 			hidden, _ := kf.GetBoolean("Icon Theme", "Hidden")
 			hasdirs := kf.HasKey("Icon Theme", "Directories")
 			name, _ := kf.GetString("Icon Theme", "Name")
+			kf.Free()
 			if hidden || !hasdirs || name == "" { // Check theme settings.
 				continue
 			}

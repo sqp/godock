@@ -10,14 +10,14 @@ Download, build and install to your Cairo-Dock external applets dir:
   make        # compile the applet.
   make link   # link the applet to your external applet directory.
 
-Copyright : (C) 2012-2014 by SQP
+Copyright : (C) 2012-2015 by SQP
 E-mail : sqp@glx-dock.org
 
 */
 package main
 
 import (
-	"github.com/sqp/godock/libs/dock" // Connection to cairo-dock.
+	"github.com/sqp/godock/libs/appdbus" // Connection to cairo-dock.
 	"github.com/sqp/godock/services/GoGmail"
 )
 
@@ -26,5 +26,5 @@ import (
 // Program launched. Create and activate applet.
 //
 func main() {
-	dock.StartApplet(GoGmail.NewApplet())
+	appdbus.StartApplet(GoGmail.NewApplet())
 }

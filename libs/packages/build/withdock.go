@@ -11,7 +11,7 @@ import (
 func init() {
 	dirShareData = globals.DirShareData()
 
-	iconCore = globals.CairoDockIcon
+	iconCore = globals.FileCairoDockIcon()
 
 	AppletInfo = func(name string) (dir, icon string) {
 		mod := gldi.ModuleGet(name)

@@ -1,4 +1,5 @@
-package dock
+// Package action provides actions management for applets.
+package action
 
 import "github.com/sqp/godock/libs/cdtype"
 

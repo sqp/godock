@@ -24,15 +24,17 @@ http://www.gnu.org/licenses/licenses.html#GPL
 */
 
 import (
-	"github.com/sqp/godock/libs/cdtype"         // Applets types.
+	"github.com/sqp/godock/libs/cdapplet"       // Applet base.
+	"github.com/sqp/godock/libs/cdtype"         // Applet types.
 	"github.com/sqp/godock/libs/clipboard"      // Get clipboard content.
-	"github.com/sqp/godock/libs/dock"           // Connection to cairo-dock.
 	"github.com/sqp/godock/libs/packages/build" // Sources builder.
 	"github.com/sqp/godock/libs/text/linesplit" // Parse command output.
 
+	"errors"
 	"fmt"
 	"os"
 	"path"
+	// "path/filepath"
 	"strconv"
 	"strings"
 )
@@ -55,7 +57,7 @@ type Applet struct {
 // NewApplet create an new Update applet instance.
 //
 func NewApplet() cdtype.AppInstance {
-	app := &Applet{AppBase: dock.NewCDApplet()}
+	app := &Applet{AppBase: cdapplet.New()}
 	app.defineActions()
 
 	// Create a cairo-dock sources version checker.
@@ -120,6 +122,7 @@ func (app *Applet) Init(loadConf bool) {
 	// Set booleans references for menu checkboxes.
 	app.Action().SetBool(ActionToggleUserMode, &app.conf.UserMode)
 	app.Action().SetBool(ActionToggleReload, &app.conf.BuildReload)
+	app.Action().SetBool(ActionToggleDiffStash, &app.conf.DiffStash)
 }
 
 //------------------------------------------------------------------[ EVENTS ]--
@@ -275,6 +278,12 @@ func (app *Applet) defineActions() {
 			Call: app.actionToggleReload,
 		},
 		&cdtype.Action{
+			ID:   ActionToggleDiffStash,
+			Name: "Diff vs stash",
+			Menu: cdtype.MenuCheckBox,
+			// Call: app.actionToggleReload,
+		},
+		&cdtype.Action{
 			ID:       ActionBuildTarget,
 			Name:     "Build target",
 			Icon:     "media-playback-start",
@@ -333,17 +342,24 @@ func (app *Applet) defineActions() {
 // Open diff command, or toggle window visibility if application is monitored and opened.
 //
 func (app *Applet) actionShowDiff() {
+	var e error
 	switch {
 	case app.conf.DiffMonitored && app.Window().IsOpened(): // Application monitored and open.
-		app.Window().ToggleVisibility()
+		e = app.Window().ToggleVisibility()
 
 	default: // Launch application.
-		if _, e := os.Stat(app.target.SourceDir()); e != nil {
-			app.Log().NewWarn("Invalid source directory", "ShowDiff")
+		dir := app.target.SourceDir()
+		if _, e = os.Stat(dir); e != nil {
+			e = errors.New("invalid source directory: " + dir)
 		} else {
-			app.Log().ExecAsync(app.conf.DiffCommand, app.target.SourceDir())
+			if app.conf.DiffStash {
+				e = app.Log().ExecAsync("git", "-C", dir, "difftool", "-d")
+			} else {
+				e = app.Log().ExecAsync(app.conf.DiffCommand, dir)
+			}
 		}
 	}
+	app.Log().Err(e, "show diff")
 }
 
 // actionGrepTarget searches the directory for the given string.

@@ -23,12 +23,10 @@ import (
 //
 // Reload event is optional. Here is the default call if you want to override it.
 //
-// 	app.Events.Reload = func(confChanged bool) {
-// 		app.Log.Debug("Reload module")
-// 		app.Init(confChanged)
-//  	if app.Poller() != nil {
-// 			app.Poller().Restart() // send our restart event.
-//  	}
+// 	app.Events.Reload = func(loadConf bool) {
+// 		app.Log().Debug("Reload module")
+// 		app.Init(loadConf)
+// 		app.Poller().Restart() // send our restart event. (safe on nil pollers).
 // 	}
 //
 type Events struct {

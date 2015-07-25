@@ -131,6 +131,9 @@ func (icon *IconConf) GetClass() datatype.DesktopClasser {
 // This is the default unchanged config file.
 //
 func (icon *IconConf) OriginalConfigPath() string {
+	if !icon.IsApplet() {
+		return ""
+	}
 	vc := icon.ModuleInstance().Module().VisitCard()
 	return filepath.Join(vc.GetShareDataDir(), vc.GetConfFileName())
 }
@@ -274,7 +277,7 @@ func (v *AppletDownload) CanAdd() bool {
 // CanUninstall returns whether the applet can be uninstalled or not.
 //
 func (v *AppletDownload) CanUninstall() bool {
-	return v.Type != packages.TypeInDev && v.Type != packages.TypeLocal
+	return v.Type != packages.TypeInDev && v.Type != packages.TypeLocal && !v.IsActive()
 }
 
 // Activate activates the applet.
@@ -336,7 +339,7 @@ func (v *AppletDownload) Install(options string) error {
 	// Only way I found for now to interact with it and let it know it will have
 	// a new applet to handle. As a bonus, it also activate the applet, which
 	// will toggle the activated button with the UpdateModuleState signal.
-	url := packages.DistantURL + cdglobal.AppletsDirName + "/" + v.SrvTag + "/" + v.DisplayedName + "/" + v.DisplayedName + ".tar.gz"
+	url := packages.DistantURL + v.SrvTag + "/" + v.DisplayedName + "/" + v.DisplayedName + ".tar.gz"
 	gldi.EmitSignalDropData(globals.Maindock().Container(), url, nil, 0)
 
 	v.app = gldi.ModuleGet(v.DisplayedName)
@@ -351,7 +354,7 @@ func (v *AppletDownload) Install(options string) error {
 	// return v.AppletPackage.Install(options)
 }
 
-// Uninstall downloads and extract an external archive to package dir.
+// Uninstall removes the external applet package dir.
 //
 func (v *AppletDownload) Uninstall() error {
 	externalUserDir := globals.DirDockData(cdglobal.AppletsDirName)
@@ -360,6 +363,31 @@ func (v *AppletDownload) Uninstall() error {
 		v.app = nil
 	}
 	return e
+}
+
+//--------------------------------------------------------------[ DOCK THEME ]--
+
+// dockTheme wraps an dock theme package as Appleter for config data source.
+//
+type dockTheme struct {
+	packages.AppletPackage
+}
+
+func (v *dockTheme) IsActive() bool               { return false }
+func (v *dockTheme) CanAdd() bool                 { return false }
+func (v *dockTheme) Activate() string             { return "" }
+func (v *dockTheme) Deactivate()                  {}
+func (v *dockTheme) GetTitle() string             { return v.DisplayedName }
+func (v *dockTheme) GetName() string              { return v.FormatName() }
+func (v *dockTheme) GetAuthor() string            { return v.Author }
+func (v *dockTheme) FormatCategory() string       { return "" }
+func (v *dockTheme) GetIconFilePath() string      { return v.IconState() }
+func (v *dockTheme) IconState() string            { return globals.DirShareData(v.AppletPackage.IconState()) }
+func (v *dockTheme) Install(options string) error { return nil }
+func (v *dockTheme) Uninstall() error             { return nil }
+
+func (v *dockTheme) CanUninstall() bool {
+	return v.Type != packages.TypeInDev && v.Type != packages.TypeLocal
 }
 
 //
@@ -382,27 +410,33 @@ func (dv *HandbookDescTranslate) GetDescription() string {
 //
 type Data struct{ datatype.SourceCommon }
 
-//MainConf returns the full path to the dock config file.
+//MainConfigFile returns the full path to the dock config file.
 //
-func (Data) MainConf() string {
+func (Data) MainConfigFile() string {
 	return globals.ConfigFile()
+}
+
+//MainConfigDefault returns the full path to the dock config file.
+//
+func (Data) MainConfigDefault() string {
+	return globals.ConfigFileDefault()
 }
 
 // AppIcon returns the application icon path.
 //
 func (Data) AppIcon() string {
-	return globals.DirShareData(globals.CairoDockIcon)
+	return globals.FileCairoDockIcon()
 }
 
 // DirShareData returns the path to the shared data dir.
-func (Data) DirShareData() string {
-	return globals.DirShareData()
+func (Data) DirShareData(path ...string) string {
+	return globals.DirShareData(path...)
 }
 
-// DirAppData returns the path to the applications data dir (user saved data).
+// DirUserAppData returns the path to the applications data dir (user saved data).
 //
-func (Data) DirAppData() (string, error) {
-	return globals.DirAppdata()
+func (Data) DirUserAppData(path ...string) (string, error) {
+	return globals.DirUserAppData(path...)
 }
 
 // ListKnownApplets builds the list of all user applets.
@@ -411,7 +445,10 @@ func (Data) ListKnownApplets() map[string]datatype.Appleter {
 	list := make(map[string]datatype.Appleter)
 	for name, app := range gldi.ModuleList() {
 		if !app.IsAutoLoaded() { // don't display modules that can't be disabled
-			list[name] = &AppletConf{*app.VisitCard(), app}
+			list[name] = &AppletConf{
+				VisitCard: *app.VisitCard(),
+				app:       app,
+			}
 		}
 	}
 	return list
@@ -421,7 +458,7 @@ func (Data) ListKnownApplets() map[string]datatype.Appleter {
 //
 func (Data) ListDownloadApplets() (map[string]datatype.Appleter, error) {
 	externalUserDir := globals.DirDockData(cdglobal.AppletsDirName)
-	packs, e := packages.ListDownloadIndex(cdglobal.AppletsServerTag, externalUserDir)
+	packs, e := packages.ListDownloadApplets(externalUserDir)
 	if e != nil {
 		return nil, e
 	}
@@ -429,7 +466,10 @@ func (Data) ListDownloadApplets() (map[string]datatype.Appleter, error) {
 	applets := gldi.ModuleList()
 	list := make(map[string]datatype.Appleter)
 	for k, v := range packs {
-		list[k] = &AppletDownload{*v, applets[k]}
+		list[k] = &AppletDownload{
+			AppletPackage: *v,
+			app:           applets[k],
+		}
 	}
 
 	return list, nil
@@ -734,6 +774,135 @@ func (Data) ListIconsMainDock() (list []datatype.Iconer) {
 		}
 	}
 	return list
+}
+
+// ListDockThemeLoad builds the list of dock themes for load widget (local and distant).
+//
+func (Data) ListDockThemeLoad() (map[string]datatype.Appleter, error) {
+	dir := globals.DirDockData(cdglobal.ConfigDirDockThemes)
+	packs, e := packages.ListDownloadDockThemes(dir)
+	if e != nil {
+		return nil, e
+	}
+
+	list := make(map[string]datatype.Appleter)
+	for _, v := range packs {
+		list[v.DisplayedName] = &dockTheme{AppletPackage: *v}
+	}
+
+	return list, nil
+}
+
+// ListDockThemeSave builds the list of dock themes for save widget (local).
+//
+func (Data) ListDockThemeSave() []datatype.Field {
+	dir := globals.DirDockData(cdglobal.ConfigDirDockThemes)
+	packs, e := packages.ListFromDir(dir, packages.TypeUser, packages.SourceDockTheme)
+	if e != nil {
+		println("ListDockThemeSave wrong dir:", dir) // TODO: use a logger.
+		return nil
+	}
+
+	var list []datatype.Field
+	for _, pack := range packs {
+		list = append(list, datatype.Field{
+			Key:  pack.DisplayedName,
+			Name: pack.GetName(),
+		})
+	}
+	return list
+}
+
+// CurrentThemeLoad imports and loads a dock theme.
+//
+func (Data) CurrentThemeLoad(themeName string, useBehaviour, useLaunchers bool) error {
+
+	// if (pThemesWidget->pImportTask != NULL)
+	// {
+	// 	gldi_task_discard (pThemesWidget->pImportTask);
+	// 	pThemesWidget->pImportTask = NULL;
+	// }
+	// //\___________________ On regarde si le theme courant est modifie.
+	// gboolean bNeedSave = cairo_dock_current_theme_need_save ();
+	// if (bNeedSave)
+	// {
+
+	if gldi.CurrentThemeNeedSave() {
+		// 	Icon *pIcon = cairo_dock_get_current_active_icon ();  // it's most probably the icon corresponding to the configuration window
+		// 	if (pIcon == NULL || cairo_dock_get_icon_container (pIcon) == NULL)  // if not available, get any icon
+		// 		pIcon = gldi_icons_get_any_without_dialog ();
+		// 	int iClickedButton = gldi_dialog_show_and_wait (_("You have made some changes to the current theme.\nYou will lose them if you don't save before choosing a new theme. Continue anyway?"),
+		// 		pIcon, CAIRO_CONTAINER (g_pMainDock),
+		// 		CAIRO_DOCK_SHARE_DATA_DIR"/"CAIRO_DOCK_ICON, NULL);
+		// 	if (iClickedButton != 0 && iClickedButton != -1)  // cancel button or Escape.
+		// 	{
+		// 		return FALSE;
+		// 	}
+	}
+
+	// //\___________________ On charge le nouveau theme choisi.
+	// gchar *tmp = g_strdup (cNewThemeName);
+	// CairoDockPackageType iType = cairo_dock_extract_package_type_from_name (tmp);
+	// g_free (tmp);
+
+	// gboolean bThemeImported = FALSE;
+	// if (iType != CAIRO_DOCK_LOCAL_PACKAGE && iType != CAIRO_DOCK_USER_PACKAGE)
+	// {
+	// 	GtkWidget *pWaitingDialog = gtk_window_new (GTK_WINDOW_TOPLEVEL);
+	// 	pThemesWidget->pWaitingDialog = pWaitingDialog;
+	// 	gtk_window_set_decorated (GTK_WINDOW (pWaitingDialog), FALSE);
+	// 	gtk_window_set_skip_taskbar_hint (GTK_WINDOW (pWaitingDialog), TRUE);
+	// 	gtk_window_set_skip_pager_hint (GTK_WINDOW (pWaitingDialog), TRUE);
+	// 	gtk_window_set_transient_for (GTK_WINDOW (pWaitingDialog), pMainWindow);
+	// 	gtk_window_set_modal (GTK_WINDOW (pWaitingDialog), TRUE);
+
+	// 	GtkWidget *pMainVBox = gtk_box_new (GTK_ORIENTATION_VERTICAL, CAIRO_DOCK_FRAME_MARGIN);
+	// 	gtk_container_add (GTK_CONTAINER (pWaitingDialog), pMainVBox);
+
+	// 	GtkWidget *pLabel = gtk_label_new (_("Please wait while importing the theme..."));
+	// 	gtk_box_pack_start(GTK_BOX (pMainVBox), pLabel, FALSE, FALSE, 0);
+
+	// 	GtkWidget *pBar = gtk_progress_bar_new ();
+	// 	gtk_progress_bar_pulse (GTK_PROGRESS_BAR (pBar));
+	// 	gtk_box_pack_start (GTK_BOX (pMainVBox), pBar, FALSE, FALSE, 0);
+	// 	pThemesWidget->iSidPulse = g_timeout_add (100, (GSourceFunc)_pulse_bar, pBar);
+	// 	g_signal_connect (G_OBJECT (pWaitingDialog),
+	// 		"destroy",
+	// 		G_CALLBACK (on_waiting_dialog_destroyed),
+	// 		pThemesWidget);
+
+	// 	GtkWidget *pCancelButton = gtk_button_new_with_label (_("Cancel"));
+	// 	g_signal_connect (G_OBJECT (pCancelButton), "clicked", G_CALLBACK(on_cancel_dl), pWaitingDialog);
+	// 	gtk_box_pack_start (GTK_BOX (pMainVBox), pCancelButton, FALSE, FALSE, 0);
+
+	// 	gtk_widget_show_all (pWaitingDialog);
+
+	// 	cd_debug ("start importation...");
+	// 	pThemesWidget->pImportTask = cairo_dock_import_theme_async (cNewThemeName, bLoadBehavior, bLoadLaunchers, (GFunc)_load_theme, pThemesWidget);  // if 'pThemesWidget' is destroyed, the 'reset' callback will be called and will cancel the task.
+	// }
+	// else  // if the theme is already local and uptodate, there is really no need to show a progressbar, because only the download/unpacking is done asynchonously (and the copy of the files is fast enough).
+	// {
+
+	e := gldi.CurrentThemeImport(themeName, useBehaviour, useLaunchers)
+	if e != nil {
+		return e
+	}
+	gldi.CurrentThemeLoad()
+
+	return nil
+}
+
+// CurrentThemeSave saves the current dock theme, and can also make an archive.
+//
+func (Data) CurrentThemeSave(themeName string, saveBehaviour, saveLaunchers, needPackage bool, dirPackage string) error {
+	e := gldi.CurrentThemeExport(themeName, saveBehaviour, saveLaunchers)
+	if e != nil {
+		return e
+	}
+	if !needPackage {
+		return nil
+	}
+	return gldi.CurrentThemePackage(themeName, dirPackage)
 }
 
 // Handbook wraps a dock module visit card as Handbooker for config data source.

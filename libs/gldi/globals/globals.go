@@ -31,27 +31,13 @@ extern CairoDock *g_pMainDock;
 import "C"
 
 import (
+	"github.com/sqp/godock/libs/cdglobal" // Global consts.
+
 	"github.com/sqp/godock/libs/gldi"
 
 	"os"
 	"path/filepath"
 	"unsafe"
-)
-
-const (
-	CairoDockIcon = "cairo-dock.svg" // CAIRO_DOCK_ICON
-
-	CairoDockGettextPackage = "cairo-dock" // CAIRO_DOCK_GETTEXT_PACKAGE
-
-	dirAppData = "appdata" // store user common applets data in ~/.cairo-dock/
-
-	// #define CAIRO_DOCK_LOCAL_EXTRAS_DIR "extras"
-	// #define CAIRO_DOCK_LAUNCHERS_DIR "launchers"
-	// #define CAIRO_DOCK_LOCAL_ICONS_DIR "icons"
-	// #define CAIRO_DOCK_LOCAL_IMAGES_DIR "images"
-
-	DirPlugIns   = "plug-ins"  // CAIRO_DOCK_PLUG_INS_DIR
-	DirAppletsGo = "goapplets" // go internal applets data files in /usr/share/cairo-dock/plug-ins
 )
 
 var (
@@ -92,6 +78,10 @@ func ConfigFile() string {
 	return C.GoString((*C.char)(C.g_cConfFile))
 }
 
+func ConfigFileDefault() string {
+	return DirShareData(C.CAIRO_DOCK_CONF_FILE)
+}
+
 func DirDockData(path ...string) string {
 	dir := C.GoString((*C.char)(C.g_cCairoDockDataDir))
 	path = append([]string{dir}, path...)
@@ -109,15 +99,19 @@ func DirShareData(path ...string) string {
 	return filepath.Join(path...)
 }
 
-func DirAppdata() (string, error) {
-	dir := filepath.Join(DirDockData(), dirAppData)
+// DirUserAppData returns the path to user applet common data in ~/.cairo-dock/
+//
+func DirUserAppData(path ...string) (string, error) {
+	path = append([]string{cdglobal.DirUserAppData}, path...) // was CAIRO_DOCK_SHARE_DATA_DIR
+	full := DirDockData(path...)
+	dir := filepath.Dir(full)
 
 	_, e := os.Stat(dir)
 	if e != nil {
-		e = os.Mkdir(dir, 0700) // Create as private as it could contain passwords. TODO: Need to confirm.
+		e = os.MkdirAll(dir, 0700) // Create as private as it could contain passwords. TODO: Need to confirm.
 	}
 
-	return dir, e
+	return full, e
 }
 
 func PrimaryContainer() *gldi.Container {
@@ -130,6 +124,11 @@ func PrimaryContainer() *gldi.Container {
 
 // gchar *g_cCurrentImagesPath = NULL;  // le chemin vers le repertoire des images ou autre du theme courant.
 // gchar *g_cCurrentPlugInsPath = NULL;  // le chemin vers le repertoire des plug-ins du theme courant.
+
+//
+//------------------------------------------------------------[ GLOBAL FILES ]--
+
+func FileCairoDockIcon() string { return DirShareData(cdglobal.FileCairoDockIcon) }
 
 //
 //-------------------------------------------------------------[ DOCKS PARAM ]--

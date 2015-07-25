@@ -29,7 +29,7 @@ func BuildMenuContainer(m *backendmenu.DockMenu) int {
 	}
 
 	//\_________________________ First item is the Cairo-Dock sub-menu.
-	dockmenu := m.AddSubMenu("Cairo-Dock", globals.DirShareData(globals.CairoDockIcon))
+	dockmenu := m.AddSubMenu("Cairo-Dock", globals.FileCairoDockIcon())
 
 	if !globals.DockIsLocked() {
 		dockmenu.Entry(backendmenu.MenuConfigure)

@@ -52,7 +52,7 @@ var (
 
 	// iconCore defines the name of the dock icon (overriden by gldi backend with real values).
 	//
-	iconCore = "cairo-dock.svg"
+	iconCore = "/usr/share/cairo-dock/cairo-dock.svg"
 )
 
 // SourceType defines the type of a builder.
@@ -268,7 +268,7 @@ type BuilderGodock struct {
 // Icon returns the icon name (or path) of the builder.
 //
 func (build *BuilderGodock) Icon() string {
-	return filepath.Join(dirShareData, iconCore) // TODO: improve with a dedicated icon.
+	return iconCore // TODO: improve with a dedicated icon.
 }
 
 // Label returns the builder label.
@@ -317,7 +317,7 @@ type BuilderCore struct {
 // Icon returns the icon name (or path) of the builder.
 //
 func (build *BuilderCore) Icon() string {
-	return filepath.Join(dirShareData, iconCore)
+	return iconCore
 }
 
 // Label returns the builder label.

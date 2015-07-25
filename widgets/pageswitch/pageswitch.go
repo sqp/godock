@@ -73,6 +73,12 @@ func (widget *Switcher) Load() {
 	}
 }
 
+// Selected returns the name of the selected page.
+//
+func (widget *Switcher) Selected() string {
+	return widget.current
+}
+
 // Clear resets the switcher and all its pages.
 //
 func (widget *Switcher) Clear() {

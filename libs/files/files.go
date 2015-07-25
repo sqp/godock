@@ -14,24 +14,24 @@ import (
 // UpdateConfFile udates a key in a configuration file.
 //
 func UpdateConfFile(configFile, group, key string, value interface{}) error {
-	pKeyF := keyfile.New()
-	_, e := pKeyF.LoadFromFile(configFile, keyfile.FlagsKeepComments|keyfile.FlagsKeepTranslations)
+	// Get the file access rights to preserve them.
+	fi, e := os.Stat(configFile)
 	if e != nil {
 		return e
 	}
 
-	// Get the file access rights to preserve them.
-	fi, e2 := os.Stat(configFile)
-	if e2 != nil {
-		return e2
+	pKeyF, e := keyfile.NewFromFile(configFile, keyfile.FlagsKeepComments|keyfile.FlagsKeepTranslations)
+	if e != nil {
+		return e
 	}
+	defer pKeyF.Free()
 
 	pKeyF.Set(group, key, value)
-	_, content, _ := pKeyF.ToData()
-
-	ioutil.WriteFile(configFile, []byte(content), fi.Mode())
-
-	return nil
+	_, content, e := pKeyF.ToData()
+	if e != nil {
+		return e
+	}
+	return ioutil.WriteFile(configFile, []byte(content), fi.Mode())
 }
 
 // CopyDir copies files recursively from source to destination dir.

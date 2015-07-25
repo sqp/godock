@@ -56,6 +56,7 @@ type List struct {
 	gtk.ScrolledWindow // Main widget is the container. The ScrolledWindow will handle list scrollbars.
 	tree               *gtk.TreeView
 	model              *gtk.ListStore
+	columnCategory     *gtk.TreeViewColumn
 	control            ControlDownload
 	log                cdtype.Logger
 
@@ -74,6 +75,7 @@ func NewList(control ControlDownload, log cdtype.Logger) *List {
 		ScrolledWindow: *builder.GetScrolledWindow("widget"),
 		model:          builder.GetListStore("model"),
 		tree:           builder.GetTreeView("tree"),
+		columnCategory: builder.GetTreeViewColumn("columnCategory"),
 		control:        control,
 		log:            log,
 		rows:           make(map[string]*Row),
@@ -176,6 +178,12 @@ func (widget *List) Delete(key string) {
 func (widget *List) Clear() {
 	widget.rows = make(map[string]*Row)
 	widget.model.Clear()
+}
+
+// hideColumnCategory hides the category column.
+//
+func (widget *List) hideColumnCategory() {
+	widget.columnCategory.Set("visible", false)
 }
 
 //
@@ -297,6 +305,44 @@ func (widget *ListExternal) Load(list map[string]datatype.Appleter) {
 // UpdateModuleState does nothing (stub for interface).
 //
 func (widget *ListExternal) UpdateModuleState(name string, active bool) {}
+
+//
+//-------------------------------------------------------------[ LIST THEMES ]--
+
+// ListThemes defines an applet list widget with dock themes to install.
+//
+type ListThemes struct {
+	List
+}
+
+// NewListThemes creates an applet list widget with external applets to install.
+//
+func NewListThemes(control ControlDownload, log cdtype.Logger) *ListThemes {
+	w := &ListThemes{*NewList(control, log)}
+	w.hideColumnCategory()
+	return w
+}
+
+// Load loads the applet list into the widget.
+//
+func (widget *ListThemes) Load(list map[string]datatype.Appleter) {
+	for key, pack := range list {
+		iter := widget.newIter(key, pack)
+		widget.model.SetCols(iter, gtk.Cols{
+			RowKey:  key,
+			RowName: pack.GetName(),
+		})
+
+		img := pack.GetIconFilePath()
+		if pix, e := common.PixbufNewFromFile(img, iconSize); !widget.log.Err(e, "Load icon") {
+			widget.model.SetValue(iter, RowIcon, pix)
+		}
+	}
+}
+
+// UpdateModuleState does nothing (stub for interface).
+//
+func (widget *ListThemes) UpdateModuleState(name string, active bool) {}
 
 // func modelApplet() *gtk.ListStore {
 // 	store, _ := gtk.ListStoreNew(

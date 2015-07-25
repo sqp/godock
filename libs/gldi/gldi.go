@@ -97,6 +97,9 @@ static gboolean _module_is_auto_loaded(GldiModule *module) {
 }
 
 
+static gpointer  intToPointer(int i)  { return GINT_TO_POINTER(i); }
+
+
 //
 //---------------------------------------------------------[ LSTS FORWARDING ]--
 
@@ -216,10 +219,65 @@ func ModulesGetNb() int {
 	return int(C.gldi_module_get_nb())
 }
 
-// LoadCurrentTheme loads the theme in the dock.
+// CurrentThemeLoad loads the theme in the dock.
 //
-func LoadCurrentTheme() {
+func CurrentThemeLoad() {
 	C.cairo_dock_load_current_theme()
+}
+
+// CurrentThemeNeedSave loads the theme in the dock.
+//
+func CurrentThemeNeedSave() bool {
+	return gobool(C.cairo_dock_current_theme_need_save())
+}
+
+// CurrentThemeImport loads the theme in the dock.
+//
+func CurrentThemeImport(themeName string, useBehaviour, useLaunchers bool) error {
+	if themeName == "" {
+		return errors.New("theme name empty")
+	}
+	cTheme := (*C.gchar)(C.CString(themeName))
+	defer C.free(unsafe.Pointer((*C.char)(cTheme)))
+
+	c := C.cairo_dock_import_theme(cTheme, cbool(useBehaviour), cbool(useLaunchers))
+	if !gobool(c) {
+		return errors.New("import theme failed")
+	}
+	return nil
+}
+
+// CurrentThemeExport loads the theme in the dock.
+//
+func CurrentThemeExport(themeName string, saveBehaviour, saveLaunchers bool) error {
+	if themeName == "" {
+		return errors.New("theme name empty")
+	}
+	cstr := (*C.gchar)(C.CString(themeName))
+	defer C.free(unsafe.Pointer((*C.char)(cstr)))
+
+	c := C.cairo_dock_export_current_theme(cstr, cbool(saveBehaviour), cbool(saveLaunchers))
+	if !gobool(c) {
+		return errors.New("export theme failed")
+	}
+	return nil
+}
+
+// CurrentThemePackage creates a package with the current theme of the dock.
+//
+func CurrentThemePackage(themeName, dirPath string) error {
+	if themeName == "" {
+		return errors.New("theme name empty")
+	}
+	cTheme := (*C.gchar)(C.CString(themeName))
+	defer C.free(unsafe.Pointer((*C.char)(cTheme)))
+	cDirPath := (*C.gchar)(C.CString(dirPath))
+	defer C.free(unsafe.Pointer((*C.char)(cDirPath)))
+	c := C.cairo_dock_package_current_theme(cTheme, cDirPath)
+	if !gobool(c) {
+		return errors.New("package theme failed")
+	}
+	return nil
 }
 
 // FMForceDesktopEnv forces the dock to use the given desktop environment backend.
@@ -698,7 +756,11 @@ func (o *Desklet) GetIcon() *Icon {
 	return NewIconFromNative(unsafe.Pointer(o.Ptr.pIcon))
 }
 
-func (o *Desklet) Icons() (list []*Icon) {
+func (o *Desklet) HasIcons() bool {
+	return o.Ptr.icons != nil
+}
+
+func (o *Desklet) Icons() []*Icon {
 	clist := (*glib.List)(unsafe.Pointer(o.Ptr.icons))
 	return goListIcons(clist)
 }
@@ -708,12 +770,7 @@ func (o *Desklet) RemoveIcons() {
 		ObjectUnref(ic)
 	}
 	C.g_list_free(o.Ptr.icons)
-
-	// 	if (pModuleInstance->pDesklet != NULL && pModuleInstance->pDesklet->icons != NULL)  // idem, version desklet.
-	// 	{
-	// 		g_list_foreach (pModuleInstance->pDesklet->icons, (GFunc) gldi_object_unref, NULL);
-	// 		g_list_free (pModuleInstance->pDesklet->icons);
-	// 		pModuleInstance->pDesklet->icons = NULL;
+	o.Ptr.icons = nil
 }
 
 func (o *Desklet) SetSticky(b bool) {
@@ -732,6 +789,20 @@ func (o *Desklet) Visibility() cdtype.DeskletVisibility {
 // TRUE <=> save state in conf.
 func (o *Desklet) SetVisibility(vis cdtype.DeskletVisibility, save bool) {
 	C.gldi_desklet_set_accessibility(o.Ptr, C.CairoDeskletVisibility(vis), cbool(save))
+}
+
+func (o *Desklet) SetRendererByName(name string) {
+	cstr := (*C.gchar)(C.CString(name))
+	defer C.free(unsafe.Pointer((*C.char)(cstr)))
+	C.cairo_dock_set_desklet_renderer_by_name(o.Ptr, cstr, nil)
+}
+
+func (o *Desklet) SetRendererByNameData(name string, unk1, unk2 bool) {
+	cstr := (*C.gchar)(C.CString(name))
+	defer C.free(unsafe.Pointer((*C.char)(cstr)))
+
+	data := [2]C.gpointer{C.intToPointer(C.int(cbool(unk1))), C.intToPointer(C.int(cbool(unk2)))}
+	C.cairo_dock_set_desklet_renderer_by_name(o.Ptr, cstr, C.CairoDeskletRendererConfigPtr(unsafe.Pointer(&data)))
 }
 
 //
@@ -1039,6 +1110,9 @@ func (icon *Icon) SetIcon(str string) error {
 func (icon *Icon) RenderNewData(values ...float64) error {
 	if icon.Ptr.image.pSurface == nil {
 		return errors.New("icon has no image.pSurface")
+	}
+	if icon.GetContainer() == nil {
+		return errors.New("icon has no container")
 	}
 
 	ctx := C.cairo_create(icon.Ptr.image.pSurface)
@@ -1359,16 +1433,21 @@ func (mi *ModuleInstance) PopupAboutApplet() {
 	C.gldi_module_instance_popup_description(mi.Ptr)
 }
 
-func PrepareNewIcons(fields []string) (map[string]*Icon, *C.GList) {
+func (mi *ModuleInstance) PrepareNewIcons(fields []string) (map[string]*Icon, *C.GList) {
+	var list *C.GList
+	switch {
+	case mi.Ptr.pDock == nil: // In desklet mode.
+		list = mi.Desklet().Ptr.icons
 
-	// var list *C.GList
-	// switch {
-	// case mi.pDock == nil: // In desklet mode.
-	// 	list = pInstance.pDesklet.icons
+	case mi.Icon().GetSubDock() != nil: // In dock with a subdock. Reuse current list.
+		list = mi.Icon().GetSubDock().Ptr.icons
+	}
 
-	// case mi.Icon().GetSubDock() != nil: // In dock with a subdock. Reuse current list.
-	// 	list = pIcon.pSubDock.icons
-	// }
+	lastIcon := C.cairo_dock_get_last_icon(list)
+	n := 0
+	if lastIcon != nil {
+		n = int(lastIcon.fOrder)
+	}
 
 	// GList *pCurrentIconsList = (pInstance->pDock ? (pIcon->pSubDock ? pIcon->pSubDock->icons : NULL) : pInstance->pDesklet->icons);
 	// Icon *pLastIcon = cairo_dock_get_last_icon (pCurrentIconsList);
@@ -1378,7 +1457,7 @@ func PrepareNewIcons(fields []string) (map[string]*Icon, *C.GList) {
 	var clist *C.GList
 	for i := 0; i < len(fields)/3; i++ {
 		id := fields[3*i+2]
-		icon := CreateDummyLauncher(fields[3*i], fields[3*i+1], fields[3*i+2], "", float64(i))
+		icon := CreateDummyLauncher(fields[3*i], fields[3*i+1], fields[3*i+2], "", float64(i+n))
 		clist = C.g_list_append(clist, C.gpointer(icon.Ptr))
 		icons[id] = icon
 	}
@@ -1387,12 +1466,13 @@ func PrepareNewIcons(fields []string) (map[string]*Icon, *C.GList) {
 }
 
 func (mi *ModuleInstance) InsertIcons(clist *C.GList, dockRenderer, deskletRenderer string) {
+	data := [3]C.gpointer{C.intToPointer(0), C.intToPointer(1), nil}
 
-	// var data = [3]C.gpointer{C.intToPointer(0), C.intToPointer(1), nil}
-
-	C.cairo_dock_insert_icons_in_applet(mi.Ptr, clist, gchar(dockRenderer), gchar(deskletRenderer), nil) // last is type CairoDeskletRendererConfigPtr
-
-	// (GldiModuleInstance *pModuleInstance, GList *pIconsList, const gchar *cDockRenderer, const gchar *cDeskletRenderer, gpointer pDeskletRendererData);
+	C.cairo_dock_insert_icons_in_applet(mi.Ptr,
+		clist,
+		gchar(dockRenderer), // check if really not to free.
+		gchar(deskletRenderer),
+		C.gpointer(unsafe.Pointer(&data))) // CairoDeskletRendererConfigPtr
 }
 
 func (mi *ModuleInstance) RemoveAllIcons() {

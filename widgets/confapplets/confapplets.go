@@ -22,6 +22,7 @@ type ListMode int
 const (
 	ListCanAdd   ListMode = iota // Applets for the add page.
 	ListExternal                 // Applets for the download page.
+	ListThemes                   // Global dock themes.
 )
 
 //
@@ -41,9 +42,16 @@ type ListInterface interface {
 // GUIControl is the interface to the main GUI and data source.
 //
 type GUIControl interface {
-	SelectIcons(string)
 	ListKnownApplets() map[string]datatype.Appleter
 	ListDownloadApplets() (map[string]datatype.Appleter, error)
+	ListDockThemeLoad() (map[string]datatype.Appleter, error)
+	ListDockThemeSave() []datatype.Field
+}
+
+// SelectIconser defines the optional control item selection.
+//
+type SelectIconser interface {
+	SelectIcons(string)
 }
 
 // ConfApplet provides an applets list and preview widget.
@@ -88,6 +96,9 @@ func New(control GUIControl, log cdtype.Logger, menu MenuDownloader, mode ListMo
 			widget.PackStart(menu, false, false, 0)
 		}
 		widget.applets = appletlist.NewListExternal(widget, log)
+
+	case ListThemes:
+		widget.applets = appletlist.NewListThemes(widget, log)
 	}
 
 	inbox, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
@@ -111,6 +122,12 @@ func (widget *ConfApplet) Load() {
 		if !widget.log.Err(e, "external applets list") {
 			widget.applets.Load(applets)
 		}
+
+	case ListThemes:
+		applets, e := widget.control.ListDockThemeLoad()
+		if !widget.log.Err(e, "ListDockThemes") {
+			widget.applets.Load(applets)
+		}
 	}
 }
 
@@ -121,7 +138,11 @@ func (widget *ConfApplet) Save() {
 	case ListCanAdd:
 		app := widget.applets.Selected()
 		newconf := app.Activate()
-		widget.control.SelectIcons(newconf)
+
+		selecter, ok := widget.control.(SelectIconser)
+		if ok {
+			selecter.SelectIcons(newconf)
+		}
 		if !app.CanAdd() {
 			widget.applets.Delete(app.GetName())
 		}
@@ -140,6 +161,12 @@ func (widget *ConfApplet) Clean() {
 //
 func (widget *ConfApplet) Clear() {
 	widget.applets.Clear()
+}
+
+// Selected returns the name of the selected page.
+//
+func (widget *ConfApplet) Selected() datatype.Appleter {
+	return widget.applets.Selected()
 }
 
 // UpdateModuleState updates the state of the given applet, from a dock event.
@@ -262,7 +289,7 @@ func (widget *MenuDownload) OnSelect(pack datatype.Appleter) {
 // SetInstalledState sets the state of the 'installed' switch.
 //
 func (widget *MenuDownload) SetInstalledState(state bool) {
-	// widget.active.SetSensitive(!state)
+	widget.active.SetSensitive(!state)
 	widget.installed.HandlerBlock(widget.handlerInstalled)
 	widget.installed.SetActive(state)
 	widget.installed.HandlerUnblock(widget.handlerInstalled)
@@ -271,7 +298,7 @@ func (widget *MenuDownload) SetInstalledState(state bool) {
 // SetActiveState sets the state of the 'active' switch.
 //
 func (widget *MenuDownload) SetActiveState(state bool) {
-	// widget.installed.SetSensitive(pack.CanUninstall())
+	widget.installed.SetSensitive(widget.current.CanUninstall())
 	widget.active.HandlerBlock(widget.handlerActive)
 	widget.active.SetActive(state)
 	widget.active.HandlerUnblock(widget.handlerActive)
@@ -293,9 +320,15 @@ func (widget *MenuDownload) toggledInstalled(switc *gtk.Switch) {
 
 		widget.log.Info("Installed applet", name)
 		widget.active.SetSensitive(true)
+		widget.installed.SetSensitive(widget.current.CanUninstall())
 		widget.applets.SetActive(true)
 
 	} else { // Uninstall
+		if !widget.current.CanUninstall() {
+			widget.SetInstalledState(true)
+			return
+		}
+
 		e := widget.current.Uninstall()
 		if widget.log.Err(e, "Uninstall package") { // Uninstall failed. Force checked state of widget.
 			widget.SetInstalledState(true)

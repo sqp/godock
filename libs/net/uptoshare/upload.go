@@ -34,6 +34,10 @@ import (
 	// "mime/multipart"
 )
 
+// HistoryFile defines the name of the default history file.
+//
+const HistoryFile = "uptoshare_history.txt"
+
 /*
 // FileNameFromURI is a wrapper around g_filename_from_uri to convert a filepath to UTF-8.
 //

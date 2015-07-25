@@ -177,7 +177,7 @@ func NewGuiConfigure(source datatype.Source, log cdtype.Logger) *GuiConfigure {
 	}
 
 	// Load GUI own config page settings.
-	e := confsettings.Init(source.DirAppData())
+	e := confsettings.Init(source.DirUserAppData(confsettings.GuiFilename))
 	log.Err(e, "Load ConfigSettings")
 
 	// Create widgets.

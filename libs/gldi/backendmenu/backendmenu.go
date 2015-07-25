@@ -327,7 +327,7 @@ func (m *DockMenu) Entry(entry MenuEntry) bool {
 					dialog.DialogShowWithQuestion("Delete this dock?",
 						m.Dock.GetPointedIcon(),
 						m.Container,
-						globals.DirShareData(globals.CairoDockIcon),
+						globals.FileCairoDockIcon(),
 						cbDialogIsOK(func() {
 							gldi.ObjectDelete(m.Dock)
 						}))
@@ -573,7 +573,7 @@ func (m *DockMenu) Entry(entry MenuEntry) bool {
 				dialog.DialogShowWithQuestion("Quit Cairo-Dock?",
 					GetIconForDesklet(m.Icon, m.Container),
 					m.Container,
-					globals.DirShareData(globals.CairoDockIcon),
+					globals.FileCairoDockIcon(),
 					cbDialogIsOK(gtk.MainQuit))
 			})
 
@@ -687,7 +687,7 @@ func (m *DockMenu) Entry(entry MenuEntry) bool {
 								tran.Slate("Do you want to re-dispatch the icons contained inside this container into the dock?\n(otherwise they will be destroyed)"),
 								m.Icon,
 								m.Container,
-								globals.DirShareData(globals.CairoDockIcon),
+								globals.FileCairoDockIcon(),
 								cbDialogIsOK(func() {
 									m.Icon.RemoveIconsFromSubdock(m.Dock)
 								}))

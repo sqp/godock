@@ -1,7 +1,8 @@
 /*
 Package appdbus is the godock cairo-dock connector using DBus.
 
-Its goal is to connect the main Cairo-Dock Golang API, godock/libs/dock, to its parent.
+// Its goal is to connect the main Cairo-Dock Golang applet object,
+// godock/libs/cdapplet, to its parent, the dock.
 */
 package appdbus
 

@@ -1,7 +1,8 @@
-// Package dock is the Cairo-Dock applet manager, using DBus or Gldi backend.
-package dock
+// Package cdapplet is the Cairo-Dock applet base object, using DBus or Gldi backend.
+package cdapplet
 
 import (
+	"github.com/sqp/godock/libs/cdapplet/action"
 	"github.com/sqp/godock/libs/cdtype"
 	"github.com/sqp/godock/libs/config"
 	"github.com/sqp/godock/libs/log"     // Display info in terminal.
@@ -40,11 +41,11 @@ type CDApplet struct {
 	cdtype.AppIcon // Dock applet connection, Can be Gldi or Dbus (will be Gldi with build tag dock).
 }
 
-// NewCDApplet creates a new applet manager.
+// New creates a new applet manager.
 //
-func NewCDApplet() cdtype.AppBase {
+func New() cdtype.AppBase {
 	app := &CDApplet{
-		action: &Actions{},
+		action: &action.Actions{},
 		hooker: NewHooker(dockCalls, dockTests),
 		log:    log.NewLog(log.Logs),
 	}
@@ -99,7 +100,7 @@ func (cda *CDApplet) SetEvents(app cdtype.AppInstance) {
 			Reload: func(loadConf bool) {
 				cda.log.Debug("Reload module")
 				app.Init(loadConf)
-				cda.poller.Restart() // send our restart event. (safe on nil pollers).
+				cda.Poller().Restart() // send our restart event. (safe on nil pollers).
 			},
 		}
 

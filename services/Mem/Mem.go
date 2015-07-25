@@ -4,8 +4,8 @@ package Mem
 import (
 	"github.com/cloudfoundry/gosigar" // System informations.
 
-	"github.com/sqp/godock/libs/cdtype"
-	"github.com/sqp/godock/libs/dock" // Connection to cairo-dock.
+	"github.com/sqp/godock/libs/cdapplet" // Applet base.
+	"github.com/sqp/godock/libs/cdtype"   // Applet types.
 	"github.com/sqp/godock/libs/sysinfo"
 )
 
@@ -21,7 +21,7 @@ type Applet struct {
 // NewApplet create a new Mem applet instance.
 //
 func NewApplet() cdtype.AppInstance {
-	app := &Applet{AppBase: dock.NewCDApplet()} // Icon controler and interface to cairo-dock.
+	app := &Applet{AppBase: cdapplet.New()} // Icon controler and interface to cairo-dock.
 	app.Poller().Add(app.GetMemActivity)
 
 	app.service.App = app

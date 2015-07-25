@@ -11,7 +11,6 @@ import "C"
 
 import (
 	"errors"
-	// "runtime"
 	"unsafe"
 )
 
@@ -75,7 +74,6 @@ type KeyFile struct {
 // New is a wrapper around g_key_file_new().
 func New() *KeyFile {
 	kf := &KeyFile{cKey: C.g_key_file_new()}
-	// runtime.SetFinalizer(kf, func(kf *KeyFile) { C.g_key_file_free(kf.cKey) })
 	return kf
 }
 

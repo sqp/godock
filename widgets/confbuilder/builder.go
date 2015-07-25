@@ -31,11 +31,13 @@ import (
 	"github.com/conformal/gotk3/gtk"
 
 	"github.com/sqp/godock/libs/cdtype"
+	"github.com/sqp/godock/libs/config"
 	"github.com/sqp/godock/libs/text/tran"
 
 	"github.com/sqp/godock/widgets/confbuilder/datatype"
 	"github.com/sqp/godock/widgets/confsettings"
 
+	"errors"
 	"strings"
 )
 
@@ -65,19 +67,24 @@ const (
 	WidgetOpenGLOnly = '&'
 )
 
-// Dock buildable widgets list.
 //
-const ( // WidgetType;
+//-------------------------------------------------------------[ WIDGET TYPE ]--
 
-	WidgetCheckButton        = 'b' // boolean in a button to tick.
-	WidgetCheckControlButton = 'B' // boolean in a button to tick, that will control the sensitivity of the next widget.
-	WidgetIntegerSpin        = 'i' // integer in a spin button.
-	WidgetIntegerScale       = 'I' // integer in an horizontal scale.
-	WidgetIntegerSize        = 'j' // pair of integers for dimansion WidthxHeight
-	WidgetFloatSpin          = 'f' // double in a spin button.
-	WidgetFloatScale         = 'e' // double in an horizontal scale.
-	WidgetColorSelectorRGB   = 'c' // 3 doubles with a color selector (RGB).
-	WidgetColorSelectorRGBA  = 'C' // 4 doubles with a color selector (RGBA).
+// WidgetType defines the type for a key and its widget.
+//
+type WidgetType byte
+
+// Dock buildable widgets list.
+const (
+	WidgetCheckButton        WidgetType = 'b' // boolean in a button to tick.
+	WidgetCheckControlButton            = 'B' // boolean in a button to tick, that will control the sensitivity of the next widget.
+	WidgetIntegerSpin                   = 'i' // integer in a spin button.
+	WidgetIntegerScale                  = 'I' // integer in an horizontal scale.
+	WidgetIntegerSize                   = 'j' // pair of integers for dimansion WidthxHeight
+	WidgetFloatSpin                     = 'f' // double in a spin button.
+	WidgetFloatScale                    = 'e' // double in an horizontal scale.
+	WidgetColorSelectorRGB              = 'c' // 3 doubles with a color selector (RGB).
+	WidgetColorSelectorRGBA             = 'C' // 4 doubles with a color selector (RGBA).
 
 	WidgetViewList                         = 'n' // list of views.
 	WidgetThemeList                        = 'h' // list of themes in a combo, with preview and readme.
@@ -127,12 +134,126 @@ const ( // WidgetType;
 	WidgetExpander  = 'X' // a frame inside an expander. The previous frame will be closed.
 )
 
+// Builder returns the builder call for the widget type.
+//
+func (typ WidgetType) Builder() func(build *Builder, key *Key) {
+	switch typ {
+	case WidgetCheckButton, // boolean
+		WidgetCheckControlButton: // boolean qui controle le widget suivant
+		return (*Builder).WidgetCheckButton
+
+	case WidgetIntegerSpin, // integer in a spin button.
+		WidgetIntegerScale, // integer in a HScale.
+		WidgetIntegerSize:  // double integer WxH
+		return (*Builder).WidgetInteger
+
+	case WidgetFloatSpin, // float.
+		WidgetFloatScale: // float in a HScale.
+		return (*Builder).WidgetFloat
+
+	case WidgetColorSelectorRGB, // float x3 avec un bouton de choix de couleur.
+		WidgetColorSelectorRGBA: // float x4 avec un bouton de choix de couleur.
+		return (*Builder).WidgetColorSelector
+
+	case WidgetViewList: // List of dock views.
+		return (*Builder).WidgetViewList
+
+	case WidgetThemeList: // List themes in a combo, with preview and readme.
+		return (*Builder).WidgetListTheme
+
+	case WidgetAnimationList: // List of animations.
+		return (*Builder).WidgetAnimationList
+
+	case WidgetDialogDecoratorList: // liste des decorateurs de dialogue.
+		return (*Builder).WidgetDialogDecoratorList
+
+	case WidgetDeskletDecorationListSimple, // liste des decorations de desklet.
+		WidgetDeskletDecorationListWithDefault: // idem mais avec le choix "defaut" en plus.
+		return (*Builder).WidgetListDeskletDecoration
+
+	case WidgetListDocks: // liste des docks existant.
+		return (*Builder).WidgetDockList
+
+	case WidgetIconThemeList:
+		return (*Builder).WidgetIconThemeList
+
+	case WidgetIconsList:
+		return (*Builder).WidgetIconsList
+
+	case WidgetScreensList:
+		return (*Builder).WidgetScreensList
+
+	// case WidgetJumpToModuleSimple, // bouton raccourci vers un autre module
+	// 	WidgetJumpToModuleIfExists: // idem mais seulement affiche si le module existe.
+	// 	 return (*Builder).WidgetJumpToModule
+
+	case WidgetLaunchCommandSimple,
+		WidgetLaunchCommandIfCondition:
+		return (*Builder).WidgetLaunchCommand
+
+	case WidgetListSimple, // a list of strings.
+		WidgetListWithEntry, // a list of strings with an entry to add custom choices.
+
+		WidgetNumberedList, // a list of numbered strings.
+		// 	WidgetNumberedControlListSimple,           // a list of numbered strings whose current choice defines the sensitivity of the widgets below.
+		WidgetNumberedControlListSelective: // a list of numbered strings whose current choice defines the sensitivity of the widgets below given in the list.
+		return (*Builder).WidgetLists
+
+	case WidgetTreeViewSortSimple, // N strings listed from top to bottom.
+		WidgetTreeViewSortAndModify, // same with possibility to add/remove some.
+		WidgetTreeViewMultiChoice:   // N strings that can be selected or not.
+		return (*Builder).WidgetTreeView
+
+	case WidgetFontSelector: // string avec un selecteur de font a cote du GtkEntry.
+		return (*Builder).WidgetFontSelector
+
+	case WidgetLink: // string avec un lien internet a cote.
+		return (*Builder).WidgetLink
+
+	case WidgetStringEntry, // string
+		WidgetPasswordEntry,    // string de type "password", crypte dans le .build et cache dans l'UI (Merci Tofe !) ,-)
+		WidgetFileSelector,     // string avec un selecteur de fichier a cote du GtkEntry.
+		WidgetFolderSelector,   // string avec un selecteur de repertoire a cote du GtkEntry.
+		WidgetSoundSelector,    // string avec un selecteur de fichier a cote du GtkEntry et un boutton play.
+		WidgetShortkeySelector, // string avec un selecteur de touche clavier (Merci Ctaf !)
+		WidgetClassSelector,    // string avec un selecteur de class (Merci Matttbe !)
+		WidgetImageSelector:    // string with a file selector (results are filtered to only display images)
+		return (*Builder).WidgetStrings
+
+	case WidgetEmptyWidget: // Containers for custom widget.
+	case WidgetEmptyFull:
+
+	case WidgetTextLabel: // Just the text label.
+
+		// int iFrameWidth = GPOINTER_TO_INT (g_object_get_data (G_OBJECT (pMainWindow), "frame-width"));
+		// gtk_widget_set_size_request (pLabel, MIN (800, gldi_desktop_get_width() - iFrameWidth), -1);
+		// gtk_label_set_justify (GTK_LABEL (pLabel), GTK_JUSTIFY_LEFT);
+		return (*Builder).WidgetTextLabel
+
+	case WidgetHandbook:
+		return (*Builder).WidgetHandbook
+
+	case WidgetFrame, WidgetExpander: // frames: simple or with expander.
+		return (*Builder).WidgetFrame
+
+	case WidgetSeparator:
+		return (*Builder).WidgetSeparator
+	}
+
+	return func(build *Builder, _ *Key) {
+		build.log.NewWarn("invalid type", "build widget")
+	}
+}
+
+//
+//---------------------------------------------------------------------[ KEY ]--
+
 // Key defines a configuration entry.
 //
 type Key struct {
 	Group             string
 	Name              string
-	Type              byte
+	Type              WidgetType
 	NbElements        int
 	AuthorizedValues  []string
 	Text              string
@@ -140,7 +261,50 @@ type Key struct {
 	IsAlignedVertical bool
 	IsDefault         bool // true when a default text has been set (must be ignored). Match "ignore-value" in the C version.
 	GetValues         []func() interface{}
+	makeWidget        func(*Builder, *Key) // custom widget, replaces the use of Type.
 }
+
+// IsType returns whether the key type is one of the provided types.
+//
+func (key *Key) IsType(types ...WidgetType) bool {
+	for _, test := range types {
+		if key.Type == test {
+			return true
+		}
+	}
+	return false
+}
+
+// Bool returns the first value as bool.
+//
+func (key *Key) Bool() (bool, error) {
+	if key == nil {
+		return false, errors.New("missing key")
+	}
+	return key.GetValues[0]().(bool), nil
+}
+
+// String returns the first value as string.
+//
+func (key *Key) String() (string, error) {
+	if key == nil {
+		return "", errors.New("missing key")
+	}
+	return key.GetValues[0]().(string), nil
+}
+
+// SetCustom sets a custom key widget builder call.
+//
+func (key *Key) SetCustom(custom func(*Builder, *Key)) (*Key, error) {
+	if key == nil {
+		return nil, errors.New("missing key")
+	}
+	key.makeWidget = custom
+	return key, nil
+}
+
+//
+//-----------------------------------------------------------------[ BUILDER ]--
 
 // Builder builds a Cairo-Dock configuration page.
 //
@@ -163,9 +327,12 @@ type Builder struct {
 	pFrame          *gtk.Frame
 	pLabelContainer gtk.IWidget
 
-	keys []*Key
+	// Build keys. Using the same group id index (order as detected and used).
+	buildGroups []string
+	buildKeys   [][]*Key
 
-	Conf          *CairoConfig
+	// extra data.
+	Conf          *CDConfig
 	data          datatype.Source
 	log           cdtype.Logger
 	win           *gtk.Window // Parent window.
@@ -176,9 +343,13 @@ type Builder struct {
 // GetKey finds the key referenced by its config group and name.
 //
 func (build *Builder) GetKey(group, name string) *Key {
-	for _, key := range build.keys {
-		if key.Group == group && key.Name == name {
-			return key
+	for gid, testgroup := range build.buildGroups {
+		if group == testgroup {
+			for _, key := range build.buildKeys[gid] {
+				if key.Name == name {
+					return key
+				}
+			}
 		}
 	}
 	return nil
@@ -186,7 +357,7 @@ func (build *Builder) GetKey(group, name string) *Key {
 
 // BuildPage builds a Cairo-Dock configuration page for the given group.
 //
-func (build *Builder) BuildPage(cGroupName string) *gtk.ScrolledWindow {
+func (build *Builder) BuildPage(keys []*Key) *gtk.ScrolledWindow {
 
 	// gconstpointer *data;
 	// gsize length = 0;
@@ -222,8 +393,6 @@ func (build *Builder) BuildPage(cGroupName string) *gtk.ScrolledWindow {
 	// gboolean bAddBackButton;
 	// GtkWidget *pPreviewBox;
 
-	bInsert := false
-
 	build.pageScroll, _ = gtk.ScrolledWindowNew(nil, nil)
 	build.pageBox, _ = gtk.BoxNew(gtk.ORIENTATION_VERTICAL, MarginGUI)
 	build.pageBox.SetBorderWidth(MarginGUI)
@@ -231,19 +400,11 @@ func (build *Builder) BuildPage(cGroupName string) *gtk.ScrolledWindow {
 
 	build.pFrameVBox = nil
 
-	build.pKeyBox = nil
-	build.pLabel = nil
-	build.pWidgetBox = nil
-	build.pAdditionalItemsVBox = nil
-
 	build.iNbControlledWidgets = 0
 
 	// FRAMES ONLY
 	build.pFrame = nil
 	build.pLabelContainer = nil
-
-	keys := build.Conf.List(cGroupName)
-	build.keys = append(build.keys, keys...)
 
 	for _, key := range keys {
 		// log.DEV(key.Name, string(key.Type), key.AuthorizedValues)
@@ -253,11 +414,11 @@ func (build *Builder) BuildPage(cGroupName string) *gtk.ScrolledWindow {
 		build.pWidgetBox = nil
 		build.pAdditionalItemsVBox = nil
 
-		bFullSize := key.Type == WidgetThemeList || key.Type == WidgetViewList || key.Type == WidgetEmptyFull || key.Type == WidgetHandbook
+		bFullSize := key.IsType(WidgetThemeList, WidgetViewList, WidgetEmptyFull, WidgetHandbook)
 
-		if key.Type != WidgetFrame && key.Type != WidgetExpander && key.Type != WidgetSeparator {
+		if !key.IsType(WidgetFrame) && !key.IsType(WidgetExpander) && !key.IsType(WidgetSeparator) {
 			// Create Key box.
-			if key.Type == WidgetThemeList || key.Type == WidgetViewList {
+			if key.IsType(WidgetThemeList, WidgetViewList) {
 				build.pAdditionalItemsVBox, _ = gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
 				build.pKeyBox, _ = gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, MarginGUI)
 				build.addWidget(build.pAdditionalItemsVBox, bFullSize, bFullSize, 0)
@@ -325,265 +486,167 @@ func (build *Builder) BuildPage(cGroupName string) *gtk.ScrolledWindow {
 			}
 
 			// Key widgets on the right. In pWidgetBox, they will be stacked from left to right.
-			if key.Type != WidgetEmptyWidget && key.Type != WidgetTextLabel {
+			if !key.IsType(WidgetTextLabel) {
 				build.pWidgetBox, _ = gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, MarginGUI)
-				build.pKeyBox.PackEnd(build.pWidgetBox, false, false, 0)
+				build.pKeyBox.PackEnd(build.pWidgetBox, bFullSize, bFullSize, 0)
 			}
 		}
 
 		// pSubWidgetList = NULL;
-		// bAddBackButton = FALSE;
-		// bInsert = TRUE;
 
-		// //\______________ On cree les widgets selon leur type.
-		switch key.Type {
-		case WidgetCheckButton, // boolean
-			WidgetCheckControlButton: // boolean qui controle le widget suivant
-			build.WidgetCheckButton(key)
-
-		case WidgetIntegerSpin, // integer in a spin button.
-			WidgetIntegerScale, // integer in a HScale.
-			WidgetIntegerSize:  // double integer WxH
-			build.WidgetInteger(key)
-
-		case WidgetFloatSpin, // float.
-			WidgetFloatScale: // float in a HScale.
-			build.WidgetFloat(key)
-
-		case WidgetColorSelectorRGB, // float x3 avec un bouton de choix de couleur.
-			WidgetColorSelectorRGBA: // float x4 avec un bouton de choix de couleur.
-			build.WidgetColorSelector(key)
-
-		case WidgetViewList: // List of dock views.
-			build.WidgetViewList(key)
-
-		case WidgetThemeList: // List themes in a combo, with preview and readme.
-			build.WidgetListTheme(key)
-
-		case WidgetAnimationList: // List of animations.
-			build.WidgetAnimationList(key)
-
-		case WidgetDialogDecoratorList: // liste des decorateurs de dialogue.
-			build.WidgetDialogDecoratorList(key)
-
-		case WidgetDeskletDecorationListSimple, // liste des decorations de desklet.
-			WidgetDeskletDecorationListWithDefault: // idem mais avec le choix "defaut" en plus.
-			build.WidgetListDeskletDecoration(key)
-
-		case WidgetListDocks: // liste des docks existant.
-			build.WidgetDockList(key)
-
-		case WidgetIconThemeList:
-			build.WidgetIconThemeList(key)
-
-		case WidgetIconsList:
-			build.WidgetIconsList(key)
-
-		case WidgetScreensList:
-			build.WidgetScreensList(key)
-
-		// case WidgetJumpToModuleSimple, // bouton raccourci vers un autre module
-		// 	WidgetJumpToModuleIfExists: // idem mais seulement affiche si le module existe.
-		// 	build.WidgetJumpToModule(key)
-
-		case WidgetLaunchCommandSimple,
-			WidgetLaunchCommandIfCondition:
-			build.WidgetLaunchCommand(key)
-
-		case WidgetListSimple, // a list of strings.
-			WidgetListWithEntry, // a list of strings with an entry to add custom choices.
-
-			WidgetNumberedList, // a list of numbered strings.
-			// 	WidgetNumberedControlListSimple,           // a list of numbered strings whose current choice defines the sensitivity of the widgets below.
-			WidgetNumberedControlListSelective: // a list of numbered strings whose current choice defines the sensitivity of the widgets below given in the list.
-			build.WidgetLists(key)
-
-		case WidgetTreeViewSortSimple, // N strings listed from top to bottom.
-			WidgetTreeViewSortAndModify, // same with possibility to add/remove some.
-			WidgetTreeViewMultiChoice:   // N strings that can be selected or not.
-			build.WidgetTreeView(key)
-
-		case WidgetFontSelector: // string avec un selecteur de font a cote du GtkEntry.
-			build.WidgetFontSelector(key)
-
-		case WidgetLink: // string avec un lien internet a cote.
-			build.WidgetLink(key)
-
-		case WidgetStringEntry, // string
-			WidgetPasswordEntry,    // string de type "password", crypte dans le .build et cache dans l'UI (Merci Tofe !) ,-)
-			WidgetFileSelector,     // string avec un selecteur de fichier a cote du GtkEntry.
-			WidgetFolderSelector,   // string avec un selecteur de repertoire a cote du GtkEntry.
-			WidgetSoundSelector,    // string avec un selecteur de fichier a cote du GtkEntry et un boutton play.
-			WidgetShortkeySelector, // string avec un selecteur de touche clavier (Merci Ctaf !)
-			WidgetClassSelector,    // string avec un selecteur de class (Merci Matttbe !)
-			WidgetImageSelector:    // string with a file selector (results are filtered to only display images)
-			build.WidgetStrings(key)
-
-		case WidgetEmptyWidget: // Containers for custom widget.
-		case WidgetEmptyFull:
-
-		case WidgetTextLabel: // Just the text label.
-
-			// int iFrameWidth = GPOINTER_TO_INT (g_object_get_data (G_OBJECT (pMainWindow), "frame-width"));
-			// gtk_widget_set_size_request (pLabel, MIN (800, gldi_desktop_get_width() - iFrameWidth), -1);
-			// gtk_label_set_justify (GTK_LABEL (pLabel), GTK_JUSTIFY_LEFT);
-			build.pLabel.SetLineWrap(true)
-
-		case WidgetHandbook:
-			build.WidgetHandbook(key)
-
-		case WidgetFrame, WidgetExpander: // frames: simple or with expander.
-			build.WidgetFrame(key)
-
-		case WidgetSeparator:
-			build.WidgetSeparator()
-
-		default:
-			build.log.Info("Load build: invalid widget type", string(key.Type), ":", key.Name)
-			bInsert = false
+		// Build widget for the key, use default if not overridden.
+		if key.makeWidget == nil {
+			key.makeWidget = key.Type.Builder()
 		}
+		key.makeWidget(build, key)
 	}
 
-	_ = bInsert
 	return build.pageScroll
 }
+
+//
+//--------------------------------------------------------------------[ SAVE ]--
 
 // Save updates the configuration file with user changes.
 //
 func (build *Builder) Save() {
-	for _, key := range build.keys {
-		if key.GetValues != nil {
-
-			switch key.Type {
-			case WidgetCheckButton, // boolean
-				WidgetCheckControlButton: // boolean qui controle le widget suivant
-				if key.NbElements > 1 {
-					bools := make([]bool, key.NbElements)
-					for i, f := range key.GetValues {
-						bools[i] = f().(bool)
-					}
-					build.Conf.KeyFile.SetBooleanList(key.Group, key.Name, bools)
-				} else {
-					build.Conf.KeyFile.SetBoolean(key.Group, key.Name, key.GetValues[0]().(bool))
-				}
-
-			case WidgetIntegerSpin, // integer
-				WidgetIntegerScale, // integer in a HScale
-				WidgetIntegerSize:  // double integer WxH
-				if key.NbElements > 1 {
-					ints := make([]int, key.NbElements)
-					for i, f := range key.GetValues {
-						ints[i] = f().(int)
-					}
-					build.Conf.KeyFile.SetIntegerList(key.Group, key.Name, ints)
-				} else {
-					build.Conf.KeyFile.SetInteger(key.Group, key.Name, key.GetValues[0]().(int))
-				}
-
-			case WidgetFloatSpin, // float.
-				WidgetFloatScale: // float in a HScale.
-				if key.NbElements > 1 {
-					floats := make([]float64, key.NbElements)
-					for i, f := range key.GetValues {
-						floats[i] = f().(float64)
-					}
-					build.Conf.KeyFile.SetDoubleList(key.Group, key.Name, floats)
-				} else {
-					build.Conf.KeyFile.SetDouble(key.Group, key.Name, key.GetValues[0]().(float64))
-				}
-
-			case WidgetColorSelectorRGB, // float x3 avec un bouton de choix de couleur.
-				WidgetColorSelectorRGBA: // float x4 avec un bouton de choix de couleur.
-				value := key.GetValues[0]().(*gdk.RGBA)
-				floats := value.Floats()
-
-				if key.Type == WidgetColorSelectorRGB && len(floats) > 3 { // need only 3 values when no alpha.
-					floats = floats[:3]
-				}
-				build.Conf.KeyFile.SetDoubleList(key.Group, key.Name, floats)
-
-			case WidgetNumberedList, // a list of numbered strings.
-				WidgetNumberedControlListSimple,    // a list of numbered strings whose current choice defines the sensitivity of the widgets below.
-				WidgetNumberedControlListSelective: // a list of numbered strings whose current choice defines the sensitivity of the widgets below given in the list.
-				value := key.GetValues[0]().(int)
-				// log.DEV("NUMBERED LIST", key.Name, value)
-				build.Conf.KeyFile.SetInteger(key.Group, key.Name, value)
-
-			case WidgetTreeViewSortSimple, // N strings listed from top to bottom.
-				WidgetTreeViewSortAndModify, // same with possibility to add/remove some.
-				WidgetTreeViewMultiChoice:   // N strings that can be selected or not.
-				value := key.GetValues[0]().([]string)
-				// log.DEV("TREEVIEW", key.Name, value)
-				if len(value) > 1 {
-					build.Conf.KeyFile.SetStringList(key.Group, key.Name, value)
-				} else if len(value) == 1 {
-					build.Conf.KeyFile.SetString(key.Group, key.Name, value[0])
-				}
-
-			case WidgetStringEntry,
-				WidgetPasswordEntry,
-				WidgetFileSelector, WidgetFolderSelector, // selectors.
-				WidgetSoundSelector, WidgetShortkeySelector,
-				WidgetClassSelector, WidgetFontSelector,
-				WidgetThemeList,                                      // themes list in a combo, with preview and readme.
-				WidgetViewList, WidgetAnimationList, WidgetListDocks, // other filled lists.
-				WidgetDialogDecoratorList, WidgetIconThemeList, // ...
-				WidgetScreensList,
-
-				WidgetListSimple, WidgetListWithEntry, // a list of strings.
-				WidgetDeskletDecorationListSimple,      // desklet decorations list.
-				WidgetDeskletDecorationListWithDefault, // idem mais avec le choix "defaut" en plus.
-				WidgetIconsList,                        // main dock icons list.
-
-				WidgetImageSelector:
-
-				if key.IsDefault { // The default placeholder is active, no need to save.
-					continue
-				}
-
-				value := key.GetValues[0]().(string)
-				if key.Type == WidgetPasswordEntry {
-					// TODO: cairo_dock_encrypt_string(value, &value)
-				}
-
-				build.Conf.KeyFile.SetString(key.Group, key.Name, value)
-
-				//
-
-				//
-
-				// shouldn't be saved, need to check.
-
-			// case WidgetJumpToModuleSimple, // bouton raccourci vers un autre module
-			// 	WidgetJumpToModuleIfExists: // idem mais seulement affiche si le module existe.
-			// 	build.WidgetJumpToModule(key)
-
-			// case WidgetLaunchCommandSimple,
-			// 	WidgetLaunchCommandIfCondition:
-			// 	build.WidgetLaunchCommand(key)
-
-			case WidgetLink: // string with internet.
-			case WidgetEmptyWidget: // Containers for custom widget.
-			case WidgetEmptyFull:
-			case WidgetTextLabel: // Just the text label.
-			case WidgetHandbook:
-			case WidgetFrame, WidgetExpander:
-			case WidgetSeparator:
-
-			default:
-				for i, f := range key.GetValues {
-					build.log.Info("KEY NOT MATCHED", key.Name, i+1, "/", len(key.GetValues), "[", f(), "]")
-				}
-			}
-
-		} else {
-			// log.DEV("KEY EMPTY")
+	for gid := range build.buildGroups {
+		for _, key := range build.buildKeys[gid] {
+			build.UpdateKeyfileWithKey(key)
 		}
 	}
+	_, str, e := build.Conf.ToData()
+	if !build.log.Err(e, "save: get keyfile data") {
+		confsettings.SaveFile(build.Conf.File, str)
+	}
+}
 
-	_, str, _ := build.Conf.ToData()
+// UpdateKeyfileWithKey updates the builder keyfile with key values.
+//
+func (build *Builder) UpdateKeyfileWithKey(key *Key) {
+	if key.GetValues == nil {
+		// log.DEV("KEY EMPTY")
+	}
 
-	confsettings.SaveFile(build.Conf.File, str)
+	switch key.Type {
+	case WidgetCheckButton, // boolean
+		WidgetCheckControlButton: // boolean qui controle le widget suivant
+		if key.NbElements > 1 {
+			bools := make([]bool, key.NbElements)
+			for i, f := range key.GetValues {
+				bools[i] = f().(bool)
+			}
+			build.Conf.KeyFile.SetBooleanList(key.Group, key.Name, bools)
+		} else {
+			build.Conf.KeyFile.SetBoolean(key.Group, key.Name, key.GetValues[0]().(bool))
+		}
+
+	case WidgetIntegerSpin, // integer
+		WidgetIntegerScale, // integer in a HScale
+		WidgetIntegerSize:  // double integer WxH
+		if key.NbElements > 1 {
+			ints := make([]int, key.NbElements)
+			for i, f := range key.GetValues {
+				ints[i] = f().(int)
+			}
+			build.Conf.KeyFile.SetIntegerList(key.Group, key.Name, ints)
+		} else {
+			build.Conf.KeyFile.SetInteger(key.Group, key.Name, key.GetValues[0]().(int))
+		}
+
+	case WidgetFloatSpin, // float.
+		WidgetFloatScale: // float in a HScale.
+		if key.NbElements > 1 {
+			floats := make([]float64, key.NbElements)
+			for i, f := range key.GetValues {
+				floats[i] = f().(float64)
+			}
+			build.Conf.KeyFile.SetDoubleList(key.Group, key.Name, floats)
+		} else {
+			build.Conf.KeyFile.SetDouble(key.Group, key.Name, key.GetValues[0]().(float64))
+		}
+
+	case WidgetColorSelectorRGB, // float x3 avec un bouton de choix de couleur.
+		WidgetColorSelectorRGBA: // float x4 avec un bouton de choix de couleur.
+		value := key.GetValues[0]().(*gdk.RGBA)
+		floats := value.Floats()
+
+		if key.IsType(WidgetColorSelectorRGB) && len(floats) > 3 { // need only 3 values when no alpha.
+			floats = floats[:3]
+		}
+		build.Conf.KeyFile.SetDoubleList(key.Group, key.Name, floats)
+
+	case WidgetNumberedList, // a list of numbered strings.
+		WidgetNumberedControlListSimple,    // a list of numbered strings whose current choice defines the sensitivity of the widgets below.
+		WidgetNumberedControlListSelective: // a list of numbered strings whose current choice defines the sensitivity of the widgets below given in the list.
+		value := key.GetValues[0]().(int)
+		// log.DEV("NUMBERED LIST", key.Name, value)
+		build.Conf.KeyFile.SetInteger(key.Group, key.Name, value)
+
+	case WidgetTreeViewSortSimple, // N strings listed from top to bottom.
+		WidgetTreeViewSortAndModify, // same with possibility to add/remove some.
+		WidgetTreeViewMultiChoice:   // N strings that can be selected or not.
+		value := key.GetValues[0]().([]string)
+		// log.DEV("TREEVIEW", key.Name, value)
+		if len(value) > 1 {
+			build.Conf.KeyFile.SetStringList(key.Group, key.Name, value)
+		} else if len(value) == 1 {
+			build.Conf.KeyFile.SetString(key.Group, key.Name, value[0])
+		}
+
+	case WidgetStringEntry,
+		WidgetPasswordEntry,
+		WidgetFileSelector, WidgetFolderSelector, // selectors.
+		WidgetSoundSelector, WidgetShortkeySelector,
+		WidgetClassSelector, WidgetFontSelector,
+		WidgetThemeList,                                      // themes list in a combo, with preview and readme.
+		WidgetViewList, WidgetAnimationList, WidgetListDocks, // other filled lists.
+		WidgetDialogDecoratorList, WidgetIconThemeList, // ...
+		WidgetScreensList,
+
+		WidgetListSimple, WidgetListWithEntry, // a list of strings.
+		WidgetDeskletDecorationListSimple,      // desklet decorations list.
+		WidgetDeskletDecorationListWithDefault, // idem mais avec le choix "defaut" en plus.
+		WidgetIconsList,                        // main dock icons list.
+
+		WidgetImageSelector:
+
+		if key.IsDefault { // The default placeholder is active, no need to save.
+			return
+		}
+
+		value := key.GetValues[0]().(string)
+		if key.IsType(WidgetPasswordEntry) {
+			// TODO: cairo_dock_encrypt_string(value, &value)
+		}
+
+		build.Conf.KeyFile.SetString(key.Group, key.Name, value)
+
+		//
+
+		//
+
+		// shouldn't be saved, need to check.
+
+	// case WidgetJumpToModuleSimple, // bouton raccourci vers un autre module
+	// 	WidgetJumpToModuleIfExists: // idem mais seulement affiche si le module existe.
+
+	// case WidgetLaunchCommandSimple,
+	// 	WidgetLaunchCommandIfCondition:
+
+	case WidgetLink: // string with internet.
+	case WidgetEmptyWidget: // Containers for custom widget.
+	case WidgetEmptyFull:
+	case WidgetTextLabel: // Just the text label.
+	case WidgetHandbook:
+	case WidgetFrame, WidgetExpander:
+	case WidgetSeparator:
+
+	default:
+		for i, f := range key.GetValues {
+			build.log.Info("KEY NOT MATCHED", key.Name, i+1, "/", len(key.GetValues), "[", f(), "]")
+		}
+	}
 }
 
 //
@@ -606,8 +669,11 @@ func (build *Builder) addSubWidget(child gtk.IWidget) {
 	build.pWidgetBox.PackStart(child, false, false, 0)
 }
 
-// _pack_subwidget
-func (build *Builder) addKeyWidget(child gtk.IWidget, key *Key, f func() interface{}) {
+// AddKeyWidget adds a key widget to the page with its getValue call
+//
+// (was _pack_subwidget).
+//
+func (build *Builder) AddKeyWidget(child gtk.IWidget, key *Key, f func() interface{}) {
 	key.GetValues = append(key.GetValues, f)
 
 	// do {pSubWidgetList = g_slist_append (pSubWidgetList, pSubWidget);} while (0)
@@ -631,9 +697,32 @@ func (build *Builder) addKeyScale(child *gtk.Scale, key *Key, f func() interface
 		box.PackStart(child, false, false, 0)
 		box.PackStart(labelRight, false, false, 0)
 
-		build.addKeyWidget(box, key, f)
+		build.AddKeyWidget(box, key, f)
 	} else {
 		child.Set("value-pos", gtk.POS_LEFT)
-		build.addKeyWidget(child, key, f)
+		build.AddKeyWidget(child, key, f)
 	}
+}
+
+// addReset adds a reset value button.
+// Requires a callback to restore defaults with the provided values (as strings).
+//
+func (build *Builder) addReset(key *Key, call func([]string)) {
+	if build.originalConf == "" {
+		return
+	}
+
+	back, _ := gtk.ButtonNewFromIconName("edit-clear", gtk.ICON_SIZE_MENU)
+	build.addSubWidget(back)
+	back.Connect("clicked", func() {
+		conf, e := config.NewFromFile(build.originalConf)
+		if build.log.Err(e, "load original conf") {
+			return
+		}
+		str, e := conf.String(key.Group, key.Name)
+		if build.log.Err(e, "get original conf key "+key.Group+" :: "+key.Name) {
+			return
+		}
+		call(strings.Split(str, ";"))
+	})
 }

@@ -33,7 +33,8 @@ static GldiModule* newModule (gpointer vc) {
 import "C"
 
 import (
-	"github.com/sqp/godock/libs/cdtype" // Applets types.
+	"github.com/sqp/godock/libs/cdglobal" // Global consts.
+	"github.com/sqp/godock/libs/cdtype"   // Applets types.
 
 	"github.com/sqp/godock/libs/gldi"
 	"github.com/sqp/godock/libs/gldi/appgldi"
@@ -157,7 +158,7 @@ func (o *AppManager) StopLoop() {
 //----------------------------------------------------[ APPLETS REGISTRATION ]--
 
 func (o *AppManager) registerApplets() {
-	dir := globals.DirShareData(globals.DirPlugIns, globals.DirAppletsGo)
+	dir := globals.DirShareData(cdglobal.ConfigDirAppletsGo)
 	packs, e := packages.ListFromDir(dir, packages.TypeGoInternal, packages.SourceApplet)
 	if o.log.Err(e, "registerapplets") {
 		return
@@ -200,11 +201,7 @@ func (o *AppManager) startApplet(mi *gldi.ModuleInstance, kf *keyfile.KeyFile) {
 
 	// Default desklet renderer.
 	if desklet := mi.Desklet(); desklet != nil {
-		// desklet.SetRendererByName("Simple", nil)
-
-		// 		cairo_dock_set_desklet_renderer_by_name (pModuleInstance->pDesklet,
-		// 			"Simple",
-		// 			(CairoDeskletRendererConfigPtr) NULL);
+		desklet.SetRendererByName("Simple")
 	}
 
 	// Default icon image.
@@ -264,7 +261,8 @@ func (o *AppManager) stopApplet(mi *gldi.ModuleInstance) {
 
 	icon.RemoveDataRenderer()
 
-	if desklet := mi.Desklet(); desklet != nil {
+	desklet := mi.Desklet()
+	if desklet != nil && desklet.HasIcons() {
 		desklet.RemoveIcons()
 	}
 
@@ -288,23 +286,11 @@ func (o *AppManager) reloadApplet(mi *gldi.ModuleInstance, oldContainer *gldi.Co
 
 	// Default desklet renderer.
 	if desklet := mi.Desklet(); desklet != nil {
-		// desklet.SetRendererByName("Simple", nil)
-
-		// 		if (pModuleInstance->pDesklet->icons == NULL)
-		// 		{
-		// 			cairo_dock_set_desklet_renderer_by_name (pModuleInstance->pDesklet,
-		// 				"Simple",
-		// 				(CairoDeskletRendererConfigPtr) NULL);
-		// 		}
-		// 		else
-		// 		{
-		// 			gpointer data[2] = {GINT_TO_POINTER (TRUE), GINT_TO_POINTER (FALSE)};
-		// 			cairo_dock_set_desklet_renderer_by_name (pModuleInstance->pDesklet,
-		// 				"Caroussel",
-		// 				(CairoDeskletRendererConfigPtr) data);
-		// 		}
-		// 	}
-
+		if desklet.HasIcons() {
+			desklet.SetRendererByNameData("Caroussel", true, false)
+		} else {
+			desklet.SetRendererByName("Simple")
+		}
 	}
 
 	// Default icon image.

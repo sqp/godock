@@ -28,7 +28,7 @@ import (
 
 	"github.com/sqp/godock/services/TVPlay"
 
-	"github.com/sqp/godock/libs/dock" // Connection to cairo-dock.
+	"github.com/sqp/godock/libs/appdbus" // Connection to cairo-dock.
 )
 
 // Special hack to prevent threads related crashs.
@@ -54,5 +54,5 @@ func main() {
 	go gtk.Main()
 	defer gtk.MainQuit()
 
-	dock.StartApplet(TVPlay.NewApplet())
+	appdbus.StartApplet(TVPlay.NewApplet())
 }

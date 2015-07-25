@@ -28,6 +28,7 @@ import "C"
 import (
 	"github.com/conformal/gotk3/gtk"
 
+	"github.com/sqp/godock/libs/cdglobal"     // Global consts.
 	"github.com/sqp/godock/libs/cdtype"       // Logger type.
 	"github.com/sqp/godock/libs/config"       // Config parser.
 	"github.com/sqp/godock/libs/files"        // Files operations.
@@ -43,38 +44,6 @@ import (
 	"path/filepath"
 	"time"
 	"unsafe"
-)
-
-const (
-	// Default config path in .config.
-	CAIRO_DOCK_DATA_DIR = "cairo-dock"
-
-	// Nom du repertoire des themes extras.
-	CAIRO_DOCK_EXTRAS_DIR = "extras"
-
-	CAIRO_DOCK_THEMES_DIR = "themes"
-
-	// Nom du repertoire racine du theme courant.
-	CAIRO_DOCK_CURRENT_THEME_NAME = "current_theme"
-
-	CAIRO_DOCK_DISTANT_THEMES_DIR = "themes3.4"
-
-	CAIRO_DOCK_THEME_SERVER = "http://download.tuxfamily.org/glxdock/themes"
-
-	// Unused AFAIK.
-	// CAIRO_DOCK_BACKUP_THEME_SERVER ="http://fabounet03.free.fr"
-
-	HiddenFile = ".cairo-dock"
-	Changelog  = "ChangeLog.txt"
-)
-
-// System dir locations. Can be overridden at build time.
-var (
-	// System dock themes (CAIRO_DOCK_SHARE_THEMES_DIR).
-	CairoDockShareThemesDir = "/usr/share/cairo-dock/themes"
-
-	// System dock locale (CAIRO_DOCK_LOCALE_DIR).
-	CairoDockLocaleDir = "/usr/share/locale"
 )
 
 var log cdtype.Logger
@@ -146,7 +115,7 @@ func (settings *DockSettings) Init() {
 	gtk.Init(nil)
 
 	//\___________________ internationalize the app.
-	tran.Scend(globals.CairoDockGettextPackage, CairoDockLocaleDir, "UTF-8")
+	tran.Scend(cdglobal.CairoDockGettextPackage, cdglobal.CairoDockLocaleDir, "UTF-8")
 
 	if settings.Verbosity != "" {
 		gldi.LogSetLevelFromName(settings.Verbosity)
@@ -200,14 +169,14 @@ func (settings *DockSettings) Init() {
 	}
 
 	if settings.ThemeServer == "" {
-		settings.ThemeServer = CAIRO_DOCK_THEME_SERVER
+		settings.ThemeServer = cdglobal.DownloadServerURL
 	}
 	gldi.SetPaths(confdir, // will later be available as DirDockData  (g_cCairoDockDataDir)
-		CAIRO_DOCK_EXTRAS_DIR,
-		CAIRO_DOCK_THEMES_DIR,
-		CAIRO_DOCK_CURRENT_THEME_NAME,
-		CairoDockShareThemesDir,
-		CAIRO_DOCK_DISTANT_THEMES_DIR,
+		cdglobal.ConfigDirExtras,
+		cdglobal.ConfigDirDockThemes,
+		cdglobal.ConfigDirCurrentTheme,
+		cdglobal.CairoDockShareThemesDir,
+		cdglobal.DockThemeServerTag,
 		settings.ThemeServer)
 
 	//\___________________ Check that OpenGL is safely usable, if not ask the user what to do.
@@ -281,10 +250,10 @@ func (settings DockSettings) Prepare() {
 		if os.Getenv("DESKTOP_SESSION") == "cairo-dock" { // We're using the CD session for the first time
 			themeName = "Default-Panel"
 			settings.sessionWasUsed = true
-			files.UpdateConfFile(globals.DirDockData(HiddenFile), "Launch", "cd session", true)
+			files.UpdateConfFile(globals.DirDockData(cdglobal.FileHiddenConfig), "Launch", "cd session", true)
 		}
 
-		files.CopyDir(globals.DirShareData("themes", themeName), globals.CurrentThemePath())
+		files.CopyDir(globals.DirShareData(cdglobal.ConfigDirDockThemes, themeName), globals.CurrentThemePath())
 	}
 
 	// MISSING
@@ -293,7 +262,7 @@ func (settings DockSettings) Prepare() {
 }
 
 func (settings *DockSettings) Start() {
-	gldi.LoadCurrentTheme() // was moved before registration when I had some problems with refresh on start. Removed here for now.
+	gldi.CurrentThemeLoad() // was moved before registration when I had some problems with refresh on start. Removed here for now.
 
 	//\___________________ lock mode.
 
@@ -311,7 +280,7 @@ func (settings *DockSettings) Start() {
 	}
 
 	if settings.isNewVersion { // update the version in the file.
-		files.UpdateConfFile(globals.DirDockData(HiddenFile), "Launch", "last version", globals.Version())
+		files.UpdateConfFile(globals.DirDockData(cdglobal.FileHiddenConfig), "Launch", "last version", globals.Version())
 
 		// If any operation must be done on the user theme (like activating
 		// a module by default, or disabling an option), it should be done
@@ -413,7 +382,7 @@ func ConfigDir(dir string) string {
 
 	usr, e := user.Current()
 	if e == nil {
-		return filepath.Join(usr.HomeDir, ".config", CAIRO_DOCK_DATA_DIR) // Default dock config path in .config.
+		return filepath.Join(usr.HomeDir, ".config", cdglobal.ConfigDirBaseName) // Default dock config path in .config.
 	}
 
 	return ""
@@ -461,7 +430,7 @@ func dialogAskBackend() {
 
 	if remember { // save user choice to file.
 		value := ternary.String(gtk.ResponseType(answer) == gtk.RESPONSE_YES, "opengl", "cairo")
-		files.UpdateConfFile(globals.DirDockData(HiddenFile), "Launch", "default backend", value)
+		files.UpdateConfFile(globals.DirDockData(cdglobal.FileHiddenConfig), "Launch", "default backend", value)
 	}
 }
 
@@ -470,7 +439,7 @@ func dialogNoPlugins() {
 	str := "No plug-in were found.\nPlug-ins provide most of the functionalities (animations, applets, views, etc).\nSee http://glx-dock.org for more information.\nThere is almost no meaning in running the dock without them and it's probably due to a problem with the installation of these plug-ins.\nBut if you really want to use the dock without these plug-ins, you can launch the dock with the '-f' option to no longer have this message.\n"
 	icon := gldi.IconsGetAnyWithoutDialog()
 	container := globals.Maindock().ToContainer()
-	iconpath := globals.DirShareData(globals.CairoDockIcon)
+	iconpath := globals.FileCairoDockIcon()
 	dialog.DialogShowTemporaryWithIcon(tran.Slate(str), icon, container, 0, iconpath)
 }
 
@@ -484,12 +453,12 @@ func dialogChangelog() {
 	// 			Icon *pFirstIcon = cairo_dock_get_first_icon (g_pMainDock->icons);
 	dialog.NewDialog(nil, globals.Maindock().Container(), cdtype.DialogData{
 		Message:   str,
-		Icon:      globals.DirShareData(globals.CairoDockIcon),
+		Icon:      globals.FileCairoDockIcon(),
 		UseMarkup: true})
 }
 
 func getChangelog() string {
-	changelogPath := globals.DirShareData(Changelog)
+	changelogPath := globals.DirShareData(cdglobal.FileChangelog)
 
 	conf, e := config.NewFromFile(changelogPath)
 	if e != nil {
@@ -536,7 +505,7 @@ type hiddenConfig struct {
 // loadHidden will try to load the hidden config data from the file.
 //
 func loadHidden(path string) *hiddenConfig {
-	file := filepath.Join(path, HiddenFile)
+	file := filepath.Join(path, cdglobal.FileHiddenConfig)
 	conf, e := config.NewFromFile(file)
 
 	if e != nil { // File missing, create it.

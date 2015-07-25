@@ -12,8 +12,8 @@ package DiskFree
 import (
 	"github.com/cloudfoundry/gosigar" // Partitions and usage informations.
 
-	"github.com/sqp/godock/libs/cdtype"
-	"github.com/sqp/godock/libs/dock" // Connection to cairo-dock.
+	"github.com/sqp/godock/libs/cdapplet" // Applet base.
+	"github.com/sqp/godock/libs/cdtype"   // Applet types.
 	"github.com/sqp/godock/libs/sysinfo"
 )
 
@@ -29,7 +29,7 @@ type Applet struct {
 // NewApplet creates a new DiskFree applet instance.
 //
 func NewApplet() cdtype.AppInstance {
-	app := &Applet{AppBase: dock.NewCDApplet()} // Icon controler and interface to cairo-dock.
+	app := &Applet{AppBase: cdapplet.New()} // Icon controler and interface to cairo-dock.
 	app.Poller().Add(app.service.Check)
 
 	app.service.App = app

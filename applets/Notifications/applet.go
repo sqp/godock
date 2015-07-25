@@ -16,9 +16,8 @@ E-mail : sqp@glx-dock.org
 package main
 
 import (
+	"github.com/sqp/godock/libs/appdbus" // Connection to cairo-dock.
 	"github.com/sqp/godock/services/Notifications"
-
-	"github.com/sqp/godock/libs/dock" // Connection to cairo-dock.
 )
 
 //---------------------------------------------------------------[ MAIN CALL ]--
@@ -26,5 +25,5 @@ import (
 // Program launched. Create and activate applet.
 //
 func main() {
-	dock.StartApplet(Notifications.NewApplet())
+	appdbus.StartApplet(Notifications.NewApplet())
 }

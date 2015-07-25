@@ -3,7 +3,6 @@ package NetActivity
 import "github.com/sqp/godock/libs/cdtype"
 
 const defaultUpdateDelay = 3
-const historyFile = "appdata/uptoshare_history.txt"
 
 const (
 	// EmblemAction is the position of the "upload in progress" emblem.

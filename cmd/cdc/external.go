@@ -123,7 +123,7 @@ func installOrRemoveApplets(list []string, remove bool) {
 			options = "v" // Tar command verbose option.
 		}
 		action = func(appname string, pack *packages.AppletPackage) bool {
-			pack.SrvTag = cdglobal.AppletsServerTag
+			pack.SrvTag = cdglobal.AppletsDirName + "/" + cdglobal.AppletsServerTag
 			e := pack.Install(externalUserDir, options)
 			return testErr(e, "install", "Applet installed", appname)
 		}
@@ -175,7 +175,7 @@ func listPackages() (list packages.AppletPackages, e error) {
 	}
 
 	// List default (merged both).
-	packs, e := packages.ListDownloadIndex(cdglobal.AppletsServerTag, externalUserDir)
+	packs, e := packages.ListDownloadApplets(externalUserDir)
 	if e != nil {
 		return nil, e
 	}

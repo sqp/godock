@@ -192,7 +192,6 @@ func (widget *GuiIcons) OnSelect(icon datatype.Iconer, ei error) {
 	widget.switcher.Clear()
 
 	if widget.config != nil {
-		widget.config.KeyFile().Free()
 		widget.config.Destroy()
 		widget.config = nil
 	}
@@ -219,8 +218,13 @@ func (widget *GuiIcons) OnSelect(icon datatype.Iconer, ei error) {
 	//   field custom   TaskBar, Service (applet without icon).
 	//   group          Desklets, Alt maindock.
 
-	println("orig", icon.OriginalConfigPath())
-	build, e := confbuilder.NewGrouper(widget.data, widget.log, widget.data.GetWindow(), icon.ConfigPath(), icon.GetGettextDomain())
+	build, e := confbuilder.NewGrouper(
+		widget.data,
+		widget.log,
+		widget.data.GetWindow(),
+		icon.ConfigPath(),
+		icon.OriginalConfigPath(),
+		icon.GetGettextDomain())
 	if widget.log.Err(e, "Load Keyfile "+icon.ConfigPath()) {
 		return
 	}

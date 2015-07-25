@@ -13,6 +13,7 @@ import (
 	"github.com/sqp/godock/widgets/confbuilder/datatype"
 	"github.com/sqp/godock/widgets/confsettings"
 	"github.com/sqp/godock/widgets/confshortkeys"
+	"github.com/sqp/godock/widgets/docktheme"
 	"github.com/sqp/godock/widgets/gtk/buildhelp"
 	"github.com/sqp/godock/widgets/gtk/gunvalue"
 	"github.com/sqp/godock/widgets/pageswitch"
@@ -29,6 +30,8 @@ const (
 	TabDownload = "Download"
 	// TabShortkeys is the name of the config shortkeys tab.
 	TabShortkeys = "Shortkeys"
+	// TabThemes is the name of the config themes tab.
+	TabThemes = "Themes"
 )
 
 //
@@ -117,11 +120,11 @@ var coreItems = []*Item{
 		Tooltip:  "Define icon caption and quick-info style.",
 		Managers: []string{"Icons"}},
 
-	// {
-	// 	Key:   "Themes",
-	// 	Title: "Themes",
-	// Tooltip:"Try new themes and save your theme.",
-	// 	Icon:  "icons/icon-controler.svg"},
+	{
+		Key:     TabThemes,
+		Title:   TabThemes,
+		Icon:    "icons/icon-appearance.svg", // icon-controler.svg
+		Tooltip: "Try new themes and save your theme."},
 
 	{
 		Key:     TabShortkeys,
@@ -190,7 +193,7 @@ type grabber interface {
 
 type saver interface {
 	configWidget
-	confbuilder.KeyFiler // KeyFile() *KeyFile
+	confbuilder.KeyFiler
 	Save()
 }
 
@@ -321,7 +324,7 @@ func (widget *ConfCore) onSelect(item *Item, e error) {
 	if widget.log.Err(e, "onSelect: selection problem") {
 		return
 	}
-	// widget.switcher.Clear() // unused yet
+	widget.switcher.Clear()
 
 	if widget.config != nil {
 		widget.config.Destroy()
@@ -331,12 +334,18 @@ func (widget *ConfCore) onSelect(item *Item, e error) {
 	widget.SetAction()
 
 	file := ""
+	def := ""
 	switch item.Key {
 	case TabShortkeys:
 		w := confshortkeys.New(widget.data, widget.log)
 		w.Load()
 		widget.Pack2(w, true, true)
 		widget.config = w
+		return
+
+	case TabThemes:
+		widget.config = docktheme.New(widget.data, widget.log, widget.switcher)
+		widget.Pack2(widget.config, true, true)
 		return
 
 	case TabDownload: // download tab has a special widget.
@@ -352,10 +361,11 @@ func (widget *ConfCore) onSelect(item *Item, e error) {
 		file = confsettings.PathFile()
 
 	default:
-		file = widget.data.MainConf()
+		file = widget.data.MainConfigFile()
+		def = widget.data.MainConfigDefault()
 	}
 
-	build, e := confbuilder.NewGrouper(widget.data, widget.log, widget.data.GetWindow(), file, "")
+	build, e := confbuilder.NewGrouper(widget.data, widget.log, widget.data.GetWindow(), file, def, "")
 	if widget.log.Err(e, "Load Keyfile "+file) {
 		return
 	}

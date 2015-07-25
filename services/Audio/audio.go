@@ -6,9 +6,9 @@ import (
 
 	"github.com/sqp/pulseaudio"
 
-	"github.com/sqp/godock/libs/cdtype"
-	"github.com/sqp/godock/libs/dock"    // Connection to cairo-dock.
-	"github.com/sqp/godock/libs/ternary" // Ternary operators.
+	"github.com/sqp/godock/libs/cdapplet" // Applet base.
+	"github.com/sqp/godock/libs/cdtype"   // Applet types.
+	"github.com/sqp/godock/libs/ternary"  // Ternary operators.
 
 	"errors"
 	"os/exec"
@@ -32,7 +32,7 @@ type Applet struct {
 // NewApplet create a new applet instance.
 //
 func NewApplet() cdtype.AppInstance {
-	app := &Applet{AppBase: dock.NewCDApplet()} // Icon controler and interface to cairo-dock.
+	app := &Applet{AppBase: cdapplet.New()} // Icon controler and interface to cairo-dock.
 	log = app.Log()
 	var e error
 	app.pulse, e = NewAppPulse(app)

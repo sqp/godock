@@ -61,6 +61,8 @@ type groupConfiguration struct {
 	DiffCommand   string // Command to launch on Show diff action.
 	DiffMonitored bool   // true if the diff command application should be monitored (like a launcher).
 
+	DiffStash bool
+
 	BuildTargets []string // list of buildable targets.
 }
 
@@ -112,6 +114,7 @@ const (
 	ActionCycleTarget
 	ActionToggleUserMode
 	ActionToggleReload
+	ActionToggleDiffStash
 	ActionBuildTarget
 	ActionUpdateAll
 	ActionDownloadOthers
@@ -151,6 +154,7 @@ var menuDev = []int{
 	// ActionDownloadAll,
 	ActionNone,
 	ActionToggleReload,
+	ActionToggleDiffStash,
 	// ActionToggleUserMode,
 	ActionUpdateAll,
 }

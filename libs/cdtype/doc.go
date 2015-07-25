@@ -58,8 +58,8 @@ data that will be required during all the applet lifetime.
 	package demo
 
 	import (
-		"github.com/sqp/godock/libs/cdtype" // Dock types.
-		"github.com/sqp/godock/libs/dock"   // Applet base.
+		"github.com/sqp/godock/libs/cdapplet" // Applet base.
+		"github.com/sqp/godock/libs/cdtype"   // Applet types.
 	)
 
 	// Applet data and controlers.
@@ -72,8 +72,8 @@ data that will be required during all the applet lifetime.
 
 	// NewApplet creates a new applet instance.
 	//
-	func NewApplet() cdtype.AppBase {
-		app := &Applet{AppBase: dock.NewCDApplet()} // Icon controler and interface to cairo-dock.
+	func NewApplet() cdtype.AppInstance {
+		app := &Applet{AppBase: cdapplet.New()} // Icon controler and interface to cairo-dock.
 		// Create and set your permanent items here...
 		return app
 	}
@@ -149,7 +149,7 @@ the hook service just use matching methods.
 	// can become
 
 	func (app *Applet) OnDropData(data string) {
-			app.Log().Info("dropped", data)
+		app.Log().Info("dropped", data)
 	}
 
 Note that both methods are available and enabled at the same time, and you may
@@ -261,13 +261,14 @@ applet.go
 	package main
 
 	import (
-		demo "demo/src"                     // Package with your applet source.
-		"github.com/sqp/godock/libs/dock"   // Connection to cairo-dock.
+		demo "demo/src"                      // Package with your applet source.
+		"github.com/sqp/godock/libs/appdbus" // Connection to cairo-dock.
 	)
 
 	func main() {
-		dock.StartApplet(demo.NewApplet())
+		appdbus.StartApplet(demo.NewApplet())
 	}
+
 
 Makefile
 	TARGET=demo

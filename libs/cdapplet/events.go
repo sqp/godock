@@ -1,4 +1,4 @@
-package dock
+package cdapplet
 
 import (
 	"github.com/sqp/godock/libs/cdtype"

@@ -55,6 +55,7 @@ type PackageSource int
 const (
 	SourceApplet PackageSource = iota
 	SourceTheme
+	SourceDockTheme
 )
 
 //
@@ -120,19 +121,19 @@ func ListDownloadSort(list map[string]*AppletPackage) (sorted AppletPackages) {
 // In case of multiple errors, the last one is returned.
 // (local access errors are more important than network errors)
 //
-func ListDownloadIndex(version string, externalUserDir string) (map[string]*AppletPackage, error) {
+func ListDownloadIndex(srvTag, externalUserDir string, source PackageSource) (map[string]*AppletPackage, error) {
 	filled := make(map[string]*AppletPackage) // index by name so local packages will replace distant ones.
 
-	found, eRet := ListDistant(cdglobal.AppletsDirName + "/" + version)
+	found, eRet := ListDistant(srvTag)
 	if eRet == nil {
 		for _, pack := range found {
 			filled[pack.DisplayedName] = pack
-			pack.SrvTag = version
+			pack.SrvTag = srvTag
 		}
 	}
 
 	// Get local applets.
-	local, eUsr := ListFromDir(externalUserDir, TypeUser, SourceApplet)
+	local, eUsr := ListFromDir(externalUserDir, TypeUser, source)
 	if eUsr != nil {
 		return filled, eUsr
 	}
@@ -146,10 +147,22 @@ func ListDownloadIndex(version string, externalUserDir string) (map[string]*Appl
 		}
 
 		filled[pack.DisplayedName] = pack
-		pack.SrvTag = version
+		pack.SrvTag = srvTag
 	}
 
 	return filled, eRet
+}
+
+// ListDownloadApplets builds the full list of external applets packages.
+//
+func ListDownloadApplets(externalUserDir string) (map[string]*AppletPackage, error) {
+	return ListDownloadIndex(cdglobal.AppletsDirName+"/"+cdglobal.AppletsServerTag, externalUserDir, SourceApplet)
+}
+
+// ListDownloadDockThemes builds the full list of dock themes packages.
+//
+func ListDownloadDockThemes(themeDir string) (map[string]*AppletPackage, error) {
+	return ListDownloadIndex(cdglobal.DockThemeServerTag, themeDir, SourceDockTheme)
 }
 
 //
@@ -296,9 +309,13 @@ func ReadPackageFile(dir, applet string, source PackageSource) (*AppletPackage, 
 	case SourceApplet:
 		file = "auto-load.conf"
 		group = "Register"
+
 	case SourceTheme:
 		file = "theme.conf"
 		group = "Description"
+
+	case SourceDockTheme:
+		return &AppletPackage{}, nil
 	}
 	filename := filepath.Join(dir, applet, file)
 	conf, e := config.NewFromFile(filename)
@@ -502,7 +519,7 @@ func (pack *AppletPackage) GetPreviewFilePath() string {
 //
 func (pack *AppletPackage) Install(externalUserDir, options string) error {
 	// Connect a reader to the archive on server.
-	resp, eNet := http.Get(DistantURL + cdglobal.AppletsDirName + "/" + pack.SrvTag + "/" + pack.DisplayedName + "/" + pack.DisplayedName + ".tar.gz")
+	resp, eNet := http.Get(DistantURL + pack.SrvTag + "/" + pack.DisplayedName + "/" + pack.DisplayedName + ".tar.gz")
 	if eNet != nil {
 		return eNet
 	}
@@ -567,7 +584,7 @@ func (pack *AppletPackage) Uninstall(externalUserDir string) error {
 		return e
 	}
 	pack.Type = TypeDistant
-	pack.Path = DistantURL + cdglobal.AppletsDirName + "/" + pack.SrvTag + "/" + pack.DisplayedName
+	pack.Path = DistantURL + pack.SrvTag + "/" + pack.DisplayedName
 	return nil
 }
 

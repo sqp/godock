@@ -193,6 +193,7 @@ func fillModelWithFields(model *gtk.ListStore, list []datatype.Field, current st
 	return
 }
 
+//
 //-------------------------------------------------------[ COMMON LISTSTORES ]--
 
 // Rows defines liststore rows. Must match the ListStore declaration type and order.
@@ -211,54 +212,67 @@ func newModelSimple() (*gtk.ListStore, error) {
 		glib.TYPE_STRING)    /* RowDesc*/
 }
 
+// newComboBox creates a combo box.
 //
-func newComboBox(withEntry, numbered bool) (widget *gtk.ComboBox, model *gtk.ListStore, getValue func() interface{}) {
+func newComboBox(withEntry, numbered bool, current string, list []datatype.Field) (widget *gtk.ComboBox, model *gtk.ListStore, getValue func() interface{}) {
 	model, _ = newModelSimple()
 	// gtk_tree_sortable_set_sort_column_id(GTK_TREE_SORTABLE(modele), CAIRO_DOCK_MODEL_NAME, GTK_SORT_ASCENDING)
 
-	if withEntry {
-		widget, _ = gtk.ComboBoxNewWithEntry()
-		widget.SetModel(model)
-		widget.Set("entry-text-column", RowName)
+	widget, _ = gtk.ComboBoxNewWithModel(model)
+	renderer, _ := gtk.CellRendererTextNew()
+	widget.PackStart(renderer, true)
+	widget.AddAttribute(renderer, "text", RowName)
 
-		getValue = func() interface{} { // return selected as position int
-			entry, _ := widget.GetChild()
-			e := toEntry(entry)
-			v, _ := e.GetText()
+	// Fill and set current.
+	iter := fillModelWithFields(model, list, current)
+	widget.SetActiveIter(iter)
+
+	switch {
+	case withEntry:
+		entry, _ := gtk.EntryNew() // Add entry manually so we don't have to recast a GetChild
+		entry.SetText(current)
+		widget.Add(entry)
+		widget.Set("id-column", RowName)
+		widget.Connect("changed", func() { entry.SetText(widget.GetActiveID()) })
+		getValue = func() interface{} { // return the entry content string.
+			v, _ := entry.GetText()
 			return v
 		}
 
-	} else {
-		widget, _ = gtk.ComboBoxNewWithModel(model)
-		renderer, _ := gtk.CellRendererTextNew()
-		widget.PackStart(renderer, true)
-		widget.AddAttribute(renderer, "text", RowName)
+	case numbered:
+		getValue = func() interface{} { // return selected as position int
+			return widget.GetActive()
+		}
 
-		if numbered {
-			getValue = func() interface{} { // return selected as position int
-				return widget.GetActive()
-			}
-		} else {
-			widget.Set("id-column", RowName)
-			getValue = func() interface{} { // return selected as content string
-				return widget.GetActiveID()
-			}
+	default:
+		widget.Set("id-column", RowName)
+		getValue = func() interface{} { // return selected as content string
+			return widget.GetActiveID()
 		}
 	}
+
 	return
 }
 
-// newComboBoxFields adds and fills a list widget.
+// NewComboBoxFilled creates a combo box filled with the getList call.
 //
-func (build *Builder) newComboBoxFields(key *Key, list []datatype.Field) *gtk.ComboBox {
-	model, _ := newModelSimple()
-	combo, getValue := build.newComboBoxWithModel(model, false, false, false)
+func (build *Builder) NewComboBoxFilled(key *Key, withEntry, numbered bool, getList func() []datatype.Field) *gtk.ComboBox {
+	var list []datatype.Field
+	if getList != nil {
+		list = getList()
+	}
 	current, _ := build.Conf.GetString(key.Group, key.Name)
-	iter := fillModelWithFields(model, list, current)
-	combo.SetActiveIter(iter)
+	widget, _, getValue := newComboBox(withEntry, numbered, current, list)
+	build.AddKeyWidget(widget, key, getValue)
+	return widget
+}
 
-	build.addKeyWidget(combo, key, getValue)
-	return combo
+// fieldsPrepend prepends one or more fields to a list of fields.
+//
+func fieldsPrepend(list []datatype.Field, fields ...datatype.Field) func() []datatype.Field {
+	return func() []datatype.Field {
+		return append(fields, list...) // prepend defaults.
+	}
 }
 
 // _add_combo_from_modele
@@ -647,8 +661,3 @@ func onClassGrabClicked(obj *gtk.Button) {
 // 	const gchar *cSoundPath = gtk_entry_get_text (GTK_ENTRY (pEntry));
 // 	cairo_dock_play_sound (cSoundPath);
 // }
-
-func toEntry(w *gtk.Widget) *gtk.Entry {
-	return &gtk.Entry{Widget: *w, Editable: gtk.Editable{w.Object}}
-	// e := &gtk.Entry{Widget: gtk.Widget{glib.InitiallyUnowned{entry.Object}}, Editable: gtk.Editable{entry.Object}}
-}
