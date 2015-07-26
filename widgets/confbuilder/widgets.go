@@ -1126,7 +1126,7 @@ func (build *Builder) WidgetStrings(key *Key) {
 			grab.Connect("clicked", onClassGrabClicked)
 
 		case WidgetShortkeySelector:
-			grab.Connect("clicked", onKeyGrabClicked, &textGrabData{entry: widget, win: build.win})
+			grab.Connect("clicked", onKeyGrabClicked, &textGrabData{entry: widget, win: build.data.GetWindow()})
 		}
 		build.addSubWidget(grab)
 

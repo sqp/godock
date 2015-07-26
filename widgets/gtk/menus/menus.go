@@ -327,7 +327,7 @@ func (o *ButtonsEntry) AddButton(tooltip, img string, call interface{}) *gtk.But
 
 func (o *ButtonsEntry) onMenuItemPress(_ *gtk.MenuItem, event *gdk.Event) bool { // GdkEventCrossing
 	// Position of the mouse relatively to the menu-item.
-	eventBtn := &gdk.EventButton{event}
+	eventBtn := &gdk.EventButton{Event: event}
 	mouseX, mouseY := int(eventBtn.X()), int(eventBtn.Y())
 
 	sel, e := o.findButtonHovered(mouseX, mouseY)
@@ -363,7 +363,7 @@ func (o *ButtonsEntry) onMenuItemLeave(_ *gtk.MenuItem, event *gdk.Event) bool {
 
 func (o *ButtonsEntry) onMenuItemMotionNotify(_ *gtk.MenuItem, event *gdk.Event) bool {
 	// Position of the mouse relatively to the menu-item.
-	eventBtn := &gdk.EventButton{event} // GdkEventMotion
+	eventBtn := &gdk.EventButton{Event: event} // GdkEventMotion
 	mouseX, mouseY := int(eventBtn.X()), int(eventBtn.Y())
 
 	sel, e := o.findButtonHovered(mouseX, mouseY)

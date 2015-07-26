@@ -602,7 +602,7 @@ func onKeyGrabClicked(_ *gtk.Button, data *textGrabData) {
 // Receives keyboard events until a valid shortcut is found, to set it as entry text.
 //
 func onKeyGrabReceived(_ *gtk.Window, event *gdk.Event, data *textGrabData) {
-	key := &gdk.EventKey{event}
+	key := &gdk.EventKey{Event: event}
 
 	if !gtk.AcceleratorValid(key.KeyVal(), gdk.ModifierType(key.State())) {
 		return

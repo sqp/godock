@@ -137,7 +137,9 @@ import (
 	"github.com/sqp/godock/libs/gldi/desktopclass"
 	"github.com/sqp/godock/libs/packages"
 	"github.com/sqp/godock/libs/text/tran"
+
 	"github.com/sqp/godock/widgets/gtk/keyfile"
+	"github.com/sqp/godock/widgets/gtk/togtk"
 
 	"errors"
 	"path/filepath"
@@ -499,13 +501,7 @@ func MenuAddSubMenu(menu *gtk.Menu, label, iconPath string) (*gtk.Menu, *gtk.Men
 	if c == nil {
 		return nil, nil
 	}
-	obj := &glib.Object{glib.ToGObject(unsafe.Pointer(c))}
-	submenu := &gtk.Menu{gtk.MenuShell{gtk.Container{gtk.Widget{glib.InitiallyUnowned{obj}}}}}
-
-	obj = &glib.Object{glib.ToGObject(unsafe.Pointer(cmenuitem))}
-	item := &gtk.MenuItem{gtk.Bin{gtk.Container{gtk.Widget{glib.InitiallyUnowned{obj}}}}}
-
-	return submenu, item
+	return togtk.Menu(unsafe.Pointer(c)), togtk.MenuItem(unsafe.Pointer(cmenuitem))
 }
 
 /** A convenient function to add an item to a given menu.
@@ -533,10 +529,7 @@ func MenuAddItem(menu *gtk.Menu, label, iconPath string) *gtk.MenuItem {
 	if c == nil {
 		return nil
 	}
-	obj := &glib.Object{glib.ToGObject(unsafe.Pointer(c))}
-	item := &gtk.MenuItem{gtk.Bin{gtk.Container{gtk.Widget{glib.InitiallyUnowned{obj}}}}}
-
-	return item
+	return togtk.MenuItem(unsafe.Pointer(c))
 }
 
 // unused, see cdtype.Logger.Exec...

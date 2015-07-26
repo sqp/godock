@@ -63,13 +63,16 @@ func (gc *Connector) ShowMainGui() {
 	gc.Widget.Select(confgui.GroupConfig)
 }
 
-// ShowModuleGui opens the GUI and should display an applets config. TODO: Fix. (used only for Help ATM)
+// ShowModuleGui opens the GUI and should display an item of the config page.
 //
-func (gc *Connector) ShowModuleGui(appletName string) {
-	gc.Log.Info("ShowModuleGui", appletName)
+// TODO: maybe rename.
+// (was to display an applets config and is used only for Help ATM)
+//
+func (gc *Connector) ShowModuleGui(key string) {
+	gc.Log.Info("ShowModuleGui", key)
 
 	gc.Create()
-	gc.Widget.Select(confgui.GroupIcons)
+	gc.Widget.Select(confgui.GroupConfig, key)
 }
 
 // ShowItems opens the GUI and displays the given item icon config.
@@ -151,7 +154,7 @@ func (gc *Connector) UpdateShortkeys() {
 //
 func (gc *Connector) UpdateDeskletParams(desklet *gldi.Desklet) {
 	if gc.Widget != nil && desklet != nil {
-		gc.Widget.UpdateDeskletParams(&datagldi.IconConf{*desklet.GetIcon()})
+		gc.Widget.UpdateDeskletParams(&datagldi.IconConf{Icon: *desklet.GetIcon()})
 	}
 }
 
@@ -159,7 +162,7 @@ func (gc *Connector) UpdateDeskletParams(desklet *gldi.Desklet) {
 //
 func (gc *Connector) UpdateDeskletVisibility(desklet *gldi.Desklet) {
 	if gc.Widget != nil && desklet != nil {
-		gc.Widget.UpdateDeskletVisibility(&datagldi.IconConf{*desklet.GetIcon()})
+		gc.Widget.UpdateDeskletVisibility(&datagldi.IconConf{Icon: *desklet.GetIcon()})
 	}
 }
 

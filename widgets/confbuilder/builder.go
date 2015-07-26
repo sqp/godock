@@ -34,7 +34,6 @@ import (
 	"github.com/sqp/godock/libs/config"
 	"github.com/sqp/godock/libs/text/tran"
 
-	"github.com/sqp/godock/widgets/confbuilder/datatype"
 	"github.com/sqp/godock/widgets/confsettings"
 
 	"errors"
@@ -333,9 +332,8 @@ type Builder struct {
 
 	// extra data.
 	Conf          *CDConfig
-	data          datatype.Source
+	data          Source
 	log           cdtype.Logger
-	win           *gtk.Window // Parent window.
 	gettextDomain string
 	originalConf  string // path to default config file.
 }
@@ -343,16 +341,34 @@ type Builder struct {
 // GetKey finds the key referenced by its config group and name.
 //
 func (build *Builder) GetKey(group, name string) *Key {
-	for gid, testgroup := range build.buildGroups {
-		if group == testgroup {
-			for _, key := range build.buildKeys[gid] {
-				if key.Name == name {
-					return key
-				}
-			}
+	gid, e := build.FindGroupÎD(group)
+	if e != nil {
+		return nil
+	}
+
+	for _, key := range build.buildKeys[gid] {
+		if key.Name == name {
+			return key
 		}
 	}
 	return nil
+}
+
+// FindGroupÎD finds the ID of the group with the given name.
+//
+func (build *Builder) FindGroupÎD(group string) (int, error) {
+	for gid, testgroup := range build.buildGroups {
+		if group == testgroup {
+			return gid, nil
+		}
+	}
+	return -1, errors.New("group unknown: " + group)
+}
+
+// AddGroupKey adds one or many keys to an existing group.
+//
+func (build *Builder) AddGroupKey(gid int, keys ...*Key) {
+	build.buildKeys[gid] = append(build.buildKeys[gid], keys...) // keys sorted by group
 }
 
 // BuildPage builds a Cairo-Dock configuration page for the given group.

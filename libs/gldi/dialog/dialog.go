@@ -23,11 +23,12 @@ static const gchar** constListString(gchar** split) {
 import "C"
 
 import (
-	"github.com/conformal/gotk3/glib"
 	"github.com/conformal/gotk3/gtk"
 
 	"github.com/sqp/godock/libs/cdtype" // Applets types.
 	"github.com/sqp/godock/libs/gldi"
+
+	"github.com/sqp/godock/widgets/gtk/togtk"
 
 	"strings"
 	"unsafe"
@@ -369,11 +370,7 @@ func onDialogAnswer(clickedButton C.int, widget *C.GtkWidget, data C.gpointer, d
 	if dialogCall == nil {
 		return
 	}
-
-	obj := &glib.Object{glib.ToGObject(unsafe.Pointer(widget))}
-	w := &gtk.Widget{glib.InitiallyUnowned{obj}}
-
-	dialogCall(int(clickedButton), w)
+	dialogCall(int(clickedButton), togtk.Widget(unsafe.Pointer(widget)))
 }
 
 func cbool(b bool) C.gboolean {

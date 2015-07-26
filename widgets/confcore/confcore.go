@@ -16,6 +16,7 @@ import (
 	"github.com/sqp/godock/widgets/docktheme"
 	"github.com/sqp/godock/widgets/gtk/buildhelp"
 	"github.com/sqp/godock/widgets/gtk/gunvalue"
+	"github.com/sqp/godock/widgets/helpfile"
 	"github.com/sqp/godock/widgets/pageswitch"
 
 	"errors"
@@ -25,13 +26,12 @@ import (
 const iconSize = 24
 const panedPosition = 200
 
+// Cutom config core tabs.
 const (
-	// TabDownload is the name of the config download tab.
-	TabDownload = "Download"
-	// TabShortkeys is the name of the config shortkeys tab.
-	TabShortkeys = "Shortkeys"
-	// TabThemes is the name of the config themes tab.
-	TabThemes = "Themes"
+	TabDownload  = "Download"  // Key for the tab download.
+	TabShortkeys = "Shortkeys" // Key for the tab shortkeys.
+	TabThemes    = "Themes"    // Key for the tab themes.
+	TabHelp      = "Help"      // Key for the tab help.
 )
 
 //
@@ -150,11 +150,11 @@ var coreItems = []*Item{
 		Title: confsettings.GuiGroup,
 		Icon:  "cairo-dock.svg"},
 
-	// {
-	// 	Key:     "Help",
-	// 	Title:   "Help",
-	// 	Icon:    "plug-ins/Help/icon.svg",
-	// 	Tooltip: "Try new themes and save your theme."},
+	{
+		Key:     "Help",
+		Title:   "Help",
+		Icon:    "plug-ins/Help/icon.svg",
+		Tooltip: "Try new themes and save your theme."},
 
 	// + icon effects*
 	// _add_sub_group_to_group_button (pGroupDescription, "Indicators", "icon-indicators.svg", _("Indicators"));
@@ -167,12 +167,12 @@ var coreItems = []*Item{
 // Controller defines methods used on the main widget / data source by this widget and its sons.
 //
 type Controller interface {
-	datatype.Source
-	GetWindow() *gtk.Window
+	confbuilder.Source
 	SetActionNone()
 	SetActionSave()
 	SetActionGrab()
 	SetActionCancel()
+	SetActionApply()
 
 	SelectIcons(string)
 }
@@ -242,6 +242,12 @@ func (widget *ConfCore) Load() {
 
 // func (widget *ConfCore) Clean() {
 // }
+
+// Select sets the selected item based on its key name.
+//
+func (widget *ConfCore) Select(key string) bool {
+	return widget.list.Select(key)
+}
 
 //--------------------------------------------------------[ SAVE CONFIG PAGE ]--
 
@@ -335,27 +341,19 @@ func (widget *ConfCore) onSelect(item *Item, e error) {
 
 	file := ""
 	def := ""
+	var w configWidget
 	switch item.Key {
 	case TabShortkeys:
-		w := confshortkeys.New(widget.data, widget.log)
-		w.Load()
-		widget.Pack2(w, true, true)
-		widget.config = w
-		return
+		w = confshortkeys.New(widget.data, widget.log)
 
 	case TabThemes:
-		widget.config = docktheme.New(widget.data, widget.log, widget.switcher)
-		widget.Pack2(widget.config, true, true)
-		return
+		w = docktheme.New(widget.data, widget.log, widget.switcher)
 
 	case TabDownload: // download tab has a special widget.
-		w := confapplets.New(widget.data, widget.log, nil, confapplets.ListExternal)
-		w.Load()
-		w.ShowAll()
+		w = confapplets.NewLoaded(widget.data, widget.log, nil, confapplets.ListExternal)
 
-		widget.Pack2(w, true, true)
-		widget.config = w
-		return
+	case TabHelp:
+		w = helpfile.New(widget.data, widget.log, widget.switcher)
 
 	case confsettings.GuiGroup: // own config has a special path.
 		file = confsettings.PathFile()
@@ -365,14 +363,19 @@ func (widget *ConfCore) onSelect(item *Item, e error) {
 		def = widget.data.MainConfigDefault()
 	}
 
-	build, e := confbuilder.NewGrouper(widget.data, widget.log, widget.data.GetWindow(), file, def, "")
-	if widget.log.Err(e, "Load Keyfile "+file) {
-		return
+	if file != "" { // config to build from file.
+		build, e := confbuilder.NewGrouper(widget.data, widget.log, file, def, "")
+		if widget.log.Err(e, "Load Keyfile "+file) {
+			return
+		}
+		w = build.BuildSingle(item.Key)
 	}
-	widget.config = build.BuildSingle(item.Key)
+	widget.setCurrent(w)
+}
 
-	widget.Pack2(widget.config, true, true)
-	widget.config.ShowAll()
+func (widget *ConfCore) setCurrent(w configWidget) {
+	widget.config = w
+	widget.Pack2(w, true, true)
 }
 
 // SetAction sets the action button name (save or grab).
@@ -380,13 +383,17 @@ func (widget *ConfCore) onSelect(item *Item, e error) {
 func (widget *ConfCore) SetAction() {
 	item, e := widget.list.Selected()
 	switch {
-	case e != nil: // Do nothing. Should be triggered only on load, before any user selection.
+	case e != nil, // Do nothing. Should be triggered only on load, before any user selection.
+		item.Key == TabDownload,
+		item.Key == TabHelp:
+
+		widget.data.SetActionNone()
+
+	case item.Key == TabThemes:
+		widget.data.SetActionApply()
 
 	case item.Key == TabShortkeys:
 		widget.data.SetActionGrab()
-
-	case item.Key == TabDownload:
-		widget.data.SetActionNone()
 
 	default:
 		widget.data.SetActionSave()
@@ -506,6 +513,18 @@ func (widget *List) Load(shareData string) {
 			}
 		}
 	}
+}
+
+// Select sets the selected row based on its name.
+//
+func (widget *List) Select(conf string) bool {
+	row, ok := widget.rows[conf]
+	if !ok {
+		return false
+	}
+
+	widget.selection.SelectIter(row.Iter)
+	return true
 }
 
 // Selected returns the data about the selected item.

@@ -6,7 +6,6 @@ import (
 	"github.com/conformal/gotk3/gtk"
 
 	"errors"
-	// "math"
 )
 
 //
@@ -89,22 +88,22 @@ func PixbufNewFromFile(iconName string, size int) (pixbuf *gdk.Pixbuf, e error) 
 			return nil, e
 		}
 		return t.LoadIcon(iconName, size, gtk.ICON_LOOKUP_USE_BUILTIN)
-
-	default: // Full path.
-
-		// if size == GTK_ICON_SIZE_BUTTON { /// TODO: find a way to get a correct transposition...
-		// 	size = CAIRO_DOCK_TAB_ICON_SIZE
-		// } else if size == GTK_ICON_SIZE_MENU {
-		// 	size = CAIRO_DOCK_FRAME_ICON_SIZE
-		// }
-
-		return PixbufAtSize(iconName, size, size)
-		// if pix, e := PixbufAtSize(iconName, iSize, iSize); !log.Err(e, "Load image pixbuf") {
-		// 	return pix
-		// }
 	}
 
-	return nil, errors.New("PixbufNewFromFile: no match for " + iconName)
+	// Full path.
+
+	// if size == GTK_ICON_SIZE_BUTTON { /// TODO: find a way to get a correct transposition...
+	// 	size = CAIRO_DOCK_TAB_ICON_SIZE
+	// } else if size == GTK_ICON_SIZE_MENU {
+	// 	size = CAIRO_DOCK_FRAME_ICON_SIZE
+	// }
+
+	return PixbufAtSize(iconName, size, size)
+	// if pix, e := PixbufAtSize(iconName, iSize, iSize); !log.Err(e, "Load image pixbuf") {
+	// 	return pix
+	// }
+
+	// return nil, errors.New("PixbufNewFromFile: no match for " + iconName)
 }
 
 func Big(text string) string      { return "<big>" + text + "</big>" }

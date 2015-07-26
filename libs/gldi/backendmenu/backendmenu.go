@@ -12,7 +12,6 @@ extern gboolean buildMenuContainer(gpointer, Icon*, GldiContainer*, GtkWidget*, 
 import "C"
 import (
 	"github.com/conformal/gotk3/gdk"
-	"github.com/conformal/gotk3/glib"
 	"github.com/conformal/gotk3/gtk"
 
 	"github.com/bradfitz/iter" // easy for.
@@ -28,6 +27,7 @@ import (
 
 	"github.com/sqp/godock/widgets/about"
 	"github.com/sqp/godock/widgets/gtk/menus"
+	"github.com/sqp/godock/widgets/gtk/togtk"
 
 	"fmt"
 	"os"
@@ -107,9 +107,7 @@ func convert(ic *C.Icon, cont *C.GldiContainer, cmenu *C.GtkWidget) *DockMenu {
 		dock = container.ToCairoDock()
 	}
 
-	obj := &glib.Object{glib.ToGObject(unsafe.Pointer(cmenu))}
-	menu := &gtk.Menu{gtk.MenuShell{gtk.Container{gtk.Widget{glib.InitiallyUnowned{obj}}}}}
-
+	menu := togtk.Menu(unsafe.Pointer(cmenu))
 	return WrapDockMenu(icon, container, dock, menu)
 }
 
@@ -597,7 +595,7 @@ func (m *DockMenu) Entry(entry MenuEntry) bool {
 		// 		gtk_widget_set_sensitive (pQuitEntry, FALSE); // locked)
 		// }
 		cbSensitive := func(_ *gtk.CheckMenuItem, event *gdk.Event) {
-			key := &gdk.EventKey{event}
+			key := &gdk.EventKey{Event: event}
 
 			println("key", key.KeyVal())
 

@@ -654,7 +654,7 @@ func (Data) ListScreens() (list []datatype.Field) {
 func (Data) ListViews() map[string]datatype.Handbooker {
 	list := make(map[string]datatype.Handbooker)
 	for key, rend := range gldi.CairoDockRendererList() {
-		list[key] = &HandbookDescTranslate{&datatype.HandbookDescDisk{&datatype.HandbookSimple{
+		list[key] = &HandbookDescTranslate{&datatype.HandbookDescDisk{Handbooker: &datatype.HandbookSimple{
 			Key:         key,
 			Title:       ternary.String(rend.GetDisplayedName() != "", rend.GetDisplayedName(), key),
 			Description: rend.GetReadmeFilePath(),
@@ -912,7 +912,7 @@ func (Data) Handbook(name string) datatype.Handbooker {
 	if mod == nil {
 		return nil
 	}
-	return &datatype.HandbookDescSplit{mod.VisitCard()}
+	return &datatype.HandbookDescSplit{Handbooker: mod.VisitCard()}
 }
 
 // ManagerReload reloads the manager matching the given name.

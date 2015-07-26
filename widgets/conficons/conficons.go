@@ -20,13 +20,6 @@ const listIconsWidth = 200
 
 //--------------------------------------------------------[ PAGE GUI ICONS ]--
 
-// Controller defines methods used on the main widget / data source by this widget and its sons.
-//
-type Controller interface {
-	datatype.Source
-	GetWindow() *gtk.Window
-}
-
 // configWidget defines a GtkWidget with a Save method.
 //
 type configWidget interface {
@@ -44,13 +37,13 @@ type GuiIcons struct {
 	// page     configWidget
 	switcher *pageswitch.Switcher
 
-	data Controller
+	data confbuilder.Source
 	log  cdtype.Logger
 }
 
 // New creates a GuiIcons widget to edit cairo-dock icons config.
 //
-func New(data Controller, log cdtype.Logger, switcher *pageswitch.Switcher) *GuiIcons {
+func New(data confbuilder.Source, log cdtype.Logger, switcher *pageswitch.Switcher) *GuiIcons {
 	paned, _ := gtk.PanedNew(gtk.ORIENTATION_HORIZONTAL)
 	widget := &GuiIcons{
 		Paned:    *paned,
@@ -221,7 +214,6 @@ func (widget *GuiIcons) OnSelect(icon datatype.Iconer, ei error) {
 	build, e := confbuilder.NewGrouper(
 		widget.data,
 		widget.log,
-		widget.data.GetWindow(),
 		icon.ConfigPath(),
 		icon.OriginalConfigPath(),
 		icon.GetGettextDomain())
@@ -245,7 +237,6 @@ func (widget *GuiIcons) OnSelect(icon datatype.Iconer, ei error) {
 	}
 
 	widget.Pack2(widget.config, true, true)
-	widget.config.ShowAll()
 }
 
 //-------------------------------------------------------[ WIDGET ICONS LIST ]--

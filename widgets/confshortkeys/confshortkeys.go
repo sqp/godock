@@ -80,6 +80,7 @@ func New(control Controller, log cdtype.Logger) *Shortkeys {
 	// The user is allowed to edit the shortcut text. This will handle the new text.
 	rend.Connect("edited", widget.onManualEdit)
 
+	widget.Load()
 	return widget
 }
 
@@ -232,7 +233,7 @@ func (widget *Shortkeys) onManualEdit(oo *gtk.CellRendererText, path, accel stri
 // onKeyGrabReceived is called when a grabbed keyboard events is received.
 //
 func (widget *Shortkeys) onKeyGrabReceived(win *gtk.Window, event *gdk.Event) {
-	key := &gdk.EventKey{event}
+	key := &gdk.EventKey{Event: event}
 
 	if !gtk.AcceleratorValid(key.KeyVal(), gdk.ModifierType(key.State())) {
 		return

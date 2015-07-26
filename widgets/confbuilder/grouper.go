@@ -14,6 +14,13 @@ import (
 	"strings"
 )
 
+// Source extends the data source with GetWindow needed to use the builder.
+//
+type Source interface {
+	datatype.Source
+	GetWindow() *gtk.Window
+}
+
 // CDConfig builds Cairo-Dock configuration page widgets.
 //
 type CDConfig struct {
@@ -57,7 +64,7 @@ func (conf *CDConfig) List(cGroupName string) (list []*Key) {
 
 // Builder returns a builder ready to create a configuration gui for the keyfile.
 //
-func (conf *CDConfig) Builder(source datatype.Source, log cdtype.Logger, win *gtk.Window, originalConf, gettextDomain string) *Grouper {
+func (conf *CDConfig) Builder(source Source, log cdtype.Logger, originalConf, gettextDomain string) *Grouper {
 	box, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
 	box.Connect("destroy", conf.KeyFile.Free)
 	return &Grouper{Builder{
@@ -65,7 +72,6 @@ func (conf *CDConfig) Builder(source datatype.Source, log cdtype.Logger, win *gt
 		Conf:          conf,
 		data:          source,
 		log:           log,
-		win:           win,
 		originalConf:  originalConf,
 		gettextDomain: gettextDomain,
 	}}
@@ -80,12 +86,12 @@ type Grouper struct{ Builder }
 
 // NewGrouper creates a config page builder from the file.
 //
-func NewGrouper(source datatype.Source, log cdtype.Logger, win *gtk.Window, configFile, originalConf, gettextDomain string) (*Grouper, error) {
+func NewGrouper(source Source, log cdtype.Logger, configFile, originalConf, gettextDomain string) (*Grouper, error) {
 	cdConf, e := LoadFile(configFile)
 	if e != nil {
 		return nil, e
 	}
-	return cdConf.Builder(source, log, win, originalConf, gettextDomain), nil
+	return cdConf.Builder(source, log, originalConf, gettextDomain), nil
 }
 
 // BuildSingle builds a single page config for the given group.
@@ -104,8 +110,15 @@ func (build *Grouper) BuildSingle(group string) *Grouper {
 // BuildAll builds a dock configuration widget with all groups.
 //
 func (build *Grouper) BuildAll(switcher *pageswitch.Switcher, tweaks ...func(*Builder)) *Grouper {
+	_, groups := build.Conf.GetGroups()
+	return build.BuildGroups(switcher, groups, tweaks...)
+}
+
+// BuildGroups builds a dock configuration widget with the given groups.
+//
+func (build *Grouper) BuildGroups(switcher *pageswitch.Switcher, groups []string, tweaks ...func(*Builder)) *Grouper {
 	// Load keys.
-	_, build.buildGroups = build.Conf.GetGroups()
+	build.buildGroups = groups
 	for _, group := range build.buildGroups {
 		keys := build.Conf.List(group)
 		build.buildKeys = append(build.buildKeys, keys) // keys sorted by group
@@ -122,7 +135,8 @@ func (build *Grouper) BuildAll(switcher *pageswitch.Switcher, tweaks ...func(*Bu
 		w := build.BuildPage(build.buildKeys[i])
 
 		switcher.AddPage(&pageswitch.Page{
-			Name:    group,
+			Key:     group,
+			Name:    build.translate(group),
 			OnShow:  func() { build.PackStart(w, true, true, 0); w.ShowAll() },
 			OnHide:  func() { build.Remove(w) },
 			OnClear: func() { w.Destroy() }})
@@ -136,6 +150,7 @@ func (build *Grouper) BuildAll(switcher *pageswitch.Switcher, tweaks ...func(*Bu
 	// Single group, hide the switcher. Multi groups, display it.
 	switcher.Set("visible", len(build.buildGroups) > 1)
 
+	build.ShowAll()
 	return build
 }
 

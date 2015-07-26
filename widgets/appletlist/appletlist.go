@@ -94,7 +94,7 @@ func NewList(control ControlDownload, log cdtype.Logger) *List {
 
 	// Double click launch add action.
 	widget.tree.Connect("button-press-event", func(tree *gtk.TreeView, ev *gdk.Event) {
-		btn := &gdk.EventButton{ev}
+		btn := &gdk.EventButton{Event: ev}
 		if btn.Button() == 1 && btn.Type() == gdk.EVENT_2BUTTON_PRESS {
 			control.Save()
 		}

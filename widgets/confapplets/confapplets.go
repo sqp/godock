@@ -70,7 +70,7 @@ type ConfApplet struct {
 	Applets *map[string]datatype.Appleter // List of applets known by the Dock.
 }
 
-// New creates a widget to download cairo-dock applets.
+// New creates a widget to list cairo-dock applets and themes.
 //
 func New(control GUIControl, log cdtype.Logger, menu MenuDownloader, mode ListMode) *ConfApplet {
 	mainbox, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
@@ -106,7 +106,16 @@ func New(control GUIControl, log cdtype.Logger, menu MenuDownloader, mode ListMo
 	widget.PackStart(inbox, true, true, 0)
 	inbox.PackStart(widget.applets, false, false, 0)
 	inbox.PackStart(widget.preview, true, true, 4)
+	widget.ShowAll()
 	return widget
+}
+
+// NewLoaded creates a widget to list cairo-dock applets and themes and loads data.
+//
+func NewLoaded(control GUIControl, log cdtype.Logger, menu MenuDownloader, mode ListMode) *ConfApplet {
+	w := New(control, log, menu, mode)
+	w.Load()
+	return w
 }
 
 // Load list of applets in the appletlist.

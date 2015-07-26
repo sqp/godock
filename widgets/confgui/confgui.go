@@ -342,6 +342,13 @@ func (widget *GuiConfigure) SetActionSave() {
 	widget.Menu.Save.Show()
 }
 
+// SetActionApply sets the action button with save text.
+//
+func (widget *GuiConfigure) SetActionApply() {
+	widget.Menu.Save.SetLabel(tran.Slate("Apply"))
+	widget.Menu.Save.Show()
+}
+
 // SetActionAdd sets the action button with add text.
 //
 func (widget *GuiConfigure) SetActionAdd() {

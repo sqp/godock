@@ -11,13 +11,14 @@ import (
 // Page defines a switcher page.
 //
 type Page struct {
-	Name    string
-	Icon    string
+	Key  string // key reference.
+	Name string // Visible name.
+	// Icon    string
 	OnLoad  func()
 	OnShow  func()
 	OnHide  func()
 	OnClear func()
-	Widget  gtk.IWidget
+	// Widget  gtk.IWidget
 
 	// internal
 	btn     *gtk.ToggleButton
@@ -51,9 +52,9 @@ func (widget *Switcher) AddPage(page *Page) {
 	page.btn, _ = gtk.ToggleButtonNewWithLabel(page.Name)
 	widget.PackStart(page.btn, false, false, 0)
 	page.btn.Show()
-	page.handler, _ = page.btn.Connect("clicked", func() { widget.clickedBtn(page.Name) })
+	page.handler, _ = page.btn.Connect("clicked", func() { widget.clickedBtn(page.Key) })
 
-	widget.pages[page.Name] = page
+	widget.pages[page.Key] = page
 }
 
 // Activate selects a page.

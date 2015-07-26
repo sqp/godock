@@ -1,5 +1,7 @@
 // Package docktheme provides a cairo-dock main theme load/save widget.
 //
+// Still use the themes.conf file with custom widgets, but as virtual (no temp).
+//
 // TODO:
 //   Update what's needed after load/save.
 //   Load add ratings.
@@ -7,26 +9,16 @@
 package docktheme
 
 import (
-	"github.com/conformal/gotk3/gtk"
-
 	"github.com/sqp/godock/libs/cdglobal"
 	"github.com/sqp/godock/libs/cdtype"
 
 	"github.com/sqp/godock/widgets/confapplets"
 	"github.com/sqp/godock/widgets/confbuilder"
-	"github.com/sqp/godock/widgets/confbuilder/datatype"
 	"github.com/sqp/godock/widgets/pageswitch"
 )
 
 const groupLoad = "Load theme"
 const groupSave = "Save"
-
-// Controller defines methods used on the main widget / data source by this widget and its sons.
-//
-type Controller interface {
-	datatype.Source
-	GetWindow() *gtk.Window
-}
 
 //-------------------------------------------------------[ WIDGET CORE LIST ]--
 
@@ -37,24 +29,23 @@ type DockTheme struct {
 
 	switcher *pageswitch.Switcher
 
-	data Controller
+	data confbuilder.Source
 	log  cdtype.Logger
 }
 
 // New creates a DockTheme widget to load and save the main theme.
 //
-func New(data Controller, log cdtype.Logger, switcher *pageswitch.Switcher) *DockTheme {
+func New(data confbuilder.Source, log cdtype.Logger, switcher *pageswitch.Switcher) *DockTheme {
 	file := data.DirShareData(cdglobal.FileConfigThemes)
-	build, e := confbuilder.NewGrouper(data, log, data.GetWindow(), file, "", "")
+	build, e := confbuilder.NewGrouper(data, log, file, "", "")
 	if log.Err(e, "Load Keyfile "+file) {
 		return nil
 	}
 
 	widgetLoad := func(build *confbuilder.Builder, key *confbuilder.Key) {
-		w := confapplets.New(data, log, nil, confapplets.ListThemes)
+		w := confapplets.NewLoaded(data, log, nil, confapplets.ListThemes)
 		getValue := func() interface{} { return w.Selected().GetName() }
 		build.AddKeyWidget(w, key, getValue)
-		w.Load()
 	}
 
 	widgetSave := func(build *confbuilder.Builder, key *confbuilder.Key) {
@@ -71,14 +62,12 @@ func New(data Controller, log cdtype.Logger, switcher *pageswitch.Switcher) *Doc
 		log.Err(e, "get key=", groupSave, "::", "theme name")
 	}
 
-	w := &DockTheme{
+	return &DockTheme{
 		Grouper:  *build.BuildAll(switcher, hack),
 		switcher: switcher,
 		data:     data,
 		log:      log,
 	}
-	w.Grouper.ShowAll()
-	return w
 }
 
 //
