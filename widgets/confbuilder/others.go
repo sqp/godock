@@ -12,6 +12,7 @@ import (
 	"github.com/sqp/godock/widgets/confbuilder/datatype"
 	"github.com/sqp/godock/widgets/gtk/buildhelp"
 	"github.com/sqp/godock/widgets/gtk/gunvalue"
+	"github.com/sqp/godock/widgets/gtk/newgtk"
 
 	"fmt"
 	"os"
@@ -218,8 +219,8 @@ func newComboBox(withEntry, numbered bool, current string, list []datatype.Field
 	model, _ = newModelSimple()
 	// gtk_tree_sortable_set_sort_column_id(GTK_TREE_SORTABLE(modele), CAIRO_DOCK_MODEL_NAME, GTK_SORT_ASCENDING)
 
-	widget, _ = gtk.ComboBoxNewWithModel(model)
-	renderer, _ := gtk.CellRendererTextNew()
+	widget = newgtk.ComboBoxWithModel(model)
+	renderer := newgtk.CellRendererText()
 	widget.PackStart(renderer, true)
 	widget.AddAttribute(renderer, "text", RowName)
 
@@ -229,7 +230,7 @@ func newComboBox(withEntry, numbered bool, current string, list []datatype.Field
 
 	switch {
 	case withEntry:
-		entry, _ := gtk.EntryNew() // Add entry manually so we don't have to recast a GetChild
+		entry := newgtk.Entry() // Add entry manually so we don't have to recast a GetChild
 		entry.SetText(current)
 		widget.Add(entry)
 		widget.Set("id-column", RowName)
@@ -280,18 +281,18 @@ func fieldsPrepend(list []datatype.Field, fields ...datatype.Field) func() []dat
 func (build *Builder) newComboBoxWithModel(model *gtk.ListStore, bAddPreviewWidgets, bWithEntry, bHorizontalPackaging bool) (widget *gtk.ComboBox, getValue func() interface{}) {
 	if model == nil {
 		// TODO: need the one with entry.
-		combo, _ := gtk.ComboBoxNew()
+		combo := newgtk.ComboBox()
 		getValue = func() interface{} { v := combo.GetActive(); return v }
 
 		widget = combo
 		return
 	}
 	if bWithEntry {
-		widget, _ := gtk.ComboBoxNewWithEntry()
+		widget := newgtk.ComboBoxWithEntry()
 		widget.SetModel(model)
 	} else {
-		combo, _ := gtk.ComboBoxNewWithModel(model)
-		renderer, _ := gtk.CellRendererTextNew()
+		combo := newgtk.ComboBoxWithModel(model)
+		renderer := newgtk.CellRendererText()
 		combo.PackStart(renderer, false)
 		combo.AddAttribute(renderer, "text", RowName)
 		getValue = func() interface{} {
@@ -434,19 +435,19 @@ func onFileChooserOpen(obj *gtk.Button, data fileChooserData) {
 	}
 
 	if data.key.Type == WidgetFileSelector || data.key.Type == WidgetSoundSelector { // Add shortcuts to system icons directories.
-		filter, _ := gtk.FileFilterNew()
+		filter := newgtk.FileFilter()
 		filter.SetName(tran.Slate("All"))
 		filter.AddPattern("*")
 		dialog.AddFilter(filter)
 	}
 
 	if data.key.Type == WidgetFileSelector || data.key.Type == WidgetImageSelector { // Preview and images filter.
-		filter, _ := gtk.FileFilterNew()
+		filter := newgtk.FileFilter()
 		filter.SetName(tran.Slate("Image"))
 		filter.AddPixbufFormats()
 		dialog.AddFilter(filter)
 
-		img, _ := gtk.ImageNew()
+		img := newgtk.Image()
 		dialog.SetPreviewWidget(img)
 		dialog.Connect("update-preview", onFileChooserUpdatePreview, img)
 	}

@@ -8,6 +8,7 @@ import (
 
 	"github.com/sqp/godock/widgets/common"
 	"github.com/sqp/godock/widgets/confbuilder/datatype"
+	"github.com/sqp/godock/widgets/gtk/newgtk"
 
 	"os"
 	"path/filepath"
@@ -39,7 +40,7 @@ func New(source datatype.Source, selected datatype.DesktopClasser, origins strin
 	wCommand := boxButton(command, func() { println("need to launch", command) })
 	wDesktopFiles := boxLabel(desktopFile)
 
-	grid, _ := gtk.GridNew()
+	grid := newgtk.Grid()
 	grid.Attach(boxLabel("Name"), 0, 0, 1, 1)
 	grid.Attach(boxLabel("Icon"), 0, 1, 1, 1)
 	grid.Attach(boxLabel("Command"), 0, 2, 1, 1)
@@ -49,8 +50,8 @@ func New(source datatype.Source, selected datatype.DesktopClasser, origins strin
 	grid.Attach(wCommand, 1, 2, 1, 1)
 	grid.Attach(wDesktopFiles, 1, 3, 1, 1)
 
-	frame, _ := gtk.FrameNew("")
-	label, _ := gtk.LabelNew(common.Bold("Launcher origin"))
+	frame := newgtk.Frame("")
+	label := newgtk.Label(common.Bold("Launcher origin"))
 	label.SetUseMarkup(true)
 	frame.SetLabelWidget(label)
 	frame.Add(grid)
@@ -58,20 +59,20 @@ func New(source datatype.Source, selected datatype.DesktopClasser, origins strin
 }
 
 func boxButton(label string, call func()) *gtk.Box {
-	btnCommand, _ := gtk.ButtonNewWithLabel(label)
+	btnCommand := newgtk.ButtonWithLabel(label)
 	btnCommand.Connect("clicked", call)
 	btnCommand.SetRelief(gtk.RELIEF_HALF)
 	return boxWidget(btnCommand)
 }
 
 func boxLabel(str string) *gtk.Box {
-	label, _ := gtk.LabelNew(str + "\t")
+	label := newgtk.Label(str + "\t")
 	label.SetUseMarkup(true)
 	return boxWidget(label)
 }
 
 func boxWidget(widget gtk.IWidget) *gtk.Box {
-	box, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
+	box := newgtk.Box(gtk.ORIENTATION_HORIZONTAL, 0)
 	box.PackStart(widget, false, false, 0)
 	return box
 }

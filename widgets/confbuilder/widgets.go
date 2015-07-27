@@ -14,6 +14,7 @@ import (
 	"github.com/sqp/godock/widgets/common"
 	"github.com/sqp/godock/widgets/confbuilder/datatype"
 	"github.com/sqp/godock/widgets/gtk/gunvalue"
+	"github.com/sqp/godock/widgets/gtk/newgtk"
 
 	"strconv"
 )
@@ -29,7 +30,7 @@ func (build *Builder) WidgetCheckButton(key *Key) {
 		if uint64(k) < nbval {
 			value = values[k]
 		}
-		widget, _ := gtk.CheckButtonNew()
+		widget := newgtk.CheckButton()
 		widget.SetActive(value)
 
 		if key.IsType(WidgetCheckControlButton) {
@@ -82,8 +83,8 @@ func (build *Builder) WidgetInteger(key *Key) {
 	var toggle *gtk.ToggleButton
 	if key.IsType(WidgetIntegerSize) {
 		key.NbElements *= 2
-		toggle, _ = gtk.ToggleButtonNew()
-		img, _ := gtk.ImageNewFromIconName("media-playback-pause", gtk.ICON_SIZE_MENU) // get better image.
+		toggle = newgtk.ToggleButton()
+		img := newgtk.ImageFromIconName("media-playback-pause", gtk.ICON_SIZE_MENU) // get better image.
 		toggle.SetImage(img)
 	}
 
@@ -104,15 +105,15 @@ func (build *Builder) WidgetInteger(key *Key) {
 			if step < 1 {
 				step = 1
 			}
-			adjustment, _ := gtk.AdjustmentNew(float64(value), fMinValue, fMaxValue, 1, step, 0)
-			widget, _ := gtk.ScaleNew(gtk.ORIENTATION_HORIZONTAL, adjustment)
+			adjustment := newgtk.Adjustment(float64(value), fMinValue, fMaxValue, 1, step, 0)
+			widget := newgtk.Scale(gtk.ORIENTATION_HORIZONTAL, adjustment)
 			widget.Set("digits", 0)
 			getValue := func() interface{} { return int(widget.GetValue()) }
 			setValue = append(setValue, func(v int) { widget.SetValue(float64(v)) })
 			build.addKeyScale(widget, key, getValue)
 
 		case WidgetIntegerSpin, WidgetIntegerSize:
-			widget, _ := gtk.SpinButtonNewWithRange(fMinValue, fMaxValue, 1)
+			widget := newgtk.SpinButtonWithRange(fMinValue, fMaxValue, 1)
 			widget.SetValue(float64(value))
 			getValue := func() interface{} { return widget.GetValueAsInt() }
 			setValue = append(setValue, func(v int) { widget.SetValue(float64(v)) })
@@ -120,7 +121,7 @@ func (build *Builder) WidgetInteger(key *Key) {
 
 			if key.IsType(WidgetIntegerSize) {
 				if k&1 == 0 { // separator
-					label, _ := gtk.LabelNew("x")
+					label := newgtk.Label("x")
 					build.addSubWidget(label)
 				} else { // connect both spin values.
 					if prevValue == value {
@@ -179,15 +180,15 @@ func (build *Builder) WidgetFloat(key *Key) {
 		switch key.Type {
 		case WidgetFloatScale:
 			// log.DEV("FLOAT SCALE", value, key.AuthorizedValues)
-			adjustment, _ := gtk.AdjustmentNew(value, fMinValue, fMaxValue, (fMaxValue-fMinValue)/20, (fMaxValue-fMinValue)/10, 0)
-			widget, _ := gtk.ScaleNew(gtk.ORIENTATION_HORIZONTAL, adjustment)
+			adjustment := newgtk.Adjustment(value, fMinValue, fMaxValue, (fMaxValue-fMinValue)/20, (fMaxValue-fMinValue)/10, 0)
+			widget := newgtk.Scale(gtk.ORIENTATION_HORIZONTAL, adjustment)
 			widget.Set("digits", 3)
 			getValue := func() interface{} { return widget.GetValue() }
 			setValue = append(setValue, func(v float64) { widget.SetValue(v) })
 			build.addKeyScale(widget, key, getValue)
 
 		case WidgetFloatSpin:
-			widget, _ := gtk.SpinButtonNewWithRange(fMinValue, fMaxValue, 1)
+			widget := newgtk.SpinButtonWithRange(fMinValue, fMaxValue, 1)
 			widget.Set("digits", 3)
 			widget.SetValue(value)
 			getValue := func() interface{} { return widget.GetValue() }
@@ -224,7 +225,7 @@ func (build *Builder) WidgetColorSelector(key *Key) {
 	}
 	gdkColor := gdk.NewRGBA(values...)
 
-	widget, _ := gtk.ColorButtonNewWithRGBA(gdkColor)
+	widget := newgtk.ColorButtonWithRGBA(gdkColor)
 	widget.Set("use-alpha", key.IsType(WidgetColorSelectorRGBA))
 	getValue := func() interface{} { return widget.GetRGBA() }
 	build.AddKeyWidget(widget, key, getValue)
@@ -434,8 +435,8 @@ func (build *Builder) WidgetDockList(key *Key) {
 	model.SetSortColumnId(RowName, gtk.SORT_ASCENDING)
 
 	iter := fillModelWithFields(model, list, current)
-	combo, _ := gtk.ComboBoxNewWithModel(model)
-	renderer, _ := gtk.CellRendererTextNew()
+	combo := newgtk.ComboBoxWithModel(model)
+	renderer := newgtk.CellRendererText()
 	combo.PackStart(renderer, false)
 	combo.AddAttribute(renderer, "text", RowName)
 	combo.SetActiveIter(iter)
@@ -472,13 +473,13 @@ func (build *Builder) WidgetIconsList(key *Key) {
 	current, _ := build.Conf.GetString(key.Group, key.Name)
 
 	model, _ := newModelSimple()
-	widget, _ := gtk.ComboBoxNewWithModel(model)
+	widget := newgtk.ComboBoxWithModel(model)
 
-	rp, _ := gtk.CellRendererPixbufNew()
+	rp := newgtk.CellRendererPixbuf()
 	widget.PackStart(rp, false)
 	widget.AddAttribute(rp, "pixbuf", RowIcon)
 
-	renderer, _ := gtk.CellRendererTextNew()
+	renderer := newgtk.CellRendererText()
 	widget.PackStart(renderer, true)
 	widget.AddAttribute(renderer, "text", RowName)
 
@@ -849,7 +850,7 @@ func (build *Builder) WidgetTreeView(key *Key) {
 	build.log.Err(e, "WidgetTreeView conf.GetStringList")
 
 	// Build treeview.
-	model, _ := gtk.ListStoreNew(
+	model := newgtk.ListStore(
 		glib.TYPE_STRING,  /* RowKey*/
 		glib.TYPE_STRING,  /* RowName*/
 		glib.TYPE_STRING,  /* RowIcon*/
@@ -857,7 +858,7 @@ func (build *Builder) WidgetTreeView(key *Key) {
 		glib.TYPE_BOOLEAN, // active
 		glib.TYPE_INT)     // order
 
-	widget, _ := gtk.TreeViewNewWithModel(model)
+	widget := newgtk.TreeViewWithModel(model)
 	widget.Set("headers-visible", false)
 
 	getValue := func() interface{} { // Grab data from all iters.
@@ -874,23 +875,23 @@ func (build *Builder) WidgetTreeView(key *Key) {
 
 	// Add control buttons.
 	if key.IsType(WidgetTreeViewMultiChoice) {
-		renderer, _ := gtk.CellRendererToggleNew()
-		col, _ := gtk.TreeViewColumnNewWithAttribute("", renderer, "active", 4)
+		renderer := newgtk.CellRendererToggle()
+		col := newgtk.TreeViewColumnWithAttribute("", renderer, "active", 4)
 		widget.AppendColumn(col)
 		// 	g_signal_connect (G_OBJECT (rend), "toggled", (GCallback) _cairo_dock_activate_one_element, modele);
 
 		renderer.Set("active", 4)
 	}
 
-	renderer, _ := gtk.CellRendererTextNew()
-	col, _ := gtk.TreeViewColumnNewWithAttribute("", renderer, "text", RowName)
+	renderer := newgtk.CellRendererText()
+	col := newgtk.TreeViewColumnWithAttribute("", renderer, "text", RowName)
 	widget.AppendColumn(col)
 
 	// cValueList = g_key_file_get_string_list (pKeyFile, cGroupName, cKeyName, &length, NULL);
 
 	model.SetSortColumnId(5, gtk.SORT_ASCENDING)
 
-	scroll, _ := gtk.ScrolledWindowNew(nil, nil)
+	scroll := newgtk.ScrolledWindow(nil, nil)
 
 	//
 
@@ -908,12 +909,12 @@ func (build *Builder) WidgetTreeView(key *Key) {
 	scroll.Add(widget)
 
 	if key.IsType(WidgetTreeViewSortSimple, WidgetTreeViewSortAndModify) {
-		vboxItems, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, MarginGUI)
+		vboxItems := newgtk.Box(gtk.ORIENTATION_VERTICAL, MarginGUI)
 
-		buttonUp, _ := gtk.ButtonNew()
-		buttonDn, _ := gtk.ButtonNew()
-		imgUp, _ := gtk.ImageNewFromIconName("go-up", gtk.ICON_SIZE_SMALL_TOOLBAR)
-		imgDn, _ := gtk.ImageNewFromIconName("go-down", gtk.ICON_SIZE_SMALL_TOOLBAR)
+		buttonUp := newgtk.Button()
+		buttonDn := newgtk.Button()
+		imgUp := newgtk.ImageFromIconName("go-up", gtk.ICON_SIZE_SMALL_TOOLBAR)
+		imgDn := newgtk.ImageFromIconName("go-down", gtk.ICON_SIZE_SMALL_TOOLBAR)
 
 		buttonUp.SetImage(imgUp)
 		buttonDn.SetImage(imgDn)
@@ -928,14 +929,14 @@ func (build *Builder) WidgetTreeView(key *Key) {
 
 		if key.IsType(WidgetTreeViewSortAndModify) {
 
-			vboxAdd, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, MarginGUI)
-			sep, _ := gtk.SeparatorNew(gtk.ORIENTATION_VERTICAL)
-			buttonAdd, _ := gtk.ButtonNew()
-			entry, _ := gtk.EntryNew()
-			buttonRm, _ := gtk.ButtonNew()
+			vboxAdd := newgtk.Box(gtk.ORIENTATION_VERTICAL, MarginGUI)
+			sep := newgtk.Separator(gtk.ORIENTATION_VERTICAL)
+			buttonAdd := newgtk.Button()
+			entry := newgtk.Entry()
+			buttonRm := newgtk.Button()
 
-			imgAdd, _ := gtk.ImageNewFromIconName("list-add", gtk.ICON_SIZE_SMALL_TOOLBAR)
-			imgRm, _ := gtk.ImageNewFromIconName("list-remove", gtk.ICON_SIZE_SMALL_TOOLBAR)
+			imgAdd := newgtk.ImageFromIconName("list-add", gtk.ICON_SIZE_SMALL_TOOLBAR)
+			imgRm := newgtk.ImageFromIconName("list-remove", gtk.ICON_SIZE_SMALL_TOOLBAR)
 			buttonAdd.SetImage(imgAdd)
 			buttonRm.SetImage(imgRm)
 
@@ -1049,7 +1050,7 @@ func (build *Builder) WidgetTreeView(key *Key) {
 //
 func (build *Builder) WidgetFontSelector(key *Key) {
 	value, _ := build.Conf.GetString(key.Group, key.Name)
-	widget, _ := gtk.FontButtonNewWithFont(value)
+	widget := newgtk.FontButtonWithFont(value)
 	widget.Set("show-style", true)
 	widget.Set("show-size", true)
 	widget.Set("use-size", true)
@@ -1080,7 +1081,7 @@ func (build *Builder) WidgetLink(key *Key) {
 //
 func (build *Builder) WidgetStrings(key *Key) {
 	value, _ := build.Conf.GetString(key.Group, key.Name)
-	widget, _ := gtk.EntryNew()
+	widget := newgtk.Entry()
 
 	widget.SetText(value)
 
@@ -1098,16 +1099,16 @@ func (build *Builder) WidgetStrings(key *Key) {
 	// 	Add special buttons to fill the entry box.
 	switch key.Type {
 	case WidgetFileSelector, WidgetFolderSelector, WidgetSoundSelector, WidgetImageSelector: // we add a file selector
-		fileChooser, _ := gtk.ButtonNew()
-		img, _ := gtk.ImageNewFromIconName("document-open", gtk.ICON_SIZE_SMALL_TOOLBAR)
+		fileChooser := newgtk.Button()
+		img := newgtk.ImageFromIconName("document-open", gtk.ICON_SIZE_SMALL_TOOLBAR)
 		fileChooser.SetImage(img)
 		fileChooser.Connect("clicked", onFileChooserOpen, fileChooserData{widget, key})
 
 		build.addSubWidget(fileChooser)
 
 		if key.IsType(WidgetSoundSelector) { //Sound Play Button
-			play, _ := gtk.ButtonNew()
-			imgPlay, _ := gtk.ImageNewFromIconName("media-playback-start", gtk.ICON_SIZE_SMALL_TOOLBAR)
+			play := newgtk.Button()
+			imgPlay := newgtk.ImageFromIconName("media-playback-start", gtk.ICON_SIZE_SMALL_TOOLBAR)
 			play.SetImage(imgPlay)
 
 			// 			g_signal_connect (G_OBJECT (pButtonPlay),
@@ -1118,7 +1119,7 @@ func (build *Builder) WidgetStrings(key *Key) {
 		}
 
 	case WidgetShortkeySelector, WidgetClassSelector: // on ajoute un selecteur de touches/classe.
-		grab, _ := gtk.ButtonNewWithLabel("Grab")
+		grab := newgtk.ButtonWithLabel("Grab")
 		// 		gtk_widget_add_events(pMainWindow, GDK_KEY_PRESS_MASK);
 
 		switch key.Type {
@@ -1202,12 +1203,12 @@ func (build *Builder) WidgetFrame(key *Key) {
 	}
 
 	// Create the frame label with the optional icon.
-	build.pLabel, _ = gtk.LabelNew("")
+	build.pLabel = newgtk.Label("")
 	build.pLabel.SetMarkup(" " + common.Bold(build.translate(value)) + " ")
 	if img == "" {
 		build.pLabelContainer = build.pLabel
 	} else {
-		box, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, MarginIcon/2)
+		box := newgtk.Box(gtk.ORIENTATION_HORIZONTAL, MarginIcon/2)
 		if icon, e := common.ImageNewFromFile(img, 20); !build.log.Err(e, "Frame icon") { // TODO: fix size : int(gtk.ICON_SIZE_MENU)
 			box.Add(icon)
 		}
@@ -1216,9 +1217,9 @@ func (build *Builder) WidgetFrame(key *Key) {
 	}
 
 	// Create the box that will contain next widgets (inside the frame).
-	build.pFrameVBox, _ = gtk.BoxNew(gtk.ORIENTATION_VERTICAL, MarginGUI)
+	build.pFrameVBox = newgtk.Box(gtk.ORIENTATION_VERTICAL, MarginGUI)
 
-	build.pFrame, _ = gtk.FrameNew("")
+	build.pFrame = newgtk.Frame("")
 	build.pFrame.SetBorderWidth(MarginGUI)
 	build.pFrame.SetShadowType(gtk.SHADOW_OUT)
 	build.pFrame.Add(build.pFrameVBox)
@@ -1230,7 +1231,7 @@ func (build *Builder) WidgetFrame(key *Key) {
 		build.pageBox.PackStart(build.pFrame, false, false, 0)
 
 	case WidgetExpander:
-		expand, _ := gtk.ExpanderNew("")
+		expand := newgtk.Expander("")
 		expand.SetExpanded(false)
 		expand.SetLabelWidget(build.pLabelContainer)
 
@@ -1280,7 +1281,7 @@ func (build *Builder) WidgetFrame(key *Key) {
 func (build *Builder) WidgetSeparator(*Key) {
 	// GtkWidget *pAlign = gtk_alignment_new (.5, .5, 0.8, 1.);
 	// g_object_set (pAlign, "height-request", 12, NULL);
-	widget, _ := gtk.SeparatorNew(gtk.ORIENTATION_HORIZONTAL)
+	widget := newgtk.Separator(gtk.ORIENTATION_HORIZONTAL)
 	// gtk_container_add (GTK_CONTAINER (pAlign), pOneWidget);
 	build.addWidget(widget, false, false, 0)
 }

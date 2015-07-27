@@ -16,6 +16,7 @@ import (
 	"github.com/sqp/godock/widgets/docktheme"
 	"github.com/sqp/godock/widgets/gtk/buildhelp"
 	"github.com/sqp/godock/widgets/gtk/gunvalue"
+	"github.com/sqp/godock/widgets/gtk/newgtk"
 	"github.com/sqp/godock/widgets/helpfile"
 	"github.com/sqp/godock/widgets/pageswitch"
 
@@ -213,7 +214,7 @@ type ConfCore struct {
 // New creates a ConfCore widget to edit the main cairo-dock config.
 //
 func New(data Controller, log cdtype.Logger, switcher *pageswitch.Switcher) *ConfCore {
-	paned, _ := gtk.PanedNew(gtk.ORIENTATION_HORIZONTAL)
+	paned := newgtk.Paned(gtk.ORIENTATION_HORIZONTAL)
 
 	widget := &ConfCore{
 		Paned:    *paned,

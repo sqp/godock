@@ -7,9 +7,11 @@ import (
 	"github.com/conformal/gotk3/gtk"
 
 	"github.com/sqp/godock/libs/cdtype"
+
 	"github.com/sqp/godock/widgets/appletlist"
 	"github.com/sqp/godock/widgets/appletpreview"
 	"github.com/sqp/godock/widgets/confbuilder/datatype"
+	"github.com/sqp/godock/widgets/gtk/newgtk"
 
 	"os"
 )
@@ -73,7 +75,7 @@ type ConfApplet struct {
 // New creates a widget to list cairo-dock applets and themes.
 //
 func New(control GUIControl, log cdtype.Logger, menu MenuDownloader, mode ListMode) *ConfApplet {
-	mainbox, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
+	mainbox := newgtk.Box(gtk.ORIENTATION_VERTICAL, 0)
 
 	widget := &ConfApplet{
 		Box:     *mainbox,
@@ -101,7 +103,7 @@ func New(control GUIControl, log cdtype.Logger, menu MenuDownloader, mode ListMo
 		widget.applets = appletlist.NewListThemes(widget, log)
 	}
 
-	inbox, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
+	inbox := newgtk.Box(gtk.ORIENTATION_HORIZONTAL, 0)
 
 	widget.PackStart(inbox, true, true, 0)
 	inbox.PackStart(widget.applets, false, false, 0)
@@ -242,20 +244,12 @@ type MenuDownload struct {
 // NewMenuDownload creates the menu to control the selected applet.
 //
 func NewMenuDownload(log cdtype.Logger) *MenuDownload {
-	box, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
-	installed, _ := gtk.SwitchNew()
-	active, _ := gtk.SwitchNew()
-
 	widget := &MenuDownload{
-		Box:       *box,
-		installed: installed,
-		active:    active,
+		Box:       *newgtk.Box(gtk.ORIENTATION_HORIZONTAL, 0),
+		installed: newgtk.Switch(),
+		active:    newgtk.Switch(),
 		log:       log,
 	}
-
-	sep, _ := gtk.SeparatorNew(gtk.ORIENTATION_VERTICAL)
-	lblInstalled, _ := gtk.LabelNew("Installed")
-	lblActive, _ := gtk.LabelNew("Active")
 
 	// Actions
 	var e error
@@ -264,11 +258,11 @@ func NewMenuDownload(log cdtype.Logger) *MenuDownload {
 	widget.handlerActive, e = widget.active.Connect("notify::active", widget.toggledActive)
 	log.Err(e, "Connect active button callback")
 
-	widget.PackStart(lblInstalled, false, false, 8)
-	widget.PackStart(installed, false, false, 0)
-	widget.PackStart(sep, false, false, 4)
-	widget.PackStart(lblActive, false, false, 8)
-	widget.PackStart(active, false, false, 0)
+	widget.PackStart(newgtk.Label("Installed"), false, false, 8)
+	widget.PackStart(widget.installed, false, false, 0)
+	widget.PackStart(newgtk.Separator(gtk.ORIENTATION_VERTICAL), false, false, 4)
+	widget.PackStart(newgtk.Label("Active"), false, false, 8)
+	widget.PackStart(widget.active, false, false, 0)
 	return widget
 }
 

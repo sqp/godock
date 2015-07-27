@@ -35,6 +35,7 @@ import (
 	"github.com/sqp/godock/libs/text/tran"
 
 	"github.com/sqp/godock/widgets/confsettings"
+	"github.com/sqp/godock/widgets/gtk/newgtk"
 
 	"errors"
 	"strings"
@@ -409,8 +410,8 @@ func (build *Builder) BuildPage(keys []*Key) *gtk.ScrolledWindow {
 	// gboolean bAddBackButton;
 	// GtkWidget *pPreviewBox;
 
-	build.pageScroll, _ = gtk.ScrolledWindowNew(nil, nil)
-	build.pageBox, _ = gtk.BoxNew(gtk.ORIENTATION_VERTICAL, MarginGUI)
+	build.pageScroll = newgtk.ScrolledWindow(nil, nil)
+	build.pageBox = newgtk.Box(gtk.ORIENTATION_VERTICAL, MarginGUI)
 	build.pageBox.SetBorderWidth(MarginGUI)
 	build.pageScroll.Add(build.pageBox)
 
@@ -435,17 +436,17 @@ func (build *Builder) BuildPage(keys []*Key) *gtk.ScrolledWindow {
 		if !key.IsType(WidgetFrame) && !key.IsType(WidgetExpander) && !key.IsType(WidgetSeparator) {
 			// Create Key box.
 			if key.IsType(WidgetThemeList, WidgetViewList) {
-				build.pAdditionalItemsVBox, _ = gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
-				build.pKeyBox, _ = gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, MarginGUI)
+				build.pAdditionalItemsVBox = newgtk.Box(gtk.ORIENTATION_VERTICAL, 0)
+				build.pKeyBox = newgtk.Box(gtk.ORIENTATION_HORIZONTAL, MarginGUI)
 				build.addWidget(build.pAdditionalItemsVBox, bFullSize, bFullSize, 0)
 				build.pAdditionalItemsVBox.PackStart(build.pKeyBox, false, false, 0)
 
 			} else {
 				if key.IsAlignedVertical {
 					build.log.Info("aligned /", strings.TrimSuffix(key.Name, "\n"))
-					build.pKeyBox, _ = gtk.BoxNew(gtk.ORIENTATION_VERTICAL, MarginGUI)
+					build.pKeyBox = newgtk.Box(gtk.ORIENTATION_VERTICAL, MarginGUI)
 				} else {
-					build.pKeyBox, _ = gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, MarginGUI)
+					build.pKeyBox = newgtk.Box(gtk.ORIENTATION_HORIZONTAL, MarginGUI)
 				}
 
 				build.addWidget(build.pKeyBox, bFullSize, bFullSize, 0)
@@ -491,7 +492,7 @@ func (build *Builder) BuildPage(keys []*Key) *gtk.ScrolledWindow {
 
 			// Key description on the left.
 			if key.Text != "" { // and maybe need to test different from  "loading..." ?
-				build.pLabel, _ = gtk.LabelNew("")
+				build.pLabel = newgtk.Label("")
 				text := strings.TrimRight(build.translate(key.Text), ":") // dirty hack against ugly trailing colon.
 
 				build.pLabel.SetMarkup(text)
@@ -503,7 +504,7 @@ func (build *Builder) BuildPage(keys []*Key) *gtk.ScrolledWindow {
 
 			// Key widgets on the right. In pWidgetBox, they will be stacked from left to right.
 			if !key.IsType(WidgetTextLabel) {
-				build.pWidgetBox, _ = gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, MarginGUI)
+				build.pWidgetBox = newgtk.Box(gtk.ORIENTATION_HORIZONTAL, MarginGUI)
 				build.pKeyBox.PackEnd(build.pWidgetBox, bFullSize, bFullSize, 0)
 			}
 		}
@@ -703,11 +704,11 @@ func (build *Builder) addKeyScale(child *gtk.Scale, key *Key, f func() interface
 
 		child.Set("value-pos", gtk.POS_TOP)
 		// log.DEV("MISSING SubScale options", string(key.Type), key.AuthorizedValues)
-		box, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
+		box := newgtk.Box(gtk.ORIENTATION_HORIZONTAL, 0)
 		// 	GtkWidget * pAlign = gtk_alignment_new(1., 1., 0., 0.)
-		labelLeft, _ := gtk.LabelNew(build.translate(key.AuthorizedValues[2]))
+		labelLeft := newgtk.Label(build.translate(key.AuthorizedValues[2]))
 		// 	pAlign = gtk_alignment_new(1., 1., 0., 0.)
-		labelRight, _ := gtk.LabelNew(build.translate(key.AuthorizedValues[3]))
+		labelRight := newgtk.Label(build.translate(key.AuthorizedValues[3]))
 
 		box.PackStart(labelLeft, false, false, 0)
 		box.PackStart(child, false, false, 0)
@@ -728,7 +729,7 @@ func (build *Builder) addReset(key *Key, call func([]string)) {
 		return
 	}
 
-	back, _ := gtk.ButtonNewFromIconName("edit-clear", gtk.ICON_SIZE_MENU)
+	back := newgtk.ButtonFromIconName("edit-clear", gtk.ICON_SIZE_MENU)
 	build.addSubWidget(back)
 	back.Connect("clicked", func() {
 		conf, e := config.NewFromFile(build.originalConf)

@@ -8,6 +8,7 @@ import (
 	"github.com/conformal/gotk3/gtk"
 
 	"github.com/sqp/godock/widgets/common"
+	"github.com/sqp/godock/widgets/gtk/newgtk"
 
 	"errors"
 	"reflect"
@@ -39,7 +40,7 @@ type Menu struct {
 // Warning, don't forget to use ShowAll when you add entries manually.
 //
 func NewMenu(items ...interface{}) *Menu {
-	gtkmenu, _ := gtk.MenuNew()
+	gtkmenu := newgtk.Menu()
 	menu := WrapMenu(gtkmenu)
 	menu.AddList(items...)
 	menu.ShowAll()
@@ -54,14 +55,14 @@ func WrapMenu(menu *gtk.Menu) *Menu {
 		groups: make(map[int]*glib.SList),
 
 		callNewItem: func(menu *gtk.Menu, label, iconPath string) *gtk.MenuItem {
-			item, _ := gtk.MenuItemNewWithLabel(label)
+			item := newgtk.MenuItemWithLabel(label)
 			menu.Append(item)
 			return item
 		},
 
 		callNewSubMenu: func(menu *gtk.Menu, label, iconPath string) (*gtk.Menu, *gtk.MenuItem) {
-			gtkmenu, _ := gtk.MenuNew()
-			item, _ := gtk.MenuItemNewWithLabel(label)
+			gtkmenu := newgtk.Menu()
+			item := newgtk.MenuItemWithLabel(label)
 			menu.Append(item)
 			item.SetSubmenu(gtkmenu)
 			return gtkmenu, item
@@ -84,8 +85,7 @@ func (menu *Menu) SetCallNewSubMenu(call CallNewSubMenu) {
 // AddSeparator adds a separator to the menu.
 //
 func (menu *Menu) AddSeparator() {
-	sep, _ := gtk.SeparatorMenuItemNew()
-	menu.Append(sep)
+	menu.Append(newgtk.SeparatorMenuItem())
 }
 
 // AddEntry adds an item to the menu with its callback.
@@ -104,7 +104,7 @@ func (menu *Menu) AddEntry(label, iconPath string, call interface{}, userData ..
 // AddCheckEntry adds a check entry to the menu.
 //
 func (menu *Menu) AddCheckEntry(label string, active bool, call interface{}, userData ...interface{}) (item *gtk.CheckMenuItem) {
-	item, _ = gtk.CheckMenuItemNewWithLabel(label)
+	item = newgtk.CheckMenuItemWithLabel(label)
 	item.SetActive(active)
 	if call != nil {
 		item.Connect("toggled", call, userData...)
@@ -118,7 +118,7 @@ func (menu *Menu) AddCheckEntry(label string, active bool, call interface{}, use
 func (menu *Menu) AddRadioEntry(label string, active bool, groupID int, call interface{}, userData ...interface{}) (item *gtk.RadioMenuItem) {
 	group, _ := menu.groups[groupID]
 
-	item, _ = gtk.RadioMenuItemNewWithLabel(group, label)
+	item = newgtk.RadioMenuItemWithLabel(group, label)
 	if group == nil {
 		var e error
 		group, e = item.GetGroup()
@@ -260,39 +260,35 @@ type ButtonsEntry struct {
 // NewButtonsEntry creates a menu entry with buttons management.
 //
 func NewButtonsEntry(text string) *ButtonsEntry {
-	item, _ := gtk.MenuItemNew()
-	box, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 1)
-	label, _ := gtk.LabelNew(text)
-
 	be := &ButtonsEntry{
-		MenuItem: *item,
-		box:      box,
-		label:    label,
+		MenuItem: *newgtk.MenuItem(),
+		box:      newgtk.Box(gtk.ORIENTATION_HORIZONTAL, 1),
+		label:    newgtk.Label(text),
 	}
 
 	// Packing.
-	item.Add(box)
-	box.PackStart(label, false, false, 0)
+	be.Add(be.box)
+	be.box.PackStart(be.label, false, false, 0)
 
 	// Forward click to inside buttons.
-	item.Connect("button-press-event", be.onMenuItemPress)
+	be.Connect("button-press-event", be.onMenuItemPress)
 
 	// Highlight pointed button.
-	item.Connect("motion-notify-event", be.onMenuItemMotionNotify)
+	be.Connect("motion-notify-event", be.onMenuItemMotionNotify)
 
 	// Turn off highlight pointed button when we leave the menu-item.
 	// if we leave it quickly, a motion event won't be generated.
-	item.Connect("leave-notify-event", be.onMenuItemLeave)
+	be.Connect("leave-notify-event", be.onMenuItemLeave)
 
 	// Force the label to not highlight.
 	// it gets highlighted, even if we overwrite the motion_notify_event callback.
-	item.Connect("enter-notify-event", be.onMenuItemEnter)
+	be.Connect("enter-notify-event", be.onMenuItemEnter)
 
 	// We don't want to higlighted the whole menu-item , but only the currently
 	// pointed button; so we draw the menu-item ourselves, with a propagate to
 	// childs and intercept signal.
-	item.Connect("draw", func(_ *gtk.MenuItem, cr *cairo.Context) bool {
-		be.PropagateDraw(box, cr)
+	be.Connect("draw", func(_ *gtk.MenuItem, cr *cairo.Context) bool {
+		be.PropagateDraw(be.box, cr)
 		return true
 	})
 
@@ -302,7 +298,7 @@ func NewButtonsEntry(text string) *ButtonsEntry {
 // AddButton adds a button to the entry.
 //
 func (o *ButtonsEntry) AddButton(tooltip, img string, call interface{}) *gtk.Button {
-	btn, _ := gtk.ButtonNew()
+	btn := newgtk.Button()
 	btn.SetTooltipText(tooltip)
 	btn.Connect("clicked", call)
 	o.box.PackEnd(btn, false, false, 0)

@@ -25,6 +25,7 @@ import (
 	"github.com/sqp/godock/widgets/conficons"
 	"github.com/sqp/godock/widgets/confmenu"
 	"github.com/sqp/godock/widgets/confsettings"
+	"github.com/sqp/godock/widgets/gtk/newgtk"
 	"github.com/sqp/godock/widgets/pageswitch"
 )
 
@@ -167,11 +168,12 @@ type GuiConfigure struct {
 // NewGuiConfigure creates the main Cairo-Dock configuration widget.
 //
 func NewGuiConfigure(source datatype.Source, log cdtype.Logger) *GuiConfigure {
-	box, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
+	box := newgtk.Box(gtk.ORIENTATION_VERTICAL, 0)
 
 	widget := &GuiConfigure{
-		Source: source,
 		Box:    *box,
+		Source: source,
+		stack:  newgtk.Stack(),
 		pages:  make(map[string]*Page),
 		log:    log,
 	}
@@ -187,14 +189,12 @@ func NewGuiConfigure(source datatype.Source, log cdtype.Logger) *GuiConfigure {
 	menuIcons.Set("no-show-all", true)
 
 	// Box for separator on left of menuIcons.
-	boxIcons, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
-	sepIcons, _ := gtk.SeparatorNew(gtk.ORIENTATION_VERTICAL)
+	boxIcons := newgtk.Box(gtk.ORIENTATION_HORIZONTAL, 0)
+	sepIcons := newgtk.Separator(gtk.ORIENTATION_VERTICAL)
 	boxIcons.PackStart(sepIcons, false, false, 6)
 	boxIcons.PackStart(menuIcons, false, false, 0)
 
-	widget.stack, _ = gtk.StackNew()
-
-	sw, _ := gtk.StackSwitcherNew()
+	sw := newgtk.StackSwitcher()
 	sw.SetStack(widget.stack)
 	sw.SetHomogeneous(false)
 
@@ -214,7 +214,7 @@ func NewGuiConfigure(source datatype.Source, log cdtype.Logger) *GuiConfigure {
 
 	// Packing menu.
 
-	sep, _ := gtk.SeparatorNew(gtk.ORIENTATION_HORIZONTAL)
+	sep := newgtk.Separator(gtk.ORIENTATION_HORIZONTAL)
 
 	widget.Menu.PackStart(sw, false, false, 0)
 	widget.Menu.PackStart(boxIcons, false, false, 0)

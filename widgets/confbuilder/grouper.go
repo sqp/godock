@@ -8,6 +8,7 @@ import (
 
 	"github.com/sqp/godock/widgets/confbuilder/datatype"
 	"github.com/sqp/godock/widgets/gtk/keyfile"
+	"github.com/sqp/godock/widgets/gtk/newgtk"
 	"github.com/sqp/godock/widgets/pageswitch"
 
 	"strconv"
@@ -65,7 +66,7 @@ func (conf *CDConfig) List(cGroupName string) (list []*Key) {
 // Builder returns a builder ready to create a configuration gui for the keyfile.
 //
 func (conf *CDConfig) Builder(source Source, log cdtype.Logger, originalConf, gettextDomain string) *Grouper {
-	box, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
+	box := newgtk.Box(gtk.ORIENTATION_VERTICAL, 0)
 	box.Connect("destroy", conf.KeyFile.Free)
 	return &Grouper{Builder{
 		Box:           *box,

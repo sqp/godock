@@ -10,6 +10,7 @@ import (
 	"github.com/sqp/godock/widgets/confbuilder"
 	"github.com/sqp/godock/widgets/confbuilder/datatype"
 	"github.com/sqp/godock/widgets/conficons/desktopclass"
+	"github.com/sqp/godock/widgets/gtk/newgtk"
 	"github.com/sqp/godock/widgets/pageswitch"
 
 	"errors"
@@ -44,7 +45,7 @@ type GuiIcons struct {
 // New creates a GuiIcons widget to edit cairo-dock icons config.
 //
 func New(data confbuilder.Source, log cdtype.Logger, switcher *pageswitch.Switcher) *GuiIcons {
-	paned, _ := gtk.PanedNew(gtk.ORIENTATION_HORIZONTAL)
+	paned := newgtk.Paned(gtk.ORIENTATION_HORIZONTAL)
 	widget := &GuiIcons{
 		Paned:    *paned,
 		switcher: switcher,
@@ -53,12 +54,12 @@ func New(data confbuilder.Source, log cdtype.Logger, switcher *pageswitch.Switch
 	}
 	widget.icons = NewList(widget, log)
 
-	up, _ := gtk.ButtonNewFromIconName("go-up", gtk.ICON_SIZE_BUTTON)
-	down, _ := gtk.ButtonNewFromIconName("go-down", gtk.ICON_SIZE_BUTTON)
-	remove, _ := gtk.ButtonNewFromIconName("list-remove", gtk.ICON_SIZE_BUTTON)
+	up := newgtk.ButtonFromIconName("go-up", gtk.ICON_SIZE_BUTTON)
+	down := newgtk.ButtonFromIconName("go-down", gtk.ICON_SIZE_BUTTON)
+	remove := newgtk.ButtonFromIconName("list-remove", gtk.ICON_SIZE_BUTTON)
 
-	boxLeft, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
-	boxBtns, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
+	boxLeft := newgtk.Box(gtk.ORIENTATION_VERTICAL, 0)
+	boxBtns := newgtk.Box(gtk.ORIENTATION_HORIZONTAL, 0)
 	boxLeft.PackStart(widget.icons, true, true, 0)
 	boxLeft.PackStart(boxBtns, false, false, 0)
 	boxBtns.PackStart(up, false, false, 0)
@@ -199,7 +200,7 @@ func (widget *GuiIcons) OnSelect(icon datatype.Iconer, ei error) {
 
 		case datatype.GroupServices:
 		}
-		// widget.config, _ = gtk.LabelNew("TODO")
+		// widget.config = newgtk.Label("TODO")
 		// widget.Pack2(widget.config, true, true)
 		return
 	}
@@ -262,15 +263,14 @@ type List struct {
 // NewList creates a dock icons management widget.
 //
 func NewList(control ListControl, log cdtype.Logger) *List {
-	scroll, _ := gtk.ScrolledWindowNew(nil, nil)
 	widget := &List{
-		ScrolledWindow: *scroll,
+		ScrolledWindow: *newgtk.ScrolledWindow(nil, nil),
+		list:           newgtk.ListBox(),
 		control:        control,
 		log:            log,
 		index:          make(map[*gtk.ListBoxRow]datatype.Iconer),
 	}
 
-	widget.list, _ = gtk.ListBoxNew()
 	widget.list.Connect("row-selected", widget.onSelectionChanged)
 	widget.Add(widget.list)
 
@@ -309,8 +309,8 @@ func (widget *List) iconsDock(icons []datatype.Iconer, subdocks map[string][]dat
 // addBoxItem adds an item to the list.
 //
 func (widget *List) addBoxItem(icon datatype.Iconer, indent int, bold bool) *gtk.ListBoxRow {
-	row, _ := gtk.ListBoxRowNew()
-	box, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
+	row := newgtk.ListBoxRow()
+	box := newgtk.Box(gtk.ORIENTATION_HORIZONTAL, 0)
 	row.Add(box)
 
 	name, img := icon.DefaultNameIcon()
@@ -324,7 +324,7 @@ func (widget *List) addBoxItem(icon datatype.Iconer, indent int, bold bool) *gtk
 			box.PackStart(pix, false, false, 0)
 		}
 	}
-	lbl, _ := gtk.LabelNew(name)
+	lbl := newgtk.Label(name)
 	lbl.SetUseMarkup(true)
 	box.PackStart(lbl, false, false, 0)
 

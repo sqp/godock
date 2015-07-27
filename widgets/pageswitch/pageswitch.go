@@ -4,6 +4,8 @@ package pageswitch
 import (
 	"github.com/conformal/gotk3/glib"
 	"github.com/conformal/gotk3/gtk"
+
+	"github.com/sqp/godock/widgets/gtk/newgtk"
 )
 
 //-------------------------------------------------[  ]--
@@ -37,19 +39,16 @@ type Switcher struct {
 // New creates a switcher box to handle page switching.
 //
 func New() *Switcher {
-	box, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
-
-	widget := &Switcher{
-		Box:   *box,
+	return &Switcher{
+		Box:   *newgtk.Box(gtk.ORIENTATION_HORIZONTAL, 0),
 		pages: make(map[string]*Page),
 	}
-	return widget
 }
 
 // AddPage connects a page to a new button.
 //
 func (widget *Switcher) AddPage(page *Page) {
-	page.btn, _ = gtk.ToggleButtonNewWithLabel(page.Name)
+	page.btn = newgtk.ToggleButtonWithLabel(page.Name)
 	widget.PackStart(page.btn, false, false, 0)
 	page.btn.Show()
 	page.handler, _ = page.btn.Connect("clicked", func() { widget.clickedBtn(page.Key) })

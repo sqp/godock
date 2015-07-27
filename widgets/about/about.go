@@ -7,6 +7,8 @@ import (
 	"github.com/sqp/godock/libs/gldi/globals"
 	"github.com/sqp/godock/libs/text/tran"
 
+	"github.com/sqp/godock/widgets/gtk/newgtk"
+
 	"fmt"
 )
 
@@ -43,19 +45,19 @@ func New() *About {
 	// 	GTK_RESPONSE_CLOSE,
 	// 	NULL);
 
-	dialog, _ := gtk.DialogNew()
+	dialog := newgtk.Dialog()
 	dialog.SetTitle(tran.Slate("About Cairo-Dock"))
 	// dialog.SetParentWindow(parentWindow)
 	dialog.AddButton(tran.Slate("_Close"), gtk.RESPONSE_CLOSE)
 	dialog.Connect("response", dialog.Destroy)
 
 	// Widgets.
-	image, _ := gtk.ImageNewFromFile(globals.DirShareData("images", cairoDockLogo))
+	image := newgtk.ImageFromFile(globals.DirShareData("images", cairoDockLogo))
 	notebook := addNotebook()
 	links := addLinks()
 
 	// Packing.
-	header, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
+	header := newgtk.Box(gtk.ORIENTATION_HORIZONTAL, 0)
 	header.PackStart(image, false, false, 0)
 	header.PackStart(links, false, false, 0)
 
@@ -97,9 +99,9 @@ func addLinks() *gtk.Box {
 		tooltip: tran.Slate("Support the people who spend countless hours to bring you the best dock ever."),
 	}}
 
-	box, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
+	box := newgtk.Box(gtk.ORIENTATION_VERTICAL, 0)
 	for _, item := range linksData {
-		link, _ := gtk.LinkButtonNewWithLabel(item.uri, item.label)
+		link := newgtk.LinkButtonWithLabel(item.uri, item.label)
 		box.PackStart(link, false, false, 0)
 		if item.tooltip != "" {
 			link.SetTooltipText(item.tooltip)
@@ -150,7 +152,7 @@ func addNotebook() *gtk.Notebook {
 		},
 	}}
 
-	notebook, _ := gtk.NotebookNew()
+	notebook := newgtk.Notebook()
 	notebook.SetScrollable(true)
 
 	for _, nb := range notebookData {
@@ -160,14 +162,14 @@ func addNotebook() *gtk.Notebook {
 }
 
 func notebookPage(nb *gtk.Notebook, label, contentStr string, contentArgs []interface{}) {
-	tabLabel, _ := gtk.LabelNew(label)
-	box, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
-	scroll, _ := gtk.ScrolledWindowNew(nil, nil)
+	tabLabel := newgtk.Label(label)
+	box := newgtk.Box(gtk.ORIENTATION_VERTICAL, 0)
+	scroll := newgtk.ScrolledWindow(nil, nil)
 	scroll.Add(box)
 	nb.AppendPage(scroll, tabLabel)
 
 	content := fmt.Sprintf(contentStr, contentArgs...)
-	contentLabel, _ := gtk.LabelNew(content)
+	contentLabel := newgtk.Label(content)
 	contentLabel.SetUseMarkup(true)
 	box.PackStart(contentLabel, false, false, 15)
 

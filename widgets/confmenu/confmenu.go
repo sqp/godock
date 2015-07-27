@@ -5,6 +5,8 @@ package confmenu
 
 import (
 	"github.com/conformal/gotk3/gtk"
+
+	"github.com/sqp/godock/widgets/gtk/newgtk"
 )
 
 // Controller defines methods used on the main widget / data source by this widget and its sons.
@@ -30,23 +32,16 @@ type MenuBar struct {
 // New creates the config menu with add or save buttons.
 //
 func New(control Controller) *MenuBar {
-
-	box, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
-	if box == nil {
-		return nil
-	}
-
 	wmb := &MenuBar{
-		Box:     *box,
+		Box:     *newgtk.Box(gtk.ORIENTATION_HORIZONTAL, 0),
+		Save:    newgtk.ButtonWithMnemonic("_Save"),
 		control: control,
 	}
 
-	wmb.Save, _ = gtk.ButtonNewWithMnemonic("_Save")
-
 	wmb.Save.Set("no-show-all", true)
 
-	sep, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
-	buttonQuit, _ := gtk.ButtonNewWithMnemonic("_Close")
+	sep := newgtk.Box(gtk.ORIENTATION_HORIZONTAL, 0)
+	buttonQuit := newgtk.ButtonWithMnemonic("_Close")
 
 	/// Actions
 	wmb.Save.Connect("clicked", wmb.control.ClickedSave)

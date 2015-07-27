@@ -38,6 +38,8 @@ import (
 	"github.com/sqp/godock/libs/ternary"      // Ternary operators.
 	"github.com/sqp/godock/libs/text/tran"    // Translate.
 
+	"github.com/sqp/godock/widgets/gtk/newgtk"
+
 	"fmt"
 	"os"
 	"os/user"
@@ -400,21 +402,21 @@ func dialogAskBackend() {
 	// Need to keep the string as it is for translation.
 	str := "OpenGL allows you to use the hardware acceleration, reducing the CPU load to the minimum.\nIt also allows some pretty visual effects similar to Compiz.\nHowever, some cards and/or their drivers don't fully support it, which may prevent the dock from running correctly.\nDo you want to activate OpenGL ?\n (To not show this dialog, launch the dock from the Application menu,\n  or with the -o option to force OpenGL and -c to force cairo.)"
 
-	dialog, _ := gtk.DialogNew()
+	dialog := newgtk.Dialog()
 	dialog.SetTitle(tran.Slate("Use OpenGL in Cairo-Dock"))
 	dialog.AddButton(tran.Slate("Yes"), gtk.RESPONSE_YES)
 	dialog.AddButton(tran.Slate("No"), gtk.RESPONSE_NO)
 
-	labelTxt, _ := gtk.LabelNew(tran.Slate(str))
+	labelTxt := newgtk.Label(tran.Slate(str))
 
 	content, _ := dialog.GetContentArea()
 	content.PackStart(labelTxt, false, false, 0)
 
-	askBox, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 3)
+	askBox := newgtk.Box(gtk.ORIENTATION_HORIZONTAL, 3)
 	content.PackStart(askBox, false, false, 0)
 
-	labelSave, _ := gtk.LabelNew(tran.Slate("Remember this choice"))
-	check, _ := gtk.CheckButtonNew()
+	labelSave := newgtk.Label(tran.Slate("Remember this choice"))
+	check := newgtk.CheckButton()
 	askBox.PackEnd(check, false, false, 0)
 	askBox.PackEnd(labelSave, false, false, 0)
 

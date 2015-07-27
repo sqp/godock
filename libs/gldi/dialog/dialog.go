@@ -28,6 +28,7 @@ import (
 	"github.com/sqp/godock/libs/cdtype" // Applets types.
 	"github.com/sqp/godock/libs/gldi"
 
+	"github.com/sqp/godock/widgets/gtk/newgtk"
 	"github.com/sqp/godock/widgets/gtk/togtk"
 
 	"strings"
@@ -189,8 +190,8 @@ func dialogWidgetText(data cdtype.DialogWidgetText) (*gtk.Widget, func() interfa
 	var getValue func() interface{}
 
 	if data.MultiLines {
-		textview, _ := gtk.TextViewNew()
-		scroll, _ := gtk.ScrolledWindowNew(nil, nil)
+		textview := newgtk.TextView()
+		scroll := newgtk.ScrolledWindow(nil, nil)
 		scroll.SetPolicy(gtk.POLICY_NEVER, gtk.POLICY_AUTOMATIC)
 		scroll.Add(textview)
 		scroll.Set("width-request", 230)
@@ -218,7 +219,7 @@ func dialogWidgetText(data cdtype.DialogWidgetText) (*gtk.Widget, func() interfa
 		}
 
 	} else {
-		entry, _ := gtk.EntryNew()
+		entry := newgtk.Entry()
 		entry.SetHasFrame(false)
 		if data.InitialValue != "" {
 			entry.SetText(data.InitialValue)
@@ -279,10 +280,11 @@ func dialogWidgetText(data cdtype.DialogWidgetText) (*gtk.Widget, func() interfa
 
 func dialogWidgetScale(data cdtype.DialogWidgetScale) (*gtk.Widget, func() interface{}) {
 	step := (data.MaxValue - data.MinValue) / 100
-	scale, _ := gtk.ScaleNewWithRange(gtk.ORIENTATION_HORIZONTAL, data.MinValue, data.MaxValue, step)
+	scale := newgtk.ScaleWithRange(gtk.ORIENTATION_HORIZONTAL, data.MinValue, data.MaxValue, step)
 	scale.SetValue(data.InitialValue)
 	scale.Set("digits", data.NbDigit)
 	scale.Set("width-request", 150)
+	scale.GrabFocus()
 
 	// C.gldi_dialog_set_widget_text_color((*C.GtkWidget)(unsafe.Pointer(scale.Native()))) // WTF ???
 
@@ -292,16 +294,13 @@ func dialogWidgetScale(data cdtype.DialogWidgetScale) (*gtk.Widget, func() inter
 		return &scale.Widget, getValue
 	}
 
-	box, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
-	min, _ := gtk.LabelNew(data.MinLabel)
-	max, _ := gtk.LabelNew(data.MaxLabel)
-	box.PackStart(min, false, false, 0)
+	box := newgtk.Box(gtk.ORIENTATION_HORIZONTAL, 0)
+
+	box.PackStart(newgtk.Label(data.MinLabel), false, false, 0)
 	box.PackStart(scale, false, false, 0)
-	box.PackStart(max, false, false, 0)
+	box.PackStart(newgtk.Label(data.MaxLabel), false, false, 0)
 
 	// 	GtkWidget *pAlign = gtk_alignment_new (1., 1., 0., 0.); // used alignments for labels
-
-	scale.GrabFocus()
 	return &box.Widget, getValue
 }
 
@@ -310,7 +309,7 @@ func dialogWidgetScale(data cdtype.DialogWidgetScale) (*gtk.Widget, func() inter
 
 func dialogWidgetList(data cdtype.DialogWidgetList) (*gtk.Widget, func() interface{}) {
 	var getValue func() interface{}
-	widget, _ := gtk.ComboBoxTextNew()
+	widget := newgtk.ComboBoxText()
 
 	// Fill the list with user choices.
 	values := strings.Split(data.Values, ";")
@@ -320,7 +319,7 @@ func dialogWidgetList(data cdtype.DialogWidgetList) (*gtk.Widget, func() interfa
 
 	if data.Editable {
 		// Add entry manually so we don't have to recast it after a GetChild.
-		entry, _ := gtk.EntryNew()
+		entry := newgtk.Entry()
 		widget.Add(entry)
 		widget.Connect("changed", func() { entry.SetText(widget.GetActiveText()) })
 
