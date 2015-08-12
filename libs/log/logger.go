@@ -59,15 +59,18 @@ import (
 // Format returns a formatted message in the given color with endline.
 //
 func Format(col, sender, msg string, more ...interface{}) string {
-	list := append([]interface{}{time.Now().Format("15:04:05"), color.Yellow(sender), strhelp.Bracket(color.Colored(msg, col))}, more...)
-	return fmt.Sprintln(list...)
+	return fmt.Sprintln(append([]interface{}{
+		time.Now().Format("15:04:05"),
+		color.Yellow(sender),
+		strhelp.Bracket(color.Colored(msg, col))},
+		more...)...)
 }
 
 // FormatErr returns a formatted error message with endline.
 //
 func FormatErr(e string, sender string, msg ...interface{}) string {
-	str := fmt.Sprintln(msg...) // adds an undesired \n at the end, removed next line.
-	return Format(color.FgRed, sender, "error", str[:len(str)-1], ":", e)
+	str := fmt.Sprint(msg...) // adds an undesired \n at the end, removed next line.
+	return Format(color.FgRed, sender, "error", str, ":", e)
 }
 
 //
@@ -185,6 +188,17 @@ func (l *Log) NewErr(e string, msg ...interface{}) {
 		l.LogOut.Err(e, l.name, msg...)
 	} else {
 		print(FormatErr(e, l.name, msg...))
+	}
+}
+
+// NewErrf log a new error with arguments formatting.
+//
+func (l *Log) NewErrf(title, format string, args ...interface{}) {
+	str := fmt.Sprintf(format, args...)
+	if l.LogOut != nil {
+		l.LogOut.Err("", l.name, str)
+	} else {
+		print(FormatErr(str, l.name, title))
 	}
 }
 

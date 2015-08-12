@@ -19,9 +19,10 @@ import (
 	"github.com/sqp/godock/libs/cdtype" // Logger type.
 	"github.com/sqp/godock/libs/text/tran"
 
+	"github.com/sqp/godock/widgets/cfbuild/datatype"
 	"github.com/sqp/godock/widgets/confapplets"
-	"github.com/sqp/godock/widgets/confbuilder/datatype"
 	"github.com/sqp/godock/widgets/confcore"
+	"github.com/sqp/godock/widgets/confgui/btnaction"
 	"github.com/sqp/godock/widgets/conficons"
 	"github.com/sqp/godock/widgets/confmenu"
 	"github.com/sqp/godock/widgets/confsettings"
@@ -44,63 +45,8 @@ const (
 	GroupConfig = "Config"
 )
 
-// NewStandalone creates a new config window to use as standalone application.
 //
-func NewStandalone(data datatype.Source, log cdtype.Logger, path ...string) {
-	gtk.Init(nil)
-
-	widget, win := NewConfigWindow(data, log)
-	win.Connect("destroy", gtk.MainQuit)
-
-	widget.Load()
-	// widget.Menu.Switcher.Activate("Icons")
-
-	if len(path) > 0 {
-		widget.SelectIcons(path[0])
-	}
-
-	gtk.Main()
-
-	// log.Info("GUI QUITTED OK !!")
-	win.Destroy()
-}
-
-// NewConfigWindow creates a new config widget and window, ready to use.
-//
-func NewConfigWindow(data datatype.Source, log cdtype.Logger) (*GuiConfigure, *gtk.Window) {
-	widget := NewGuiConfigure(data, log)
-	win, err := gtk.WindowNew(gtk.WINDOW_TOPLEVEL)
-	if err != nil {
-		// log.Fatal("Unable to create window:", err)
-		return nil, nil
-	}
-	win.SetDefaultSize(WindowWidth, WindowHeight)
-	win.Add(widget)
-
-	win.SetTitle(WindowTitle)
-	win.SetWMClass(WindowClass, WindowTitle)
-
-	win.SetIconFromFile(data.AppIcon())
-
-	// win.Set("border-width", 4)
-
-	win.ShowAll()
-	widget.SetWindow(win)
-	widget.OnQuit = win.Destroy
-
-	return widget, win
-}
-
-//
-
-// Page defines a switcher page.
-//
-type Page struct {
-	Name   string
-	Widget Saver
-	OnShow func()
-	OnHide func()
-}
+//------------------------------------------------------[ WIDGETS INTERFACES ]--
 
 // Saver extends the Widget interface with a Save action.
 //
@@ -114,6 +60,12 @@ type Saver interface {
 //
 type Selecter interface {
 	Select(string) bool
+}
+
+// ShowWelcomer defines the optional interface to show a placeholder page.
+//
+type ShowWelcomer interface {
+	ShowWelcome(setBtn bool)
 }
 
 // Clearer defines the interface to clear the data of a config page.
@@ -159,23 +111,26 @@ type GuiConfigure struct {
 
 	iconToSelect string // Cache for the icon name to select as ReloadItems is called after the display (fix case new item).
 
-	pages   map[string]*Page
-	current *Page
+	btnAction map[string]btnaction.Tune
+	pages     map[string]*Page
+	current   *Page
 
 	log cdtype.Logger
 }
 
-// NewGuiConfigure creates the main Cairo-Dock configuration widget.
+// NewWidget creates the main Cairo-Dock configuration widget.
 //
-func NewGuiConfigure(source datatype.Source, log cdtype.Logger) *GuiConfigure {
+func NewWidget(source datatype.Source, log cdtype.Logger) *GuiConfigure {
 	box := newgtk.Box(gtk.ORIENTATION_VERTICAL, 0)
 
 	widget := &GuiConfigure{
 		Box:    *box,
 		Source: source,
-		stack:  newgtk.Stack(),
-		pages:  make(map[string]*Page),
-		log:    log,
+
+		stack:     newgtk.Stack(),
+		btnAction: make(map[string]btnaction.Tune),
+		pages:     make(map[string]*Page),
+		log:       log,
 	}
 
 	// Load GUI own config page settings.
@@ -187,26 +142,38 @@ func NewGuiConfigure(source datatype.Source, log cdtype.Logger) *GuiConfigure {
 	widget.Menu = confmenu.New(widget)
 	menuIcons := pageswitch.New()
 	menuIcons.Set("no-show-all", true)
+	menuCore := pageswitch.New()
+	menuCore.Set("no-show-all", true)
 
 	// Box for separator on left of menuIcons.
 	boxIcons := newgtk.Box(gtk.ORIENTATION_HORIZONTAL, 0)
 	sepIcons := newgtk.Separator(gtk.ORIENTATION_VERTICAL)
 	boxIcons.PackStart(sepIcons, false, false, 6)
 	boxIcons.PackStart(menuIcons, false, false, 0)
+	boxIcons.PackStart(menuCore, false, false, 0)
 
 	sw := newgtk.StackSwitcher()
 	sw.SetStack(widget.stack)
 	sw.SetHomogeneous(false)
 
-	icons := conficons.New(widget, log, menuIcons)
-	core := confcore.New(widget, log, menuIcons)
+	btnIcons := btnaction.New(widget.Menu.Save)
+	btnCore := btnaction.New(widget.Menu.Save)
+	btnAdd := btnaction.New(widget.Menu.Save)
+	btnAdd.SetAdd()
+
+	icons := conficons.New(widget, log, menuIcons, btnIcons)
+	core := confcore.New(widget, log, menuCore, btnCore)
 	add := confapplets.New(widget, log, nil, confapplets.ListCanAdd)
+	add.Hide() // TODO: REMOVE THE NEED OF THAT.
 
 	// Add pages to the switcher. This will pack the pages widgets to the gui box.
 
-	widget.AddPage(icons, GroupIcons, func() { widget.SetActionSave(); menuIcons.Show() }, func() { widget.Menu.Save.Hide(); menuIcons.Hide() })
-	widget.AddPage(add, GroupAdd, widget.SetActionAdd, widget.Menu.Save.Hide)
-	widget.AddPage(core, GroupConfig, core.SetAction, widget.Menu.Save.Hide)
+	widget.AddPage(GroupIcons, icons, btnIcons, menuIcons.Show, menuIcons.Hide)
+	widget.AddPage(GroupAdd, add, btnAdd, nil, nil)
+	widget.AddPage(GroupConfig, core, btnCore, menuCore.Show, menuCore.Hide)
+
+	// widget.stack.ChildSetProperty(core, "icon-name", "cairo-dock")
+	widget.stack.ChildSetProperty(add, "icon-name", "list-add")
 
 	widget.stack.Connect("notify::visible-child-name", func() {
 		widget.OnSelectPage(widget.stack.GetVisibleChildName())
@@ -227,15 +194,29 @@ func NewGuiConfigure(source datatype.Source, log cdtype.Logger) *GuiConfigure {
 	return widget
 }
 
+//
+//-------------------------------------------------------------[ CONFIG PAGE ]--
+
+// Page defines a switcher page.
+//
+type Page struct {
+	Name   string
+	Widget Saver
+	OnShow func()
+	OnHide func()
+	btn    btnaction.Tune
+}
+
 // AddPage adds a tab to the main config switcher with its widget.
 //
-func (widget *GuiConfigure) AddPage(saver Saver, name string, onShow, onHide func()) {
+func (widget *GuiConfigure) AddPage(name string, saver Saver, btn btnaction.Tune, onShow, onHide func()) {
 	widget.stack.AddTitled(saver, name, tran.Slate(name))
 	widget.pages[name] = &Page{
 		Name:   name,
 		Widget: saver,
 		OnShow: onShow,
 		OnHide: onHide,
+		btn:    btn,
 	}
 }
 
@@ -245,23 +226,6 @@ func (widget *GuiConfigure) Load() {
 	for _, page := range widget.pages {
 		page.Widget.Load()
 	}
-
-	// widget.stack.SetVisibleChildName(GroupConfig)
-	// widget.Switch(GroupIcons)
-	// widget.Menu.Switcher.Load()
-}
-
-// SetWindow sets the pointer to the parent window, used for some config
-// callbacks (grab events).
-//
-func (widget *GuiConfigure) SetWindow(win *gtk.Window) {
-	widget.window = win
-}
-
-// GetWindow returns the pointer to the parent window.
-//
-func (widget *GuiConfigure) GetWindow() *gtk.Window {
-	return widget.window
 }
 
 //
@@ -297,26 +261,48 @@ func (widget *GuiConfigure) SelectIcons(item string) {
 // Select selects the given group page and may also select a specific item in the page.
 //
 func (widget *GuiConfigure) Select(page string, item ...string) bool {
-	widget.log.Info("newpage displayed")
+	// Show placeholders if needed.
+	defer widget.pages[GroupIcons].Widget.(ShowWelcomer).ShowWelcome(false)
+	defer widget.pages[GroupConfig].Widget.(ShowWelcomer).ShowWelcome(false)
 
-	widget.stack.SetVisibleChildName(page)
+	// widget.log.Info("newpage selected", page, item)
+
+	child, ok := widget.pages[page]
+	if !ok {
+		widget.log.Info("config select, no matching page:", page, item)
+		return false
+	}
+	widget.stack.SetVisibleChild(child.Widget)
+
+	if widget.current == nil {
+		widget.log.Info("config select", "no page selected", page)
+		return false
+	}
 
 	// Select a specific item in the page.
-	selecter, ok := interface{}(widget.current.Widget).(Selecter) // Detect if the widget can Select.
-	if len(item) > 0 && ok {
-		return selecter.Select(item[0])
+	if len(item) > 0 {
+		selecter, ok := widget.current.Widget.(Selecter) // Detect if the widget can Select.
+		if ok {
+			return selecter.Select(item[0])
+		}
+		widget.log.Info("config select: no selecter", page, item)
 	}
+
 	return false
 }
 
-// OnSelectPage reacts when the page is changed to toggle OnHide and OnShow additional callbacks.
+// OnSelectPage reacts when the page is changed to set the button state and
+// trigger OnHide and OnShow additional callbacks.
 //
 func (widget *GuiConfigure) OnSelectPage(page string) {
-	if widget.current != nil && widget.current.OnHide != nil { // Hide previous page.
-		widget.current.OnHide()
+	if widget.current != nil {
+		widget.current.btn.Hide()
+		if widget.current.OnHide != nil { // Hide previous page.
+			widget.current.OnHide()
+		}
 	}
 
-	widget.log.Info("GuiConfigure OnSelectPage")
+	widget.log.Debug("OnSelectPage", page)
 
 	current, ok := widget.pages[page] // Set new current.
 	if !ok {
@@ -324,63 +310,22 @@ func (widget *GuiConfigure) OnSelectPage(page string) {
 	}
 	widget.current = current
 
+	widget.current.btn.Display()
 	if widget.current.OnShow != nil { // Show new page.
 		widget.current.OnShow()
 	}
 }
 
-// SetActionNone disables the action button.
-//
-func (widget *GuiConfigure) SetActionNone() {
-	widget.Menu.Save.Hide()
-}
-
-// SetActionSave sets the action button with save text.
-//
-func (widget *GuiConfigure) SetActionSave() {
-	widget.Menu.Save.SetLabel(tran.Slate("Save"))
-	widget.Menu.Save.Show()
-}
-
-// SetActionApply sets the action button with save text.
-//
-func (widget *GuiConfigure) SetActionApply() {
-	widget.Menu.Save.SetLabel(tran.Slate("Apply"))
-	widget.Menu.Save.Show()
-}
-
-// SetActionAdd sets the action button with add text.
-//
-func (widget *GuiConfigure) SetActionAdd() {
-	widget.Menu.Save.SetLabel(tran.Slate("Add"))
-	widget.Menu.Save.Show()
-}
-
-// SetActionGrab sets the action button with grab text.
-//
-func (widget *GuiConfigure) SetActionGrab() {
-	widget.Menu.Save.SetLabel(tran.Slate("Grab"))
-	widget.Menu.Save.Show()
-}
-
-// SetActionCancel sets the action button with cancel text.
-//
-func (widget *GuiConfigure) SetActionCancel() {
-	widget.Menu.Save.SetLabel(tran.Slate("Cancel"))
-	widget.Menu.Save.Show()
-}
-
 //
 //------------------------------------------------------[ DOCK GUI CALLBACKS ]--
 
-// WARINING: Callbacks must use pages instead of current.
+// WARNING: Callbacks must use pages instead of current.
 // Widgets can be loaded but not visible. You must act on every needed page.
 
 // ReloadItems refreshes the icons page list (clear and reselect, or select cached).
 //
 func (widget *GuiConfigure) ReloadItems() {
-	// sel := widget.pages[GroupIcons].Selected()
-	icons := interface{}(widget.pages[GroupIcons].Widget).(Clearer)
+	icons := widget.pages[GroupIcons].Widget.(Clearer)
 	path := icons.Clear()
 	// widget.log.DEV("ReloadItems path to reselect", path)
 	if widget.iconToSelect != "" {
@@ -447,3 +392,63 @@ func (widget *GuiConfigure) UpdateDeskletVisibility(icon datatype.Iconer) {
 		w.UpdateDeskletVisibility(icon)
 	}
 }
+
+//
+//------------------------------------------------------------------[ WINDOW ]--
+
+// SetWindow sets the pointer to the parent window, used for some config
+// callbacks (grab events).
+//
+func (widget *GuiConfigure) SetWindow(win *gtk.Window) {
+	widget.window = win
+	widget.OnQuit = win.Destroy
+}
+
+// GetWindow returns the pointer to the parent window.
+//
+func (widget *GuiConfigure) GetWindow() *gtk.Window {
+	return widget.window
+}
+
+// NewWindow creates a new config window with its widget, ready to use.
+//
+func NewWindow(data datatype.Source, log cdtype.Logger) (*GuiConfigure, error) {
+	win, e := gtk.WindowNew(gtk.WINDOW_TOPLEVEL)
+	if e != nil {
+		return nil, e
+	}
+	win.SetDefaultSize(WindowWidth, WindowHeight)
+	win.SetTitle(WindowTitle)
+	win.SetWMClass(WindowClass, WindowTitle)
+
+	win.SetIconFromFile(data.AppIcon())
+
+	widget := NewWidget(data, log)
+	widget.SetWindow(win)
+
+	win.Add(widget)
+	win.ShowAll()
+
+	return widget, nil
+}
+
+// NewStandalone creates a new config window to use as standalone application.
+//
+// func NewStandalone(data datatype.Source, log cdtype.Logger, path ...string) {
+// 	gtk.Init(nil)
+
+// 	widget, win := NewWindow(data, log)
+// 	win.Connect("destroy", gtk.MainQuit)
+
+// 	widget.Load()
+// 	// widget.Menu.Switcher.Activate("Icons")
+
+// 	if len(path) > 0 {
+// 		widget.SelectIcons(path[0])
+// 	}
+
+// 	gtk.Main()
+
+// 	// log.Info("GUI QUITTED OK !!")
+// 	win.Destroy()
+// }

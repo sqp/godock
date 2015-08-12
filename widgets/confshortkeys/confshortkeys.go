@@ -8,8 +8,10 @@ import (
 
 	"github.com/sqp/godock/libs/cdtype"
 
+	"github.com/sqp/godock/widgets/cfbuild/cftype"
+	"github.com/sqp/godock/widgets/cfbuild/datatype"
 	"github.com/sqp/godock/widgets/common"
-	"github.com/sqp/godock/widgets/confbuilder/datatype"
+	"github.com/sqp/godock/widgets/confgui/btnaction"
 	"github.com/sqp/godock/widgets/confsettings"
 	"github.com/sqp/godock/widgets/gtk/buildhelp"
 	"github.com/sqp/godock/widgets/gtk/gunvalue"
@@ -29,15 +31,6 @@ const (
 	rowEditable
 )
 
-// Controller defines methods used on the main widget / data source by the shortkeys widget.
-//
-type Controller interface {
-	GetWindow() *gtk.Window
-	ListShortkeys() []datatype.Shortkeyer
-	SetActionGrab()
-	SetActionCancel()
-}
-
 // Shortkeys defines a dock shortkeys management widget.
 //
 type Shortkeys struct {
@@ -45,7 +38,8 @@ type Shortkeys struct {
 	tree               *gtk.TreeView
 	model              *gtk.ListStore
 	selection          *gtk.TreeSelection
-	control            Controller
+	btn                btnaction.Tune
+	control            cftype.Source
 	log                cdtype.Logger
 
 	cbID glib.SignalHandle // Grab callback id.
@@ -55,7 +49,7 @@ type Shortkeys struct {
 
 // New creates a dock shortkeys management widget.
 //
-func New(control Controller, log cdtype.Logger) *Shortkeys {
+func New(control cftype.Source, log cdtype.Logger, btn btnaction.Tune) *Shortkeys {
 	builder := buildhelp.NewFromBytes(confshortkeysXML())
 
 	widget := &Shortkeys{
@@ -64,6 +58,7 @@ func New(control Controller, log cdtype.Logger) *Shortkeys {
 		tree:           builder.GetTreeView("tree"),
 		selection:      builder.GetTreeSelection("selection"),
 		control:        control,
+		btn:            btn,
 		log:            log,
 		rows:           make(map[*gtk.TreeIter]datatype.Shortkeyer),
 	}
@@ -146,7 +141,7 @@ func (widget *Shortkeys) Grab() {
 		return
 	}
 
-	widget.control.SetActionCancel()
+	widget.btn.SetCancel()
 	widget.SetSensitive(false)
 	widget.cbID, _ = widget.control.GetWindow().Connect("key-press-event", widget.onKeyGrabReceived)
 
@@ -261,7 +256,7 @@ func (widget *Shortkeys) onKeyGrabFinish() {
 	widget.control.GetWindow().HandlerDisconnect(widget.cbID)
 	widget.cbID = 0
 
-	widget.control.SetActionGrab()
+	widget.btn.SetGrab()
 	widget.SetSensitive(true)
 }
 

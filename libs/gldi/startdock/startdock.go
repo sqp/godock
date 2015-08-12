@@ -8,7 +8,7 @@ import (
 	"github.com/sqp/godock/libs/gldi/backendgui"
 	"github.com/sqp/godock/libs/gldi/backendmenu"
 	"github.com/sqp/godock/libs/gldi/globals"
-	"github.com/sqp/godock/libs/gldi/gui"
+	"github.com/sqp/godock/libs/gldi/guibridge"
 	"github.com/sqp/godock/libs/gldi/maindock"
 	"github.com/sqp/godock/libs/gldi/menu"
 	"github.com/sqp/godock/libs/gldi/mgrgldi"
@@ -79,7 +79,7 @@ func Run(log cdtype.Logger, getSettings func() maindock.DockSettings) bool {
 
 	CustomHacks()
 
-	backendgui.Register(gui.NewConnector(log))
+	backendgui.Register(guibridge.New(log))
 	backendmenu.Register("dock", menu.BuildMenuContainer, menu.BuildMenuIcon)
 	backendmenu.SetLogger(log)
 

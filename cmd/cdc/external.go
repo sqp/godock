@@ -188,14 +188,14 @@ func listPackages() (list packages.AppletPackages, e error) {
 // Format applet packages using simple table formater.
 //
 func printConsole(list packages.AppletPackages) {
-	lf := tablist.NewTableFormater([]tablist.ColInfo{
-		{0, false, "Inst"},
-		{0, true, "[ Applet ]"},
-		{0, true, "Category"},
-	})
+	lf := tablist.NewFormater(
+		tablist.NewColRight(0, "Inst"),
+		tablist.NewColLeft(0, "[ Applet ]"),
+		tablist.NewColLeft(0, "Category"),
+	)
 
 	for _, pack := range list {
-		line := lf.Line()
+		line := lf.AddLine()
 		if pack.Type == packages.TypeUser {
 			line.Colored(0, color.FgGreen, " * ")
 		}

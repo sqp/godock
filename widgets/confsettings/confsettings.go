@@ -24,9 +24,7 @@ const (
 )
 
 // User own config live settings (what is currently active).
-var (
-	Settings *ConfigSettings
-)
+var Settings = ConfigSettings{}
 
 // ConfigSettings defines the options the user can set about the GUI itself.
 // This GUI config page will often be refered as "own config".
@@ -40,7 +38,10 @@ type ConfigSettings struct {
 	File string
 }
 
-func (cs *ConfigSettings) loadConf(file string) error {
+// Load loads the own config settings.
+//
+func (cs *ConfigSettings) Load() error {
+	file := cs.File                     // Backup the file path.
 	conf, e := config.NewFromFile(file) // Special conf reflector around the config file parser.
 	if e != nil {
 		return e
@@ -49,6 +50,13 @@ func (cs *ConfigSettings) loadConf(file string) error {
 	// TODO: need to forward conf.Errors
 	cs.File = file // Force value of file everytime, it's set to blank by unmarshal.
 	return nil
+}
+
+// ToVirtual returns whether the save is virtual or not (only prints).
+//
+func (cs *ConfigSettings) ToVirtual(file string) bool {
+	// save disabled and no editor and not own conf.
+	return !cs.SaveEnabled && cs.SaveEditor == "" && cs.File != file
 }
 
 // Init will try to load the own config data from the file, and create it if missing.
@@ -64,11 +72,12 @@ func Init(file string, e error) error {
 		if e != nil {
 			return e
 		}
+		// TODO: need to inform about file created (need logger).
 	}
 
 	// Create our user settings
-	Settings = &ConfigSettings{}
-	return Settings.loadConf(file)
+	Settings = ConfigSettings{File: file}
+	return Settings.Load()
 }
 
 // PathFile returns the path to the own config's config file.
@@ -80,19 +89,19 @@ func PathFile() string {
 // SaveFile is the current GUI save call to check whether it can be safely used
 // according to user settings. May move at some point.
 //
-func SaveFile(file, content string) {
+func SaveFile(file, content string) (tofile bool, e error) {
 	isOwn := filepath.Base(file) == GuiFilename
+	tofile = Settings.SaveEnabled || isOwn // force save for own config page.
+	switch {
+	case tofile:
+		e = ioutil.WriteFile(file, []byte(content), 0600)
 
-	if Settings.SaveEnabled || isOwn { // force save for own config page.
-		ioutil.WriteFile(file, []byte(content), 0600)
-		if isOwn {
-			Settings.loadConf(file)
-		}
+	case Settings.SaveEditor == "":
 
-	} else {
+	default:
 		ioutil.WriteFile(TmpFile, []byte(content), 0600)
-		exec.Command(Settings.SaveEditor, file, TmpFile).Run()
-
-		// TODO: need return error
+		e = exec.Command(Settings.SaveEditor, file, TmpFile).Start()
 	}
+
+	return tofile, e
 }

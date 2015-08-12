@@ -1,55 +1,71 @@
-package confbuilder
-
-// // #cgo pkg-config: gtk+-3.0
-// // #include <gtk/gtk.h>
-// import "C"
+// Package cfwidget implements key widgets for the config file builder.
+package cfwidget
 
 import (
 	"github.com/conformal/gotk3/gdk"
 	"github.com/conformal/gotk3/glib"
 	"github.com/conformal/gotk3/gtk"
 
-	"github.com/sqp/godock/libs/text/tran"
+	"github.com/google/shlex"
 
+	"github.com/sqp/godock/libs/helper/cast"
+	"github.com/sqp/godock/libs/ternary"
+	"github.com/sqp/godock/libs/text/tran" // Translate.
+
+	"github.com/sqp/godock/widgets/cfbuild/cftype"   // Types for config file builder usage.
+	"github.com/sqp/godock/widgets/cfbuild/datatype" // Types for config file builder data source.
 	"github.com/sqp/godock/widgets/common"
-	"github.com/sqp/godock/widgets/confbuilder/datatype"
 	"github.com/sqp/godock/widgets/gtk/gunvalue"
-	"github.com/sqp/godock/widgets/gtk/newgtk"
+	"github.com/sqp/godock/widgets/gtk/indexiter" // References of iter to reselect.
+	"github.com/sqp/godock/widgets/gtk/newgtk"    // Create widgets.
+	"github.com/sqp/godock/widgets/handbook"
 
 	"strconv"
 )
 
+// Warning, during the widget build, the key value must be get before you set
+// the GetValue callback.
+
 //------------------------------------------------------[ WIDGETS COLLECTION ]--
 
-// WidgetCheckButton adds a check button widget.
+// CheckButton adds a check button widget.
 //
-func (build *Builder) WidgetCheckButton(key *Key) {
-	nbval, values, _ := build.Conf.GetBooleanList(key.Group, key.Name)
+func CheckButton(key *cftype.Key) {
+	if key.NbElements > 1 { // TODO: remove temp test
+		key.Log().Info("CheckButton multi", key.NbElements, key.Type.String())
+	}
+
+	values := key.Value().ListBool()
+
+	var activers []widgetActiver
+
 	for k := 0; k < key.NbElements; k++ {
 		var value bool
-		if uint64(k) < nbval {
+		if k < len(values) {
 			value = values[k]
 		}
-		widget := newgtk.CheckButton()
-		widget.SetActive(value)
+		w := newgtk.CheckButton()
+		w.SetActive(value)
+		key.PackSubWidget(w)
+		activers = append(activers, w)
 
-		if key.IsType(WidgetCheckControlButton) {
+		if key.IsType(cftype.KeyBoolCtrl) {
 			// 		_allocate_new_buffer;
 			// 		data[0] = pKeyBox;
 			// 		data[1] = (pFrameVBox != NULL ? pFrameVBox : pGroupBox);
 			// 		if (pAuthorizedValuesList != NULL && pAuthorizedValuesList[0] != NULL)
-			// 			iNbControlledWidgets = g_ascii_strtod (pAuthorizedValuesList[0], NULL);
+			// 			NbControlled = g_ascii_strtod (pAuthorizedValuesList[0], NULL);
 			// 		else
-			// 			iNbControlledWidgets = 1;
-			// 		data[2] = GINT_TO_POINTER (iNbControlledWidgets);
-			// 		if (iNbControlledWidgets < 0)  // a negative value means that the behavior is inverted.
+			// 			NbControlled = 1;
+			// 		data[2] = GINT_TO_POINTER (NbControlled);
+			// 		if (NbControlled < 0)  // a negative value means that the behavior is inverted.
 			// 		{
 			// 			bValue = !bValue;
-			// 			iNbControlledWidgets = -iNbControlledWidgets;
+			// 			NbControlled = -NbControlled;
 			// 		}
 			// 		g_signal_connect (G_OBJECT (pOneWidget), "toggled", G_CALLBACK(_cairo_dock_toggle_control_button), data);
 
-			// 		g_object_set_data (G_OBJECT (pKeyBox), "nb-ctrl-widgets", GINT_TO_POINTER (iNbControlledWidgets));
+			// 		g_object_set_data (G_OBJECT (pKeyBox), "nb-ctrl-widgets", GINT_TO_POINTER (NbControlled));
 			// 		g_object_set_data (G_OBJECT (pKeyBox), "one-widget", pOneWidget);
 
 			// 		if (! bValue)  // les widgets suivants seront inactifs.
@@ -57,230 +73,261 @@ func (build *Builder) WidgetCheckButton(key *Key) {
 			// 			CDControlWidget *cw = g_new0 (CDControlWidget, 1);
 			// 			pControlWidgets = g_list_prepend (pControlWidgets, cw);
 			// 			cw->iNbSensitiveWidgets = 0;
-			// 			cw->iNbControlledWidgets = iNbControlledWidgets;
+			// 			cw->NbControlled = NbControlled;
 			// 			cw->iFirstSensitiveWidget = 1;
 			// 			cw->pControlContainer = (pFrameVBox != NULL ? pFrameVBox : pGroupBox);
 			// 		}  // sinon le widget suivant est sensitif, donc rien a faire.
 		}
-
-		getValue := func() interface{} { return widget.GetActive() }
-		build.AddKeyWidget(widget, key, getValue)
+	}
+	if key.NbElements == 1 {
+		key.PackKeyWidget(key,
+			func() interface{} { return activers[0].GetActive() },
+			func(uncast interface{}) { activers[0].SetActive(uncast.(bool)) },
+		)
+	} else {
+		key.PackKeyWidget(key,
+			func() interface{} { return listActiverGet(activers) },
+			func(uncast interface{}) { listActiverSet(activers, uncast.([]bool)) },
+		)
 	}
 }
 
-// WidgetInteger adds an integer selector widget.
+// IntegerScale adds an integer scale widget.
 //
-func (build *Builder) WidgetInteger(key *Key) {
-	var fMinValue float64
-	var fMaxValue float64 = 9999
-	if len(key.AuthorizedValues) > 0 {
-		fMinValue, _ = strconv.ParseFloat(key.AuthorizedValues[0], 32)
-	}
-	if len(key.AuthorizedValues) > 1 {
-		fMaxValue, _ = strconv.ParseFloat(key.AuthorizedValues[1], 32)
+func IntegerScale(key *cftype.Key) {
+	if key.NbElements > 1 { // TODO: remove temp test
+		key.Log().Info("IntegerScale multi", key.NbElements, key.Type.String())
 	}
 
-	var toggle *gtk.ToggleButton
-	if key.IsType(WidgetIntegerSize) {
-		key.NbElements *= 2
-		toggle = newgtk.ToggleButton()
-		img := newgtk.ImageFromIconName("media-playback-pause", gtk.ICON_SIZE_MENU) // get better image.
-		toggle.SetImage(img)
+	value := key.Value().Int()
+	minValue, maxValue := minMaxValues(key)
+
+	step := (maxValue - minValue) / 20
+	if step < 1 {
+		step = 1
+	}
+	adjustment := newgtk.Adjustment(float64(value), minValue, maxValue, 1, step, 0)
+	w := newgtk.Scale(gtk.ORIENTATION_HORIZONTAL, adjustment)
+	w.Set("digits", 0)
+
+	PackValuerAsInt(key, WrapKeyScale(key, w), w, value)
+}
+
+// IntegerSpin adds an integer scale widget.
+//
+func IntegerSpin(key *cftype.Key) {
+	if key.NbElements > 1 { // TODO: remove temp test
+		key.Log().Info("integer multi ffs", key.Type.String())
 	}
 
-	var value, prevValue int
-	var prevWidget *gtk.SpinButton
-	var setValue []func(int)
+	value := key.Value().Int()
+	minValue, maxValue := minMaxValues(key)
 
-	nbval, values, _ := build.Conf.GetIntegerList(key.Group, key.Name)
+	w := newgtk.SpinButtonWithRange(minValue, maxValue, 1)
+	w.SetValue(float64(value))
+
+	PackValuerAsInt(key, w, w, value)
+}
+
+// IntegerSize adds an integer selector widget.
+//
+func IntegerSize(key *cftype.Key) {
+	if key.NbElements > 1 { // TODO: remove temp test
+		key.Log().Info("IntegerSize multi", key.NbElements, key.Type.String())
+	}
+
+	toggle := newgtk.ToggleButton()
+	img := newgtk.ImageFromIconName("media-playback-pause", gtk.ICON_SIZE_MENU) // get better image.
+	toggle.SetImage(img)
+
+	values := key.Value().ListInt()
+	minValue, maxValue := minMaxValues(key)
+
+	var valuers []WidgetValuer
+
+	key.NbElements *= 2 // Two widgets to add.
+
+	// Value pair data.
+	var firstValue int
+	var firstWidget *gtk.SpinButton
+	var cbBlock func() func()
+
 	for k := 0; k < key.NbElements; k++ {
-		if uint64(k) < nbval {
+		var value int
+		if k < len(values) {
 			value = values[k]
 		}
 
-		switch key.Type {
-		case WidgetIntegerScale:
-			// log.DEV("FLOAT INT", value, key.AuthorizedValues, fMinValue, fMaxValue)
-			step := (fMaxValue - fMinValue) / 20
-			if step < 1 {
-				step = 1
+		w := newgtk.SpinButtonWithRange(minValue, maxValue, 1)
+		w.SetValue(float64(value))
+		key.PackSubWidget(w)
+		valuers = append(valuers, w)
+
+		if k&1 == 0 { // first value, separator
+			label := newgtk.Label("x")
+			key.PackSubWidget(label)
+
+			firstWidget = w
+			firstValue = value
+
+		} else { // second value. connect both spin values.
+			if firstValue == value {
+				toggle.SetActive(true)
 			}
-			adjustment := newgtk.Adjustment(float64(value), fMinValue, fMaxValue, 1, step, 0)
-			widget := newgtk.Scale(gtk.ORIENTATION_HORIZONTAL, adjustment)
-			widget.Set("digits", 0)
-			getValue := func() interface{} { return int(widget.GetValue()) }
-			setValue = append(setValue, func(v int) { widget.SetValue(float64(v)) })
-			build.addKeyScale(widget, key, getValue)
 
-		case WidgetIntegerSpin, WidgetIntegerSize:
-			widget := newgtk.SpinButtonWithRange(fMinValue, fMaxValue, 1)
-			widget.SetValue(float64(value))
-			getValue := func() interface{} { return widget.GetValueAsInt() }
-			setValue = append(setValue, func(v int) { widget.SetValue(float64(v)) })
-			build.AddKeyWidget(widget, key, getValue)
+			cb0, e := firstWidget.Connect("value-changed", onValuePairChanged, &valuePair{
+				linked: w,
+				toggle: toggle})
+			key.Log().Err(e, "IntegerSize connect value-changed 1")
+			cb1, e := w.Connect("value-changed", onValuePairChanged, &valuePair{
+				linked: firstWidget,
+				toggle: toggle})
+			key.Log().Err(e, "IntegerSize connect value-changed 2")
 
-			if key.IsType(WidgetIntegerSize) {
-				if k&1 == 0 { // separator
-					label := newgtk.Label("x")
-					build.addSubWidget(label)
-				} else { // connect both spin values.
-					if prevValue == value {
-						toggle.SetActive(true)
-					}
-
-					widget.Connect("value-changed", onValuePairChanged, &valuePair{
-						linked: prevWidget,
-						toggle: toggle})
-					prevWidget.Connect("value-changed", onValuePairChanged, &valuePair{
-						linked: widget,
-						toggle: toggle})
+			cbBlock = func() func() {
+				firstWidget.HandlerBlock(cb0)
+				w.HandlerBlock(cb1)
+				return func() {
+					firstWidget.HandlerUnblock(cb0)
+					w.HandlerUnblock(cb1)
 				}
-				prevWidget = widget
-				prevValue = value
 			}
 		}
 	}
 
-	if key.IsType(WidgetIntegerSize) {
-		build.addSubWidget(toggle)
+	setValue := func(uncast interface{}) {
+		if cbBlock == nil {
+			key.Log().NewErr("no valuePair callbacks", "IntegerSize", key.Name)
+		} else {
+			defer cbBlock()() // This disables now and reenables during defer.
+		}
+		values := uncast.([]int)
+		if len(values) < 2 {
+			key.Log().NewErr("not enough values provided", "IntegerSize set value", key.Name, values)
+			values = []int{0, 0}
+		}
+
+		listValuerSet(valuers, cast.IntsToFloats(values))
+		toggle.SetActive(values[0] == values[1])
 	}
 
-	build.addReset(key, func(values []string) {
-		for k, v := range values {
-			if k >= len(setValue) {
-				build.log.NewErr("not enough value fields to reset integers", "key:"+key.Name)
-				return
-			}
-			val, _ := strconv.ParseInt(v, 10, 32)
-			setValue[k](int(val))
-		}
-	})
+	key.PackKeyWidget(key,
+		func() interface{} { return cast.FloatsToInts(listValuerGet(valuers)) },
+		setValue,
+		toggle,
+	)
+
+	oldval, _ := key.Storage().Default(key.Group, key.Name)
+	PackReset(key, oldval.ListInt())
 }
 
-// WidgetFloat adds a float selector widget. SpinButton or Horizontal Scale
+// Float adds a float selector widget. SpinButton or Horizontal Scale
 //
-func (build *Builder) WidgetFloat(key *Key) {
-	var fMinValue float64
-	var fMaxValue float64 = 9999
-	if len(key.AuthorizedValues) > 0 {
-		fMinValue, _ = strconv.ParseFloat(key.AuthorizedValues[0], 32)
-	}
-	if len(key.AuthorizedValues) > 1 {
-		fMaxValue, _ = strconv.ParseFloat(key.AuthorizedValues[1], 32)
+func Float(key *cftype.Key) {
+	if key.NbElements > 1 { // TODO: remove temp test
+		key.Log().Info("Float multi", key.NbElements, key.Type.String())
 	}
 
-	var setValue []func(float64)
-	nbval, values, _ := build.Conf.GetDoubleList(key.Group, key.Name)
+	values := key.Value().ListFloat()
+	minValue, maxValue := minMaxValues(key)
+
+	var valuers []WidgetValuer
+
 	for k := 0; k < key.NbElements; k++ {
 		var value float64
-		if uint64(k) < nbval {
+		if k < len(values) {
 			value = values[k]
 		}
 
 		switch key.Type {
-		case WidgetFloatScale:
-			// log.DEV("FLOAT SCALE", value, key.AuthorizedValues)
-			adjustment := newgtk.Adjustment(value, fMinValue, fMaxValue, (fMaxValue-fMinValue)/20, (fMaxValue-fMinValue)/10, 0)
-			widget := newgtk.Scale(gtk.ORIENTATION_HORIZONTAL, adjustment)
-			widget.Set("digits", 3)
-			getValue := func() interface{} { return widget.GetValue() }
-			setValue = append(setValue, func(v float64) { widget.SetValue(v) })
-			build.addKeyScale(widget, key, getValue)
+		case cftype.KeyFloatScale:
+			adjustment := newgtk.Adjustment(
+				value,
+				minValue,
+				maxValue,
+				(maxValue-minValue)/20,
+				(maxValue-minValue)/10, 0,
+			)
+			w := newgtk.Scale(gtk.ORIENTATION_HORIZONTAL, adjustment)
+			w.Set("digits", 3)
 
-		case WidgetFloatSpin:
-			widget := newgtk.SpinButtonWithRange(fMinValue, fMaxValue, 1)
-			widget.Set("digits", 3)
-			widget.SetValue(value)
-			getValue := func() interface{} { return widget.GetValue() }
-			setValue = append(setValue, widget.SetValue)
-			build.AddKeyWidget(widget, key, getValue)
+			key.PackSubWidget(WrapKeyScale(key, w))
+			valuers = append(valuers, w)
+
+		case cftype.KeyFloatSpin:
+			w := newgtk.SpinButtonWithRange(minValue, maxValue, 1)
+			w.Set("digits", 3)
+			w.SetValue(value)
+
+			key.PackSubWidget(w)
+			valuers = append(valuers, w)
 		}
-
 	}
 
-	build.addReset(key, func(values []string) {
-		for k, v := range values {
-			if k >= len(setValue) {
-				build.log.NewErr("not enough value fields to reset integers", "key:"+key.Name)
-				return
-			}
-			val, _ := strconv.ParseFloat(v, 32)
-			setValue[k](val)
-		}
-	})
+	switch {
+	case key.NbElements == 1:
+		key.PackKeyWidget(key,
+			func() interface{} { return valuers[0].GetValue() },
+			func(uncast interface{}) { valuers[0].SetValue(uncast.(float64)) },
+		)
+		oldval, _ := key.Storage().Default(key.Group, key.Name)
+		PackReset(key, oldval.Float())
+
+	default:
+		key.PackKeyWidget(key,
+			func() interface{} { return listValuerGet(valuers) },
+			func(uncast interface{}) { listValuerSet(valuers, uncast.([]float64)) },
+		)
+		oldval, _ := key.Storage().Default(key.Group, key.Name)
+		PackReset(key, oldval.ListFloat())
+	}
 }
 
-// WidgetColorSelector adds a color selector widget.
+// ColorSelector adds a color selector widget.
 //
-func (build *Builder) WidgetColorSelector(key *Key) {
-	switch key.Type {
-	case WidgetColorSelectorRGB:
-		key.NbElements = 3
-	case WidgetColorSelectorRGBA:
-		key.NbElements = 4
-	}
-	_, values, _ := build.Conf.GetDoubleList(key.Group, key.Name)
+func ColorSelector(key *cftype.Key) {
+	values := key.Value().ListFloat()
 	if len(values) == 3 {
 		values = append(values, 1) // no transparency.
 	}
 	gdkColor := gdk.NewRGBA(values...)
-
 	widget := newgtk.ColorButtonWithRGBA(gdkColor)
-	widget.Set("use-alpha", key.IsType(WidgetColorSelectorRGBA))
-	getValue := func() interface{} { return widget.GetRGBA() }
-	build.AddKeyWidget(widget, key, getValue)
 
-	build.addReset(key, func(liststr []string) {
-		var values []float64
-		for _, v := range liststr {
-			val, _ := strconv.ParseFloat(v, 32)
-			values = append(values, val)
-		}
+	var getValue func() interface{}
+	switch key.Type {
+	case cftype.KeyColorSelectorRGB:
+		key.NbElements = 3
+		getValue = func() interface{} { return widget.GetRGBA().Floats()[:3] } // Need to trunk ?
 
-		if len(values) == 3 {
-			values = append(values, 1) // no transparency.
-		}
-		widget.SetRGBA(gdk.NewRGBA(values...))
-	})
+	case cftype.KeyColorSelectorRGBA:
+		key.NbElements = 4
+		getValue = func() interface{} { return widget.GetRGBA().Floats() }
+	}
+
+	widget.Set("use-alpha", key.IsType(cftype.KeyColorSelectorRGBA))
+
+	key.PackKeyWidget(key,
+		getValue,
+		func(uncast interface{}) { widget.SetRGBA(gdk.NewRGBA(uncast.([]float64)...)) },
+		widget,
+	)
+	oldval, _ := key.Storage().Default(key.Group, key.Name)
+	PackReset(key, oldval.ListFloat())
 }
 
-// WidgetListTheme adds an theme list widget.
+// ListThemeApplet adds an theme list widget.
 //
-func (build *Builder) WidgetListTheme(key *Key) {
-	current, _ := build.Conf.GetString(key.Group, key.Name)
-	build.log.Info("theme", current, key.AuthorizedValues)
-
-	model, _ := newModelSimple()
-	model.SetSortColumnId(RowName, gtk.SORT_ASCENDING)
-	combo, getValue := build.newComboBoxWithModel(model, true, false, true)
-
-	details := NewHandbook(build.log)
-	build.AddKeyWidget(combo, key, getValue)
-	build.addWidget(details, false, false, 0)
-
-	// Connect the theme preview update on selection.
-	var list map[string]datatype.Handbooker
-	combo.Connect("changed", func() {
-		pack, ok := list[getValue().(string)]
-		if ok {
-			details.SetPackage(pack)
-		}
-	})
-
-	// Fill the list with known themes.
+func ListThemeApplet(key *cftype.Key) {
+	var index map[string]datatype.Handbooker
 	if len(key.AuthorizedValues) > 2 {
-		current, _ := build.Conf.GetString(key.Group, key.Name)
 		if key.AuthorizedValues[1] == "gauges" {
-			list = build.data.ListThemeXML(key.AuthorizedValues[0], key.AuthorizedValues[1], key.AuthorizedValues[2])
-			iter := fillModelWithTheme(model, list, current)
-			combo.SetActiveIter(iter)
+			index = key.Source().ListThemeXML(key.AuthorizedValues[0], key.AuthorizedValues[1], key.AuthorizedValues[2])
 
 		} else {
-			list = build.data.ListThemeINI(key.AuthorizedValues[0], key.AuthorizedValues[1], key.AuthorizedValues[2])
-			iter := fillModelWithTheme(model, list, current)
-			combo.SetActiveIter(iter)
+			index = key.Source().ListThemeINI(key.AuthorizedValues[0], key.AuthorizedValues[1], key.AuthorizedValues[2])
 		}
 	}
+	PackComboBoxWithIndexHandbooker(key, index)
 
 	// 	// list local packages first.
 	// 	_allocate_new_buffer;
@@ -311,93 +358,75 @@ func (build *Builder) WidgetListTheme(key *Key) {
 
 }
 
-// WidgetIconThemeList adds a desktop icon-themes list widget.
+// ListView adds a view list widget.
 //
-func (build *Builder) WidgetIconThemeList(key *Key) {
-	getList := fieldsPrepend(build.data.ListIconTheme(),
+func ListView(key *cftype.Key) {
+	index := key.Source().ListViews()
+	PackComboBoxWithIndexHandbooker(key, index)
+}
+
+// ListThemeDesktopIcon adds a desktop icon-themes list widget.
+//
+func ListThemeDesktopIcon(key *cftype.Key) {
+	getList := fieldsPrepend(key.Source().ListThemeDesktopIcon(),
 		datatype.Field{},
 		datatype.Field{Key: "_Custom Icons_", Name: tran.Slate("_Custom Icons_")},
 	)
-	build.NewComboBoxFilled(key, false, false, getList)
+	PackComboBoxWithListField(key, false, false, getList)
 }
 
-// WidgetViewList adds a view list widget.
+// ListAnimation adds an animation list widget.
 //
-func (build *Builder) WidgetViewList(key *Key) {
-	index := build.data.ListViews()
-
-	model, _ := newModelSimple()
-	combo, getValue := build.newComboBoxWithModel(model, false, false, false)
-	current, _ := build.Conf.GetString(key.Group, key.Name)
-	iter := fillModelWithTheme(model, index, current)
-	model.SetSortColumnId(RowName, gtk.SORT_ASCENDING)
-
-	// Connect the view preview update on selection.
-	details := NewHandbook(build.log)
-	combo.Connect("changed", func() {
-		key := getValue().(string)
-		pack, ok := index[key]
-		if ok {
-			details.SetPackage(pack)
-		}
-	})
-	combo.SetActiveIter(iter) // Set iter after connect, to update with current value.
-
-	build.AddKeyWidget(combo, key, getValue)
-	build.addWidget(details, false, false, 0)
-}
-
-// WidgetAnimationList adds an animation list widget.
-//
-func (build *Builder) WidgetAnimationList(key *Key) {
-	getList := fieldsPrepend(build.data.ListAnimations(),
+func ListAnimation(key *cftype.Key) {
+	getList := fieldsPrepend(key.Source().ListAnimations(),
 		datatype.Field{},
 	)
-	build.NewComboBoxFilled(key, false, false, getList)
+	PackComboBoxWithListField(key, false, false, getList)
 }
 
-// WidgetDialogDecoratorList adds an dialog decorator list widget.
+// ListDialogDecorator adds an dialog decorator list widget.
 //
-func (build *Builder) WidgetDialogDecoratorList(key *Key) {
-	build.NewComboBoxFilled(key, false, false, build.data.ListDialogDecorator)
+func ListDialogDecorator(key *cftype.Key) {
+	PackComboBoxWithListField(key, false, false, key.Source().ListDialogDecorator)
 }
 
-// WidgetListDeskletDecoration adds a desklet decoration list widget.
+// ListDeskletDecoration adds a desklet decoration list widget.
 //
-func (build *Builder) WidgetListDeskletDecoration(key *Key) {
-	getList := build.data.ListDeskletDecorations
-	if key.IsType(WidgetDeskletDecorationListWithDefault) {
+func ListDeskletDecoration(key *cftype.Key) {
+	current := key.Value().String()
+	getList := key.Source().ListDeskletDecorations
+	if key.IsType(cftype.KeyListDeskletDecoDefault) {
 		getList = fieldsPrepend(getList(),
-			datatype.Field{Key: "default", Name: "default"},
+			datatype.Field{Key: "default", Name: tran.Slate("default")},
 		)
 	}
-	build.NewComboBoxFilled(key, false, false, getList)
+	PackComboBoxWithListField(key, false, false, getList)
+
 	// 	gtk_tree_sortable_set_sort_column_id (GTK_TREE_SORTABLE (pListStore), CAIRO_DOCK_MODEL_NAME, GTK_SORT_ASCENDING);
 
 	// _allocate_new_buffer;
 	// data[0] = pKeyBox;
 	// data[1] = (pFrameVBox != NULL ? pFrameVBox : pGroupBox);
-	// iNbControlledWidgets = 9;
-	// data[2] = GINT_TO_POINTER (iNbControlledWidgets);
-	// iNbControlledWidgets --;  // car dans cette fonction, on ne compte pas le separateur.
+	// NbControlled = 9;
+	// data[2] = GINT_TO_POINTER (NbControlled);
+	// NbControlled --;  // car dans cette fonction, on ne compte pas le separateur.
 	// g_signal_connect (G_OBJECT (pOneWidget), "changed", G_CALLBACK (_cairo_dock_select_custom_item_in_combo), data);
 
-	current, _ := build.Conf.GetString(key.Group, key.Name)
 	if current == "personnal" { // Disable the next widgets.
 		// 		CDControlWidget *cw = g_new0 (CDControlWidget, 1);
 		// 		pControlWidgets = g_list_prepend (pControlWidgets, cw);
-		// 		cw->iNbControlledWidgets = iNbControlledWidgets;
+		// 		cw->NbControlled = NbControlled;
 		// 		cw->iNbSensitiveWidgets = 0;
 		// 		cw->iFirstSensitiveWidget = 1;
 		// 		cw->pControlContainer = (pFrameVBox != NULL ? pFrameVBox : pGroupBox);
 	}
 }
 
-// WidgetScreensList adds a screen selection widget.
+// ListScreens adds a screen selection widget.
 //
-func (build *Builder) WidgetScreensList(key *Key) {
-	list := build.data.ListScreens()
-	combo := build.NewComboBoxFilled(key, false, false, fieldsPrepend(list))
+func ListScreens(key *cftype.Key) {
+	list := key.Source().ListScreens()
+	combo := PackComboBoxWithListField(key, false, false, fieldsPrepend(list))
 	if len(list) <= 1 {
 		combo.SetSensitive(false)
 	}
@@ -409,50 +438,48 @@ func (build *Builder) WidgetScreensList(key *Key) {
 	// 	g_signal_connect (pOneWidget, "destroy", G_CALLBACK (_on_list_destroyed), NULL);
 }
 
-// WidgetDockList adds a dock list widget.
+// ListDock adds a dock list widget.
 //
-func (build *Builder) WidgetDockList(key *Key) {
+func ListDock(key *cftype.Key) {
 	// Get current Icon name if its a Subdock.
-	iIconType, _ := build.Conf.GetInteger(key.Group, "Icon Type")
+	iIconType, _ := key.Storage().Int(key.Group, "Icon Type")
 	SubdockName := ""
-	if iIconType == UserIconStack { // it's a stack-icon
-		SubdockName, _ = build.Conf.GetString(key.Group, "Name") // It's a subdock, get its name to remove the selection of a recursive position (inside itself).
+	if iIconType == cftype.UserIconStack { // it's a stack-icon
+		SubdockName, _ = key.Storage().String(key.Group, "Name") // It's a subdock, get its name to remove the selection of a recursive position (inside itself).
 	}
 
-	list := build.data.ListDocks("", SubdockName) // Get the list of available docks. Keep parent, but remove itself from the list.
+	list := key.Source().ListDocks("", SubdockName) // Get the list of available docks. Keep parent, but remove itself from the list.
 	list = append(list, datatype.Field{
 		Key:  datatype.KeyNewDock,
 		Name: tran.Slate("New main dock")},
 	)
 
-	model, _ := newModelSimple()
-	current, _ := build.Conf.GetString(key.Group, key.Name)
+	model := newModelSimple()
+	current := key.Value().String()
 
 	if current == "" {
 		current = datatype.KeyMainDock
 	}
 
 	model.SetSortColumnId(RowName, gtk.SORT_ASCENDING)
-
-	iter := fillModelWithFields(model, list, current)
-	combo := newgtk.ComboBoxWithModel(model)
+	widget := newgtk.ComboBoxWithModel(model)
 	renderer := newgtk.CellRendererText()
-	combo.PackStart(renderer, false)
-	combo.AddAttribute(renderer, "text", RowName)
-	combo.SetActiveIter(iter)
+	widget.PackStart(renderer, false)
+	widget.AddAttribute(renderer, "text", RowName)
 
-	getValue := func() interface{} {
-		iter, _ := combo.GetActiveIter()
-		text := build.getActiveRowInCombo(model, iter)
-		// text := combo.GetActive();
-		return text
-	}
-	build.AddKeyWidget(combo, key, getValue)
+	saved := indexiter.NewByString(widget, key.Log())
+	iter := fillModelWithFields(key, model, list, current, saved)
+	widget.SetActiveIter(iter)
+
+	key.PackKeyWidget(key,
+		getValueListCombo(widget, model, key.Log()),
+		func(uncast interface{}) { saved.SetActive(uncast.(string)) },
+		widget)
 }
 
-// WidgetIconsList adds an icon list widget.
+// ListIconsMainDock adds an icon list widget.
 //
-func (build *Builder) WidgetIconsList(key *Key) {
+func ListIconsMainDock(key *cftype.Key) {
 	// {
 	// 	if (g_pMainDock == NULL) // maintenance mode... no dock, no icons
 	// 	{
@@ -470,9 +497,8 @@ func (build *Builder) WidgetIconsList(key *Key) {
 
 	//
 
-	current, _ := build.Conf.GetString(key.Group, key.Name)
-
-	model, _ := newModelSimple()
+	current := key.Value().String()
+	model := newModelSimple()
 	widget := newgtk.ComboBoxWithModel(model)
 
 	rp := newgtk.CellRendererPixbuf()
@@ -483,42 +509,10 @@ func (build *Builder) WidgetIconsList(key *Key) {
 	widget.PackStart(renderer, true)
 	widget.AddAttribute(renderer, "text", RowName)
 
-	widget.Set("id-column", RowName)
-	getValue := func() interface{} {
-		iter, _ := widget.GetActiveIter()
-		text := build.getActiveRowInCombo(model, iter)
-		return text
-	}
-
-	build.AddKeyWidget(widget, key, getValue)
-
-	iconSize := 24
-	// iconSize := int(gtk.ICON_SIZE_LARGE_TOOLBAR)
-
-	for _, icon := range build.data.ListIconsMainDock() {
-		configPath := icon.ConfigPath()
-		iter := model.Append()
-		name, img := icon.DefaultNameIcon()
-
-		model.SetCols(iter, gtk.Cols{
-			RowName: name,
-			RowKey:  configPath,
-		})
-
-		if img != "" {
-			if pix, e := common.PixbufNewFromFile(img, iconSize); !build.log.Err(e, "Load icon") {
-				model.SetValue(iter, RowIcon, pix)
-			}
-		}
-
-		if configPath == current {
-			widget.SetActiveIter(iter)
-		}
-	}
-
-	//
-
-	//
+	list := key.Source().ListIconsMainDock()
+	saved := indexiter.NewByString(widget, key.Log())
+	iter := fillModelWithFields(key, model, list, current, saved)
+	widget.SetActiveIter(iter)
 
 	//
 
@@ -625,12 +619,16 @@ func (build *Builder) WidgetIconsList(key *Key) {
 	// 	g_free (cValue);
 	// }
 
+	key.PackKeyWidget(key,
+		getValueListCombo(widget, model, key.Log()),
+		func(uncast interface{}) { saved.SetActive(uncast.(string)) },
+		widget)
 }
 
-// WidgetJumpToModule adds a redirect button widget.
+// JumpToModule adds a redirect button widget.
 // USED?
 //
-func (build *Builder) WidgetJumpToModule(key *Key) {
+func JumpToModule(key *cftype.Key) {
 	// if (pAuthorizedValuesList == NULL || pAuthorizedValuesList[0] == NULL || *pAuthorizedValuesList[0] == '\0')
 	// 	break ;
 
@@ -657,28 +655,28 @@ func (build *Builder) WidgetJumpToModule(key *Key) {
 
 }
 
-// WidgetLaunchCommand adds a launch command widget.
+// LaunchCommand adds a launch command widget.
 // HELP ONLY
 //
-func (build *Builder) WidgetLaunchCommand(key *Key) {
-	// if (pAuthorizedValuesList == NULL || pAuthorizedValuesList[0] == NULL || *pAuthorizedValuesList[0] == '\0')
-	// 	break ;
+func LaunchCommand(key *cftype.Key) {
 	if len(key.AuthorizedValues) == 0 || key.AuthorizedValues[0] == "" {
+		key.Log().NewErrf("command missing", "widget LaunchCommand: %s", key.Name)
 		return
 	}
-
 	// log.Info(key.Name, key.AuthorizedValues)
 
-	// gchar *cFirstCommand = NULL;
-	// cFirstCommand = pAuthorizedValuesList[0];
-	if key.IsType(WidgetLaunchCommandIfCondition) {
+	if key.IsType(cftype.KeyLaunchCmdIf) {
+
+		key.Log().Info("KeyLaunchCmdIf : disabled for now")
+		return
+
 		if len(key.AuthorizedValues) < 2 {
-			build.pLabel.SetSensitive(false)
+			key.Label().SetSensitive(false)
 			return
 		}
-		// build.log.Info("test", key.AuthorizedValues[1])
+		// key.Log().Info("test", key.AuthorizedValues[1])
 
-		// build.log.Err(build.log.ExecShow(key.AuthorizedValues[1]), "exec test")
+		// key.Log().Err(key.Log().ExecShow(key.AuthorizedValues[1]), "exec test")
 
 		// gchar *cSecondCommand = pAuthorizedValuesList[1];
 		// gchar *cResult = cairo_dock_launch_command_sync (cSecondCommand);
@@ -691,42 +689,86 @@ func (build *Builder) WidgetLaunchCommand(key *Key) {
 		// }
 		// g_free (cResult);
 	}
-	// pOneWidget = gtk_button_new_from_stock (GTK_STOCK_JUMP_TO);
-	// g_signal_connect (G_OBJECT (pOneWidget),
-	// 	"clicked",
+
+	args, e := shlex.Split(key.AuthorizedValues[0])
+	if key.Log().Err(e, "widget LaunchCommand parse command", key.Name, ":", key.AuthorizedValues[0], "==>", args) {
+		return
+	}
+
+	// key.Log().DEV("new args", len(args), args)
+
+	spinner := newgtk.Spinner()
+	spinner.SetNoShowAll(true)
+	key.PackSubWidget(spinner)
+
+	btn := newgtk.ButtonFromIconName("go-jump", gtk.ICON_SIZE_BUTTON)
+	key.PackSubWidget(btn)
+
+	btn.Connect("clicked", func() {
+		cmd := key.Log().ExecCmd(args[0], args[1:]...)
+
+		e := cmd.Start()
+		if key.Log().Err(e, "widget LaunchCommand exec", key.AuthorizedValues[0]) {
+			return
+		}
+
+		btn.Hide()
+		spinner.Show()
+		spinner.Start()
+
+		// Wait the external program in a go routine.
+		// When finished, restore buttons state in the gtk idle loop.
+		go func() {
+			cmd.Wait()
+
+			glib.IdleAdd(func() {
+				btn.Show()
+				spinner.Hide()
+				spinner.Stop()
+			})
+		}()
+	})
+
 	// 	G_CALLBACK (_cairo_dock_widget_launch_command),
-	// 	g_strdup (cFirstCommand));
-	// _pack_subwidget (pOneWidget);
 }
 
-// WidgetLists adds a string list widget.
+// Lists adds a string list widget.
 //
-func (build *Builder) WidgetLists(key *Key) {
-	if key.IsType(WidgetNumberedControlListSimple, WidgetNumberedControlListSelective) && len(key.AuthorizedValues) == 0 {
-		build.log.NewWarn("not enough values", "widget numbered control list:", key.Name)
+func Lists(key *cftype.Key) {
+	if key.IsType(cftype.KeyListNbCtrlSimple, cftype.KeyListNbCtrlSelect) && len(key.AuthorizedValues) == 0 {
+		key.Log().NewWarn("not enough values", "widget numbered control list:", key.Name)
 		return
 	}
 
 	// Get full value with ';'.
-	value, _ := build.Conf.GetString(key.Group, key.Name)
+	value := key.Value().String()
 
 	// log.DEV("LIST "+string(key.Type), key.Name, value, key.AuthorizedValues)
 
-	listIsNumbered := key.IsType(WidgetNumberedList, WidgetNumberedControlListSimple, WidgetNumberedControlListSelective)
+	listIsNumbered := key.IsType(cftype.KeyListNumbered, cftype.KeyListNbCtrlSimple, cftype.KeyListNbCtrlSelect)
 
 	iSelectedItem := -1
 	current := ""
 
-	if key.IsType(WidgetListWithEntry) {
+	// Control selective use 3 AuthorizedValues fields for each "value".
+	step := ternary.Int(key.IsType(cftype.KeyListNbCtrlSelect), 3, 1)
+
+	if key.IsType(cftype.KeyListEntry) {
 		current = value
 	}
 
-	if listIsNumbered {
-		iSelectedItem, _ = strconv.Atoi(value)
-		if iSelectedItem < len(key.AuthorizedValues) {
-			current = key.AuthorizedValues[iSelectedItem]
-		} else {
-			build.log.NewWarn("selection out of range", "widget numbered list:", key.Name)
+	if listIsNumbered && value != "" {
+		var e error
+		iSelectedItem, e = strconv.Atoi(value)
+		switch {
+		case key.Log().Err(e, "selection problem", "[", value, "]", "[", iSelectedItem, "]", key.Name):
+		case iSelectedItem < 0:
+
+		case iSelectedItem < len(key.AuthorizedValues):
+			current = key.AuthorizedValues[iSelectedItem*step]
+
+		default:
+			key.Log().NewWarn("selection out of range", "widget numbered list:", key.Name)
 		}
 	}
 
@@ -734,28 +776,23 @@ func (build *Builder) WidgetLists(key *Key) {
 	if len(key.AuthorizedValues) > 0 {
 		// int iOrder1, iOrder2, iExcept;
 
-		dk := 1
-		if key.IsType(WidgetNumberedControlListSelective) {
-			dk = 3
-		}
-
-		if key.IsType(WidgetNumberedControlListSimple, WidgetNumberedControlListSelective) {
-			build.iNbControlledWidgets = 0
+		if key.IsType(cftype.KeyListNbCtrlSimple, cftype.KeyListNbCtrlSelect) {
+			key.SetNbControlled(0)
 		}
 
 		// 	gchar *cResult = (listIsNumbered ? g_new0 (gchar , 10) : NULL);
 
-		for k := 0; k < len(key.AuthorizedValues); k += dk { // on ajoute toutes les chaines possibles a la combo.
+		for k := 0; k < len(key.AuthorizedValues); k += step { // on ajoute toutes les chaines possibles a la combo.
 			if !listIsNumbered && iSelectedItem == -1 && value == key.AuthorizedValues[k] {
 				current = value
-				iSelectedItem = k / dk
+				iSelectedItem = k / step
 			}
 
 			// 		if (cResult != NULL)
-			// 			snprintf (cResult, 9, "%d", k/dk);
+			// 			snprintf (cResult, 9, "%d", k/dk); // dk becomes step
 
 			// 		iExcept = 0;
-			// 		if key.IsType(WidgetNumberedControlListSelective) 		{
+			// 		if key.IsType(cftype.KeyListNbCtrlSelect) 		{
 			// 			iOrder1 = atoi (key.AuthorizedValues[k+1]);
 			// 			gchar *str = strchr (key.AuthorizedValues[k+2], ',');
 			// 			if (str)  // Note: this mechanism is an addition to the original {first widget, number of widgets}; it's not very generic nor beautiful, but until we need more, it's well enough (currently, only the Dock background needs it).
@@ -764,7 +801,7 @@ func (build *Builder) WidgetLists(key *Key) {
 			// 				iExcept = atoi (str+1);
 			// 			}
 			// 			iOrder2 = atoi (key.AuthorizedValues[k+2]);
-			// 			iNbControlledWidgets = MAX (iNbControlledWidgets, iOrder1 + iOrder2 - 1);
+			// 			NbControlled = MAX (NbControlled, iOrder1 + iOrder2 - 1);
 			// 			//g_print ("iSelectedItem:%d ; k/dk:%d\n", iSelectedItem , k/dk);
 			// 			if (iSelectedItem == (int)k/dk)
 			// 			{
@@ -772,7 +809,7 @@ func (build *Builder) WidgetLists(key *Key) {
 			// 				iNbSensitiveWidgets = iOrder2;
 			// 				iNonSensitiveWidget = iExcept;
 			// 				if (iNonSensitiveWidget != 0)
-			// 					iNbControlledWidgets ++;
+			// 					NbControlled ++;
 			// 			}
 			// 		}					else					{
 			// 			iOrder1 = iOrder2 = k;
@@ -780,10 +817,10 @@ func (build *Builder) WidgetLists(key *Key) {
 
 			//
 			name := ""
-			if key.IsType(WidgetListWithEntry) {
+			if key.IsType(cftype.KeyListEntry) {
 				name = key.AuthorizedValues[k]
 			} else {
-				name = build.translate(key.AuthorizedValues[k])
+				name = key.Translate(key.AuthorizedValues[k])
 			}
 
 			list = append(list, datatype.Field{
@@ -803,51 +840,48 @@ func (build *Builder) WidgetLists(key *Key) {
 	}
 
 	// Build the combo widget.
-	widget, _, getValue := newComboBox(key.IsType(WidgetListWithEntry), listIsNumbered, current, list)
+	widget, _, getValue, setValue := NewComboBox(key, key.IsType(cftype.KeyListEntry), listIsNumbered, current, list)
 
 	// gtk_tree_sortable_set_sort_column_id (GTK_TREE_SORTABLE (modele), GTK_TREE_SORTABLE_UNSORTED_SORT_COLUMN_ID, GTK_SORT_ASCENDING);
 
 	// int iNonSensitiveWidget = 0;
 
 	if len(key.AuthorizedValues) > 0 {
-		if key.IsType(WidgetNumberedControlListSimple, WidgetNumberedControlListSelective) {
+		if key.IsType(cftype.KeyListNbCtrlSimple, cftype.KeyListNbCtrlSelect) {
 			// 		_allocate_new_buffer;
 			// 		data[0] = pKeyBox;
 			// 		data[1] = (pFrameVBox != NULL ? pFrameVBox : pGroupBox);
-			if key.IsType(WidgetNumberedControlListSimple) {
-				// 			iNbControlledWidgets = k;
-				// 			data[2] = GINT_TO_POINTER (iNbControlledWidgets);
+			if key.IsType(cftype.KeyListNbCtrlSimple) {
+				// 			NbControlled = k;
+				// 			data[2] = GINT_TO_POINTER (NbControlled);
 				// 			g_signal_connect (G_OBJECT (pOneWidget), "changed", G_CALLBACK (_cairo_dock_select_one_item_in_control_combo), data);
 				// 			iFirstSensitiveWidget = iSelectedItem+1;  // on decroit jusqu'a 0.
 				// 			iNbSensitiveWidgets = 1;
-				// 			//g_print ("CONTROL : %d,%d,%d\n", iNbControlledWidgets, iFirstSensitiveWidget, iNbSensitiveWidgets);
+				// 			//g_print ("CONTROL : %d,%d,%d\n", NbControlled, iFirstSensitiveWidget, iNbSensitiveWidgets);
 			} else {
-				// 			data[2] = GINT_TO_POINTER (iNbControlledWidgets);
+				// 			data[2] = GINT_TO_POINTER (NbControlled);
 				// 			g_signal_connect (G_OBJECT (pOneWidget), "changed", G_CALLBACK (_cairo_dock_select_one_item_in_control_combo_selective), data);
-				// 			//g_print ("CONTROL : %d,%d,%d\n", iNbControlledWidgets, iFirstSensitiveWidget, iNbSensitiveWidgets);
+				// 			//g_print ("CONTROL : %d,%d,%d\n", NbControlled, iFirstSensitiveWidget, iNbSensitiveWidgets);
 			}
-			// 		g_object_set_data (G_OBJECT (pKeyBox), "nb-ctrl-widgets", GINT_TO_POINTER (iNbControlledWidgets));
+			// 		g_object_set_data (G_OBJECT (pKeyBox), "nb-ctrl-widgets", GINT_TO_POINTER (NbControlled));
 			// 		g_object_set_data (G_OBJECT (pKeyBox), "one-widget", pOneWidget);
 			// 		CDControlWidget *cw = g_new0 (CDControlWidget, 1);
 			// 		pControlWidgets = g_list_prepend (pControlWidgets, cw);
 			// 		cw->pControlContainer = (pFrameVBox != NULL ? pFrameVBox : pGroupBox);
-			// 		cw->iNbControlledWidgets = iNbControlledWidgets;
+			// 		cw->NbControlled = NbControlled;
 			// 		cw->iFirstSensitiveWidget = iFirstSensitiveWidget;
 			// 		cw->iNbSensitiveWidgets = iNbSensitiveWidgets;
 			// 		cw->iNonSensitiveWidget = iNonSensitiveWidget;
 			// 		//g_print (" pControlContainer:%x\n", pControlContainer);
 		}
 	}
-	build.AddKeyWidget(widget, key, getValue)
+	key.PackKeyWidget(key, getValue, setValue, widget)
 }
 
-// WidgetTreeView adds a treeview widget.
+// TreeView adds a treeview widget.
 //
-func (build *Builder) WidgetTreeView(key *Key) {
-
-	// value, _ := build.Conf.GetString(key.Group, key.Name)
-	_, values, e := build.Conf.GetStringList(key.Group, key.Name)
-	build.log.Err(e, "WidgetTreeView conf.GetStringList")
+func TreeView(key *cftype.Key) {
+	values := key.Value().ListString()
 
 	// Build treeview.
 	model := newgtk.ListStore(
@@ -866,7 +900,7 @@ func (build *Builder) WidgetTreeView(key *Key) {
 		iter, ok := model.GetIterFirst()
 		for ; ok; ok = model.IterNext(iter) {
 			str, e := gunvalue.New(model.GetValue(iter, RowName)).String()
-			if !build.log.Err(e, "WidgetTreeView GetValue "+key.Name) {
+			if !key.Log().Err(e, "WidgetTreeView GetValue "+key.Name) {
 				list = append(list, str)
 			}
 		}
@@ -874,7 +908,7 @@ func (build *Builder) WidgetTreeView(key *Key) {
 	}
 
 	// Add control buttons.
-	if key.IsType(WidgetTreeViewMultiChoice) {
+	if key.IsType(cftype.KeyTreeViewMultiChoice) {
 		renderer := newgtk.CellRendererToggle()
 		col := newgtk.TreeViewColumnWithAttribute("", renderer, "active", 4)
 		widget.AppendColumn(col)
@@ -895,21 +929,26 @@ func (build *Builder) WidgetTreeView(key *Key) {
 
 	//
 
-	if len(key.AuthorizedValues) > 0 {
-		build.log.Info("WidgetTreeView AuthorizedValues", key.AuthorizedValues)
-	}
+	// if len(key.AuthorizedValues) > 0 {
+	// 	key.Log().Info("WidgetTreeView AuthorizedValues", key.AuthorizedValues)
+	// }
 
 	// if (key.AuthorizedValues != NULL && key.AuthorizedValues[0] != NULL)
 	// 	for (k = 0; key.AuthorizedValues[k] != NULL; k++);
 	// else
 	// 	k = 1;
-	scroll.Set("height-request", 100) // key.IsType(WidgetTreeViewSortAndModify) ? 100 : MIN (100, k * 25)
+	scroll.Set("height-request", 100) // key.IsType(cftype.KeyTreeViewSortModify) ? 100 : MIN (100, k * 25)
+	scroll.Set("width-request", 250)
 	scroll.SetPolicy(gtk.POLICY_NEVER, gtk.POLICY_AUTOMATIC)
 
 	scroll.Add(widget)
 
-	if key.IsType(WidgetTreeViewSortSimple, WidgetTreeViewSortAndModify) {
-		vboxItems := newgtk.Box(gtk.ORIENTATION_VERTICAL, MarginGUI)
+	vboxItems := newgtk.Box(gtk.ORIENTATION_VERTICAL, cftype.MarginGUI)
+	grid := newgtk.Grid()
+	grid.Attach(vboxItems, 0, 0, 1, 1)
+	grid.Attach(scroll, 1, 0, 1, 1)
+
+	if key.IsType(cftype.KeyTreeViewSortSimple, cftype.KeyTreeViewSortModify) {
 
 		buttonUp := newgtk.Button()
 		buttonDn := newgtk.Button()
@@ -919,7 +958,7 @@ func (build *Builder) WidgetTreeView(key *Key) {
 		buttonUp.SetImage(imgUp)
 		buttonDn.SetImage(imgDn)
 
-		data := treeViewData{build.log, model, widget, nil}
+		data := treeViewData{key.Log(), model, widget, nil}
 
 		buttonUp.Connect("clicked", onTreeviewMoveUp, data) // Move selection up and down callbacks.
 		buttonDn.Connect("clicked", onTreeviewMoveDown, data)
@@ -927,10 +966,8 @@ func (build *Builder) WidgetTreeView(key *Key) {
 		vboxItems.PackStart(buttonUp, false, false, 0)
 		vboxItems.PackStart(buttonDn, false, false, 0)
 
-		if key.IsType(WidgetTreeViewSortAndModify) {
+		if key.IsType(cftype.KeyTreeViewSortModify) {
 
-			vboxAdd := newgtk.Box(gtk.ORIENTATION_VERTICAL, MarginGUI)
-			sep := newgtk.Separator(gtk.ORIENTATION_VERTICAL)
 			buttonAdd := newgtk.Button()
 			entry := newgtk.Entry()
 			buttonRm := newgtk.Button()
@@ -940,26 +977,19 @@ func (build *Builder) WidgetTreeView(key *Key) {
 			buttonAdd.SetImage(imgAdd)
 			buttonRm.SetImage(imgRm)
 
-			build.addSubWidget(vboxAdd)
-			build.addSubWidget(sep)
-			vboxAdd.PackStart(buttonAdd, false, false, 0)
-			vboxAdd.PackStart(entry, false, false, 0)
 			vboxItems.PackStart(buttonRm, false, false, 0)
+			grid.Attach(newgtk.Separator(gtk.ORIENTATION_HORIZONTAL), 0, 1, 2, 1)
+			grid.Attach(buttonAdd, 0, 2, 1, 1)
+			grid.Attach(entry, 1, 2, 1, 1)
 
 			data.entry = entry
 			buttonAdd.Connect("clicked", onTreeviewAddText, data)   // Add new iter to model with the value of the entry widget. Clear entry widget.
 			buttonRm.Connect("clicked", onTreeviewRemoveText, data) // Remove selected iter from model. Set its value to the entry widget.
 		}
-
-		build.addSubWidget(vboxItems)
 	}
 
-	build.AddKeyWidget(scroll, key, getValue)
-
-	// Fill model with values.
-	switch key.Type {
-	case WidgetTreeViewSortAndModify: // add saved values.
-		for i, val := range values {
+	setValues := func(newvalues []string) {
+		for i, val := range newvalues {
 			iter := model.Append()
 			model.SetValue(iter, RowKey, val)
 			model.SetValue(iter, RowName, val)
@@ -967,8 +997,21 @@ func (build *Builder) WidgetTreeView(key *Key) {
 			model.SetValue(iter, 4, true) // active
 			model.SetValue(iter, 5, i)    // order
 		}
+	}
 
-	case WidgetTreeViewSortSimple, WidgetTreeViewMultiChoice:
+	// Fill model with values.
+	switch key.Type {
+	case cftype.KeyTreeViewSortModify, // add saved values.
+		cftype.KeyTreeViewSortSimple: // TODO: TEMP to improve and maybe regroup this case as was with multichoice and not modify.
+
+		setValues(values)
+
+		key.PackKeyWidget(key,
+			getValue,
+			func(uncast interface{}) { model.Clear(); setValues(uncast.([]string)) },
+			grid)
+
+	case cftype.KeyTreeViewMultiChoice:
 		if len(key.AuthorizedValues) > 0 {
 			// var NbMax, order int
 
@@ -1046,46 +1089,55 @@ func (build *Builder) WidgetTreeView(key *Key) {
 	// }
 }
 
-// WidgetFontSelector adds a font selector widget.
+// FontSelector adds a font selector widget.
 //
-func (build *Builder) WidgetFontSelector(key *Key) {
-	value, _ := build.Conf.GetString(key.Group, key.Name)
+func FontSelector(key *cftype.Key) {
+	value := key.Value().String()
 	widget := newgtk.FontButtonWithFont(value)
 	widget.Set("show-style", true)
 	widget.Set("show-size", true)
 	widget.Set("use-size", true)
 	widget.Set("use-font", true)
 
-	getValue := func() interface{} { return widget.GetFontName() }
-	build.AddKeyWidget(widget, key, getValue)
+	key.PackKeyWidget(key,
+		func() interface{} { return widget.GetFontName() },
+		func(val interface{}) { widget.SetFontName(val.(string)) },
+		widget)
 }
 
-// WidgetLink adds a link widget.
+// Link adds a link widget.
 //
-func (build *Builder) WidgetLink(key *Key) {
-	link, _ := build.Conf.GetString(key.Group, key.Name)
-
-	text := ""
+func Link(key *cftype.Key) {
+	var text, link string
 	if len(key.AuthorizedValues) > 0 {
 		text = key.AuthorizedValues[0]
 	} else {
 		text = tran.Slate("link")
 	}
-	widget, e := gtk.LinkButtonNewWithLabel(link, text)
-	build.log.Err(e, "linkbutton")
-	build.addSubWidget(widget)
+
+	if len(key.AuthorizedValues) > 1 { // Custom keys have to use this input way.
+		link = key.AuthorizedValues[1]
+	} else {
+		link = key.Value().String()
+	}
+
+	widget := newgtk.LinkButtonWithLabel(link, text)
+
+	key.PackKeyWidget(key,
+		func() interface{} { return widget.GetUri() },
+		func(val interface{}) { widget.SetUri(val.(string)) },
+		widget)
 }
 
-// WidgetStrings adds a string widget. Many options included.
+// Strings adds a string widget. Many options included.
 // TODO: need password cypher, G_USER_DIRECTORY_PICTURES, play sound.
 //
-func (build *Builder) WidgetStrings(key *Key) {
-	value, _ := build.Conf.GetString(key.Group, key.Name)
+func Strings(key *cftype.Key) {
+	value := key.Value().String()
 	widget := newgtk.Entry()
-
 	widget.SetText(value)
 
-	if key.IsType(WidgetPasswordEntry) { // on cache le texte entre et on decrypte 'cValue'.
+	if key.IsType(cftype.KeyPasswordEntry) { // on cache le texte entre et on decrypte 'cValue'.
 		widget.SetVisibility(false)
 		// gchar *cDecryptedString = NULL;
 		// cairo_dock_decrypt_string ( cValue, &cDecryptedString );
@@ -1093,63 +1145,57 @@ func (build *Builder) WidgetStrings(key *Key) {
 		// cValue = cDecryptedString;
 	}
 
-	getValue := func() interface{} { text, _ := widget.GetText(); return text }
-	build.AddKeyWidget(widget, key, getValue)
+	// Pack the widget before any other (in full size if needed).
+	// So we do it now and fill the callbacks later
+	key.PackKeyWidget(key, nil, nil, widget)
 
 	// 	Add special buttons to fill the entry box.
 	switch key.Type {
-	case WidgetFileSelector, WidgetFolderSelector, WidgetSoundSelector, WidgetImageSelector: // we add a file selector
+	case cftype.KeyFileSelector, cftype.KeyFolderSelector,
+		cftype.KeySoundSelector, cftype.KeyImageSelector: // Add a file selector.
+
 		fileChooser := newgtk.Button()
 		img := newgtk.ImageFromIconName("document-open", gtk.ICON_SIZE_SMALL_TOOLBAR)
 		fileChooser.SetImage(img)
 		fileChooser.Connect("clicked", onFileChooserOpen, fileChooserData{widget, key})
 
-		build.addSubWidget(fileChooser)
+		key.PackSubWidget(fileChooser)
 
-		if key.IsType(WidgetSoundSelector) { //Sound Play Button
+		if key.IsType(cftype.KeySoundSelector) { //Sound Play Button
 			play := newgtk.Button()
 			imgPlay := newgtk.ImageFromIconName("media-playback-start", gtk.ICON_SIZE_SMALL_TOOLBAR)
 			play.SetImage(imgPlay)
 
-			// 			g_signal_connect (G_OBJECT (pButtonPlay),
-			// 				"clicked",
-			// 				G_CALLBACK (_cairo_dock_play_a_sound),
-			// 				data);
-			build.addSubWidget(play)
+			// play.Connect("clicked", C._cairo_dock_play_a_sound, data)
+
+			key.PackSubWidget(play)
 		}
 
-	case WidgetShortkeySelector, WidgetClassSelector: // on ajoute un selecteur de touches/classe.
+	case cftype.KeyShortkeySelector, cftype.KeyClassSelector: // Add a key/class grabber.
 		grab := newgtk.ButtonWithLabel("Grab")
+		key.PackSubWidget(grab)
 		// 		gtk_widget_add_events(pMainWindow, GDK_KEY_PRESS_MASK);
 
 		switch key.Type {
-		case WidgetClassSelector:
+		case cftype.KeyClassSelector:
 			grab.Connect("clicked", onClassGrabClicked)
 
-		case WidgetShortkeySelector:
-			grab.Connect("clicked", onKeyGrabClicked, &textGrabData{entry: widget, win: build.data.GetWindow()})
+		case cftype.KeyShortkeySelector:
+			grab.Connect("clicked", onKeyGrabClicked, &textGrabData{entry: widget, win: key.Source().GetWindow()})
 		}
-		build.addSubWidget(grab)
 
-		// for _, sk := range build.data.ListShortkeys() {
-		// 	if sk.GetConfFilePath() == build.Conf.File {
+		// for _, sk := range key.Source().ListShortkeys() {
+		// 	if sk.GetConfFilePath() == key.Storage().FilePath() {
 		// 		println("found file shortkey")
 		// 	}
 		// }
 
 	}
 
+	var setValue func(interface{})
 	// Display a default value when empty.
 	if len(key.AuthorizedValues) > 0 && key.AuthorizedValues[0] != "" {
-		defaultText := build.translate(key.AuthorizedValues[0])
-		if value == "" {
-			key.IsDefault = true
-
-			widget.SetText(defaultText)
-
-			color := gdk.NewRGBA(DefaultTextColor, DefaultTextColor, DefaultTextColor, 1)
-			widget.OverrideColor(gtk.STATE_FLAG_NORMAL, color)
-		}
+		defaultText := key.Translate(key.AuthorizedValues[0])
 		cbChanged, _ := widget.Connect("changed", onTextDefaultChanged, key)
 		data := textDefaultData{key: key, text: defaultText, cbID: cbChanged}
 		widget.Connect("focus-in-event", onTextDefaultFocusIn, data)
@@ -1159,41 +1205,66 @@ func (build *Builder) WidgetStrings(key *Key) {
 		// 	 g_object_set_data (G_OBJECT (pEntry), "ignore-value", GINT_TO_POINTER (TRUE));
 		// 	 g_object_set_data (G_OBJECT (pOneWidget), "default-text", cDefaultText);
 
+		setValue = func(uncast interface{}) {
+			// if !key.IsDefault { // not sure why this was here.
+			widget.SetText(uncast.(string))
+			onTextDefaultFocusOut(widget, nil, data)
+		}
+
+		setValue(value) // will set IsDefault and button state.
+	} else {
+		setValue = func(uncast interface{}) { widget.SetText(uncast.(string)) }
 	}
+	getValue := func() (text interface{}) {
+		if key.IsDefault {
+			return ""
+		}
+		text, _ = widget.GetText()
+		return text
+	}
+
+	key.PackKeyWidget(key, getValue, setValue)
 }
 
-// WidgetHandbook adds a handbook widget to show basic applet informations.
+// Handbook adds a handbook widget to show basic applet informations.
 //
-func (build *Builder) WidgetHandbook(key *Key) {
-	appletName, e := build.Conf.GetString(key.Group, key.Name)
-	widget := NewHandbook(build.log)
+func Handbook(key *cftype.Key) {
+	appletName := key.Value().String()
+
+	widget := handbook.New(key.Log())
 	widget.ShowVersion = true
 
-	book := build.data.Handbook(appletName)
-	// pack := build.data.AppletPackage(appletName)
+	book := key.Source().Handbook(appletName)
 
-	if !build.log.Err(e, "WIDGET_HANDBOOK no key") {
-		if widget != nil {
-			if book != nil {
-				widget.SetPackage(book)
-				build.pageBox.PackStart(widget, true, true, 0)
-			}
-		}
+	if widget == nil || book == nil {
+		key.Log().NewErr("Handbook no widget")
+		return
 	}
+	widget.SetPackage(book)
+	key.BoxPage().PackStart(widget, true, true, 0)
+
+	key.PackKeyWidget(key,
+		func() interface{} { return appletName },
+		func(uncast interface{}) {
+			appletName = uncast.(string)
+			book := key.Source().Handbook(appletName)
+			widget.SetPackage(book)
+		},
+	)
 }
 
-// WidgetFrame adds a simple or expanded frame widget.
+// Frame adds a simple or expanded frame widget.
 //
-func (build *Builder) WidgetFrame(key *Key) {
+func Frame(key *cftype.Key) {
 	if len(key.AuthorizedValues) == 0 {
-		build.pFrame = nil
-		build.pFrameVBox = nil
+		key.SetFrame(nil)
+		key.SetFrameBox(nil)
 		return
 	}
 
 	value, img := "", ""
 	if key.AuthorizedValues[0] == "" {
-		build.log.Info("WidgetFrame, need value case 1")
+		key.Log().Info("WidgetFrame, need value case 1")
 		// value = g_key_file_get_string(pKeyFile, cGroupName, cKeyName, NULL) // utile ?
 	} else {
 		value = key.AuthorizedValues[0]
@@ -1203,40 +1274,45 @@ func (build *Builder) WidgetFrame(key *Key) {
 	}
 
 	// Create the frame label with the optional icon.
-	build.pLabel = newgtk.Label("")
-	build.pLabel.SetMarkup(" " + common.Bold(build.translate(value)) + " ")
+	label := newgtk.Label("")
+	// key.SetLabel(label)
+	label.SetMarkup(" " + common.Bold(key.Translate(value)) + " ")
+
+	var labelContainer gtk.IWidget
 	if img == "" {
-		build.pLabelContainer = build.pLabel
+		labelContainer = label
 	} else {
-		box := newgtk.Box(gtk.ORIENTATION_HORIZONTAL, MarginIcon/2)
-		if icon, e := common.ImageNewFromFile(img, 20); !build.log.Err(e, "Frame icon") { // TODO: fix size : int(gtk.ICON_SIZE_MENU)
+		box := newgtk.Box(gtk.ORIENTATION_HORIZONTAL, cftype.MarginIcon/2)
+		if icon, e := common.ImageNewFromFile(img, iconSizeFrame); !key.Log().Err(e, "Frame icon") { // TODO: fix size : int(gtk.ICON_SIZE_MENU)
 			box.Add(icon)
 		}
-		box.Add(build.pLabel)
-		build.pLabelContainer = box
+		box.Add(label)
+		labelContainer = box
 	}
 
 	// Create the box that will contain next widgets (inside the frame).
-	build.pFrameVBox = newgtk.Box(gtk.ORIENTATION_VERTICAL, MarginGUI)
+	box := newgtk.Box(gtk.ORIENTATION_VERTICAL, cftype.MarginGUI)
+	key.SetFrameBox(box)
 
-	build.pFrame = newgtk.Frame("")
-	build.pFrame.SetBorderWidth(MarginGUI)
-	build.pFrame.SetShadowType(gtk.SHADOW_OUT)
-	build.pFrame.Add(build.pFrameVBox)
+	frame := newgtk.Frame("")
+	key.SetFrame(frame)
+	frame.SetBorderWidth(cftype.MarginGUI)
+	frame.SetShadowType(gtk.SHADOW_OUT)
+	frame.Add(box)
 
 	// Set label and create the expander around the frame if needed.
 	switch key.Type {
-	case WidgetFrame:
-		build.pFrame.SetLabelWidget(build.pLabelContainer)
-		build.pageBox.PackStart(build.pFrame, false, false, 0)
+	case cftype.KeyFrame:
+		frame.SetLabelWidget(labelContainer)
+		key.BoxPage().PackStart(frame, false, false, 0)
 
-	case WidgetExpander:
+	case cftype.KeyExpander:
 		expand := newgtk.Expander("")
 		expand.SetExpanded(false)
-		expand.SetLabelWidget(build.pLabelContainer)
+		expand.SetLabelWidget(labelContainer)
 
-		expand.Add(build.pFrame)
-		build.pageBox.PackStart(expand, false, false, 0)
+		expand.Add(frame)
+		key.BoxPage().PackStart(expand, false, false, 0)
 	}
 
 	// SAME AS IN builder.go
@@ -1245,10 +1321,10 @@ func (build *Builder) WidgetFrame(key *Key) {
 	// 	{
 	// 		cd_debug ("ctrl\n");
 	// 		CDControlWidget *cw = pControlWidgets->data;
-	// 		if (cw->pControlContainer == build.Box)
+	// 		if (cw->pControlContainer == key.Box)
 	// 		{
-	// 			cd_debug ("ctrl (iNbControlledWidgets:%d, iFirstSensitiveWidget:%d, iNbSensitiveWidgets:%d)", cw->iNbControlledWidgets, cw->iFirstSensitiveWidget, cw->iNbSensitiveWidgets);
-	// 			cw->iNbControlledWidgets --;
+	// 			cd_debug ("ctrl (NbControlled:%d, iFirstSensitiveWidget:%d, iNbSensitiveWidgets:%d)", cw->NbControlled, cw->iFirstSensitiveWidget, cw->iNbSensitiveWidgets);
+	// 			cw->NbControlled --;
 	// 			if (cw->iFirstSensitiveWidget > 0)
 	// 				cw->iFirstSensitiveWidget --;
 	// 			cw->iNonSensitiveWidget --;
@@ -1267,7 +1343,7 @@ func (build *Builder) WidgetFrame(key *Key) {
 	// 				if (!GTK_IS_EXPANDER (w))
 	// 					gtk_widget_set_sensitive (w, FALSE);
 	// 			}
-	// 			if (cw->iFirstSensitiveWidget == 0 && cw->iNbControlledWidgets == 0)
+	// 			if (cw->iFirstSensitiveWidget == 0 && cw->NbControlled == 0)
 	// 			{
 	// 				pControlWidgets = g_list_delete_link (pControlWidgets, pControlWidgets);
 	// 				g_free (cw);
@@ -1276,18 +1352,19 @@ func (build *Builder) WidgetFrame(key *Key) {
 	// 	}
 }
 
-// WidgetSeparator adds a simple horizontal separator.
+// Separator adds a simple horizontal separator.
 //
-func (build *Builder) WidgetSeparator(*Key) {
+func Separator(key *cftype.Key) {
 	// GtkWidget *pAlign = gtk_alignment_new (.5, .5, 0.8, 1.);
 	// g_object_set (pAlign, "height-request", 12, NULL);
 	widget := newgtk.Separator(gtk.ORIENTATION_HORIZONTAL)
 	// gtk_container_add (GTK_CONTAINER (pAlign), pOneWidget);
-	build.addWidget(widget, false, false, 0)
+	key.PackWidget(widget, false, false, 0)
 }
 
-// WidgetTextLabel just extends the widget label (nothing more needed).
+// Text just enlarges the widget label (nothing more intended).
 //
-func (build *Builder) WidgetTextLabel(key *Key) {
-	build.pLabel.SetLineWrap(true)
+func Text(key *cftype.Key) {
+	key.Label().SetLineWrap(true)
+	key.Label().SetJustify(gtk.JUSTIFY_FILL)
 }

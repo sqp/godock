@@ -1,23 +1,52 @@
-// Package desktopclass provides a desktop class informations widget.
+// Package desktopclass extends the launcher builder with desktop class informations.
 package desktopclass
 
 import (
 	"github.com/conformal/gotk3/gtk"
 
-	"github.com/sqp/godock/libs/text/strhelp"
+	"github.com/sqp/godock/libs/text/strhelp" // String helpers.
 
-	"github.com/sqp/godock/widgets/common"
-	"github.com/sqp/godock/widgets/confbuilder/datatype"
-	"github.com/sqp/godock/widgets/gtk/newgtk"
+	"github.com/sqp/godock/widgets/cfbuild/cftype"   // Types for config file builder usage.
+	"github.com/sqp/godock/widgets/cfbuild/datatype" // Types for config file builder data source.
+	"github.com/sqp/godock/widgets/cfbuild/newkey"   // Create config file builder keys.
+	"github.com/sqp/godock/widgets/common"           // Text format gtk.
+	"github.com/sqp/godock/widgets/gtk/newgtk"       // Create widgets.
 
 	"os"
 	"path/filepath"
 	"strings"
 )
 
-// New creates a desktop class informations widget.
+// Tweak prepares a build tweak to add desktop class informations for a launcher.
 //
-func New(source datatype.Source, selected datatype.DesktopClasser, origins string) gtk.IWidget {
+func Tweak(build cftype.Grouper, source datatype.Source, selected datatype.DesktopClasser) func(cftype.Builder) {
+	return func(build cftype.Builder) {
+		// Create a key for the hidden existing Origin entry.
+		keyOrigin := newkey.EmptyFull(cftype.DesktopEntry, "Origin")
+
+		// Check if a launcher origin has been set (as a desktop class file location).
+		keyOrigin.SetBuilder(build)
+		origins := keyOrigin.Value().String()
+		if origins == "" {
+			return
+		}
+
+		// Prepare the desktop class widget.
+		keyOrigin.SetMakeWidget(func(key *cftype.Key) {
+			w := Widget(source, selected, origins)
+			key.PackWidget(w, false, false, 0)
+		})
+
+		// Add the key to the builder.
+		build.AddKeys(cftype.DesktopEntry,
+			newkey.Frame(cftype.DesktopEntry, "FrameOrigin", "", ""), // A frame to close the expander.
+			keyOrigin)
+	}
+}
+
+// Widget creates a desktop class informations widget.
+//
+func Widget(source datatype.Source, selected datatype.DesktopClasser, origins string) gtk.IWidget {
 	apps := strings.Split(origins, ";")
 	if len(apps) == 0 {
 		return nil
@@ -55,6 +84,7 @@ func New(source datatype.Source, selected datatype.DesktopClasser, origins strin
 	label.SetUseMarkup(true)
 	frame.SetLabelWidget(label)
 	frame.Add(grid)
+	frame.ShowAll()
 	return frame
 }
 

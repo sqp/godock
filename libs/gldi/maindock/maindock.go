@@ -42,7 +42,6 @@ import (
 
 	"fmt"
 	"os"
-	"os/user"
 	"path/filepath"
 	"time"
 	"unsafe"
@@ -96,7 +95,7 @@ type DockSettings struct {
 }
 
 func (settings *DockSettings) Init() {
-	confdir := ConfigDir(settings.UserDefinedDataDir)
+	confdir := cdglobal.ConfigDirDock(settings.UserDefinedDataDir)
 	_, e := os.Stat(confdir)
 	settings.isFirstLaunch = e != nil // TODO: need test is dir.
 
@@ -358,36 +357,6 @@ func DesktopEnvironment(envstr string) gldi.DesktopEnvironment {
 		}
 	}
 	return env
-}
-
-// ConfigDir returns a full path to the dock theme, according to the given user option.
-//
-func ConfigDir(dir string) string {
-	if len(dir) > 0 {
-		switch dir[0] {
-		case '/':
-			return dir // Full path, used as is.
-
-		case '~':
-			usr, e := user.Current()
-			if e == nil {
-				return usr.HomeDir + dir[1:] // Relative path to the homedir.
-			}
-
-		default:
-			current, e := os.Getwd()
-			if e == nil {
-				return filepath.Join(current, dir) // Relative path to the current dir.
-			}
-		}
-	}
-
-	usr, e := user.Current()
-	if e == nil {
-		return filepath.Join(usr.HomeDir, ".config", cdglobal.ConfigDirBaseName) // Default dock config path in .config.
-	}
-
-	return ""
 }
 
 func firstLaunchSetup() {

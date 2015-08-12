@@ -7,8 +7,8 @@ import (
 
 	"github.com/sqp/godock/libs/cdtype"
 
+	"github.com/sqp/godock/widgets/cfbuild/datatype"
 	"github.com/sqp/godock/widgets/common"
-	"github.com/sqp/godock/widgets/confbuilder/datatype"
 	"github.com/sqp/godock/widgets/gtk/buildhelp"
 	"github.com/sqp/godock/widgets/gtk/gunvalue"
 )

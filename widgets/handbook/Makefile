@@ -1,5 +1,5 @@
 TARGET=handbook
-PACKAGE=confbuilder
+PACKAGE=handbook
 
 %: bindata
 

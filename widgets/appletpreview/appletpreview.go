@@ -6,9 +6,9 @@ import (
 	"github.com/conformal/gotk3/gtk"
 
 	"github.com/sqp/godock/libs/cdtype"
+	"github.com/sqp/godock/libs/text/tran"
 
 	"github.com/sqp/godock/widgets/common"
-	"github.com/sqp/godock/widgets/confbuilder/datatype"
 	"github.com/sqp/godock/widgets/gtk/buildhelp"
 
 	"fmt"
@@ -19,6 +19,21 @@ const (
 	MaxPreviewWidth  = 350
 	MaxPreviewHeight = 250
 )
+
+// Previewer defines the main data needed by the preview.
+type Previewer interface {
+	GetTitle() string
+	GetAuthor() string
+	GetDescription() string
+	GetPreviewFilePath() string
+}
+
+// Appleter defines additional data that can be used by the preview.
+type Appleter interface {
+	FormatState() string
+	FormatSize() string
+	IconState() string
+}
 
 //-----------------------------------------------------[ WIDGET APPLET PREVIEW ]--
 
@@ -72,22 +87,26 @@ func New(log cdtype.Logger) *Preview {
 	return widget
 }
 
-// Load loads an applet in the preview.
+// Load loads an applet or theme in the preview. Handbooker and Appleter can be used.
 //
-func (widget *Preview) Load(pack datatype.Appleter) {
+func (widget *Preview) Load(pack Previewer) {
 	widget.title.SetMarkup(common.Big(common.Bold(pack.GetTitle())))
 	author := pack.GetAuthor()
 	if author != "" {
-		author = fmt.Sprintf("by %s", author)
+		author = fmt.Sprintf(tran.Slate("by %s"), author)
 	}
 	widget.author.SetMarkup(common.Small(common.Mono(author)))
-	widget.stateText.SetMarkup(pack.FormatState())
-	widget.size.SetMarkup(common.Small(pack.FormatSize()))
 
-	if icon := pack.IconState(); icon != "" {
-		if pixbuf, e := common.PixbufAtSize(icon, 24, 24); !widget.log.Err(e, "Load image pixbuf") {
-			widget.stateIcon.SetFromPixbuf(pixbuf)
-			widget.stateIcon.Show()
+	apl, ok := pack.(Appleter)
+	if ok {
+		widget.stateText.SetMarkup(apl.FormatState())
+		widget.size.SetMarkup(common.Small(apl.FormatSize()))
+
+		if icon := apl.IconState(); icon != "" {
+			if pixbuf, e := common.PixbufAtSize(icon, 24, 24); !widget.log.Err(e, "Load image pixbuf") {
+				widget.stateIcon.SetFromPixbuf(pixbuf)
+				widget.stateIcon.Show()
+			}
 		}
 	}
 
@@ -96,16 +115,25 @@ func (widget *Preview) Load(pack datatype.Appleter) {
 	widget.previewFrame.Hide() // Hide the preview frame until we have an image.
 
 	// Async calls for description and image. They can have to be downloaded and be slow at it.
-	glib.IdleAdd(func() {
-		widget.description.SetMarkup(pack.GetDescription())
-		widget.setImage(pack)
-	})
+
+	chDesc := make(chan (string))
+	go func() { // Go routines to get data.
+		chDesc <- pack.GetDescription()
+	}()
+	go func() {
+		imageLocation := pack.GetPreviewFilePath()
+		// imageLocation, isTemp := pack.GetPreview(widget.TmpFile) // reuse the same tmp location if needed.
+
+		desc := <-chDesc
+		glib.IdleAdd(func() { // glib Idle to show the result.
+			widget.description.SetMarkup(desc)
+			widget.setImage(imageLocation)
+		})
+	}()
+
 }
 
-func (widget *Preview) setImage(pack datatype.Appleter) {
-	imageLocation := pack.GetPreviewFilePath()
-
-	// imageLocation, isTemp := pack.GetPreview(widget.TmpFile) // reuse the same tmp location if needed.
+func (widget *Preview) setImage(imageLocation string) {
 	if imageLocation != "" {
 		pixbuf, e := common.PixbufAtSize(imageLocation, MaxPreviewWidth, MaxPreviewHeight)
 		if e == nil {

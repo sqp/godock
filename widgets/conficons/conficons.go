@@ -6,12 +6,15 @@ import (
 
 	"github.com/sqp/godock/libs/cdtype"
 
+	"github.com/sqp/godock/widgets/cfbuild"
+	"github.com/sqp/godock/widgets/cfbuild/cftype"
+	"github.com/sqp/godock/widgets/cfbuild/datatype"
 	"github.com/sqp/godock/widgets/common"
-	"github.com/sqp/godock/widgets/confbuilder"
-	"github.com/sqp/godock/widgets/confbuilder/datatype"
+	"github.com/sqp/godock/widgets/confgui/btnaction"
 	"github.com/sqp/godock/widgets/conficons/desktopclass"
 	"github.com/sqp/godock/widgets/gtk/newgtk"
 	"github.com/sqp/godock/widgets/pageswitch"
+	"github.com/sqp/godock/widgets/welcome"
 
 	"errors"
 )
@@ -21,34 +24,29 @@ const listIconsWidth = 200
 
 //--------------------------------------------------------[ PAGE GUI ICONS ]--
 
-// configWidget defines a GtkWidget with a Save method.
-//
-type configWidget interface {
-	gtk.IWidget
-	Save()
-}
-
 // GuiIcons defines Icons configuration widget for currently actived cairo-dock Icons.
 //
 type GuiIcons struct {
 	gtk.Paned
 
 	icons  *List
-	config *confbuilder.Grouper
-	// page     configWidget
-	switcher *pageswitch.Switcher
+	config cftype.Builder
 
-	data confbuilder.Source
+	switcher *pageswitch.Switcher
+	btn      btnaction.Tune // save button
+
+	data cftype.Source
 	log  cdtype.Logger
 }
 
 // New creates a GuiIcons widget to edit cairo-dock icons config.
 //
-func New(data confbuilder.Source, log cdtype.Logger, switcher *pageswitch.Switcher) *GuiIcons {
+func New(data cftype.Source, log cdtype.Logger, switcher *pageswitch.Switcher, btn btnaction.Tune) *GuiIcons {
 	paned := newgtk.Paned(gtk.ORIENTATION_HORIZONTAL)
 	widget := &GuiIcons{
 		Paned:    *paned,
 		switcher: switcher,
+		btn:      btn,
 		data:     data,
 		log:      log,
 	}
@@ -110,6 +108,17 @@ func (widget *GuiIcons) Select(conf string) bool {
 	return widget.icons.Select(conf)
 }
 
+// ShowWelcome shows the welcome placeholder widget if nothing is displayed.
+//
+func (widget *GuiIcons) ShowWelcome(setBtn bool) {
+	if widget.config == nil {
+		widget.setCurrent(welcome.New(widget.data, widget.log))
+		if setBtn {
+			widget.btn.SetNone()
+		}
+	}
+}
+
 // Clear clears the widget data.
 //
 func (widget *GuiIcons) Clear() string {
@@ -135,29 +144,6 @@ func (widget *GuiIcons) Save() {
 		return
 	}
 
-	// Create new dock if needed for applets.
-	keyDockName := widget.config.Builder.GetKey("Icon", "dock name")
-	if keyDockName != nil {
-		dockname := keyDockName.GetValues[0]().(string)
-		keyDetached := widget.config.Builder.GetKey("Desklet", "initially detached")
-		if keyDetached != nil {
-			detached := keyDetached.GetValues[0]().(bool)
-			if !detached {
-				widget.newDock(dockname, keyDockName)
-			}
-		}
-	} else {
-
-		// Create new dock if needed for other icons.
-		keyDockName = widget.config.Builder.GetKey("Desktop Entry", "Container")
-		if keyDockName != nil {
-			dockname := keyDockName.GetValues[0]().(string)
-			widget.newDock(dockname, keyDockName)
-		}
-	}
-	// 		if (pModuleInstance->pModule->pInterface->save_custom_widget != NULL)
-	// 			pModuleInstance->pModule->pInterface->save_custom_widget (pModuleInstance, pKeyFile, pWidgetList);
-
 	widget.config.Save()
 
 	// we reload in case the items place has changed (icon's container, detached...).
@@ -166,23 +152,12 @@ func (widget *GuiIcons) Save() {
 	// 	_items_widget_reload (CD_WIDGET (pItemsWidget));  // we reload in case the items place has changed (icon's container, dock orientation, etc).}
 }
 
-// newDock creates a maindock to hold the icon if it was moved (dock not found).
-//
-func (widget *GuiIcons) newDock(dockname string, key *confbuilder.Key) {
-	if dockname == datatype.KeyNewDock { // was gldi.DockGet(dockname) == nil
-		dockname := widget.data.CreateMainDock()
-		key.GetValues = []func() interface{}{
-			func() interface{} { return dockname },
-		}
-	}
-}
-
 //
 //-------------------------------------------------------[ CONTROL CALLBACKS ]--
 
 // OnSelect reacts when a row is selected. Creates a new config for the icon.
 //
-func (widget *GuiIcons) OnSelect(icon datatype.Iconer, ei error) {
+func (widget *GuiIcons) OnSelect(icon datatype.Iconer, e error) {
 	widget.switcher.Clear()
 
 	if widget.config != nil {
@@ -190,18 +165,11 @@ func (widget *GuiIcons) OnSelect(icon datatype.Iconer, ei error) {
 		widget.config = nil
 	}
 
-	if ei != nil { // shouldn't match.
-		return
-	}
+	// Using the welcome widget as fallback for empty fields.
+	if widget.log.Err(e, "OnSelect icon") || // shouldn't match.
+		icon.ConfigPath() == "" { // for icon.ConfigGroup: datatype.KeyMainDock || datatype.GroupServices.
 
-	if icon.ConfigPath() == "" {
-		switch icon.ConfigGroup() {
-		case datatype.KeyMainDock:
-
-		case datatype.GroupServices:
-		}
-		// widget.config = newgtk.Label("TODO")
-		// widget.Pack2(widget.config, true, true)
+		widget.ShowWelcome(true)
 		return
 	}
 
@@ -212,32 +180,37 @@ func (widget *GuiIcons) OnSelect(icon datatype.Iconer, ei error) {
 	//   field custom   TaskBar, Service (applet without icon).
 	//   group          Desklets, Alt maindock.
 
-	build, e := confbuilder.NewGrouper(
+	build, ok := cfbuild.NewFromFileSafe(
 		widget.data,
 		widget.log,
 		icon.ConfigPath(),
 		icon.OriginalConfigPath(),
 		icon.GetGettextDomain())
-	if widget.log.Err(e, "Load Keyfile "+icon.ConfigPath()) {
-		return
-	}
+
 	switch {
+	case !ok: // Widget already build with an error message.
+		widget.btn.SetNone()
+		widget.setCurrent(build)
+		return
+
 	case icon.ConfigGroup() != "":
-		widget.config = build.BuildSingle(icon.ConfigGroup())
+		build.BuildSingle(icon.ConfigGroup())
+
+	case icon.IsLauncher():
+		tweak := desktopclass.Tweak(build, widget.data, icon.GetClass())
+		build.BuildAll(widget.switcher, tweak)
 
 	default:
-		widget.config = build.BuildAll(widget.switcher)
-
-		// Little hack for empty launchers, not sure it could go somewhere else.
-		if icon.IsLauncher() {
-			origins, e := build.Conf.GetString("Desktop Entry", "Origin")
-			if e == nil {
-				widget.config.PackStart(desktopclass.New(widget.data, icon.GetClass(), origins), false, false, 10)
-			}
-		}
+		build.BuildAll(widget.switcher)
 	}
 
-	widget.Pack2(widget.config, true, true)
+	widget.btn.SetSave()
+	widget.setCurrent(build)
+}
+
+func (widget *GuiIcons) setCurrent(w cftype.Builder) {
+	widget.config = w
+	widget.Pack2(w, true, true)
 }
 
 //-------------------------------------------------------[ WIDGET ICONS LIST ]--

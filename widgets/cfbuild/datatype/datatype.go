@@ -2,6 +2,7 @@
 package datatype
 
 import (
+	"github.com/sqp/godock/libs/cdtype"
 	"github.com/sqp/godock/libs/packages"
 	"github.com/sqp/godock/widgets/gtk/keyfile"
 
@@ -9,6 +10,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"sort"
 	"strings"
 )
 
@@ -60,6 +62,16 @@ const (
 	DirIconsUser = ".icons" // in $HOME
 )
 
+// DisplayMode defines the dock display backend.
+type DisplayMode int
+
+// Key display based on the display mode.
+const (
+	DisplayModeAll DisplayMode = iota
+	DisplayModeCairo
+	DisplayModeOpenGL
+)
+
 // Source defines external data needed by the config builder.
 //
 type Source interface {
@@ -83,6 +95,14 @@ type Source interface {
 	//
 	DirShareData(path ...string) string
 
+	// DesktopClasser allows to get desktop class informations for a given name.
+	//
+	DesktopClasser(class string) DesktopClasser
+
+	// DisplayMode tells which renderer mode is used.
+	//
+	DisplayMode() DisplayMode
+
 	// ListIcons builds the list of all icons.
 	//
 	ListIcons() *ListIcon
@@ -97,7 +117,7 @@ type Source interface {
 
 	// ListIconsMainDock builds the list of icons in the maindock.
 	//
-	ListIconsMainDock() []Iconer
+	ListIconsMainDock() []Field
 
 	// ListShortkeys returns the list of dock shortkeys.
 	//
@@ -128,9 +148,9 @@ type Source interface {
 	//
 	ListDocks(parent, subdock string) []Field
 
-	// ListIconTheme builds a list of desktop icon-themes in system and user dir.
+	// ListThemeDesktopIcon builds a list of desktop icon-themes in system and user dir.
 	//
-	ListIconTheme() []Field
+	ListThemeDesktopIcon() []Field
 
 	// ListDockThemes builds the list of dock themes local and distant.
 	//
@@ -167,10 +187,6 @@ type Source interface {
 	// CreateMainDock creates a new main dock to store a moved icon.
 	//
 	CreateMainDock() string
-
-	// DesktopClasser allows to get desktop class informations for a given name.
-	//
-	DesktopClasser(class string) DesktopClasser
 }
 
 // SourceCommon provides common methods for dock config data source.
@@ -234,9 +250,9 @@ func (SourceCommon) ListThemeINI(localSystem, localUser, distant string) map[str
 	return out
 }
 
-// ListIconTheme builds a list of desktop icon-themes in system and user dir.
+// ListThemeDesktopIcon builds a list of desktop icon-themes in system and user dir.
 //
-func (SourceCommon) ListIconTheme() []Field {
+func (SourceCommon) ListThemeDesktopIcon() []Field {
 
 	dirs := []string{DirIconsSystem}
 	usr, e := user.Current()
@@ -268,9 +284,9 @@ func (SourceCommon) ListIconTheme() []Field {
 				continue
 			}
 
-			hidden, _ := kf.GetBoolean("Icon Theme", "Hidden")
+			hidden, _ := kf.Bool("Icon Theme", "Hidden")
 			hasdirs := kf.HasKey("Icon Theme", "Directories")
-			name, _ := kf.GetString("Icon Theme", "Name")
+			name, _ := kf.String("Icon Theme", "Name")
 			kf.Free()
 			if hidden || !hasdirs || name == "" { // Check theme settings.
 				continue
@@ -673,3 +689,76 @@ func (DesktopClassNil) Icon() string { return "" }
 
 // MenuItems is unused.
 func (DesktopClassNil) MenuItems() [][]string { return nil }
+
+//
+//-----------------------------------------------------------------[ HELPERS ]--
+
+// ListFieldsKeys returns the list of row keys in a list of fields.
+//
+func ListFieldsKeys(fields []Field) []string {
+	list := make([]string, len(fields))
+	for i, v := range fields {
+		list[i] = v.Key
+	}
+	return list
+}
+
+// ListFieldsIDByName searches the list of fields for the matching key.
+// Returns the position of the field in the list.
+// Returns 0 if not found, to have a valid entry to select.
+//
+func ListFieldsIDByName(fields []Field, key string, log cdtype.Logger) int {
+	for i, field := range fields {
+		if key == field.Key {
+			return i
+		}
+	}
+	if log != nil {
+		log.NewErr("not found", "ListFieldsIDByName", key, fields)
+	}
+	return 0
+}
+
+// ListFieldsSortByName sorts the list of fields by their readable name.
+//
+func ListFieldsSortByName(fields []Field) {
+	sort.Sort(byName(fields))
+}
+
+// byName implements sort.Interface for []Field based on the Key field.
+type byName []Field
+
+func (a byName) Len() int           { return len(a) }
+func (a byName) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a byName) Less(i, j int) bool { return a[i].Name < a[j].Name }
+
+// ListHandbooksKeys returns the list of row keys in a list of handbooks.
+//
+func ListHandbooksKeys(books []Handbooker) []string {
+	list := make([]string, len(books))
+	for i, v := range books {
+		list[i] = v.GetName()
+	}
+	return list
+}
+
+// IndexHandbooksKeys returns the list of row keys in an index of handbooks.
+//
+func IndexHandbooksKeys(books map[string]Handbooker) (list []string) {
+	for _, v := range books {
+		list = append(list, v.GetName())
+	}
+	return list
+}
+
+// IndexHandbooksToFields converts an index of handbooks to a list of fields.
+//
+func IndexHandbooksToFields(in map[string]Handbooker) (fields []Field) {
+	for _, theme := range in {
+		fields = append(fields, Field{
+			Key:  theme.GetName(),
+			Name: theme.GetTitle(),
+		})
+	}
+	return
+}

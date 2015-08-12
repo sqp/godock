@@ -7,10 +7,11 @@ import (
 	"github.com/conformal/gotk3/gtk"
 
 	"github.com/sqp/godock/libs/cdtype"
+	"github.com/sqp/godock/libs/text/tran"
 
 	"github.com/sqp/godock/widgets/appletlist"
 	"github.com/sqp/godock/widgets/appletpreview"
-	"github.com/sqp/godock/widgets/confbuilder/datatype"
+	"github.com/sqp/godock/widgets/cfbuild/datatype"
 	"github.com/sqp/godock/widgets/gtk/newgtk"
 
 	"os"
@@ -85,6 +86,8 @@ func New(control GUIControl, log cdtype.Logger, menu MenuDownloader, mode ListMo
 		log:     log,
 		mode:    mode,
 	}
+	var preview gtk.IWidget = widget.preview
+
 	switch widget.mode {
 	case ListCanAdd:
 		widget.applets = appletlist.NewListAdd(widget, log)
@@ -92,22 +95,45 @@ func New(control GUIControl, log cdtype.Logger, menu MenuDownloader, mode ListMo
 		widget.preview.HideSize()
 
 	case ListExternal:
-		if menu == nil {
+		widget.applets = appletlist.NewListExternal(widget, log)
+
+		widget.preview.Load(&datatype.HandbookSimple{
+			Title:  "Download applets page",
+			Author: tran.Slate("Cairo-Dock contributors"),
+			// Preview: "",
+			Description: `Here, you can download external applets from the repository.
+They will be directly activated after the download
+
+You can also find them on the <a href="http://glx-dock.org/mc_album.php?a=12">Repository website</a>`,
+		})
+
+		if menu == nil { // Menu not provided, pack one above the preview.
 			menu := NewMenuDownload(log)
 			widget.menu = menu
-			widget.PackStart(menu, false, false, 0)
+			box := newgtk.Box(gtk.ORIENTATION_VERTICAL, 0)
+			box.PackStart(menu, false, false, 2)
+			box.PackStart(newgtk.Separator(gtk.ORIENTATION_HORIZONTAL), false, false, 2)
+			box.PackStart(preview, true, true, 2)
+
+			preview = box
 		}
-		widget.applets = appletlist.NewListExternal(widget, log)
 
 	case ListThemes:
 		widget.applets = appletlist.NewListThemes(widget, log)
+
+		widget.preview.Load(&datatype.HandbookSimple{
+			Title:  "Download themes page",
+			Author: tran.Slate("Cairo-Dock contributors"),
+			// Preview: "",
+			Description: "Here, you can download full dock themes from the repository.",
+		})
 	}
 
 	inbox := newgtk.Box(gtk.ORIENTATION_HORIZONTAL, 0)
 
 	widget.PackStart(inbox, true, true, 0)
 	inbox.PackStart(widget.applets, false, false, 0)
-	inbox.PackStart(widget.preview, true, true, 4)
+	inbox.PackStart(preview, true, true, 4)
 	widget.ShowAll()
 	return widget
 }
@@ -258,10 +284,10 @@ func NewMenuDownload(log cdtype.Logger) *MenuDownload {
 	widget.handlerActive, e = widget.active.Connect("notify::active", widget.toggledActive)
 	log.Err(e, "Connect active button callback")
 
-	widget.PackStart(newgtk.Label("Installed"), false, false, 8)
+	widget.PackStart(newgtk.Label("Installed"), false, false, 4)
 	widget.PackStart(widget.installed, false, false, 0)
-	widget.PackStart(newgtk.Separator(gtk.ORIENTATION_VERTICAL), false, false, 4)
-	widget.PackStart(newgtk.Label("Active"), false, false, 8)
+	widget.PackStart(newgtk.Box(gtk.ORIENTATION_VERTICAL, 0), false, false, 8)
+	widget.PackStart(newgtk.Label("Active"), false, false, 4)
 	widget.PackStart(widget.active, false, false, 0)
 	return widget
 }

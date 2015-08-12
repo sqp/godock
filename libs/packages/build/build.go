@@ -280,7 +280,7 @@ func (build *BuilderGodock) Label() string {
 // SourceDir returns the source path of the builder.
 //
 func (build BuilderGodock) SourceDir() string {
-	return filepath.Join(cdglobal.AppBuildPathFull()...)
+	return cdglobal.AppBuildPathFull()
 }
 
 // Build builds the source code.

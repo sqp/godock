@@ -7,18 +7,22 @@ import (
 	"github.com/sqp/godock/libs/cdtype"
 	"github.com/sqp/godock/libs/text/tran"
 
+	"github.com/sqp/godock/widgets/cfbuild"
+	"github.com/sqp/godock/widgets/cfbuild/cftype"
+	"github.com/sqp/godock/widgets/cfbuild/datatype"
 	"github.com/sqp/godock/widgets/common"
 	"github.com/sqp/godock/widgets/confapplets"
-	"github.com/sqp/godock/widgets/confbuilder"
-	"github.com/sqp/godock/widgets/confbuilder/datatype"
+	"github.com/sqp/godock/widgets/confgui/btnaction"
 	"github.com/sqp/godock/widgets/confsettings"
 	"github.com/sqp/godock/widgets/confshortkeys"
+	"github.com/sqp/godock/widgets/devpage"
 	"github.com/sqp/godock/widgets/docktheme"
 	"github.com/sqp/godock/widgets/gtk/buildhelp"
 	"github.com/sqp/godock/widgets/gtk/gunvalue"
 	"github.com/sqp/godock/widgets/gtk/newgtk"
 	"github.com/sqp/godock/widgets/helpfile"
 	"github.com/sqp/godock/widgets/pageswitch"
+	"github.com/sqp/godock/widgets/welcome"
 
 	"errors"
 	"path/filepath"
@@ -33,6 +37,7 @@ const (
 	TabShortkeys = "Shortkeys" // Key for the tab shortkeys.
 	TabThemes    = "Themes"    // Key for the tab themes.
 	TabHelp      = "Help"      // Key for the tab help.
+	TabDev       = "Dev"       // Key for the tab developer.
 )
 
 //
@@ -157,6 +162,12 @@ var coreItems = []*Item{
 		Icon:    "plug-ins/Help/icon.svg",
 		Tooltip: "Try new themes and save your theme."},
 
+	{
+		Key:     TabDev,
+		Title:   TabDev,
+		Icon:    "plug-ins/Help/icon.svg",
+		Tooltip: "Developer tools."},
+
 	// + icon effects*
 	// _add_sub_group_to_group_button (pGroupDescription, "Indicators", "icon-indicators.svg", _("Indicators"));
 
@@ -164,19 +175,6 @@ var coreItems = []*Item{
 
 //
 //--------------------------------------------------------[ PAGE GUI ICONS ]--
-
-// Controller defines methods used on the main widget / data source by this widget and its sons.
-//
-type Controller interface {
-	confbuilder.Source
-	SetActionNone()
-	SetActionSave()
-	SetActionGrab()
-	SetActionCancel()
-	SetActionApply()
-
-	SelectIcons(string)
-}
 
 // configWidget extends the Widget interface with common needed actions.
 //
@@ -194,7 +192,7 @@ type grabber interface {
 
 type saver interface {
 	configWidget
-	confbuilder.KeyFiler
+	cfbuild.KeyFiler
 	Save()
 }
 
@@ -206,19 +204,21 @@ type ConfCore struct {
 	list     *List
 	config   configWidget
 	switcher *pageswitch.Switcher
+	btn      btnaction.Tune
 
-	data Controller
+	data cftype.Source
 	log  cdtype.Logger
 }
 
 // New creates a ConfCore widget to edit the main cairo-dock config.
 //
-func New(data Controller, log cdtype.Logger, switcher *pageswitch.Switcher) *ConfCore {
+func New(data cftype.Source, log cdtype.Logger, switcher *pageswitch.Switcher, btn btnaction.Tune) *ConfCore {
 	paned := newgtk.Paned(gtk.ORIENTATION_HORIZONTAL)
 
 	widget := &ConfCore{
 		Paned:    *paned,
 		switcher: switcher,
+		btn:      btn,
 		data:     data,
 		log:      log,
 	}
@@ -250,6 +250,17 @@ func (widget *ConfCore) Select(key string) bool {
 	return widget.list.Select(key)
 }
 
+// ShowWelcome shows the welcome placeholder widget if nothing is displayed.
+//
+func (widget *ConfCore) ShowWelcome(setBtn bool) {
+	if widget.config == nil {
+		widget.setCurrent(welcome.New(widget.data, widget.log))
+		if setBtn {
+			widget.btn.SetNone()
+		}
+	}
+}
+
 //--------------------------------------------------------[ SAVE CONFIG PAGE ]--
 
 // Save saves the current page configuration
@@ -266,15 +277,6 @@ func (widget *ConfCore) Save() {
 
 	if saver, ok := widget.config.(saver); ok {
 		saver.Save()
-
-		item, e := widget.list.Selected()
-		if widget.log.Err(e, "Save: selection problem") {
-			return
-		}
-
-		for _, manager := range item.Managers {
-			widget.data.ManagerReload(manager, true, saver.KeyFile())
-		}
 	}
 	// //\_____________ reload modules that are concerned by these changes
 	// GldiManager *pManager;
@@ -338,67 +340,79 @@ func (widget *ConfCore) onSelect(item *Item, e error) {
 		widget.config = nil
 	}
 
-	widget.SetAction()
-
-	file := ""
-	def := ""
 	var w configWidget
 	switch item.Key {
+
+	// Custom widgets.
+
 	case TabShortkeys:
-		w = confshortkeys.New(widget.data, widget.log)
+		w = confshortkeys.New(widget.data, widget.log, widget.btn)
+		widget.btn.SetGrab()
 
 	case TabThemes:
-		w = docktheme.New(widget.data, widget.log, widget.switcher)
+		var ok bool
+		w, ok = docktheme.New(widget.data, widget.log, widget.switcher)
+		if ok {
+			widget.btn.SetApply()
+		} else {
+			widget.btn.SetNone()
+		}
 
-	case TabDownload: // download tab has a special widget.
+	case TabDownload:
 		w = confapplets.NewLoaded(widget.data, widget.log, nil, confapplets.ListExternal)
+		widget.btn.SetNone()
 
 	case TabHelp:
-		w = helpfile.New(widget.data, widget.log, widget.switcher)
+		w, _ = helpfile.New(widget.data, widget.log, widget.switcher)
+		widget.btn.SetNone()
+
+	case TabDev:
+		w = devpage.New(widget.data, widget.log, widget.switcher)
+		widget.btn.SetNone()
+
+		// Custom file path.
 
 	case confsettings.GuiGroup: // own config has a special path.
-		file = confsettings.PathFile()
+		w = widget.fromFile(item,
+			confsettings.PathFile(),
+			"", // no default.
+			func() { confsettings.Settings.Load() }, // reload own conf if saved.
+		)
+
+		// Default file path.
 
 	default:
-		file = widget.data.MainConfigFile()
-		def = widget.data.MainConfigDefault()
+		w = widget.fromFile(item,
+			widget.data.MainConfigFile(),
+			widget.data.MainConfigDefault(),
+			func() {
+				for _, manager := range item.Managers {
+					tokf, _ := interface{}(w).(saver)
+					widget.data.ManagerReload(manager, true, tokf.KeyFile())
+				}
+			})
 	}
 
-	if file != "" { // config to build from file.
-		build, e := confbuilder.NewGrouper(widget.data, widget.log, file, def, "")
-		if widget.log.Err(e, "Load Keyfile "+file) {
-			return
-		}
-		w = build.BuildSingle(item.Key)
-	}
 	widget.setCurrent(w)
+}
+
+func (widget *ConfCore) fromFile(item *Item, file, defFile string, postSave func()) configWidget {
+	build, ok := cfbuild.NewFromFileSafe(widget.data, widget.log, file, defFile, "")
+
+	if ok {
+		build.BuildSingle(item.Key)
+		build.SetPostSave(postSave)
+		widget.btn.SetSave()
+
+	} else {
+		widget.btn.SetNone()
+	}
+	return build
 }
 
 func (widget *ConfCore) setCurrent(w configWidget) {
 	widget.config = w
 	widget.Pack2(w, true, true)
-}
-
-// SetAction sets the action button name (save or grab).
-//
-func (widget *ConfCore) SetAction() {
-	item, e := widget.list.Selected()
-	switch {
-	case e != nil, // Do nothing. Should be triggered only on load, before any user selection.
-		item.Key == TabDownload,
-		item.Key == TabHelp:
-
-		widget.data.SetActionNone()
-
-	case item.Key == TabThemes:
-		widget.data.SetActionApply()
-
-	case item.Key == TabShortkeys:
-		widget.data.SetActionGrab()
-
-	default:
-		widget.data.SetActionSave()
-	}
 }
 
 // UpdateModuleState updates the state of the given applet, from a dock event.
@@ -419,13 +433,8 @@ func (widget *ConfCore) UpdateModuleState(name string, active bool) {
 //
 func (widget *ConfCore) UpdateShortkeys() {
 	widget.log.Info("UpdateShortkeys")
-	// conf, e := widget.list.Selected()
-	// log.Err(e, "confcore selected")
-
 	if grab := widget.grabber(); grab != nil {
 		grab.Load()
-		// if e == nil && conf.Key == TabShortkeys {
-		// widget.config.Load()
 	}
 }
 

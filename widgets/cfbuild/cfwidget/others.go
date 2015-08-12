@@ -1,127 +1,93 @@
-package confbuilder
+package cfwidget
 
 import (
 	"github.com/conformal/gotk3/gdk"
 	"github.com/conformal/gotk3/glib"
 	"github.com/conformal/gotk3/gtk"
 
-	"github.com/sqp/godock/libs/cdtype"
-	"github.com/sqp/godock/libs/text/tran"
+	"github.com/sqp/godock/libs/cdtype"    // Logger type.
+	"github.com/sqp/godock/libs/text/tran" // Translate.
 
-	"github.com/sqp/godock/widgets/common"
-	"github.com/sqp/godock/widgets/confbuilder/datatype"
-	"github.com/sqp/godock/widgets/gtk/buildhelp"
-	"github.com/sqp/godock/widgets/gtk/gunvalue"
-	"github.com/sqp/godock/widgets/gtk/newgtk"
+	"github.com/sqp/godock/widgets/cfbuild/cftype"   // Types for config file builder usage.
+	"github.com/sqp/godock/widgets/cfbuild/datatype" // Types for config file builder data source.
+	"github.com/sqp/godock/widgets/common"           // PixbufNewFromFile.
+	"github.com/sqp/godock/widgets/gtk/gunvalue"     // Extract gvalue data.
+	"github.com/sqp/godock/widgets/gtk/indexiter"    // References of iter to reselect.
+	"github.com/sqp/godock/widgets/gtk/newgtk"       // Create widgets.
+	"github.com/sqp/godock/widgets/handbook"         // Package preview.
 
-	"fmt"
+	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
 )
 
-//
-//----------------------------------------------------------------[ HANDBOOK ]--
+var (
+	iconSizeCombo = 24
+	iconSizeFrame = 20
+)
 
-// Handbook defines a handbook widget (applet info).
-//
-type Handbook struct {
-	gtk.Frame    // Main widget is the container.
-	title        *gtk.Label
-	author       *gtk.Label
-	description  *gtk.Label
-	previewFrame *gtk.Frame
-	previewImage *gtk.Image
+// iconSize = int(gtk.ICON_SIZE_LARGE_TOOLBAR)
 
-	ShowVersion bool
+//
+//----------------------------------------------------------[ GET/SET ACTIVE ]--
+
+type widgetActiver interface {
+	GetActive() bool
+	SetActive(bool)
 }
 
-// NewHandbook creates a handbook widget (applet info).
-//
-func NewHandbook(log cdtype.Logger) *Handbook {
-	builder := buildhelp.New()
-
-	builder.AddFromString(string(handbookXML()))
-	// builder.AddFromFile("handbook.xml")
-
-	widget := &Handbook{
-		Frame:        *builder.GetFrame("handbook"),
-		title:        builder.GetLabel("title"),
-		author:       builder.GetLabel("author"),
-		description:  builder.GetLabel("description"),
-		previewFrame: builder.GetFrame("previewFrame"),
-		previewImage: builder.GetImage("previewImage"),
+func listActiverGet(btns []widgetActiver) (vals []bool) {
+	for _, btn := range btns {
+		vals = append(vals, btn.GetActive())
 	}
-
-	if len(builder.Errors) > 0 {
-		for _, e := range builder.Errors {
-			log.Err(e, "build handbook")
-		}
-		return nil
-	}
-
-	return widget
+	return
 }
 
-// SetPackage fills the handbook data with a package.
+func listActiverSet(btns []widgetActiver, vals []bool) {
+	for i, btn := range btns {
+		btn.SetActive(vals[i])
+	}
+}
+
 //
-func (widget *Handbook) SetPackage(book datatype.Handbooker) {
-	title := common.Bold(common.Big(book.GetTitle()))
-	if widget.ShowVersion {
-		title += " v" + book.GetModuleVersion()
+//-----------------------------------------------------[ GET/SET FLOAT VALUE ]--
+
+// PackValuerAsInt packs a valuer widget with its reset button (to given value).
+// Values are get and set as int.
+//
+func PackValuerAsInt(key *cftype.Key, w gtk.IWidget, valuer WidgetValuer, value int) {
+	key.PackKeyWidget(key,
+		func() interface{} { return int(valuer.GetValue()) },
+		func(uncast interface{}) { valuer.SetValue(float64(uncast.(int))) },
+		w)
+
+	oldval, _ := key.Storage().Default(key.Group, key.Name)
+	PackReset(key, oldval.Int())
+}
+
+// WidgetValuer defines a widget with GetValue and SetValue methods.
+//
+type WidgetValuer interface {
+	GetValue() float64
+	SetValue(float64)
+}
+
+func listValuerGet(btns []WidgetValuer) (vals []float64) {
+	for _, btn := range btns {
+		vals = append(vals, btn.GetValue())
 	}
-	widget.title.SetMarkup(title)
+	return
+}
 
-	author := book.GetAuthor()
-	if author != "" {
-		author = fmt.Sprintf("by %s", author)
-		widget.author.SetMarkup(common.Small(common.Mono(author)))
-	}
-	widget.author.SetVisible(author != "")
-
-	widget.description.SetMarkup("<span rise='8000'>" + book.GetDescription() + "</span>")
-
-	previewFound := false
-	defer func() { widget.previewFrame.SetVisible(previewFound) }()
-
-	file := book.GetPreviewFilePath()
-	if file == "" {
-		return
-	}
-	_, w, h := gdk.PixbufGetFileInfo(file)
-
-	var pixbuf *gdk.Pixbuf
-	var e error
-	if w > PreviewSizeMax || h > PreviewSizeMax {
-		pixbuf, e = gdk.PixbufNewFromFileAtScale(file, PreviewSizeMax, PreviewSizeMax, true)
-	} else {
-		pixbuf, e = gdk.PixbufNewFromFile(file)
-	}
-
-	if e == nil && pixbuf != nil {
-		previewFound = true
-		widget.previewImage.SetFromPixbuf(pixbuf)
+func listValuerSet(btns []WidgetValuer, vals []float64) {
+	for i, btn := range btns {
+		btn.SetValue(vals[i])
 	}
 }
 
 //
 //-------------------------------------------------------------[ MODELS DATA ]--
-
-func fillModelWithTheme(model *gtk.ListStore, list map[string]datatype.Handbooker, current string) (toSelect *gtk.TreeIter) {
-	for _, theme := range list {
-		key := theme.GetName()
-		iter := model.Append()
-		model.SetCols(iter, gtk.Cols{
-			RowKey:  key,
-			RowName: theme.GetTitle(),
-			// RowIcon: "none",
-			RowDesc: "none"})
-
-		if key == current {
-			toSelect = iter
-		}
-	}
-	return
-}
 
 // static void _fill_model_with_one_theme (const gchar *cThemeName, CairoDockPackage *pTheme, gpointer *data)
 // {
@@ -178,25 +144,6 @@ func fillModelWithTheme(model *gtk.ListStore, list map[string]datatype.Handbooke
 // 	}
 // }
 
-func fillModelWithFields(model *gtk.ListStore, list []datatype.Field, current string) (toSelect *gtk.TreeIter) {
-	for _, field := range list {
-		iter := model.Append()
-		model.SetCols(iter, gtk.Cols{
-			RowKey:  field.Key,
-			RowName: field.Name,
-			// RowIcon: "none",
-			RowDesc: "none"})
-
-		if field.Key == current {
-			toSelect = iter
-		}
-	}
-	return
-}
-
-//
-//-------------------------------------------------------[ COMMON LISTSTORES ]--
-
 // Rows defines liststore rows. Must match the ListStore declaration type and order.
 const (
 	RowKey = iota
@@ -205,18 +152,59 @@ const (
 	RowDesc
 )
 
-func newModelSimple() (*gtk.ListStore, error) {
-	return gtk.ListStoreNew(
-		glib.TYPE_STRING,    /* RowKey*/
-		glib.TYPE_STRING,    /* RowName*/
-		gdk.PixbufGetType(), /* RowIcon*/
-		glib.TYPE_STRING)    /* RowDesc*/
+func newModelSimple() *gtk.ListStore {
+	return newgtk.ListStore(
+		glib.TYPE_STRING,    // RowKey
+		glib.TYPE_STRING,    // RowName
+		gdk.PixbufGetType(), // RowIcon
+		glib.TYPE_STRING,    // RowDesc
+	)
 }
 
-// newComboBox creates a combo box.
+// fill the model and can save references of fields+iter.
 //
-func newComboBox(withEntry, numbered bool, current string, list []datatype.Field) (widget *gtk.ComboBox, model *gtk.ListStore, getValue func() interface{}) {
-	model, _ = newModelSimple()
+func fillModelWithFields(key *cftype.Key, model *gtk.ListStore, list []datatype.Field, current string, ro indexiter.ByString) (toSelect *gtk.TreeIter) {
+	for _, field := range list {
+		iter := modelAddField(key, model, field, ro)
+
+		if field.Key == current {
+			toSelect = iter
+		}
+	}
+	return
+}
+
+// modelAddField adds one field to the model and can save reference of fields+iter.
+//
+func modelAddField(key *cftype.Key, model *gtk.ListStore, field datatype.Field, ro indexiter.ByString) *gtk.TreeIter {
+	iter := model.Append()
+	model.SetCols(iter, gtk.Cols{
+		RowKey:  field.Key,
+		RowName: field.Name,
+		RowDesc: "none",
+	})
+	if field.Icon != "" {
+		pix, e := common.PixbufNewFromFile(field.Icon, iconSizeCombo)
+		if !key.Log().Err(e, "Load icon") {
+			model.SetValue(iter, RowIcon, pix)
+		}
+	}
+
+	if ro != nil {
+		ro.Append(iter, field.Key)
+	}
+	return iter
+}
+
+//
+//-------------------------------------------------------[ COMMON LISTSTORES ]--
+
+// NewComboBox creates a combo box.
+//
+func NewComboBox(key *cftype.Key, withEntry, numbered bool, current string, list []datatype.Field) (
+	widget *gtk.ComboBox, model *gtk.ListStore, getValue func() interface{}, setValue func(interface{})) {
+
+	model = newModelSimple()
 	// gtk_tree_sortable_set_sort_column_id(GTK_TREE_SORTABLE(modele), CAIRO_DOCK_MODEL_NAME, GTK_SORT_ASCENDING)
 
 	widget = newgtk.ComboBoxWithModel(model)
@@ -225,60 +213,42 @@ func newComboBox(withEntry, numbered bool, current string, list []datatype.Field
 	widget.AddAttribute(renderer, "text", RowName)
 
 	// Fill and set current.
-	iter := fillModelWithFields(model, list, current)
+	iter := fillModelWithFields(key, model, list, current, nil)
 	widget.SetActiveIter(iter)
 
 	switch {
-	case withEntry:
+	case withEntry: // get and set the entry content string.
 		entry := newgtk.Entry() // Add entry manually so we don't have to recast a GetChild
 		entry.SetText(current)
 		widget.Add(entry)
 		widget.Set("id-column", RowName)
 		widget.Connect("changed", func() { entry.SetText(widget.GetActiveID()) })
-		getValue = func() interface{} { // return the entry content string.
-			v, _ := entry.GetText()
-			return v
-		}
+		getValue = func() interface{} { v, _ := entry.GetText(); return v }
+		setValue = func(uncast interface{}) { entry.SetText(uncast.(string)) }
 
-	case numbered:
-		getValue = func() interface{} { // return selected as position int
-			return widget.GetActive()
-		}
+	case numbered: // get and set selected as position int
+		getValue = func() interface{} { return widget.GetActive() }
+		setValue = func(uncast interface{}) { widget.SetActive(uncast.(int)) }
 
-	default:
-		widget.Set("id-column", RowName)
-		getValue = func() interface{} { // return selected as content string
-			return widget.GetActiveID()
+	default: // get and set selected as content string
+		widget.Set("id-column", RowKey)
+		getValue = func() interface{} { return widget.GetActiveID() }
+		setValue = func(uncast interface{}) {
+			newID := datatype.ListFieldsIDByName(list, uncast.(string), key.Log())
+			widget.SetActive(newID)
 		}
 	}
 
 	return
 }
 
-// NewComboBoxFilled creates a combo box filled with the getList call.
+// NewComboBoxWithModel adds a combo box with the given model (can be nil).
 //
-func (build *Builder) NewComboBoxFilled(key *Key, withEntry, numbered bool, getList func() []datatype.Field) *gtk.ComboBox {
-	var list []datatype.Field
-	if getList != nil {
-		list = getList()
-	}
-	current, _ := build.Conf.GetString(key.Group, key.Name)
-	widget, _, getValue := newComboBox(withEntry, numbered, current, list)
-	build.AddKeyWidget(widget, key, getValue)
-	return widget
-}
-
-// fieldsPrepend prepends one or more fields to a list of fields.
-//
-func fieldsPrepend(list []datatype.Field, fields ...datatype.Field) func() []datatype.Field {
-	return func() []datatype.Field {
-		return append(fields, list...) // prepend defaults.
-	}
-}
-
 // _add_combo_from_modele
 // used do/while. find why
-func (build *Builder) newComboBoxWithModel(model *gtk.ListStore, bAddPreviewWidgets, bWithEntry, bHorizontalPackaging bool) (widget *gtk.ComboBox, getValue func() interface{}) {
+func NewComboBoxWithModel(model *gtk.ListStore, log cdtype.Logger, bAddPreviewWidgets, bWithEntry, bHorizontalPackaging bool) (
+	widget *gtk.ComboBox, getValue func() interface{}) {
+
 	if model == nil {
 		// TODO: need the one with entry.
 		combo := newgtk.ComboBox()
@@ -291,22 +261,20 @@ func (build *Builder) newComboBoxWithModel(model *gtk.ListStore, bAddPreviewWidg
 		widget := newgtk.ComboBoxWithEntry()
 		widget.SetModel(model)
 	} else {
+
 		combo := newgtk.ComboBoxWithModel(model)
 		renderer := newgtk.CellRendererText()
 		combo.PackStart(renderer, false)
 		combo.AddAttribute(renderer, "text", RowName)
-		getValue = func() interface{} {
-			iter, _ := combo.GetActiveIter()
-			text := build.getActiveRowInCombo(model, iter)
-			return text
-		}
+
+		getValue = getValueListCombo(combo, model, log)
 
 		widget = combo
 	}
 	if bAddPreviewWidgets {
 		// pPreviewBox = cairo_dock_gui_make_preview_box(pMainWindow, pOneWidget, bHorizontalPackaging, 1, NULL, NULL, pDataGarbage)
-		// bFullSize := bWithEntry || bHorizontalPackaging
-		// gtk_box_pack_start (GTK_BOX (pAdditionalItemsVBox ? pAdditionalItemsVBox : pKeyBox), pPreviewBox, bFullSize, bFullSize, 0);
+		// fullSize := bWithEntry || bHorizontalPackaging
+		// gtk_box_pack_start (GTK_BOX (pAdditionalItemsVBox ? pAdditionalItemsVBox : pKeyBox), pPreviewBox, fullSize, fullSize, 0);
 	}
 	// cValue = g_key_file_get_string(pKeyFile, cGroupName, cKeyName, NULL)
 	// if _cairo_dock_find_iter_from_name(model, cValue, &iter) {
@@ -315,14 +283,24 @@ func (build *Builder) newComboBoxWithModel(model *gtk.ListStore, bAddPreviewWidg
 	return
 }
 
+func getValueListCombo(widget *gtk.ComboBox, model *gtk.ListStore, log cdtype.Logger) func() interface{} {
+	return func() interface{} {
+		iter, _ := widget.GetActiveIter()
+		text, e := getActiveRowInCombo(model, iter)
+		log.Err(e, "ListIcons")
+		return text
+	}
+}
+
 // getActiveRowInCombo gets the value of the current RowKey in the store.
 //
-func (build *Builder) getActiveRowInCombo(model *gtk.ListStore, iter *gtk.TreeIter) string {
-	if iter != nil {
-		str, e := gunvalue.New(model.GetValue(iter, RowKey)).String()
-		if !build.log.Err(e, "getActiveRowInCombo") {
-			return str
-		}
+func getActiveRowInCombo(model *gtk.ListStore, iter *gtk.TreeIter) (string, error) {
+	if iter == nil {
+		return "", errors.New("getActiveRowInCombo: no selection")
+	}
+	str, e := gunvalue.New(model.GetValue(iter, RowKey)).String()
+	if e != nil {
+		return "", e
 	}
 
 	// if (cValue == NULL && GTK_IS_COMBO_BOX (pOneWidget) && gtk_combo_box_get_has_entry (GTK_COMBO_BOX (pOneWidget)))
@@ -330,7 +308,123 @@ func (build *Builder) getActiveRowInCombo(model *gtk.ListStore, iter *gtk.TreeIt
 	// 	GtkWidget *pEntry = gtk_bin_get_child (GTK_BIN (pOneWidget));
 	// 	cValue = g_strdup (gtk_entry_get_text (GTK_ENTRY (pEntry)));
 	// }
-	return ""
+	return str, nil
+}
+
+//
+//----------------------------------------------------------[ COMMON WIDGETS ]--
+
+// PackComboBoxWithListField creates a combo box filled with the getList call.
+//
+func PackComboBoxWithListField(key *cftype.Key, withEntry, numbered bool, getList func() []datatype.Field) *gtk.ComboBox {
+	var list []datatype.Field
+	if getList != nil {
+		list = getList()
+	}
+	current, _ := key.Storage().String(key.Group, key.Name)
+	widget, _, getValue, setValue := NewComboBox(key, withEntry, numbered, current, list)
+
+	key.PackKeyWidget(key, getValue, setValue, widget)
+	return widget
+}
+
+// PackComboBoxWithIndexHandbooker creates a combo box filled with the getList call.
+//
+func PackComboBoxWithIndexHandbooker(key *cftype.Key, index map[string]datatype.Handbooker) {
+	model := newModelSimple()
+	model.SetSortColumnId(RowName, gtk.SORT_ASCENDING)
+	widget, getValue := NewComboBoxWithModel(model, key.Log(), false, false, false)
+
+	value := key.Value().String()
+
+	details := handbook.New(key.Log())
+	key.PackWidget(details, false, false, 0)
+
+	widget.Connect("changed", func() {
+		name := key.Value().String()
+		pack, ok := index[name]
+		if ok {
+			details.SetPackage(pack)
+		} else {
+			key.Log().NewErr("key missing", "ComboHandbook select preview:", name)
+		}
+	})
+
+	fields := datatype.IndexHandbooksToFields(index)
+	saved := indexiter.NewByString(widget, key.Log())
+	iter := fillModelWithFields(key, model, fields, value, saved)
+	widget.SetActiveIter(iter) // Set iter after connect, to update with current value.
+
+	key.PackKeyWidget(key,
+		getValue,
+		func(uncast interface{}) { saved.SetActive(uncast.(string)) },
+		widget,
+	)
+}
+
+// fieldsPrepend prepends one or more fields to a list of fields.
+//
+func fieldsPrepend(list []datatype.Field, fields ...datatype.Field) func() []datatype.Field {
+	return func() []datatype.Field {
+		return append(fields, list...) // prepend defaults.
+	}
+}
+
+//
+//----------------------------------------------------------[ COMMON PACKING ]--
+
+// PackReset adds a reset value button.
+// Requires a callback to restore defaults.
+//
+func PackReset(key *cftype.Key, value interface{}) *gtk.Button {
+	fileDefault := key.Storage().FileDefault()
+	if fileDefault == "" {
+		return nil
+	}
+
+	back := newgtk.ButtonFromIconName("edit-clear", gtk.ICON_SIZE_MENU)
+	back.Connect("clicked", func() { key.ValueSet(value) })
+	key.PackSubWidget(back)
+	return back
+}
+
+// WrapKeyScale wraps a key scale with its information labels if needed (enough values).
+//
+// (was _pack_hscale).
+func WrapKeyScale(key *cftype.Key, child *gtk.Scale) gtk.IWidget {
+	child.Set("width-request", 150)
+	if len(key.AuthorizedValues) >= 4 {
+
+		child.Set("value-pos", gtk.POS_TOP)
+		// log.DEV("MISSING SubScale options", string(key.Type), key.AuthorizedValues)
+		box := newgtk.Box(gtk.ORIENTATION_HORIZONTAL, 0)
+		// 	GtkWidget * pAlign = gtk_alignment_new(1., 1., 0., 0.)
+		labelLeft := newgtk.Label(key.Translate(key.AuthorizedValues[2]))
+		// 	pAlign = gtk_alignment_new(1., 1., 0., 0.)
+		labelRight := newgtk.Label(key.Translate(key.AuthorizedValues[3]))
+
+		box.PackStart(labelLeft, false, false, 0)
+		box.PackStart(child, false, false, 0)
+		box.PackStart(labelRight, false, false, 0)
+		return box
+	}
+	child.Set("value-pos", gtk.POS_LEFT)
+	return child
+}
+
+//
+//-----------------------------------------------------------------[ HELPERS ]--
+
+func minMaxValues(key *cftype.Key) (float64, float64) {
+	var fMinValue float64
+	var fMaxValue float64 = 9999
+	if len(key.AuthorizedValues) > 0 {
+		fMinValue, _ = strconv.ParseFloat(key.AuthorizedValues[0], 32)
+	}
+	if len(key.AuthorizedValues) > 1 {
+		fMaxValue, _ = strconv.ParseFloat(key.AuthorizedValues[1], 32)
+	}
+	return fMinValue, fMaxValue
 }
 
 //
@@ -352,13 +446,13 @@ func onValuePairChanged(updated *gtk.SpinButton, vp *valuePair) {
 }
 
 type textDefaultData struct {
-	key  *Key
+	key  *cftype.Key
 	text string // default text to use.
 	cbID glib.SignalHandle
 }
 
 // text changed by the user. Restore color and the ability to save the value.
-func onTextDefaultChanged(entry *gtk.Entry, key *Key) {
+func onTextDefaultChanged(entry *gtk.Entry, key *cftype.Key) {
 	key.IsDefault = false
 	entry.OverrideColor(gtk.STATE_FLAG_NORMAL, nil)
 }
@@ -375,21 +469,20 @@ func onTextDefaultFocusIn(widget *gtk.Entry, _ *gdk.Event, data textDefaultData)
 // lost focus, setting back default text and color if needed.
 func onTextDefaultFocusOut(widget *gtk.Entry, _ *gdk.Event, data textDefaultData) {
 	text, _ := widget.GetText()
-	if text == "" {
-		data.key.IsDefault = true
-
+	data.key.IsDefault = text == ""
+	if data.key.IsDefault {
 		widget.HandlerBlock(data.cbID)
 		widget.SetText(data.text)
 		widget.HandlerUnblock(data.cbID)
 
-		color := gdk.NewRGBA(DefaultTextColor, DefaultTextColor, DefaultTextColor, 1)
+		color := gdk.NewRGBA(cftype.DefaultTextColor, cftype.DefaultTextColor, cftype.DefaultTextColor, 1)
 		widget.OverrideColor(gtk.STATE_FLAG_NORMAL, color)
 	}
 }
 
 type fileChooserData struct {
 	entry *gtk.Entry
-	key   *Key
+	key   *cftype.Key
 }
 
 func onFileChooserOpen(obj *gtk.Button, data fileChooserData) {
@@ -399,11 +492,11 @@ func onFileChooserOpen(obj *gtk.Button, data fileChooserData) {
 	var action gtk.FileChooserAction
 
 	switch data.key.Type {
-	case WidgetFolderSelector:
+	case cftype.KeyFolderSelector:
 		title = tran.Slate("Pick up a directory")
 		action = gtk.FILE_CHOOSER_ACTION_SELECT_FOLDER
 
-	case WidgetImageSelector:
+	case cftype.KeyImageSelector:
 		title = tran.Slate("Pick up an image")
 		action = gtk.FILE_CHOOSER_ACTION_OPEN
 
@@ -418,7 +511,7 @@ func onFileChooserOpen(obj *gtk.Button, data fileChooserData) {
 	// Set the current folder to the current value in conf.
 	value, _ := data.entry.GetText()
 	if value == "" || value[0] != '/' {
-		if data.key.Type == WidgetImageSelector {
+		if data.key.IsType(cftype.KeyImageSelector) {
 			println("need dir pictures")
 			// dialog.SetCurrentFolder(filepath.Dir(value)) // g_get_user_special_dir (G_USER_DIRECTORY_PICTURES) :
 		} else {
@@ -429,19 +522,19 @@ func onFileChooserOpen(obj *gtk.Button, data fileChooserData) {
 		dialog.SetCurrentFolder(filepath.Dir(value))
 	}
 
-	if data.key.Type == WidgetImageSelector { // Add shortcuts to icons of the system.
+	if data.key.IsType(cftype.KeyImageSelector) { // Add shortcuts to icons of the system.
 		dialog.AddShortcutFolder("/usr/share/icons")
 		dialog.AddShortcutFolder("/usr/share/pixmaps")
 	}
 
-	if data.key.Type == WidgetFileSelector || data.key.Type == WidgetSoundSelector { // Add shortcuts to system icons directories.
+	if data.key.IsType(cftype.KeyFileSelector, cftype.KeySoundSelector) { // Add shortcuts to system icons directories.
 		filter := newgtk.FileFilter()
 		filter.SetName(tran.Slate("All"))
 		filter.AddPattern("*")
 		dialog.AddFilter(filter)
 	}
 
-	if data.key.Type == WidgetFileSelector || data.key.Type == WidgetImageSelector { // Preview and images filter.
+	if data.key.IsType(cftype.KeyFileSelector, cftype.KeyImageSelector) { // Preview and images filter.
 		filter := newgtk.FileFilter()
 		filter.SetName(tran.Slate("Image"))
 		filter.AddPixbufFormats()

@@ -1,7 +1,11 @@
 // Package cdglobal defines application and backend global consts and data.
 package cdglobal
 
-import "os"
+import (
+	"os"
+	"os/user"
+	"path/filepath"
+)
 
 // AppVersion defines the application version.
 //
@@ -74,13 +78,43 @@ const (
 // AppBuildPath defines the application build location inside GOPATH.
 var AppBuildPath = []string{"github.com", "sqp", "godock"}
 
-// AppBuildPathFull returns a splitted path to the application build directory.
+// AppBuildPathFull returns the full path to the application build directory.
 //
-func AppBuildPathFull() []string {
+func AppBuildPathFull(path ...string) string {
 	gopath := os.Getenv("GOPATH")
 	if gopath == "" {
-		return nil
+		println("GOPATH missing")
+		return ""
+	}
+	basedir := append([]string{gopath, "src"}, AppBuildPath...)
+	return filepath.Join(append(basedir, path...)...)
+}
+
+// ConfigDirDock returns a full path to the dock theme, according to the given user option.
+//
+func ConfigDirDock(dir string) string {
+	if len(dir) > 0 {
+		switch dir[0] {
+		case '/':
+			return dir // Full path, used as is.
+
+		case '~':
+			usr, e := user.Current()
+			if e == nil {
+				return usr.HomeDir + dir[1:] // Relative path to the homedir.
+			}
+		}
+
+		current, e := os.Getwd()
+		if e == nil {
+			return filepath.Join(current, dir) // Relative path to the current dir.
+		}
 	}
 
-	return append([]string{gopath, "src"}, AppBuildPath...)
+	usr, e := user.Current()
+	if e == nil {
+		return filepath.Join(usr.HomeDir, ".config", ConfigDirBaseName) // Default dock config path in .config.
+	}
+
+	return ""
 }

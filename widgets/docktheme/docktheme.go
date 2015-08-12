@@ -6,14 +6,17 @@
 //   Update what's needed after load/save.
 //   Load add ratings.
 //   Save add preview (change newComboBox call ?)
+//
 package docktheme
 
 import (
 	"github.com/sqp/godock/libs/cdglobal"
 	"github.com/sqp/godock/libs/cdtype"
 
+	"github.com/sqp/godock/widgets/cfbuild"
+	"github.com/sqp/godock/widgets/cfbuild/cftype"
+	"github.com/sqp/godock/widgets/cfbuild/cfwidget"
 	"github.com/sqp/godock/widgets/confapplets"
-	"github.com/sqp/godock/widgets/confbuilder"
 	"github.com/sqp/godock/widgets/pageswitch"
 )
 
@@ -25,49 +28,47 @@ const groupSave = "Save"
 // DockTheme provides a dock main theme load/save widget.
 //
 type DockTheme struct {
-	confbuilder.Grouper
+	cftype.Grouper
 
 	switcher *pageswitch.Switcher
 
-	data confbuilder.Source
+	data cftype.Source
 	log  cdtype.Logger
 }
 
 // New creates a DockTheme widget to load and save the main theme.
 //
-func New(data confbuilder.Source, log cdtype.Logger, switcher *pageswitch.Switcher) *DockTheme {
+func New(data cftype.Source, log cdtype.Logger, switcher *pageswitch.Switcher) (cftype.Grouper, bool) {
 	file := data.DirShareData(cdglobal.FileConfigThemes)
-	build, e := confbuilder.NewGrouper(data, log, file, "", "")
-	if log.Err(e, "Load Keyfile "+file) {
-		return nil
+	build, ok := cfbuild.NewFromFileSafe(data, log, file, "", "")
+	if !ok {
+		return build, false
 	}
 
-	widgetLoad := func(build *confbuilder.Builder, key *confbuilder.Key) {
+	// Widget building.
+	keyLoad := func(key *cftype.Key) {
 		w := confapplets.NewLoaded(data, log, nil, confapplets.ListThemes)
 		getValue := func() interface{} { return w.Selected().GetName() }
-		build.AddKeyWidget(w, key, getValue)
+		key.PackKeyWidget(key, getValue, nil, w)
 	}
 
-	widgetSave := func(build *confbuilder.Builder, key *confbuilder.Key) {
-		build.NewComboBoxFilled(key, true, false, data.ListDockThemeSave)
+	keySave := func(key *cftype.Key) {
+		cfwidget.PackComboBoxWithListField(key, true, false, data.ListDockThemeSave)
 	}
 
-	hack := func(build *confbuilder.Builder) {
-		key, e := build.GetKey(groupLoad, "chosen theme").SetCustom(widgetLoad)
-		if !log.Err(e, "get key=", groupLoad, "::", "chosen theme") {
-			key.IsAlignedVertical = true
-		}
+	build.BuildAll(switcher,
+		cfbuild.TweakKeySetAlignedVertical(groupLoad, "chosen theme"),
+		cfbuild.TweakKeyMakeWidget(groupLoad, "chosen theme", keyLoad),
+		cfbuild.TweakKeyMakeWidget(groupSave, "theme name", keySave),
+	)
 
-		_, e = build.GetKey(groupSave, "theme name").SetCustom(widgetSave)
-		log.Err(e, "get key=", groupSave, "::", "theme name")
-	}
-
+	// Builder update keys.
 	return &DockTheme{
-		Grouper:  *build.BuildAll(switcher, hack),
+		Grouper:  build,
 		switcher: switcher,
 		data:     data,
 		log:      log,
-	}
+	}, true
 }
 
 //
@@ -78,13 +79,10 @@ func New(data confbuilder.Source, log cdtype.Logger, switcher *pageswitch.Switch
 func (widget *DockTheme) Save() {
 	switch widget.switcher.Selected() {
 	case groupLoad:
-
-		themeName, e := widget.GetKey(groupLoad, "package").String()
-		widget.log.Err(e, "get key")
-
+		// Use package location before the selected theme.
+		themeName := widget.KeyString(groupLoad, "package")
 		if themeName == "" {
-			themeName, e = widget.GetKey(groupLoad, "chosen theme").String()
-			widget.log.Err(e, "get key")
+			themeName = widget.KeyString(groupLoad, "chosen theme")
 		}
 
 		if themeName == "" {
@@ -92,38 +90,26 @@ func (widget *DockTheme) Save() {
 			return
 		}
 
-		useBehaviour, e := widget.GetKey(groupLoad, "use theme behaviour").Bool()
-		widget.log.Err(e, "get key")
+		useBehaviour := widget.KeyBool(groupLoad, "use theme behaviour")
+		useLaunchers := widget.KeyBool(groupLoad, "use theme launchers")
 
-		useLaunchers, e := widget.GetKey(groupLoad, "use theme launchers").Bool()
-		widget.log.Err(e, "get key")
-
-		e = widget.data.CurrentThemeLoad(themeName, useBehaviour, useLaunchers)
+		e := widget.data.CurrentThemeLoad(themeName, useBehaviour, useLaunchers)
 		if !widget.log.Err(e, "load dock theme") {
 			// 		cairo_dock_reload_gui ();
 		}
 
 	case groupSave:
-		themeName, e := widget.GetKey(groupSave, "theme name").String()
-		widget.log.Err(e, "get key")
-
-		saveBehaviour, e := widget.GetKey(groupSave, "save current behaviour").Bool()
-		widget.log.Err(e, "get key")
-
-		saveLaunchers, e := widget.GetKey(groupSave, "save current launchers").Bool()
-		widget.log.Err(e, "get key")
-
-		needPackage, e := widget.GetKey(groupSave, "package").Bool()
-		widget.log.Err(e, "get key")
-
-		dirPackage, e := widget.GetKey(groupSave, "package dir").String()
-		widget.log.Err(e, "get key")
+		themeName := widget.KeyString(groupSave, "theme name")
+		saveBehaviour := widget.KeyBool(groupSave, "save current behaviour")
+		saveLaunchers := widget.KeyBool(groupSave, "save current launchers")
+		needPackage := widget.KeyBool(groupSave, "package")
+		dirPackage := widget.KeyString(groupSave, "package dir")
 
 		if dirPackage == "Home directory" {
 			dirPackage = ""
 		}
 
-		e = widget.data.CurrentThemeSave(themeName, saveBehaviour, saveLaunchers, needPackage, dirPackage)
+		e := widget.data.CurrentThemeSave(themeName, saveBehaviour, saveLaunchers, needPackage, dirPackage)
 		widget.log.Err(e, "save dock theme")
 
 		// 				cairo_dock_set_status_message (NULL, _("Theme has been saved"));

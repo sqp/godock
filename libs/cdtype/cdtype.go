@@ -735,6 +735,10 @@ type Logger interface {
 	//
 	NewErr(e string, msg ...interface{})
 
+	// NewErrf log a new error with arguments formatting.
+	//
+	NewErrf(title, format string, args ...interface{})
+
 	// GetErr test and logs the error, and return it for later use.
 	//
 	GetErr(e error, msg ...interface{}) error

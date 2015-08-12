@@ -1,4 +1,4 @@
-package confbuilder
+package handbook
 
 import (
 	"bytes"

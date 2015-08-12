@@ -1,5 +1,5 @@
-// Package datagldi provides a data source for the config, based on the gldi backend.
-package datagldi
+// Package confdata provides a data source for the config, based on the gldi backend.
+package confdata
 
 import (
 	"github.com/bradfitz/iter"
@@ -11,7 +11,7 @@ import (
 	"github.com/sqp/godock/libs/packages"
 	"github.com/sqp/godock/libs/ternary"
 	"github.com/sqp/godock/libs/text/tran"
-	"github.com/sqp/godock/widgets/confbuilder/datatype"
+	"github.com/sqp/godock/widgets/cfbuild/datatype"
 	"github.com/sqp/godock/widgets/gtk/keyfile"
 
 	"errors"
@@ -439,6 +439,15 @@ func (Data) DirUserAppData(path ...string) (string, error) {
 	return globals.DirUserAppData(path...)
 }
 
+// DisplayMode returns the display backend used.
+//
+func (Data) DisplayMode() datatype.DisplayMode {
+	if gldi.GLBackendIsUsed() {
+		return datatype.DisplayModeOpenGL
+	}
+	return datatype.DisplayModeCairo
+}
+
 // ListKnownApplets builds the list of all user applets.
 //
 func (Data) ListKnownApplets() map[string]datatype.Appleter {
@@ -679,6 +688,7 @@ func (Data) ListDeskletDecorations() (list []datatype.Field) {
 	for key, rend := range gldi.CairoDeskletDecorationList() {
 		list = append(list, displayerField(key, rend))
 	}
+	datatype.ListFieldsSortByName(list)
 	return list
 }
 
@@ -700,7 +710,10 @@ func displayerField(key string, data displayer) datatype.Field {
 	if name == "" {
 		name = key
 	}
-	return datatype.Field{Key: key, Name: name}
+	return datatype.Field{
+		Key:  key,
+		Name: name,
+	}
 }
 
 // ListDocks builds the list of docks with readable name.
@@ -767,10 +780,17 @@ func (Data) ListDocks(parent, subdock string) []datatype.Field {
 
 // ListIconsMainDock builds the list of icons in the maindock.
 //
-func (Data) ListIconsMainDock() (list []datatype.Iconer) {
+func (Data) ListIconsMainDock() (list []datatype.Field) {
 	for _, icon := range globals.Maindock().Icons() {
 		if !icon.IsTaskbar() && !icon.IsSeparatorAuto() && icon.GetParentDockName() == datatype.KeyMainDock {
-			list = append(list, &IconConf{*icon})
+			iconer := IconConf{*icon}
+
+			name, img := iconer.DefaultNameIcon()
+			list = append(list, datatype.Field{
+				Key:  icon.ConfigPath(),
+				Name: name,
+				Icon: img,
+			})
 		}
 	}
 	return list
