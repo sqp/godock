@@ -2,7 +2,7 @@
 package buildhelp
 
 import (
-	"github.com/conformal/gotk3/gtk"
+	"github.com/gotk3/gotk3/gtk"
 
 	"errors"
 )

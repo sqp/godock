@@ -5,7 +5,7 @@
 package vdata
 
 import (
-	"github.com/conformal/gotk3/gtk"
+	"github.com/gotk3/gotk3/gtk"
 
 	"github.com/sqp/godock/widgets/cfbuild/cftype"   // Types for config file builder usage.
 	"github.com/sqp/godock/widgets/cfbuild/datatype" // Types for config file builder data source.

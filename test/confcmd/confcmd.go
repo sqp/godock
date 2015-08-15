@@ -3,7 +3,7 @@
 package main
 
 import (
-	"github.com/conformal/gotk3/gtk"
+	"github.com/gotk3/gotk3/gtk"
 
 	"github.com/sqp/godock/widgets/cfbuild/cfprint" // Print config file builder keys.
 	"github.com/sqp/godock/widgets/cfbuild/vdata"   // Virtual data source.

@@ -9,7 +9,7 @@ Implements backendgui.GuiInterface.
 package guibridge
 
 import (
-	"github.com/conformal/gotk3/gtk"
+	"github.com/gotk3/gotk3/gtk"
 
 	"github.com/sqp/godock/libs/cdtype" // Logger type.
 	"github.com/sqp/godock/libs/gldi"

@@ -6,7 +6,8 @@ package appgldi
 
 import (
 	"github.com/bradfitz/iter" // iter.N.
-	"github.com/conformal/gotk3/glib"
+
+	"github.com/gotk3/gotk3/glib"
 
 	"github.com/sqp/godock/libs/cdtype" // Applets types.
 	"github.com/sqp/godock/libs/gldi"

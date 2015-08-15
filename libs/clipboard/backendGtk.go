@@ -3,9 +3,12 @@
 package clipboard
 
 import (
-	"github.com/conformal/gotk3/gdk"
-	"github.com/conformal/gotk3/glib"
-	"github.com/conformal/gotk3/gtk"
+	"github.com/gotk3/gotk3/gdk"
+	"github.com/gotk3/gotk3/glib"
+	"github.com/gotk3/gotk3/gtk"
+
+	"errors"
+	"time"
 )
 
 func init() {
@@ -27,13 +30,28 @@ func init() {
 		}
 		cs := make(chan (string))
 		ce := make(chan (error))
+
+		defer func() {
+			close(cs)
+			close(ce)
+		}()
+		done := false
 		glib.IdleAdd(func() { // Synced in the GTK loop to prevent thread crashs.
 			str, e := clip.WaitForText()
-			cs <- str
-			close(cs)
-			ce <- e
-			close(ce)
+			if !done {
+				done = true
+				cs <- str
+				ce <- e
+			}
 		})
+		go func() {
+			<-time.After(time.Second * 3)
+			if !done {
+				done = true
+				cs <- ""
+				ce <- errors.New("clipboard read timeout")
+			}
+		}()
 		return <-cs, <-ce
 	}
 }

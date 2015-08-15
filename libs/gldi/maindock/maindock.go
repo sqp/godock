@@ -26,7 +26,7 @@ gboolean g_bLocked;   // TODO: To remove (1 more use in interaction)
 */
 import "C"
 import (
-	"github.com/conformal/gotk3/gtk"
+	"github.com/gotk3/gotk3/gtk"
 
 	"github.com/sqp/godock/libs/cdglobal"     // Global consts.
 	"github.com/sqp/godock/libs/cdtype"       // Logger type.

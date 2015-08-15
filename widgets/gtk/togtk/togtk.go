@@ -2,8 +2,8 @@
 package togtk
 
 import (
-	"github.com/conformal/gotk3/glib"
-	"github.com/conformal/gotk3/gtk"
+	"github.com/gotk3/gotk3/glib"
+	"github.com/gotk3/gotk3/gtk"
 
 	"unsafe"
 )

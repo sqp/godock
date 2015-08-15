@@ -2,7 +2,7 @@
 package about
 
 import (
-	"github.com/conformal/gotk3/gtk"
+	"github.com/gotk3/gotk3/gtk"
 
 	"github.com/sqp/godock/libs/gldi/globals"
 	"github.com/sqp/godock/libs/text/tran"

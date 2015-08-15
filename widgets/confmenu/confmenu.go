@@ -4,7 +4,7 @@
 package confmenu
 
 import (
-	"github.com/conformal/gotk3/gtk"
+	"github.com/gotk3/gotk3/gtk"
 
 	"github.com/sqp/godock/widgets/gtk/newgtk"
 )

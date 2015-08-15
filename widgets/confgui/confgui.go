@@ -2,10 +2,10 @@
 Package confgui is a configuration window for Cairo-Dock.
 
 
-Using GTK 3.10 library https://github.com/conformal/gotk3
+Using GTK 3.10 library https://github.com/gotk3/gotk3
 
 If you use GTK 3.8, you will have to add a flag to compile it:
-  go get -tags gtk_3_8 github.com/conformal/gotk3/gtk
+  go get -tags gtk_3_8 github.com/gotk3/gotk3/gtk
 
 
 Gui xml files are compressed with github.com/jteeuwen/go-bindata
@@ -14,7 +14,7 @@ Gui xml files are compressed with github.com/jteeuwen/go-bindata
 package confgui
 
 import (
-	"github.com/conformal/gotk3/gtk"
+	"github.com/gotk3/gotk3/gtk"
 
 	"github.com/sqp/godock/libs/cdtype" // Logger type.
 	"github.com/sqp/godock/libs/text/tran"

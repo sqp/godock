@@ -11,8 +11,8 @@ extern gboolean buildMenuContainer(gpointer, Icon*, GldiContainer*, GtkWidget*, 
 */
 import "C"
 import (
-	"github.com/conformal/gotk3/gdk"
-	"github.com/conformal/gotk3/gtk"
+	"github.com/gotk3/gotk3/gdk"
+	"github.com/gotk3/gotk3/gtk"
 
 	"github.com/bradfitz/iter" // easy for.
 

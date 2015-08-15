@@ -1,7 +1,7 @@
 package vdata_test
 
 import (
-	"github.com/conformal/gotk3/gtk"
+	"github.com/gotk3/gotk3/gtk"
 
 	"github.com/stretchr/testify/assert"
 

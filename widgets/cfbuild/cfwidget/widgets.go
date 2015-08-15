@@ -2,9 +2,9 @@
 package cfwidget
 
 import (
-	"github.com/conformal/gotk3/gdk"
-	"github.com/conformal/gotk3/glib"
-	"github.com/conformal/gotk3/gtk"
+	"github.com/gotk3/gotk3/gdk"
+	"github.com/gotk3/gotk3/glib"
+	"github.com/gotk3/gotk3/gtk"
 
 	"github.com/google/shlex"
 

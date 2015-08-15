@@ -3,7 +3,7 @@
 // Dependencies
 //
 // tag gtk or dock :
-//   go binding: github.com/conformal/gotk3.
+//   go binding: github.com/gotk3/gotk3.
 //
 // default :
 //   external dependency: xclip or xsel.

@@ -23,7 +23,7 @@ static const gchar** constListString(gchar** split) {
 import "C"
 
 import (
-	"github.com/conformal/gotk3/gtk"
+	"github.com/gotk3/gotk3/gtk"
 
 	"github.com/sqp/godock/libs/cdtype" // Applets types.
 	"github.com/sqp/godock/libs/gldi"

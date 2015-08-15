@@ -49,7 +49,7 @@ static void register_gui (void)
 */
 import "C"
 import (
-	"github.com/conformal/gotk3/gtk"
+	"github.com/gotk3/gotk3/gtk"
 
 	"github.com/sqp/godock/libs/gldi"
 	"github.com/sqp/godock/libs/gldi/globals"
