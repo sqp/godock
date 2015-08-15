@@ -20,7 +20,7 @@ APPDIRDBUS=usr/share/cairo-dock/plug-ins/Dbus/third-party/
 
 
 
-# Could be useful for some distro.
+# Could be useful for some distro packagers.
 # FLAGSHARETHEME=$(SOURCE)/libs/gldi/maindock.CairoDockShareThemesDir '/usr/share/cairo-dock/themes'
 # FLAGLOCALE=$(SOURCE)/libs/gldi/maindock.CairoDockLocaleDir '/usr/share/locale'
 
@@ -51,18 +51,9 @@ dock:
 	go install -tags '$(DOCK)' $(FLAGS) $(SOURCE)/cmd/$(TARGET)
 
 patch:
-	# Patch GTK - unstable branch is required to build a dock.
-	cd "$(GOPATH)/src/github.com/conformal/gotk3" && git pull --commit --no-edit https://github.com/sqp/gotk3 unstable
+	# Patch GTK - some patches required to build a dock.
+	cd "$(GOPATH)/src/github.com/gotk3/gotk3" && git pull --commit --no-edit origin few_methods deprecated
 	
-	# git pull --commit --no-edit https://github.com/sqp/gotk3 current # current branch is enough for applets.
-
-	# branches grouped in the tree:
-	# https://github.com/sqp/gotk3 nil_case file-chooser scale treestore icontheme pixbuf_at_scale gliblist others widget_set liststore_hack
-	# iconview link_font_button expander cellrendererpixbuf accelerator
-	# https://github.com/shish/gotk3 file-chooser
-	# https://github.com/shish/gotk3 paned
-	# https://github.com/MovingToMars/gotk3 144f78d8900c48ba361dc65342878f73709d1c05
-
 	# Patch Dbus (for Notifications)
 	cd "$(GOPATH)/src/github.com/godbus/dbus" && git pull --commit --no-edit https://github.com/sqp/dbus fixeavesdrop
 
@@ -102,4 +93,16 @@ install-dock:
 	# 	fi
 	# done
 
+
+
+
+help:
+	cdc help documentation > cmd/$(TARGET)/doc.go
+	gofmt -w cmd/$(TARGET)/doc.go
+
+
+stop:
+	dbus-send --session --dest=org.cairodock.CairoDock /org/cdc/Cdc org.cairodock.CairoDock.Quit
+	
+	@## ActivateModule string:$(TARGET) boolean:false
 

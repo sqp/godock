@@ -113,13 +113,24 @@ func IconReload(arg string) func(*Client) error {
 //   		}
 //   	}
 //   }
-func DockProperties(arg string) (vars []map[string]dbus.Variant) {
+func DockProperties(arg string) []map[string]interface{} {
 	client, e := NewClient()
 	if log.Err(e, "dbus GetProperties") {
-		return
+		return nil
 	}
-	log.Err(client.Object.Call("GetProperties", 0, arg).Store(&vars), "dbus GetProperties")
-	return vars
+
+	uncasted, e := client.Get("GetProperties", arg)
+	if log.Err(e, "GetProperties") || len(uncasted) == 0 {
+		return nil
+	}
+
+	// Assert and get interface value for each element.
+	variants := uncasted[0].([]map[string]dbus.Variant)
+	listprops := make([]map[string]interface{}, len(variants))
+	for i, v := range variants {
+		listprops[i] = dbuscommon.ToMapInterface(v)
+	}
+	return listprops
 }
 
 // //--------------------------------------------------[ GET SPECIAL PROPERTIES ]--
@@ -142,7 +153,7 @@ func AppletInstances(name string) []string {
 	query := "type=Module & name=" + strings.Replace(name, "-", " ", -1)
 	if vars := DockProperties(query); len(vars) > 0 {
 		if val, ok := vars[0]["instances"]; ok {
-			if instances, ok := val.Value().([]string); ok {
+			if instances, ok := val.([]string); ok {
 				return instances
 			}
 		}
@@ -283,29 +294,29 @@ func ListIcons() (list []*CDIcon) {
 		for k, v := range props {
 			switch k {
 			case "name":
-				pack.Name = v.Value().(string)
+				pack.Name = v.(string)
 			case "Xid":
-				pack.Xid = v.Value().(uint32)
+				pack.Xid = v.(uint32)
 			case "position":
-				pack.Position = v.Value().(int32)
+				pack.Position = v.(int32)
 			case "type":
-				pack.Type = v.Value().(string)
+				pack.Type = v.(string)
 			case "quick-info":
-				pack.QuickInfo = v.Value().(string)
+				pack.QuickInfo = v.(string)
 			case "container":
-				pack.Container = v.Value().(string)
+				pack.Container = v.(string)
 			case "command":
-				pack.Command = v.Value().(string)
+				pack.Command = v.(string)
 			case "order":
-				pack.Order = v.Value().(float64)
+				pack.Order = v.(float64)
 			case "config-file":
-				pack.ConfigFile = v.Value().(string)
+				pack.ConfigFile = v.(string)
 			case "icon":
-				pack.Icon = v.Value().(string)
+				pack.Icon = v.(string)
 			case "class":
-				pack.Class = v.Value().(string)
+				pack.Class = v.(string)
 			case "module":
-				pack.Module = v.Value().(string)
+				pack.Module = v.(string)
 			default:
 				log.Info("ListIcons key not found: "+k, v)
 			}
@@ -430,45 +441,45 @@ func ListKnownApplets() map[string]*packages.AppletPackage {
 	return list
 }
 
-func parseApplet(props map[string]dbus.Variant) *packages.AppletPackage {
+func parseApplet(props map[string]interface{}) *packages.AppletPackage {
 	pack := &packages.AppletPackage{}
 	for k, v := range props {
 		switch k {
 		case "type": // == "Module"
 
 		case "name":
-			pack.DisplayedName = v.Value().(string)
+			pack.DisplayedName = v.(string)
 
 		case "title":
-			pack.Title = v.Value().(string)
+			pack.Title = v.(string)
 
 		case "author":
-			pack.Author = v.Value().(string)
+			pack.Author = v.(string)
 
 		case "instances":
-			if instances, ok := v.Value().([]string); ok {
+			if instances, ok := v.([]string); ok {
 				pack.Instances = instances
 			}
 
 		case "icon":
-			pack.Icon = v.Value().(string)
+			pack.Icon = v.(string)
 
 		case "description":
-			pack.Description = v.Value().(string)
+			pack.Description = v.(string)
 
 		case "is-multi-instance":
-			pack.IsMultiInstance = v.Value().(bool)
+			pack.IsMultiInstance = v.(bool)
 
 		case "category":
-			if cat, ok := v.Value().(uint32); ok {
+			if cat, ok := v.(uint32); ok {
 				pack.Category = int(cat)
 			}
 
 		case "preview":
-			pack.Preview = v.Value().(string)
+			pack.Preview = v.(string)
 
 		case "module-type":
-			pack.ModuleType = int(v.Value().(uint32))
+			pack.ModuleType = int(v.(uint32))
 
 		default:
 			log.Info("parseApplet field unmatched", k, v)

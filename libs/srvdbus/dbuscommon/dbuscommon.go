@@ -16,7 +16,7 @@ import (
 // Client is a Dbus client to connect to the internal Dbus server.
 //
 type Client struct {
-	dbus.Object
+	dbus.BusObject
 	srvObj string
 }
 
@@ -46,17 +46,22 @@ func GetClient(SrvObj, SrvPath string, InterfacePath ...string) (*Client, error)
 	}
 
 	// Found active instance, return client.
-	return &Client{*conn.Object(SrvObj, dbus.ObjectPath(SrvPath)), InterfacePath[0]}, nil
+	return &Client{conn.Object(SrvObj, dbus.ObjectPath(SrvPath)), InterfacePath[0]}, nil
 }
 
 // Call calls a method on a Dbus object.
 //
 func (cl *Client) Call(method string, args ...interface{}) error {
-	return cl.Object.Call(cl.srvObj+"."+method, 0, args...).Err
+	return cl.BusObject.Call(cl.srvObj+"."+method, 0, args...).Err
+}
+
+func (cl *Client) Get(method string, args ...interface{}) ([]interface{}, error) {
+	call := cl.BusObject.Call(cl.srvObj+"."+method, 0, args...)
+	return call.Body, call.Err
 }
 
 // func (cl *Client) Go(method string, args ...interface{}) error {
-// 	return cl.Object.Go(SrvObj+"."+method, dbus.FlagNoReplyExpected, nil, args...).Err
+// 	return cl.BusObject.Go(SrvObj+"."+method, dbus.FlagNoReplyExpected, nil, args...).Err
 // }
 
 //
@@ -159,4 +164,14 @@ func ToMapVariant(input map[string]interface{}) map[string]dbus.Variant {
 		vars[k] = dbus.MakeVariant(v)
 	}
 	return vars
+}
+
+// ToMapInterface recasts a map of dbus.Variant to a map of interface.
+//
+func ToMapInterface(input map[string]dbus.Variant) map[string]interface{} {
+	out := make(map[string]interface{}, len(input))
+	for i, v := range input {
+		out[i] = v.Value()
+	}
+	return out
 }
