@@ -140,7 +140,7 @@ func (load *Manager) StartApplet(a, b, c, d, e, f, g, h string) *dbus.Error {
 	app.Init(true)
 
 	if load.log.GetDebug() { // If the service debug is active, force it also on applets.
-		app.SetDebug(true)
+		app.Log().SetDebug(true)
 	}
 	app.Poller().Restart() // check poller now if it exists. Safe to use on nil poller.
 	return nil
@@ -219,12 +219,7 @@ func ListServices() (string, error) {
 	if e != nil {
 		return "", e
 	}
-
-	call := client.Object.Call("ListServices", 0)
-	if call.Err != nil {
-		return "", call.Err
-	}
-	str := ""
-	e = call.Store(&str)
+	var str string
+	e = client.Get("ListServices", []interface{}{&str})
 	return str, e
 }

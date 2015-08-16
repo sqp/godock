@@ -464,74 +464,42 @@ type iconProp struct {
 	CDDbus
 }
 
-func (o *iconProp) get(property string) (interface{}, error) {
-	var v dbus.Variant
-	e := o.dbusIcon.Object.Call("Get", 0, property).Store(&v)
-	return v.Value(), e
+func (o *iconProp) getInt(property string) (int, error) {
+	var val int32
+	e := o.dbusIcon.Get("Get", []interface{}{&val}, property)
+	return int(val), e
 }
 
-func (o *iconProp) X() (int, error) {
-	v, e := o.get("x")
-	if e != nil {
-		return 0, e
-	}
-	return int(v.(int32)), e
-}
-
-func (o *iconProp) Y() (int, error) {
-	v, e := o.get("y")
-	if e != nil {
-		return 0, e
-	}
-	return int(v.(int32)), e
-}
-
-func (o *iconProp) Width() (int, error) {
-	v, e := o.get("width")
-	if e != nil {
-		return 0, e
-	}
-	return int(v.(int32)), e
-}
-
-func (o *iconProp) Height() (int, error) {
-	v, e := o.get("height")
-	if e != nil {
-		return 0, e
-	}
-	return int(v.(int32)), e
-}
+func (o *iconProp) X() (int, error)      { return o.getInt("x") }
+func (o *iconProp) Y() (int, error)      { return o.getInt("y") }
+func (o *iconProp) Width() (int, error)  { return o.getInt("width") }
+func (o *iconProp) Height() (int, error) { return o.getInt("height") }
 
 func (o *iconProp) ContainerPosition() (cdtype.ContainerPosition, error) {
-	v, e := o.get("orientation")
-	if e != nil {
-		return 0, e
-	}
-	return cdtype.ContainerPosition(v.(uint32)), e
+	var val uint32
+	e := o.dbusIcon.Get("Get", []interface{}{&val}, "orientation")
+	return cdtype.ContainerPosition(val), e
 }
 
 func (o *iconProp) ContainerType() (cdtype.ContainerType, error) {
-	v, e := o.get("container")
+	var val uint32
+	e := o.dbusIcon.Get("Get", []interface{}{&val}, "container")
 	if e != nil {
 		return cdtype.ContainerUnknown, e
 	}
-	return cdtype.ContainerType(v.(uint32) + 1), e // +1 as we have an unknown as 0 in this version.
+	return cdtype.ContainerType(val + 1), e // +1 as we have an unknown as 0 in this version.
 }
 
 func (o *iconProp) Xid() (uint64, error) {
-	v, e := o.get("Xid")
-	if e != nil {
-		return 0, e
-	}
-	return v.(uint64), e
+	var val uint64
+	e := o.dbusIcon.Get("Get", []interface{}{&val}, "Xid")
+	return val, e
 }
 
 func (o *iconProp) HasFocus() (bool, error) {
-	v, e := o.get("has_focus")
-	if e != nil {
-		return false, e
-	}
-	return v.(bool), e
+	var val bool
+	e := o.dbusIcon.Get("Get", []interface{}{&val}, "has_focus")
+	return val, e
 }
 
 //
@@ -540,31 +508,31 @@ func (o *iconProp) HasFocus() (bool, error) {
 // IconProperties returns all applet icon properties at once.
 //
 func (cda *CDDbus) IconProperties() (cdtype.IconProperties, error) {
-	vars := make(map[string]dbus.Variant)
-	e := cda.dbusIcon.Object.Call("GetAll", 0).Store(&vars)
+	var list map[string]interface{}
+	e := cda.dbusIcon.Get("GetAll", []interface{}{&list})
 	if e != nil {
 		return nil, e
 	}
 
 	props := &iconProps{}
-	for k, v := range vars {
+	for k, v := range list {
 		switch k {
 		case "Xid":
-			props.xid = v.Value().(uint64)
+			props.xid = v.(uint64)
 		case "x":
-			props.x = int(v.Value().(int32))
+			props.x = int(v.(int32))
 		case "y":
-			props.y = int(v.Value().(int32))
+			props.y = int(v.(int32))
 		case "orientation":
-			props.containerPosition = cdtype.ContainerPosition(v.Value().(uint32))
+			props.containerPosition = cdtype.ContainerPosition(v.(uint32))
 		case "container":
-			props.containerType = cdtype.ContainerType(v.Value().(uint32) + 1) // +1 as we have an unknown as 0 in this version.
+			props.containerType = cdtype.ContainerType(v.(uint32) + 1) // +1 as we have an unknown as 0 in this version.
 		case "width":
-			props.width = int(v.Value().(int32))
+			props.width = int(v.(int32))
 		case "height":
-			props.height = int(v.Value().(int32))
+			props.height = int(v.(int32))
 		case "has_focus":
-			props.hasFocus = v.Value().(bool)
+			props.hasFocus = v.(bool)
 		}
 	}
 	return props, nil

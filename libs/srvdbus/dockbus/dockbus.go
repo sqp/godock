@@ -15,13 +15,12 @@
 package dockbus
 
 import (
-	"github.com/godbus/dbus"
-
 	"github.com/sqp/godock/libs/log"
 	"github.com/sqp/godock/libs/packages"
 	"github.com/sqp/godock/libs/srvdbus/dbuscommon"
 	"github.com/sqp/godock/libs/srvdbus/dockpath" // Path to main dock dbus service.
 
+	"errors"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -113,24 +112,15 @@ func IconReload(arg string) func(*Client) error {
 //   		}
 //   	}
 //   }
-func DockProperties(arg string) []map[string]interface{} {
+func DockProperties(arg string) ([]map[string]interface{}, error) {
 	client, e := NewClient()
 	if log.Err(e, "dbus GetProperties") {
-		return nil
+		return nil, e
 	}
 
-	uncasted, e := client.Get("GetProperties", arg)
-	if log.Err(e, "GetProperties") || len(uncasted) == 0 {
-		return nil
-	}
-
-	// Assert and get interface value for each element.
-	variants := uncasted[0].([]map[string]dbus.Variant)
-	listprops := make([]map[string]interface{}, len(variants))
-	for i, v := range variants {
-		listprops[i] = dbuscommon.ToMapInterface(v)
-	}
-	return listprops
+	var list []map[string]interface{}
+	e = client.Get("GetProperties", []interface{}{&list}, arg)
+	return list, e
 }
 
 // //--------------------------------------------------[ GET SPECIAL PROPERTIES ]--
@@ -147,32 +137,29 @@ func AppletRemove(configFile string) func(*Client) error {
 	return DockRemove("type=Module-Instance & config-file=" + configFile)
 }
 
-// AppletInstances asks the dock details about an applet.
+// AppletInstances asks the dock the list of active instances for an applet.
+// Instances references are full paths to their config files.
 //
-func AppletInstances(name string) []string {
+func AppletInstances(name string) ([]string, error) {
 	query := "type=Module & name=" + strings.Replace(name, "-", " ", -1)
-	if vars := DockProperties(query); len(vars) > 0 {
-		if val, ok := vars[0]["instances"]; ok {
-			if instances, ok := val.([]string); ok {
-				return instances
-			}
-		}
+	vars, e := DockProperties(query)
+	if e != nil {
+		return nil, e
+	}
+	if len(vars) == 0 {
+		return nil, errors.New("applet not found: " + name)
 	}
 
-	// for _, props := range vars {
-	// 	for k, v := range props {
-	// 		// if k == "name" {
-	// 		// 	log.Info(v.String())
-	// 		// }
-	// 		if k == "instances" {
-	// 			if instances, ok := v.Value().([]string); ok {
-	// 				return instances
-	// 				log.Info("", instances)
-	// 			}
-	// 		}
-	// 	}
-	// }
-	return []string{}
+	val, ok := vars[0]["instances"]
+	if !ok {
+		return nil, errors.New("missing key instances")
+	}
+
+	instances, ok := val.([]string)
+	if !ok {
+		return nil, errors.New("bad type for instances list")
+	}
+	return instances, nil
 }
 
 //--------------------------------------------------[ GET SPECIAL PROPERTIES ]--
@@ -289,7 +276,10 @@ func (icon *CDIcon) IsTaskbar() bool {
 // would be cool to have argument list.
 //
 func ListIcons() (list []*CDIcon) {
-	for _, props := range DockProperties("type=Icon") {
+	// TODO: should log or return error.
+	iconsInfo, _ := DockProperties("type=Icon")
+
+	for _, props := range iconsInfo {
 		pack := &CDIcon{}
 		for k, v := range props {
 			switch k {
@@ -415,7 +405,9 @@ func ListIconsOrdered() map[string]IconsByOrder {
 // InfoApplet asks the dock all informations about an applet.
 //
 func InfoApplet(name string) *packages.AppletPackage {
-	for _, props := range DockProperties("type=Module & name=" + name) {
+	// TODO: should log or return error.
+	vars, _ := DockProperties("type=Module & name=" + name)
+	for _, props := range vars {
 		return parseApplet(props)
 	}
 	return nil
@@ -425,8 +417,10 @@ func InfoApplet(name string) *packages.AppletPackage {
 //
 func ListKnownApplets() map[string]*packages.AppletPackage {
 	list := make(map[string]*packages.AppletPackage)
-	// var list []*packages.AppletPackage
-	for _, props := range DockProperties("type=Module") {
+
+	// TODO: should log or return error.
+	vars, _ := DockProperties("type=Module")
+	for _, props := range vars {
 		pack := parseApplet(props)
 
 		// println(pack.DisplayedName)

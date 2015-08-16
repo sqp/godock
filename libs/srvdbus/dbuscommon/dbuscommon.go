@@ -8,6 +8,8 @@ import (
 	"github.com/sqp/godock/libs/cdtype" // Logger type.
 
 	"errors"
+	"fmt"
+	"reflect"
 )
 
 //
@@ -55,9 +57,66 @@ func (cl *Client) Call(method string, args ...interface{}) error {
 	return cl.BusObject.Call(cl.srvObj+"."+method, 0, args...).Err
 }
 
-func (cl *Client) Get(method string, args ...interface{}) ([]interface{}, error) {
+// Get calls a method on a Dbus object with returned values.
+// The list of answers has to be provided before the command arguments.
+// The type of each field in answer must be a pointer to a value of the same
+// type as expected to be returned by the Dbus method called (its go version).
+//
+func (cl *Client) Get(method string, answers []interface{}, args ...interface{}) error {
 	call := cl.BusObject.Call(cl.srvObj+"."+method, 0, args...)
-	return call.Body, call.Err
+	if call.Err != nil {
+		return call.Err
+	}
+	if len(call.Body) == 0 {
+		return errors.New("no data received")
+	}
+	if len(call.Body) != len(answers) {
+		return fmt.Errorf("size mismatch, need %d found %d", len(call.Body), len(answers))
+	}
+
+	for i := range call.Body {
+		e := parseShit(call.Body[i], answers[i])
+		if e != nil {
+			return e
+		}
+	}
+	return nil
+}
+
+func parseShit(src, dest interface{}) error {
+	switch v := src.(type) {
+	case dbus.Variant:
+		tmp := v.Value()
+
+		if reflect.TypeOf(dest).Elem() != reflect.TypeOf(tmp) {
+			println("bad type may crash", reflect.TypeOf(v).String(), "to", reflect.TypeOf(dest).String())
+		}
+
+		reflect.ValueOf(dest).Elem().Set(reflect.ValueOf(tmp))
+
+	case map[string]dbus.Variant:
+		_, ok := dest.(*map[string]interface{})
+		if !ok {
+			return errors.New("bad dest type, need *map[string]interface{}")
+		}
+		tmp := ToMapInterface(v)
+		reflect.ValueOf(dest).Elem().Set(reflect.ValueOf(tmp))
+
+	case []map[string]dbus.Variant:
+
+		// variants := uncasted[0].([]map[string]dbus.Variant)
+		tmp := make([]map[string]interface{}, len(v))
+		for i, val := range v {
+			tmp[i] = ToMapInterface(val)
+		}
+
+		reflect.ValueOf(dest).Elem().Set(reflect.ValueOf(tmp))
+
+	default:
+		return fmt.Errorf("unknown dest type, %s to %s", reflect.TypeOf(v).String(), reflect.TypeOf(dest).String())
+		// println("bad type", reflect.TypeOf(v).String(), "to", reflect.TypeOf(dest).String())
+	}
+	return nil
 }
 
 // func (cl *Client) Go(method string, args ...interface{}) error {

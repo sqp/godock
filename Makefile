@@ -57,8 +57,11 @@ patch:
 	# Patch Dbus (for Notifications)
 	cd "$(GOPATH)/src/github.com/godbus/dbus" && git pull --commit --no-edit https://github.com/sqp/dbus fixeavesdrop
 
+patch-dock: patch
+
 	# Patch gettext (for dock)
 	cd "$(GOPATH)/src/github.com/gosexy/gettext" && git pull --commit --no-edit https://github.com/sqp/gettext nil_string
+
 
 install:
 	mkdir -p "$(PKGDIR)/usr/bin"
@@ -97,6 +100,8 @@ install-dock:
 
 
 help:
+	@# update command documentation.
+
 	cdc help documentation > cmd/$(TARGET)/doc.go
 	gofmt -w cmd/$(TARGET)/doc.go
 
@@ -106,3 +111,9 @@ stop:
 	
 	@## ActivateModule string:$(TARGET) boolean:false
 
+
+cover:
+	@# tests coverage with overalls: go get github.com/bluesuncorp/overalls
+
+	overalls -covermode=count -debug  -project=$(SOURCE)
+	go tool cover -html=overalls.coverprofile

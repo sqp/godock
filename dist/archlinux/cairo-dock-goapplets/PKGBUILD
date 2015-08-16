@@ -11,7 +11,7 @@ depends=('gtk3' 'gupnp-av' 'gobject-introspection')
 makedepends=('git' 'go')
 optdepends=(
   'curl: upload files with uptoshare (NetActivity: all but text services)'
-  'xclip : clipboard interaction. Alternative: xsel (NetActivity, Update)'
+  'xclip: clipboard interaction. Alternative: xsel (NetActivity, Update)'
   'git: dock version check (Update)'
   'cmake: build dock sources (Update)'
   'gksudo: install dock files needs root access (Update)'

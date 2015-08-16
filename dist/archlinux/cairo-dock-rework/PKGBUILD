@@ -27,8 +27,8 @@ build() {
   # Download
   GOPATH="$srcdir" go get -d -u -tags "$applets $cdctags" $srcpath/cmd/cdc
 
-  # Patch  
-  cd "$srcdir/src/$srcpath" && GOPATH="$srcdir" make patch
+  # Patch
+  cd "$srcdir/src/$srcpath" && GOPATH="$srcdir" make patch-dock
 
   # Build
   cd "$srcdir/src/$srcpath" && GOPATH="$srcdir" make DOCK="$cdctags $applets" dock
