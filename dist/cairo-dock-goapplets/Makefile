@@ -7,13 +7,13 @@
 
 SOURCE=github.com/sqp/godock
 
-TAGS=dock gtk_3_10 # limit gtk version for trusty.
+TAGS=gtk gtk_3_10 # limit gtk version for trusty.
 APPLETS=Audio Cpu DiskActivity DiskFree GoGmail Mem NetActivity Notifications TVPlay Update
 
 
 export GOPATH=$(CURDIR)
 
-APPNAME=cairo-dock-rework
+APPNAME=cairo-dock-goapplets
 
 APPVERSION=$(shell cat src/$(SOURCE)/version)
 
@@ -27,10 +27,11 @@ SRCFILE=$(APPNAME)_$(APPVERSION).orig.tar.gz
 %: build
 
 build:
-	GOPATH=$(CURDIR) make --directory=src/$(SOURCE) DOCK="$(TAGS) $(APPLETS)" dock
+	GOPATH=$(CURDIR) make --directory=src/$(SOURCE) APPLETS="$(TAGS) $(APPLETS)" build
 
 install:
-	GOPATH=$(CURDIR) make --directory=src/$(SOURCE) PKGDIR="$(DESTDIR)" APPLETS="$(APPLETS)" install-dock
+	GOPATH=$(CURDIR) make --directory=src/$(SOURCE) PKGDIR="$(DESTDIR)" APPLETS="$(APPLETS)" install
+	# PKGDIR="$(GOPATH)/$(PKGDIR)"
 
 clean:
 	rm -rf bin pkg
@@ -38,9 +39,9 @@ clean:
 
 # Get sources and apply patches.
 getsrc:
-	go get -u -d -tags 'dock $(APPLETS)' $(SOURCE)/cmd/cdc
+	go get -u -d -tags '$(APPLETS)' $(SOURCE)/cmd/cdc
 	
-	make --directory="$(CURDIR)/src/$(SOURCE)" patch-dock
+	make --directory="$(CURDIR)/src/$(SOURCE)" patch
 	
 
 # Create a sources package to use as Debian or OpenSuse Build Service source.
