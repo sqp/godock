@@ -1,9 +1,8 @@
 TARGET=cdc
 SOURCE=github.com/sqp/godock
-VERSION=0.0.3.2
 APPLETS=Audio Cpu DiskActivity DiskFree GoGmail Mem NetActivity Update
 
-# unstable applets requires uncommited patches to build.
+# unstable applets requires unmerged patches to build.
 UNSTABLE=Notifications TVPlay
 UNSTABLE_TAGS=gtk
 
@@ -16,6 +15,7 @@ PKGDIR=
 APPDIRGLDI=usr/share/cairo-dock/plug-ins/goapplets/
 APPDIRDBUS=usr/share/cairo-dock/plug-ins/Dbus/third-party/
 
+VERSION=$(shell cat version)
 
 
 
@@ -35,11 +35,6 @@ FLAGS=-ldflags "-X $(FLAGAPPVERSION) -X $(FLAGBUILDDATE) -X $(FLAGGITHASH) "
 
 %: build
 
-archive-%:
-	go build -tags '$(APPLETS)'  -o applets/$(TARGET) $(SOURCE)/cmd/$(TARGET)
-	@echo "Make archive $(TARGET)-$(VERSION)-$*.tar.xz"
-	tar cJfv $(TARGET)-$(VERSION)-$*.tar.xz applets  --exclude-vcs
-	rm applets/$(TARGET)
 
 build:
 	go install -tags '$(APPLETS)'  $(FLAGS) $(SOURCE)/cmd/$(TARGET)
@@ -75,11 +70,9 @@ install:
 		rm $(PKGDIR)/$(APPDIRDBUS)/$$f/Makefile ;\
 	done
 
-install-dock:
-	mkdir -p "$(PKGDIR)/usr/bin"
-	install -p -m755 "$(GOPATH)/bin/cdc" "$(PKGDIR)/usr/bin"
+install-dock: install-common
 
-	mkdir -p "$(PKGDIR)/$(APPDIRGLDI)"
+	install -d "$(PKGDIR)/$(APPDIRGLDI)"
 	for f in $(APPLETS); do	\
 		cp -Rv --preserve=timestamps "applets/$$f" "$(PKGDIR)/$(APPDIRGLDI)" ;\
 		rm $(PKGDIR)/$(APPDIRGLDI)/$$f/$$f ;\
@@ -89,14 +82,14 @@ install-dock:
 		rm $(PKGDIR)/$(APPDIRGLDI)/$$f/tocdc ;\
 	done
 
-	# Package license (if available)
-	# for f in LICENSE COPYING LICENSE.* COPYING.*; do
-	# 	if [ -e "$(GOPATH)/src/$(SOURCE)/$f" ]; then
-	# 		install -Dm644 "$(GOPATH)/src/$(SOURCE)/$f" "$(PKGDIR)/usr/share/licenses/$(TARGET)/$f"
-	# 	fi
-	# done
 
+install-common:
+	install -p -Dm755 "$(GOPATH)/bin/cdc" "$(PKGDIR)/usr/bin/cdc"
 
+	install -Dm644 "$(GOPATH)/src/$(SOURCE)/LICENSE" "$(PKGDIR)/usr/share/licenses/$(TARGET)/LICENSE"
+
+	gzip -9 < $(GOPATH)/src/$(SOURCE)/cmd/$(TARGET)/data/man.1 > $(GOPATH)/src/$(SOURCE)/cmd/$(TARGET)/data/man.1.gz
+	install -pD $(GOPATH)/src/$(SOURCE)/cmd/$(TARGET)/data/man.1.gz $(PKGDIR)/usr/share/man/man1/cdc.1.gz
 
 
 help:
@@ -117,3 +110,10 @@ cover:
 
 	overalls -covermode=count -debug  -project=$(SOURCE)
 	go tool cover -html=overalls.coverprofile
+
+
+# archive-%:
+# 	go build -tags '$(APPLETS)'  -o applets/$(TARGET) $(SOURCE)/cmd/$(TARGET)
+# 	@echo "Make archive $(TARGET)-$(VERSION)-$*.tar.xz"
+# 	tar cJfv $(TARGET)-$(VERSION)-$*.tar.xz applets  --exclude-vcs
+# 	rm applets/$(TARGET)

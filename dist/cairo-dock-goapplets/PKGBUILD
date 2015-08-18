@@ -1,7 +1,7 @@
 # Maintainer: SQP <sqp@glx-dock.org>
 
 pkgname=cairo-dock-goapplets
-pkgver=0.0.3.2
+pkgver=0.0.3.3
 pkgrel=1
 pkgdesc="Cairo-Dock applets package (Audio GoGmail TVPlay...)."
 arch=('x86_64' 'i686')

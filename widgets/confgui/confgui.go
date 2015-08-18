@@ -4,8 +4,8 @@ Package confgui is a configuration window for Cairo-Dock.
 
 Using GTK 3.10 library https://github.com/gotk3/gotk3
 
-If you use GTK 3.8, you will have to add a flag to compile it:
-  go get -tags gtk_3_8 github.com/gotk3/gotk3/gtk
+If you use GTK 3.10, you will have to add a flag to compile it:
+  go get -tags gtk_3_10 github.com/gotk3/gotk3/gtk
 
 
 Gui xml files are compressed with github.com/jteeuwen/go-bindata

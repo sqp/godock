@@ -12,7 +12,7 @@ import (
 // The -git suffix is used to tag the default value, but it should be removed if
 // the Makefile was used for the build, and the real version was set.
 //
-var AppVersion = "0.0.3.2-git"
+var AppVersion = "0.0.3.3-git"
 
 // Version variables also set at build time.
 var (

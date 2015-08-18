@@ -25,13 +25,13 @@ Install golang applets using the package manager directly from sources.
 Create a package with the dock and applets (requires an installed cairo-dock to build).
   mkdir cairo-dock-rework
   cd cairo-dock-rework
-  wget https://raw.githubusercontent.com/sqp/godock/master/dist/archlinux/cairo-dock-rework/PKGBUILD
+  wget https://raw.githubusercontent.com/sqp/godock/master/dist/cairo-dock-rework/PKGBUILD
   makepkg
 
 Or create a package with only applets.
   mkdir cairo-dock-goapplets
   cd cairo-dock-goapplets
-  wget https://raw.githubusercontent.com/sqp/godock/master/dist/archlinux/cairo-dock-goapplets/PKGBUILD
+  wget https://raw.githubusercontent.com/sqp/godock/master/dist/cairo-dock-goapplets/PKGBUILD
   makepkg
 
 Install package
@@ -52,25 +52,27 @@ Applets pack:
   go get -u -d -tags 'gtk all' github.com/sqp/godock/cmd/cdc
   cd $GOPATH/src/github.com/sqp/godock/
   make patch
-    make unstable
 
-    # It can then be installed in the system tree (optional)
+  make unstable
 
-    make install
+  # It can then be installed in the system tree (optional)
+
+  make install
 
 Dock rework with applets:
 
   go get -u -d -tags 'dock all' github.com/sqp/godock/cmd/cdc
   cd $GOPATH/src/github.com/sqp/godock/
-  make patch
-    make dock
+  make patch-dock
 
-    # or if you want to change applets list:
-    make DOCK='dock all' dock
+  make dock
 
-    # It can then be installed in the system tree (optional)
+  # or if you want to change applets list:
+  make DOCK='dock all' dock
 
-    make install-dock
+  # It can then be installed in the system tree
+
+  make install-dock
 
 or you can also install manually the applets you need (you may have to restart your dock).
 

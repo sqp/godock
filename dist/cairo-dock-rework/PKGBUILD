@@ -1,7 +1,7 @@
 # Maintainer: SQP <sqp@glx-dock.org>
 
 pkgname=cairo-dock-rework
-pkgver=0.0.3.2
+pkgver=0.0.3.3
 pkgrel=1
 pkgdesc="Cairo-Dock reworked version with a new GUI and more applets (WIP)."
 arch=('x86_64' 'i686')
@@ -16,7 +16,7 @@ optdepends=(
   'cmake: build dock sources (Update)'
   'gksudo: install dock files needs root access (Update)'
 )
-conflicts=('cairo-dock-rework')
+conflicts=('cairo-dock-goapplets')
 options=('!strip' '!emptydirs')
 
 srcpath=github.com/sqp/godock
@@ -24,11 +24,15 @@ applets="Audio Cpu DiskActivity DiskFree GoGmail Mem NetActivity Notifications T
 cdctags="dock"
 
 build() {
-  # Download
-  GOPATH="$srcdir" go get -d -u -tags "$applets $cdctags" $srcpath/cmd/cdc
 
-  # Patch
-  cd "$srcdir/src/$srcpath" && GOPATH="$srcdir" make patch-dock
+  if [ ! -e "$srcdir/src" ]; then
+    # Download
+    GOPATH="$srcdir" go get -d -u -tags "$applets $cdctags" $srcpath/cmd/cdc
+
+    # Patch
+    cd "$srcdir/src/$srcpath" && GOPATH="$srcdir" make patch-dock
+  fi
+
 
   # Build
   cd "$srcdir/src/$srcpath" && GOPATH="$srcdir" make DOCK="$cdctags $applets" dock

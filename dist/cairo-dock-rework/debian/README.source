@@ -1,0 +1,14 @@
+cairo-dock-rework for Debian
+----------------------------
+
+# Created to try to match Debian requirements with infos from:
+# https://godoc.org/github.com/sqp/godock/dist
+
+# Need a valid go environment and the Makefile:
+
+wget https://raw.githubusercontent.com/sqp/godock/master/dist/cairo-dock-rework/Makefile
+
+make getsrc packsrc
+
+ -- sqp <sqp@glx-dock.org>  Mon, 17 Aug 2015 14:59:41 +0100
+

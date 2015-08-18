@@ -51,14 +51,6 @@ func NewFormater(columns ...ColInfo) *TableFormater {
 	}
 }
 
-// NewTableFormater create a TableFormater with some columns.
-//
-func NewTableFormater(columns []ColInfo) *TableFormater {
-	return &TableFormater{
-		Base: *NewBase(columns),
-	}
-}
-
 // Count returns the number of lines.
 //
 func (lf *TableFormater) Count() int {
@@ -68,11 +60,20 @@ func (lf *TableFormater) Count() int {
 // Print prints the table content in console output.
 //
 func (lf *TableFormater) Print() {
-	lf.WalkPrintln(tabSep(tableBorderTop), lf.printlnSeparator)
+	fmt.Println(lf.Sprint())
+}
+
+// Sprint returns the table content text as if printed on console.
+//
+func (lf *TableFormater) Sprint() string {
+	var content string
 	for _, line := range lf.lines {
-		line.Print()
+		content += line.Sprint() + "\n"
 	}
-	lf.WalkPrintln(tabSep(tableBorderBot), lf.printlnFooter)
+	return lf.WalkSprint(tabSep(tableBorderTop), lf.sprintSeparator) +
+		"\n" +
+		content +
+		lf.WalkSprint(tabSep(tableBorderBot), lf.sprintFooter)
 }
 
 // AddLine create and append a new line to format.
@@ -125,7 +126,7 @@ func NewBase(columns []ColInfo) *Base {
 	}
 }
 
-// WalkPrintln runs the given call on each cell of the line and returns the line
+// WalkSprint runs the given call on each cell of the line and returns the line
 // printable content.
 //
 //   sep[0] is added at the begining of the line.
@@ -134,7 +135,7 @@ func NewBase(columns []ColInfo) *Base {
 // The result if like this:
 //   sep0 cell0 sep1 cell1 sep1 cell2 sep1 cell3 sep2
 //
-func (o *Base) WalkPrintln(sep []string, call func(int, ColInfo) string) {
+func (o *Base) WalkSprint(sep []string, call func(int, ColInfo) string) string {
 	var out string
 	for id, col := range o.cols {
 		if id > 0 {
@@ -142,12 +143,12 @@ func (o *Base) WalkPrintln(sep []string, call func(int, ColInfo) string) {
 		}
 		out += call(id, col)
 	}
-	fmt.Println(sep[0] + out + sep[2])
+	return fmt.Sprint(sep[0] + out + sep[2])
 }
 
-// WalkPrintf runs the given get format call on each cell and prints the line.
+// WalkSprintf runs the given get format call on each cell and prints the line.
 //
-func (o *Base) WalkPrintf(sep []string, call func(int, ColInfo) (format, content string)) {
+func (o *Base) WalkSprintf(sep []string, call func(int, ColInfo) (format, content string)) string {
 	var (
 		args   []interface{}
 		format string
@@ -160,7 +161,7 @@ func (o *Base) WalkPrintf(sep []string, call func(int, ColInfo) (format, content
 		format += cformat
 		args = append(args, ccontent)
 	}
-	fmt.Printf(sep[0]+format+sep[2]+"\n", args...)
+	return fmt.Sprintf(sep[0]+format+sep[2], args...)
 }
 
 // ColSize returns the size of the given column.
@@ -210,20 +211,13 @@ func NewColRight(size int, title string) ColInfo {
 	}
 }
 
-func (info ColInfo) left() string {
-	if info.Left {
-		return "-"
-	}
-	return ""
-}
-
 //
 //----------------------------------------------------------------[ LINE API ]--
 
 // Liner defines the common line API.
 //
 type Liner interface {
-	Print()
+	Sprint() string
 	Set(row int, text string) *Line
 	Colored(row int, newcolor, text string)
 }
@@ -249,10 +243,10 @@ func NewLine(base Base) *Line {
 	}
 }
 
-// Print prints the line content.
+// Sprint prints the line content.
 //
-func (line *Line) Print() {
-	line.WalkPrintf(sepVertical, line.CellData)
+func (line *Line) Sprint() string {
+	return line.WalkSprintf(sepVertical, line.CellData)
 }
 
 // CellData returns fmt format and argument for the cell.
@@ -262,16 +256,18 @@ func (line *Line) CellData(id int, _ ColInfo) (format, content string) {
 }
 
 func (line *Line) rowFormat(col int) (format string) {
-	return " %" +
-		line.Base.cols[col].left() + // negative sign if needed.
-		strconv.Itoa(line.ColSize(col)+line.colorDelta[col]) + // size = default + delta.
-		"s "
+	sign := ""
+	if line.Base.cols[col].Left {
+		sign = "-"
+	}
+	size := strconv.Itoa(line.ColSize(col) + line.colorDelta[col]) //  default + delta.
+	return " %" + sign + size + "." + size + "s "                  // force min and max size to fill exactly the cell.
 }
 
 // Set text content for given row.
 //
 func (line *Line) Set(row int, text string) *Line {
-	line.testmax(row, len(text))
+	line.SetColSize(row, len(text))
 	line.content[row] = text
 	return line
 }
@@ -280,14 +276,12 @@ func (line *Line) Set(row int, text string) *Line {
 //
 func (line Line) Colored(row int, newcolor, text string) {
 	origsize := len(text)
-	line.testmax(row, origsize) // Size of text without formating.
-	line.content[row] = color.Colored(text, newcolor)
-	line.colorDelta[row] += len(line.content[row]) - origsize
-}
-
-func (line Line) testmax(col, size int) {
-	if size > line.max[col] {
-		line.max[col] = size
+	line.SetColSize(row, origsize) // Size of text without formating.
+	if newcolor == "" {
+		line.content[row] = text
+	} else {
+		line.content[row] = color.Colored(text, newcolor)
+		line.colorDelta[row] += len(line.content[row]) - origsize
 	}
 }
 
@@ -302,8 +296,8 @@ type separator struct{ Line }
 
 func newSeparator(base Base, lf *TableFormater) *separator { return &separator{*NewLine(base)} }
 
-func (o *separator) Print() {
-	o.WalkPrintln(tabSep(tableBorderMid), o.printlnSeparator)
+func (o *separator) Sprint() string {
+	return o.WalkSprint(tabSep(tableBorderMid), o.sprintFooter)
 }
 
 //
@@ -313,8 +307,8 @@ type emptyFilled struct{ Line }
 
 func newEmptyFilled(base Base) *emptyFilled { return &emptyFilled{*NewLine(base)} }
 
-func (o *emptyFilled) Print() {
-	o.WalkPrintln(sepVertical, o.printlnEmptyFilled)
+func (o *emptyFilled) Sprint() string {
+	return o.WalkSprint(sepVertical, o.sprintEmptyFilled)
 }
 
 //
@@ -324,14 +318,14 @@ type group struct{ Line }
 
 func newGroup(base Base) *group { return &group{*NewLine(base)} }
 
-func (o *group) Print() {
-	o.WalkPrintln(tabSep(tableBorderMid), o.printlnContentDash)
+func (o *group) Sprint() string {
+	return o.WalkSprint(tabSep(tableBorderMid), o.sprintContentDash)
 }
 
 //
 //----------------------------------------------------------[ BASE FORMATERS ]--
 
-func (o *Base) printlnSeparator(id int, col ColInfo) (out string) {
+func (o *Base) sprintSeparator(id int, col ColInfo) (out string) {
 	max := o.ColSize(id) + 2
 	if len(col.Title) > max {
 		out = col.Title[:max]
@@ -341,18 +335,18 @@ func (o *Base) printlnSeparator(id int, col ColInfo) (out string) {
 	return out + strings.Repeat(sepHorizontal, max-len(out))
 }
 
-func (o *Base) printlnFooter(id int, col ColInfo) (out string) {
+func (o *Base) sprintFooter(id int, col ColInfo) (out string) {
 	return out + strings.Repeat(sepHorizontal, o.ColSize(id)+2-len(out))
 }
 
 //
 //----------------------------------------------------------[ LINE FORMATERS ]--
 
-func (line *Line) printlnContentDash(id int, col ColInfo) (out string) {
+func (line *Line) sprintContentDash(id int, col ColInfo) (out string) {
 	return line.content[id] + line.dash(id)
 }
 
-func (line *Line) printlnEmptyFilled(id int, col ColInfo) (out string) {
+func (line *Line) sprintEmptyFilled(id int, col ColInfo) (out string) {
 	if len(line.content[id]) > 0 {
 		return fmt.Sprintf(line.CellData(id, col))
 	}

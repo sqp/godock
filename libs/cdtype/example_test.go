@@ -1,6 +1,8 @@
-package cdtype
+package cdtype_test
 
-type AppTest struct{ AppBase }
+import "github.com/sqp/godock/libs/cdtype"
+
+type AppTest struct{ cdtype.AppBase }
 
 func (app *AppTest) ExampleAppIcon_popupDialogListFixed() {
 	app.PopupDialog(cdtype.DialogData{
@@ -49,7 +51,7 @@ func (app *AppTest) ExampleAppIcon_howTo() {
 
 	app.BindShortkey(cdtype.Shortkey{
 		ConfGroup: "Actions",
-		Key:       "ShortkeyOneKey",
+		ConfKey:   "ShortkeyOneKey",
 		Desc:      "Action one",
 		Shortkey:  "<Alt>K",
 	})

@@ -1,0 +1,17 @@
+Source: cairo-dock-rework
+Section: graphics
+Priority: optional
+Maintainer: SQP <sqp@glx-dock.org>
+Build-Depends: debhelper (>= 9), golang-go, libglib2.0-dev, libgtk-3-dev, libgupnp-av-1.0-dev, libgirepository1.0-dev, git, libgldi-dev | cairo-dock-dev, librsvg2-dev, libgl1-mesa-dev | libgl-dev, libglu1-mesa-dev | libglu-dev
+Standards-Version: 3.9.6
+Homepage: https://github.com/sqp/godock
+
+Package: cairo-dock-rework
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, libglib2.0-0, libgtk-3-0, libgupnp-av-1.0-2, libgldi3 | cairo-dock-core
+Recommends: curl
+Description: Cairo-Dock reworked version with a new GUI and more applets (WIP).
+ cdc is highly configurable dock/panel interface able to be a nice main or 
+ second desktop controller.
+ It comes with a bunch of applets to fill all your interactions needs
+ This program is still experimental but need testers.
