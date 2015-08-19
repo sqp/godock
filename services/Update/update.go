@@ -1,13 +1,4 @@
 /*
-Package Update is an applet for Cairo-Dock to build and update the dock and applets.
-
-Play with cairo-dock sources:
-download/update, compile, restart dock... Usefull for developers, testers and
-users who want to stay up to date, or maybe on a distro without packages.
-*/
-package Update
-
-/*
 Copyright : (C) 2012-2015 by SQP
 E-mail    : sqp@glx-dock.org
 
@@ -23,18 +14,28 @@ GNU General Public License for more details.
 http://www.gnu.org/licenses/licenses.html#GPL
 */
 
+/*
+Package Update is an applet for Cairo-Dock to build and update the dock and applets.
+
+Play with cairo-dock sources:
+download/update, compile, restart dock... Usefull for developers, testers and
+users who want to stay up to date, or maybe on a distro without packages.
+*/
+package Update
+
 import (
-	"github.com/sqp/godock/libs/cdapplet"       // Applet base.
-	"github.com/sqp/godock/libs/cdtype"         // Applet types.
-	"github.com/sqp/godock/libs/clipboard"      // Get clipboard content.
-	"github.com/sqp/godock/libs/packages/build" // Sources builder.
-	"github.com/sqp/godock/libs/text/linesplit" // Parse command output.
+	"github.com/sqp/godock/libs/cdapplet"          // Applet base.
+	"github.com/sqp/godock/libs/cdtype"            // Applet types.
+	"github.com/sqp/godock/libs/clipboard"         // Get clipboard content.
+	"github.com/sqp/godock/libs/packages/build"    // Sources builder.
+	"github.com/sqp/godock/libs/packages/versions" // Versions checker.
+	"github.com/sqp/godock/libs/text/linesplit"    // Parse command output.
 
 	"errors"
 	"fmt"
 	"os"
 	"path"
-	// "path/filepath"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -46,9 +47,9 @@ import (
 type Applet struct {
 	cdtype.AppBase // Applet base and dock connection.
 
-	conf    *updateConf   // applet user configuration.
-	version *Versions     // applet data.
-	target  build.Builder // build from sources interface.
+	conf    *updateConf        // applet user configuration.
+	version *versions.Versions // applet data.
+	target  build.Builder      // build from sources interface.
 
 	targetID int // position of current target in BuildTargets list.
 	err      error
@@ -61,10 +62,7 @@ func NewApplet() cdtype.AppInstance {
 	app.defineActions()
 
 	// Create a cairo-dock sources version checker.
-	app.version = &Versions{
-		callResult: app.onGotVersions,
-		newCommits: -1,
-	}
+	app.version = versions.NewVersions(app.onGotVersions)
 
 	// The poller will check for new versions on a timer.
 	poller := app.Poller().Add(app.version.Check)
@@ -89,8 +87,13 @@ func (app *Applet) Init(loadConf bool) {
 		Commands: cdtype.Commands{
 			cmdShowDiff: cdtype.NewCommand(app.conf.DiffMonitored, app.conf.DiffCommand)},
 		Shortkeys: []cdtype.Shortkey{
-			{"Actions", "ShortkeyOneKey", "Action one", app.conf.ShortkeyOneKey},
-			{"Actions", "ShortkeyTwoKey", "Action two", app.conf.ShortkeyTwoKey}},
+			{"Actions", "ShortkeyShowDiff", "Show diff", app.conf.ShortkeyShowDiff},
+			{"Actions", "ShortkeyShowVersions", "Show versions", app.conf.ShortkeyShowVersions},
+			{"Actions", "ShortkeyNextTarget", "Next target", app.conf.ShortkeyNextTarget},
+			{"Actions", "ShortkeyGrepTarget", "Grep target", app.conf.ShortkeyGrepTarget},
+			{"Actions", "ShortkeyOpenFileTarget", "Open file target", app.conf.ShortkeyOpenFileTarget},
+			{"Actions", "ShortkeyBuildTarget", "Build target", app.conf.ShortkeyBuildTarget},
+		},
 		Debug: app.conf.Debug})
 
 	if app.conf.VersionPollingEnabled {
@@ -100,16 +103,13 @@ func (app *Applet) Init(loadConf bool) {
 	}
 
 	// Branches for versions checking.
-	app.version.sources = []*Repo{
-		NewRepo(app.Log(), app.conf.BranchCore, path.Join(app.conf.SourceDir, app.conf.DirCore)),
-		NewRepo(app.Log(), app.conf.BranchApplets, path.Join(app.conf.SourceDir, app.conf.DirApplets)),
-	}
-	if app.conf.SourceExtra != "" {
-		sources := strings.Split(app.conf.SourceExtra, "\\n")
-		for _, src := range sources {
-			app.Log().Info(path.Base(src), src)
-			app.version.sources = append(app.version.sources, NewRepo(app.Log(), path.Base(src), src))
-		}
+	app.version.Clear()
+	app.version.AddSources(
+		versions.NewRepo(app.Log(), "cairo-dock-core", path.Join(app.conf.SourceDir, app.conf.DirCore)),
+		versions.NewRepo(app.Log(), "cairo-dock-plug-ins", path.Join(app.conf.SourceDir, app.conf.DirApplets)),
+	)
+	for _, src := range app.conf.SourceExtra {
+		app.version.AddSources(versions.NewRepo(app.Log(), path.Base(src), src))
 	}
 
 	// Build targets. Allow actions on sources and displays emblem on top left for togglable target.
@@ -156,7 +156,7 @@ func (app *Applet) DefineEvents(events *cdtype.Events) {
 	events.OnBuildMenu = func(menu cdtype.Menuer) {
 		if app.conf.UserMode {
 			dev := menuDev
-			if len(app.version.sources) > 2 {
+			if len(app.version.Sources()) > 2 {
 				dev = append(dev, ActionDownloadOthers)
 			}
 			app.Action().BuildMenu(menu, dev)
@@ -187,35 +187,120 @@ func (app *Applet) DefineEvents(events *cdtype.Events) {
 	// Shortkey event: launch configured action.
 	//
 	events.OnShortkey = func(key string) {
-		if key == app.conf.ShortkeyOneKey {
-			app.Action().Launch(app.Action().ID(app.conf.ShortkeyOneAction))
-		}
-		if key == app.conf.ShortkeyTwoKey {
-			app.Action().Launch(app.Action().ID(app.conf.ShortkeyTwoAction))
+		app.Log().Info("key", key)
+		switch key {
+		case app.conf.ShortkeyShowDiff:
+			app.Action().Launch(ActionShowDiff)
+
+		case app.conf.ShortkeyShowVersions:
+			app.Action().Launch(ActionShowVersions)
+
+		case app.conf.ShortkeyNextTarget:
+			app.Action().Launch(ActionCycleTarget)
+
+		case app.conf.ShortkeyGrepTarget:
+			app.Action().Launch(ActionGrepTarget)
+
+		case app.conf.ShortkeyOpenFileTarget:
+			app.Action().Launch(ActionOpenFileTarget)
+
+		case app.conf.ShortkeyBuildTarget:
+			app.Action().Launch(ActionBuildTarget)
 		}
 	}
 
-	// Feature to test: rgrep of the dropped string on the source dir.
+	// Grep of the dropped string on the source dir.
 	//
-	events.OnDropData = app.actionGrepTarget
+	events.OnDropData = app.GrepTarget
 }
 
+//
+//-----------------------------------------------------------[ PUBLIC REMOTE ]--
+
+// BuildTarget builds the current target.
+//
+func (app *Applet) BuildTarget() error {
+	app.DataRenderer().Progress(1)
+	defer app.DataRenderer().Remove()
+
+	// app.Animate("busy", 200)
+	app.Log().Info("Build", app.target.Label())
+	e := app.target.Build()
+	return app.Log().GetErr(e, "Build")
+}
+
+// GrepTarget searches the directory for the given string.
+//
+func (app *Applet) GrepTarget(search string) {
+	if len(search) < 2 { // security, need to confirm or improve.
+		app.Log().NewErr("grep", "search query too short, need at least 2 chars")
+		return
+	}
+
+	// Escape ." chars (dot and quotes).
+	query := strings.Replace(search, "\"", "\\\"", -1)
+	query = strings.Replace(query, ".", "\\.", -1)
+
+	// Prepare command.
+	out := ""
+	count := 0
+	cmd := app.Log().ExecCmd("grep", append(grepCmdArgs, query)...) // get the command with default args.
+	cmd.Dir = app.target.SourceDir()                                // set command dir to reduce file path.
+	cmd.Stdout = linesplit.NewWriter(func(s string) {               // results display formatter.
+		count++
+		sp := strings.SplitN(s, ":", 2)
+		if len(sp) == 2 {
+			out += grepFileFormatter(sp[0]) + ":\t" // start line with percent and a tab.
+			colored := strings.Replace(sp[1], search, grepQueryFormatter(search), -1)
+			out += strings.TrimLeft(colored, " \t") + "\n" // remove space and tab.
+
+		} else {
+			out += s + "\n"
+		}
+	})
+
+	// app.Log().Info("grep", append(grepCmdArgs, query))
+
+	// Launch command.
+	e := cmd.Run()
+	app.Log().Err(e, "Grep target")
+
+	// Print title and list.
+	found := "none found"
+	if count > 0 {
+		found = fmt.Sprintf("count %d", count)
+	}
+	fmt.Printf(grepTitlePattern, grepTitleFormatter(search), found)
+	fmt.Println(out)
+}
+
+// OpenFile opens a file to an editor.
+// If the path is relative, the target sources folder will be used.
+//
+func (app *Applet) OpenFile(file string) {
+	if !filepath.IsAbs(file) {
+		file = filepath.Join(app.target.SourceDir(), file)
+	}
+	app.Log().ExecAsync("subl3", file)
+}
+
+//
 //----------------------------------------------------------------[ CALLBACK ]--
 
 // onGotVersions is triggered after a version check, Need to set a new emblem.
 //
-func (app *Applet) onGotVersions(new int, e error) {
-	if new > 0 {
+func (app *Applet) onGotVersions(countNew int, e error) {
+	if countNew > 0 {
 		app.SetEmblem(app.FileLocation("img", app.conf.VersionEmblemNew), EmblemVersion)
 
-		if app.version.newCommits != -1 && new > app.version.newCommits { // Drop first message and only show others if number changed.
+		if app.version.CountNew() != -1 && countNew > app.version.CountNew() { // Drop first message and only show others if number changed.
 			app.actionShowVersions(false)
 		}
 
 	} else {
 		app.SetEmblem("none", EmblemVersion)
 	}
-	app.version.newCommits = new
+	app.version.SetCountNew(countNew)
 }
 
 //-----------------------------------------------------------------[ ACTIONS ]--
@@ -263,6 +348,13 @@ func (app *Applet) defineActions() {
 			Icon:     "view-refresh",
 			Call:     func() { app.actionCycleTarget(1) },
 			Threaded: true,
+		},
+		&cdtype.Action{
+			ID:       ActionOpenFileTarget,
+			Name:     "Open File target",
+			Icon:     "view-refresh",
+			Call:     app.actionOpenFile,
+			Threaded: false,
 		},
 		&cdtype.Action{
 			ID:   ActionToggleUserMode,
@@ -362,47 +454,13 @@ func (app *Applet) actionShowDiff() {
 	app.Log().Err(e, "show diff")
 }
 
-// actionGrepTarget searches the directory for the given string.
+// actionOpenFile.
 //
-func (app *Applet) actionGrepTarget(search string) {
-	if len(search) < 2 { // security, need to confirm or improve.
-		app.Log().NewErr("grep", "search query too short, need at least 2 chars")
-		return
+func (app *Applet) actionOpenFile() {
+	file, e := clipboard.Read()
+	if !app.Log().Err(e, "clipboard.Read") {
+		app.OpenFile(file)
 	}
-
-	// Escape ." chars (dot and quotes).
-	query := strings.Replace(search, "\"", "\\\"", -1)
-	query = strings.Replace(query, ".", "\\.", -1)
-
-	// Prepare command.
-	out := ""
-	count := 0
-	cmd := app.Log().ExecCmd("grep", append(grepCmdArgs, query)...) // get the command with default args.
-	cmd.Dir = app.target.SourceDir()                                // set command dir to reduce file path.
-	cmd.Stdout = linesplit.NewWriter(func(s string) {               // results display formatter.
-		count++
-		sp := strings.SplitN(s, ":", 2)
-		if len(sp) == 2 {
-			out += grepFileFormatter(sp[0]) + ":\t" // start line with percent and a tab.
-			colored := strings.Replace(sp[1], search, grepQueryFormatter(search), -1)
-			out += strings.TrimLeft(colored, " \t") + "\n" // remove space and tab.
-
-		} else {
-			out += s + "\n"
-		}
-	})
-
-	// Launch command.
-	e := cmd.Run()
-	app.Log().Err(e, "Grep target")
-
-	// Print title and list.
-	found := "none found"
-	if count > 0 {
-		found = fmt.Sprintf("count %d", count)
-	}
-	fmt.Printf(grepTitlePattern, grepTitleFormatter(search), found)
-	println(out)
 }
 
 // actionGrepTargetClip searches the directory using the clipboard content as
@@ -411,7 +469,7 @@ func (app *Applet) actionGrepTarget(search string) {
 func (app *Applet) actionGrepTargetClip() {
 	search, e := clipboard.Read()
 	if !app.Log().Err(e, "clipboard.Read") {
-		app.actionGrepTarget(search)
+		app.GrepTarget(search)
 	}
 }
 
@@ -461,12 +519,12 @@ func (app *Applet) actionShowVersions(force bool) {
 		if app.Log().Err(e, "template "+app.conf.VersionDialogTemplate) {
 			return
 		}
-
+		text = strings.Trim(text, "\n")
 		app.PopupDialog(cdtype.DialogData{
 			Message:    text,
 			TimeLength: app.conf.VersionDialogTimer,
 			UseMarkup:  true,
-			// Buttons:    "document-open;cancel",
+			Buttons:    "cancel",
 		})
 		app.Log().Err(e, "popup")
 	}
@@ -475,12 +533,8 @@ func (app *Applet) actionShowVersions(force bool) {
 // Build current target.
 //
 func (app *Applet) actionBuildTarget() {
-	app.DataRenderer().Progress(1)
-	defer app.DataRenderer().Remove()
-
-	// app.Animate("busy", 200)
-	if !app.Log().Err(app.target.Build(), "Build") {
-		app.Log().Info("Build", app.target.Label())
+	e := app.BuildTarget()
+	if e == nil {
 		app.restartTarget()
 	}
 }
@@ -499,34 +553,28 @@ func (app *Applet) actionUpdateAll() {
 	defer app.DataRenderer().Remove()
 
 	// Core.
-	_, _, e := app.version.sources[0].update()
+	_, _, e := app.version.Sources()[0].Update()
 	if app.Log().Err(e, "update core") {
 		return
 	}
 
 	app.Log().Info("updating core")
-	core := &build.BuilderCore{}
-	core.SetDir(app.conf.SourceDir)
-	core.SetProgress(func(f float64) { app.DataRenderer().Render(f) })
+	core := app.newBuilder(build.TypeCore, "")
 	e = core.Build()
 	if app.Log().Err(e, "build core") {
 		return
 	}
 
 	// Plug-ins.
-	_, _, e = app.version.sources[1].update()
+	_, _, e = app.version.Sources()[1].Update()
 	if app.Log().Err(e, "update applets") {
 		return
 	}
 
 	app.Log().Info("updating applets")
-	applets := &build.BuilderApplets{}
-	applets.SetDir(app.conf.SourceDir)
-	applets.SetProgress(func(f float64) { app.DataRenderer().Render(f) })
-
-	applets.MakeFlags = "-Denable-Logout=no" // "-Denable-gmenu=no"
-
-	app.Log().Err(applets.Build(), "build applets")
+	applets := app.newBuilder(build.TypeApplets, "")
+	e = applets.Build()
+	app.Log().Err(e, "build applets")
 
 	app.Poller().Restart()
 }
@@ -534,8 +582,8 @@ func (app *Applet) actionUpdateAll() {
 // actionUpdateOthers update extra git sources (hidden option, use key SourceExtra).
 //
 func (app *Applet) actionUpdateOthers() {
-	for _, src := range app.version.sources[2:] {
-		_, _, e := src.update()
+	for _, src := range app.version.Sources()[2:] {
+		_, _, e := src.Update()
 		app.Log().Err(e, "download", src.Name)
 	}
 	app.Poller().Restart()

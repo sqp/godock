@@ -115,9 +115,10 @@ type Builder interface {
 }
 
 // NewBuilder creates the target renderer/builder.
+// The name is mandatory for a single applet (internal or not).
 //
-func NewBuilder(target string, log cdtype.Logger) Builder {
-	switch GetSourceType(target) {
+func NewBuilder(target SourceType, name string, log cdtype.Logger) Builder {
+	switch target {
 
 	case TypeGodock:
 		build := &BuilderGodock{}
@@ -135,13 +136,13 @@ func NewBuilder(target string, log cdtype.Logger) Builder {
 		return build
 
 	case TypeAppletCompiled:
-		dir, icon := AppletInfo(target)
+		dir, icon := AppletInfo(name)
 		if dir == "" {
-			log.NewErr("applet not found: "+target, "set build target")
+			log.NewErr("applet not found: "+name, "new builder")
 			return &BuilderNull{}
 		}
 
-		build := &BuilderCompiled{Module: target}
+		build := &BuilderCompiled{Module: name}
 		build.SetLogger(log)
 		build.SetIcon(icon)
 		build.SetDir(dir)
@@ -149,12 +150,12 @@ func NewBuilder(target string, log cdtype.Logger) Builder {
 
 	case TypeAppletInternal:
 		// Ask icon of module to the Dock as we can't guess its dir and icon name.
-		_, icon := AppletInfo(strings.Replace(target, "-", " ", -1))
+		_, icon := AppletInfo(strings.Replace(name, "-", " ", -1))
 		if icon == "" {
 			icon = IconMissing
 		}
 
-		build := &BuilderInternal{Module: target}
+		build := &BuilderInternal{Module: name}
 		build.SetLogger(log)
 		build.SetIcon(icon)
 		return build

@@ -58,16 +58,16 @@ patch-dock: patch
 	cd "$(GOPATH)/src/github.com/gosexy/gettext" && git pull --commit --no-edit https://github.com/sqp/gettext nil_string
 
 
-install:
-	mkdir -p "$(PKGDIR)/usr/bin"
-	install -p -m755 "$(GOPATH)/bin/cdc" "$(PKGDIR)/usr/bin"
+install: install-common
 
-	mkdir -p "$(PKGDIR)/$(APPDIRDBUS)"
+	install -Dm644 "$(GOPATH)/src/$(SOURCE)/cmd/cdc/data/tocdc" "$(PKGDIR)/usr/share/cdc/data/tocdc"
+
+	install -d "$(PKGDIR)/$(APPDIRDBUS)"
 	for f in $(APPLETS); do	\
 		cp -Rv --preserve=timestamps "applets/$$f" "$(PKGDIR)/$(APPDIRDBUS)" ;\
 		rm $(PKGDIR)/$(APPDIRDBUS)/$$f/applet.go ;\
-		rm $(PKGDIR)/$(APPDIRDBUS)/$$f/last-modif ;\
 		rm $(PKGDIR)/$(APPDIRDBUS)/$$f/Makefile ;\
+		ln -s "$(PKGDIR)/usr/share/cdc/data/tocdc" $(PKGDIR)/$(APPDIRDBUS)/$$f/$$f ;\
 	done
 
 install-dock: install-common
@@ -75,11 +75,8 @@ install-dock: install-common
 	install -d "$(PKGDIR)/$(APPDIRGLDI)"
 	for f in $(APPLETS); do	\
 		cp -Rv --preserve=timestamps "applets/$$f" "$(PKGDIR)/$(APPDIRGLDI)" ;\
-		rm $(PKGDIR)/$(APPDIRGLDI)/$$f/$$f ;\
 		rm $(PKGDIR)/$(APPDIRGLDI)/$$f/applet.go ;\
-		rm $(PKGDIR)/$(APPDIRGLDI)/$$f/last-modif ;\
 		rm $(PKGDIR)/$(APPDIRGLDI)/$$f/Makefile ;\
-		rm $(PKGDIR)/$(APPDIRGLDI)/$$f/tocdc ;\
 	done
 
 

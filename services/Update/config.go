@@ -79,6 +79,13 @@ type groupActions struct {
 	ShortkeyTwoAction string // shortcut, all actions provided.
 	ShortkeyTwoKey    string // key binded.
 
+	ShortkeyShowDiff       string
+	ShortkeyShowVersions   string
+	ShortkeyNextTarget     string
+	ShortkeyGrepTarget     string
+	ShortkeyOpenFileTarget string
+	ShortkeyBuildTarget    string
+
 	// still hidden
 	VersionDialogTimer    int
 	VersionDialogTemplate string // both file name and template name inside.
@@ -89,12 +96,10 @@ type groupActions struct {
 	CommandSudo  string
 	FlagsApplets string // for the full applets pack, to help enable or disable them.
 
-	DirCore       string
-	DirApplets    string
-	BranchCore    string
-	BranchApplets string
+	DirCore    string
+	DirApplets string
 
-	SourceExtra string // additional repos to version check, separated by \n.
+	SourceExtra []string // additional repos to version check, separated by \n.
 
 	Debug bool
 }
@@ -112,6 +117,7 @@ const (
 	ActionCheckVersions
 	ActionGrepTarget
 	ActionCycleTarget
+	ActionOpenFileTarget
 	ActionToggleUserMode
 	ActionToggleReload
 	ActionToggleDiffStash

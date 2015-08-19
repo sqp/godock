@@ -1,4 +1,4 @@
-{{define "ShowVersionsDialog"}}{{range .}}<b>{{.Branch}}</b>: {{if .Zero}}Up to date.{{end}}{{if .Delta}}<span fgcolor='green'>{{.Delta}} new</span>.{{end}}{{with .NewLocal}}You have {{.}} unmerged patch(s).{{end}}
-{{with .Log}}
-<span size='x-small'><tt>{{.}}</tt></span>{{end}}
+{{define "ShowVersionsDialog"}}{{range .}}
+<u><b>{{.Name}}</b></u>: {{if .Zero}}Up to date.{{end}}{{if .Delta}}<span fgcolor='orange'>{{.Delta}} new</span>.{{end}}{{with .NewLocal}}You have {{.}} unmerged patch(s).{{end}}
+{{with .Log}}<span size='x-small'><tt>{{.}}</tt></span>{{end}}
 {{end}}{{end}}
