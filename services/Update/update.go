@@ -187,7 +187,6 @@ func (app *Applet) DefineEvents(events *cdtype.Events) {
 	// Shortkey event: launch configured action.
 	//
 	events.OnShortkey = func(key string) {
-		app.Log().Info("key", key)
 		switch key {
 		case app.conf.ShortkeyShowDiff:
 			app.Action().Launch(ActionShowDiff)

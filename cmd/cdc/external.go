@@ -60,7 +60,7 @@ For the full list of fields, see AppletPackage:
 // add output gob
 
 func init() {
-	cmdExternal.Run = runList // break init cycle
+	cmdExternal.Run = runExternal // break init cycle
 }
 
 var listUserDir = cmdExternal.Flag.String("d", "", "")
@@ -73,7 +73,7 @@ var listLocal = cmdExternal.Flag.Bool("l", false, "")
 var listJSON = cmdExternal.Flag.Bool("json", false, "")
 var listFmt = cmdExternal.Flag.String("f", "", "")
 
-func runList(cmd *Command, args []string) {
+func runExternal(cmd *Command, args []string) {
 
 	setPathAbsolute(listUserDir) // Ensure we have an absolute path for the config dir.
 
@@ -104,6 +104,9 @@ func runList(cmd *Command, args []string) {
 //----------------------------------------------------------------[ INSTALL ]--
 
 func installOrRemoveApplets(list []string, remove bool) {
+
+	// TODO: use active dock if available.
+
 	externalUserDir, e := packages.DirAppletsExternal(*listUserDir)
 	exitIfFail(e, "get config dir") // Ensure we have the config dir.
 

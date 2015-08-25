@@ -10,6 +10,15 @@ func Int(test bool, a, b int) int {
 	return b
 }
 
+// Float64 is a ternary operator for int.
+//
+func Float64(test bool, a, b float64) float64 {
+	if test {
+		return a
+	}
+	return b
+}
+
 // String is a ternary operator for string.
 //
 func String(test bool, a, b string) string {

@@ -62,8 +62,10 @@ func PackValuerAsInt(key *cftype.Key, w gtk.IWidget, valuer WidgetValuer, value 
 		func(uncast interface{}) { valuer.SetValue(float64(uncast.(int))) },
 		w)
 
-	oldval, _ := key.Storage().Default(key.Group, key.Name)
-	PackReset(key, oldval.Int())
+	oldval, e := key.Storage().Default(key.Group, key.Name)
+	if e == nil {
+		PackReset(key, oldval.Int())
+	}
 }
 
 // WidgetValuer defines a widget with GetValue and SetValue methods.
@@ -374,7 +376,6 @@ func fieldsPrepend(list []datatype.Field, fields ...datatype.Field) func() []dat
 //----------------------------------------------------------[ COMMON PACKING ]--
 
 // PackReset adds a reset value button.
-// Requires a callback to restore defaults.
 //
 func PackReset(key *cftype.Key, value interface{}) *gtk.Button {
 	fileDefault := key.Storage().FileDefault()

@@ -61,7 +61,6 @@ func Register(services cdtype.ListStarter, log cdtype.Logger) *AppManager {
 	backendevents.Register(Apps)
 
 	Apps.registerApplets()
-	// go Apps.StartLoop()
 
 	backendmenu.Register("applets", nil, Apps.BuildMenu)
 	return Apps

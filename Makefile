@@ -1,6 +1,10 @@
 TARGET=cdc
+VERSION=0.0.3.4
+
 SOURCE=github.com/sqp/godock
+
 APPLETS=Audio Cpu DiskActivity DiskFree GoGmail Mem NetActivity Update
+
 
 # unstable applets requires unmerged patches to build.
 UNSTABLE=Notifications TVPlay
@@ -12,22 +16,20 @@ DOCK=dock all
 # Install prefix if any.
 PKGDIR=
 
-APPDIRGLDI=usr/share/cairo-dock/plug-ins/goapplets/
+APPDIRGLDI=usr/share/cairo-dock/appletsgo/
 APPDIRDBUS=usr/share/cairo-dock/plug-ins/Dbus/third-party/
-
-VERSION=$(shell cat version)
-
-
 
 
 # Could be useful for some distro packagers.
 # FLAGSHARETHEME=$(SOURCE)/libs/gldi/maindock.CairoDockShareThemesDir '/usr/share/cairo-dock/themes'
 # FLAGLOCALE=$(SOURCE)/libs/gldi/maindock.CairoDockLocaleDir '/usr/share/locale'
 
+BUILDDATE=$(shell date --rfc-3339=seconds)
+
 FLAGAPPVERSION=$(SOURCE)/libs/cdglobal.AppVersion '$(VERSION)'
 FLAGGITHASH=$(SOURCE)/libs/cdglobal.GitHash '$(shell git rev-parse HEAD)'
 # git describe --tags
-FLAGBUILDDATE=$(SOURCE)/libs/cdglobal.BuildDate '$(shell date --rfc-3339=seconds)'
+FLAGBUILDDATE=$(SOURCE)/libs/cdglobal.BuildDate '$(BUILDDATE)'
 
 
 FLAGS=-ldflags "-X $(FLAGAPPVERSION) -X $(FLAGBUILDDATE) -X $(FLAGGITHASH) "
@@ -60,30 +62,30 @@ patch-dock: patch
 
 install: install-common
 
-	install -Dm644 "$(GOPATH)/src/$(SOURCE)/cmd/cdc/data/tocdc" "$(PKGDIR)/usr/share/cdc/data/tocdc"
+	install -Dm755 "$(GOPATH)/src/$(SOURCE)/cmd/$(TARGET)/data/tocdc"  "$(PKGDIR)/usr/bin/tocdc"
 
 	install -d "$(PKGDIR)/$(APPDIRDBUS)"
 	for f in $(APPLETS); do	\
-		cp -Rv --preserve=timestamps "applets/$$f" "$(PKGDIR)/$(APPDIRDBUS)" ;\
-		rm $(PKGDIR)/$(APPDIRDBUS)/$$f/applet.go ;\
-		rm $(PKGDIR)/$(APPDIRDBUS)/$$f/Makefile ;\
-		ln -s "$(PKGDIR)/usr/share/cdc/data/tocdc" $(PKGDIR)/$(APPDIRDBUS)/$$f/$$f ;\
+		cp -Rv --preserve=timestamps "applets/$$f"  "$(PKGDIR)/$(APPDIRDBUS)" ;\
+		rm "$(PKGDIR)/$(APPDIRDBUS)/$$f/applet.go" ;\
+		rm "$(PKGDIR)/$(APPDIRDBUS)/$$f/Makefile" ;\
+		ln -s "$(PKGDIR)/usr/bin/tocdc"  "$(PKGDIR)/$(APPDIRDBUS)/$$f/$$f" ;\
 	done
 
 install-dock: install-common
 
 	install -d "$(PKGDIR)/$(APPDIRGLDI)"
 	for f in $(APPLETS); do	\
-		cp -Rv --preserve=timestamps "applets/$$f" "$(PKGDIR)/$(APPDIRGLDI)" ;\
+		cp -Rv --preserve=timestamps "applets/$$f"  "$(PKGDIR)/$(APPDIRGLDI)" ;\
 		rm $(PKGDIR)/$(APPDIRGLDI)/$$f/applet.go ;\
 		rm $(PKGDIR)/$(APPDIRGLDI)/$$f/Makefile ;\
 	done
 
 
 install-common:
-	install -p -Dm755 "$(GOPATH)/bin/cdc" "$(PKGDIR)/usr/bin/cdc"
+	install -p -Dm755 "$(GOPATH)/bin/$(TARGET)"  "$(PKGDIR)/usr/bin/$(TARGET)"
 
-	install -Dm644 "$(GOPATH)/src/$(SOURCE)/LICENSE" "$(PKGDIR)/usr/share/licenses/$(TARGET)/LICENSE"
+	install -Dm644 "$(GOPATH)/src/$(SOURCE)/LICENSE"  "$(PKGDIR)/usr/share/licenses/$(TARGET)/LICENSE"
 
 	gzip -9 < $(GOPATH)/src/$(SOURCE)/cmd/$(TARGET)/data/man.1 > $(GOPATH)/src/$(SOURCE)/cmd/$(TARGET)/data/man.1.gz
 	install -pD $(GOPATH)/src/$(SOURCE)/cmd/$(TARGET)/data/man.1.gz $(PKGDIR)/usr/share/man/man1/cdc.1.gz
@@ -92,7 +94,7 @@ install-common:
 help:
 	@# update command documentation.
 
-	cdc help documentation > cmd/$(TARGET)/doc.go
+	$(TARGET) help documentation > cmd/$(TARGET)/doc.go
 	gofmt -w cmd/$(TARGET)/doc.go
 
 

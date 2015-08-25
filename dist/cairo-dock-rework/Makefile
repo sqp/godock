@@ -1,8 +1,8 @@
 
 # This Makefile is designed to be moved at the root of the GOPATH.
 #
-# getsrc, packsrc:         Download/update/patch and package the sources.
-# build ,install, clean:   Default build actions for the Debian autobuild.
+# getsrc packsrc packdeb   Download/update/patch and package the sources.
+# build install clean      Default build actions for the Debian autobuild.
 # 
 
 SOURCE=github.com/sqp/godock
@@ -15,7 +15,7 @@ export GOPATH=$(CURDIR)
 
 APPNAME=cairo-dock-rework
 
-APPVERSION=$(shell cat src/$(SOURCE)/version)
+APPVERSION=0.0.3.4
 
 SUBDIR=$(APPNAME)-$(APPVERSION)
 SRCFILE=$(APPNAME)_$(APPVERSION).orig.tar.gz
@@ -37,30 +37,37 @@ clean:
 
 
 # Get sources and apply patches.
+# Result: subdir src with go sources. Current dir usable as GOPATH.
 getsrc:
+	# Download and patch.
 	go get -u -d -tags 'dock $(APPLETS)' $(SOURCE)/cmd/cdc
 	
 	make --directory="$(CURDIR)/src/$(SOURCE)" patch-dock
-	
+
 
 # Create a sources package to use as Debian or OpenSuse Build Service source.
+# Result: archive name_version.orig.tar.gz (removes sources dir).
 packsrc:
+	 # Ensure the dest dir doesn't exist.
 	mkdir $(SUBDIR)
 
 	# Move Debian install files and go sources to root path.
-
 	mv src/$(SOURCE)/dist/$(APPNAME)/* src $(SUBDIR)
 
 	# Compress.
-	
 	tar -zcf $(SRCFILE) $(SUBDIR) --exclude-vcs
-	
-	@# Display results
 
-	@echo
-	@echo ------------
-	@echo
-	@ls -l $(SRCFILE)
-	
-	@md5sum $(SRCFILE)
-	@sha256sum $(SRCFILE)
+	# Clean sources.
+	rm -rf $(SUBDIR)
+
+
+# Create Debian package.
+# Result: package name_version_sysarch.deb (and others) without removing the archive.
+packdeb:
+	 # Ensure the dest dir doesn't exist.
+	mkdir $(SUBDIR)
+
+	tar xvf $(SRCFILE)
+
+	cd $(SUBDIR) && dpkg-buildpackage -us -uc -tc
+	rm -rf $(SUBDIR)

@@ -85,6 +85,9 @@ func (cl *Client) Get(method string, answers []interface{}, args ...interface{})
 
 func parseShit(src, dest interface{}) error {
 	switch v := src.(type) {
+	case string:
+		reflect.ValueOf(dest).Elem().Set(reflect.ValueOf(v))
+
 	case dbus.Variant:
 		tmp := v.Value()
 
@@ -104,7 +107,6 @@ func parseShit(src, dest interface{}) error {
 
 	case []map[string]dbus.Variant:
 
-		// variants := uncasted[0].([]map[string]dbus.Variant)
 		tmp := make([]map[string]interface{}, len(v))
 		for i, val := range v {
 			tmp[i] = ToMapInterface(val)

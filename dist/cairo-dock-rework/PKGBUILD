@@ -1,7 +1,7 @@
 # Maintainer: SQP <sqp@glx-dock.org>
 
 pkgname=cairo-dock-rework
-pkgver=0.0.3.3
+pkgver=0.0.3.4
 pkgrel=1
 pkgdesc="Cairo-Dock reworked version with a new GUI and more applets (WIP)."
 arch=('x86_64' 'i686')

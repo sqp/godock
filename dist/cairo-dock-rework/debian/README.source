@@ -10,4 +10,4 @@ wget https://raw.githubusercontent.com/sqp/godock/master/dist/cairo-dock-rework/
 
 make getsrc packsrc
 
- -- sqp <sqp@glx-dock.org>  Mon, 17 Aug 2015 14:59:41 +0100
+ -- SQP <sqp@glx-dock.org>  Mon, 17 Aug 2015 00:00:00 +0000

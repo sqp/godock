@@ -84,7 +84,10 @@ func (rp *RenderPercent) Display() {
 		values = append(values, v.value)
 		rp.text.Append(v.text, v.value*100)
 	}
-	rp.App.DataRenderer().Render(values...)
+	e := rp.App.DataRenderer().Render(values...)
+	if e != nil {
+		println("ioactivity render", e)
+	}
 	rp.cbText(rp.text.Text())
 }
 

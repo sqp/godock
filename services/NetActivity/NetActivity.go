@@ -113,8 +113,6 @@ func (app *Applet) Init(loadConf bool) {
 	app.video.SetQuality(videodl.Quality(app.conf.VideoDLQuality))
 	app.video.SetBlacklist(app.conf.VideoDLBlacklist)
 
-	app.Log().Info("init", app.video.Path)
-
 	// Settings for poller and IOActivity (force renderer reset in case of reload).
 	app.conf.UpdateDelay = cdtype.PollerInterval(app.conf.UpdateDelay, defaultUpdateDelay)
 	app.service.Settings(uint64(app.conf.UpdateDelay), cdtype.InfoPosition(app.conf.DisplayText), app.conf.DisplayValues, app.conf.GraphType, app.conf.GaugeName, app.conf.Devices...)
@@ -167,7 +165,7 @@ func (app *Applet) OnDropData(data string) {
 			app.DownloadVideo(data)
 		}
 	} else {
-		app.Upload(data)
+		app.UpToShareUpload(data)
 	}
 }
 
@@ -180,12 +178,18 @@ func (app *Applet) DefineEvents(events *cdtype.Events) {
 }
 
 //
-//-----------------------------------------------------------------[ SERVICE ]--
+//-----------------------------------------------------------[ PUBLIC REMOTE ]--
 
-// Upload uploads data to a one-click site: file location or text.
+// UpToShareUpload uploads data to a one-click site: file location or text.
 //
-func (app *Applet) Upload(data string) {
+func (app *Applet) UpToShareUpload(data string) {
 	app.up.Upload(data)
+}
+
+// UpToShareLastLink uploads data to a one-click site: file location or text.
+//
+func (app *Applet) UpToShareLastLink() string {
+	return "needlastlink"
 }
 
 // DownloadVideo downloads the video from url.

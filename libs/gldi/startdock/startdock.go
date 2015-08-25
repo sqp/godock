@@ -65,9 +65,11 @@ func Run(log cdtype.Logger, getSettings func() maindock.DockSettings) bool {
 		if log.Err(e, "applets service") {
 			return false
 		}
-		// TODO: maybe run a ticking loop for applets when Dbus is disabled.
+		// TODO: run a ticking loop for applets when Dbus is disabled.
 		appmgr := mgrgldi.Register(allapps.List(settings.Exclude), log)
 		dbus.SetManager(appmgr)
+		// go appmgr.StartLoop()
+		go dbus.StartLoop()
 	}
 
 	// HTTP listener for the pprof debug.
@@ -123,8 +125,6 @@ func serviceDbus(log cdtype.Logger) (*srvdbus.Loader, error) {
 	case !active:
 		return nil, errors.New("service already active")
 	}
-
-	go loader.StartLoop()
 
 	return loader, nil
 }

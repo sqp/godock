@@ -33,11 +33,13 @@ var Commands = CommandList{
 	// helpTestfunc,
 }
 
-// Default command, set by the backend (dock or service).
-var cmdDefault *Command
+var (
+	// Default command, set by the backend (dock or service).
+	cmdDefault *Command
 
-// Common logger for all services and actions.
-var logger = &log.Log{}
+	// Common logger for all services and actions.
+	logger = &log.Log{}
+)
 
 func main() {
 	// Get the command. Exit if fail.
@@ -48,7 +50,7 @@ func main() {
 
 	// Set logger.
 	logger.SetLogOut(log.Logs)
-	logger.SetName(os.Args[0])
+	logger.SetName(strings.TrimPrefix(os.Args[0], "./"))
 
 	// And now we can start.
 	cmd.Run(cmd, args)
@@ -65,8 +67,13 @@ func parseArgsDefault(startArgs []string, cmd *Command) (*Command, []string) {
 	showHelpShort := cmdDefault.Flag.Bool("h", false, "")
 	showHelpLong := cmdDefault.Flag.Bool("help", false, "")
 
+	// Service is the applet start forward. Just run the default with all args.
+	if len(startArgs) > 1 && startArgs[1] == "service" {
+		return cmd, startArgs[2:]
+	}
+
 	// Strip default command name from args of found.
-	if len(startArgs) > 1 && startArgs[1] == cmdDefault.Name() {
+	if len(startArgs) > 1 && startArgs[1] == "dock" { // was cmdDefault.Name()
 		startArgs = append(startArgs[:1], startArgs[2:]...)
 	}
 

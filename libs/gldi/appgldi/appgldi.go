@@ -5,8 +5,6 @@
 package appgldi
 
 import (
-	"github.com/bradfitz/iter" // iter.N.
-
 	"github.com/gotk3/gotk3/glib"
 
 	"github.com/sqp/godock/libs/cdtype" // Applets types.
@@ -17,6 +15,8 @@ import (
 	"errors"
 	"strings"
 	"unsafe"
+
+	"sync"
 )
 
 //
@@ -144,24 +144,31 @@ func (o *dataRend) Gauge(nbval int, themeName string) error {
 }
 
 func (o *dataRend) Graph(nbval int, typ cdtype.RendererGraphType) error {
-	return o.test(nbval, func() gldi.DataRendererAttributer {
-		attr := gldi.NewDataRendererAttributeGraph()
-		attr.Type = typ
-		attr.HighColor = make([]float64, nbval*3)
-		attr.LowColor = make([]float64, nbval*3)
-		for i := range iter.N(int(nbval)) {
-			attr.HighColor[3*i] = 1  // High R
-			attr.LowColor[3*i+1] = 1 // Low G+B = yellow.
-			attr.LowColor[3*i+2] = 1
-		}
+	if nbval < 1 {
+		addIdle(o.icon.RemoveDataRenderer)
+		return nil
+	}
 
-		w, _ := o.icon.IconExtent()
-		attr.MemorySize = ternary.Int(w > 1, w, 32)
+	attr := gldi.NewDataRendererAttributeGraph()
+	attr.Type = typ
+	attr.HighColor = make([]float64, nbval*3)
+	attr.LowColor = make([]float64, nbval*3)
+	for i := 0; i < nbval; i++ {
+		attr.HighColor[3*i] = 1  // High R
+		attr.LowColor[3*i+1] = 1 // Low G+B = yellow.
+		attr.LowColor[3*i+2] = 1
+	}
 
-		attr.LatencyTime = 500
-		attr.NbValues = int(nbval)
-		return attr
+	w, _ := o.icon.IconExtent()
+	attr.MemorySize = ternary.Int(w > 1, w, 32)
+
+	attr.LatencyTime = 500
+	attr.NbValues = int(nbval)
+
+	addIdle(func() {
+		o.icon.AddNewDataRenderer(attr)
 	})
+	return nil
 }
 
 func (o *dataRend) Progress(nbval int) error {
@@ -502,22 +509,41 @@ func (o *IconBase) ShowDialog(message string, duration int32) error {
 //
 //------------------------------------------------------------[ IDLE ACTIONS ]--
 
-var redraw []func()
+var idleMu = &sync.Mutex{} // protects idleDraw and idleRun.
+var idleDraw []func()      // List of functions to run in the glib main loop.
+var idleRun bool           // Tells if the idle flusher is running or not.
 
 // addIdle adds a function to call on the next gtk idle cycle, to safely use
 // the dock with our goroutines.
+// It will also start the callIdle flush if it's not running.
 //
 func addIdle(call func()) {
-	if redraw == nil {
+	idleMu.Lock()
+	idleDraw = append(idleDraw, call)
+	if !idleRun {
+		idleRun = true
 		glib.IdleAdd(callIdle)
 	}
-	redraw = append(redraw, call)
+	idleMu.Unlock()
 }
 
+// callIdle flushes the idleDraw list by calling them all.
+// It will also process calls received while running, and stops only when
+// idleDraw is really empty.
+//
 func callIdle() {
-	for _, call := range redraw {
-		call()
+	for idleDraw != nil {
+		idleMu.Lock()
+		todraw := idleDraw
+		idleDraw = nil
+		idleMu.Unlock()
+
+		for _, call := range todraw {
+			call()
+		}
 	}
-	// println("idle called", len(redraw))
-	redraw = nil
+
+	idleMu.Lock()
+	idleRun = false
+	idleMu.Unlock()
 }

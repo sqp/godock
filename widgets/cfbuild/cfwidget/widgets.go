@@ -217,8 +217,11 @@ func IntegerSize(key *cftype.Key) {
 		toggle,
 	)
 
-	oldval, _ := key.Storage().Default(key.Group, key.Name)
-	PackReset(key, oldval.ListInt())
+	oldval, e := key.Storage().Default(key.Group, key.Name)
+	key.Log().Err(e, "IntegerSize original value")
+	if e == nil {
+		PackReset(key, oldval.ListInt())
+	}
 }
 
 // Float adds a float selector widget. SpinButton or Horizontal Scale
@@ -270,16 +273,20 @@ func Float(key *cftype.Key) {
 			func() interface{} { return valuers[0].GetValue() },
 			func(uncast interface{}) { valuers[0].SetValue(uncast.(float64)) },
 		)
-		oldval, _ := key.Storage().Default(key.Group, key.Name)
-		PackReset(key, oldval.Float())
+		oldval, e := key.Storage().Default(key.Group, key.Name)
+		if e == nil {
+			PackReset(key, oldval.Float())
+		}
 
 	default:
 		key.PackKeyWidget(key,
 			func() interface{} { return listValuerGet(valuers) },
 			func(uncast interface{}) { listValuerSet(valuers, uncast.([]float64)) },
 		)
-		oldval, _ := key.Storage().Default(key.Group, key.Name)
-		PackReset(key, oldval.ListFloat())
+		oldval, e := key.Storage().Default(key.Group, key.Name)
+		if e == nil {
+			PackReset(key, oldval.ListFloat())
+		}
 	}
 }
 
@@ -311,8 +318,10 @@ func ColorSelector(key *cftype.Key) {
 		func(uncast interface{}) { widget.SetRGBA(gdk.NewRGBA(uncast.([]float64)...)) },
 		widget,
 	)
-	oldval, _ := key.Storage().Default(key.Group, key.Name)
-	PackReset(key, oldval.ListFloat())
+	oldval, e := key.Storage().Default(key.Group, key.Name)
+	if e == nil {
+		PackReset(key, oldval.ListFloat())
+	}
 }
 
 // ListThemeApplet adds an theme list widget.
