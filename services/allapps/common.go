@@ -31,7 +31,7 @@ func List(exclude ...string) cdtype.ListStarter {
 }
 
 // AddGtkNeeded allow an applet to declare its gtk dependency.
-// If used, the gtk main loop will lock the main thread to prevent later problems.
+// If used, the gtk main loop should lock the main thread to prevent later problems.
 //
 func AddGtkNeeded() {
 	needgtk = true

@@ -1,4 +1,5 @@
-/* TVPlay is an applet for Cairo-Dock to control DLNA/UPnP devices like network TV and radio.
+/*
+TVPlay is an applet for Cairo-Dock to control DLNA/UPnP devices like network TV and radio.
 
 Dependencies: libgupnp-1.0-dev libgupnp-av-1.0-dev libgssdp-1.0-dev
   libgtk-3-dev
@@ -39,20 +40,20 @@ import (
 // #cgo pkg-config: x11
 import "C"
 
-func GRRTHREADS() {
-	C.XInitThreads()
-}
+// func GRRTHREADS() {
+// 	C.XInitThreads()
+// }
 
 //---------------------------------------------------------------[ MAIN CALL ]--
 
 // Program launched. Create and activate applet.
 //
 func main() {
-	GRRTHREADS()
+	// GRRTHREADS()
 	gtk.Init(nil)
-	// app :=  // need to build the gui before launching GTK. Works better without threads related crashes.
-	go gtk.Main()
-	defer gtk.MainQuit()
-
-	appdbus.StartApplet(TVPlay.NewApplet())
+	go func() {
+		appdbus.StartApplet(TVPlay.NewApplet())
+		gtk.MainQuit()
+	}()
+	gtk.Main()
 }

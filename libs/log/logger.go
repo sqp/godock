@@ -196,7 +196,7 @@ func (l *Log) NewErr(e string, msg ...interface{}) {
 func (l *Log) NewErrf(title, format string, args ...interface{}) {
 	str := fmt.Sprintf(format, args...)
 	if l.LogOut != nil {
-		l.LogOut.Err("", l.name, str)
+		l.LogOut.Err(title, l.name, str)
 	} else {
 		print(FormatErr(str, l.name, title))
 	}

@@ -1,4 +1,4 @@
-// +build TVPlay || all
+// +build all TVPlay
 
 package allapps
 

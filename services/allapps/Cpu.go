@@ -1,4 +1,4 @@
-// +build Cpu || all
+// +build all Cpu
 
 package allapps
 

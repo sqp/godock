@@ -23,6 +23,8 @@ type Versions struct {
 	callResult func(int, error) // Action to execute to send polling results.
 }
 
+// NewVersions creates a multiple versions checker with some repos.
+//
 func NewVersions(callResult func(int, error), repos ...*Repo) *Versions {
 	return &Versions{
 		callResult: callResult,

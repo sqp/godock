@@ -49,6 +49,8 @@ import (
 	"unsafe"
 )
 
+// Apps is the active applet manager.
+//
 var Apps *AppManager
 
 // LogWindow provides an optional call to open the log window.
@@ -99,8 +101,8 @@ func NewAppManager(services cdtype.ListStarter, log cdtype.Logger) *AppManager {
 
 // CountActive returns the number of managed applets.
 //
-func (load *AppManager) CountActive() int {
-	return len(load.actives)
+func (o *AppManager) CountActive() int {
+	return len(o.actives)
 }
 
 // GetApplets return an applet instance.
@@ -116,8 +118,8 @@ func (o *AppManager) GetApplets(name string) (list []cdtype.AppInstance) {
 
 // Tick ticks all applets pollers.
 //
-func (load *AppManager) Tick() {
-	for _, app := range load.actives {
+func (o *AppManager) Tick() {
+	for _, app := range o.actives {
 		app.Poller().Plop() // Safe to use on nil poller.
 	}
 }
@@ -358,22 +360,32 @@ func (o *AppManager) reloadApplet(mi *gldi.ModuleInstance, oldContainer *gldi.Co
 //
 //------------------------------------------------------------------[ EVENTS ]--
 
+// OnLeftClick forwards a click event to the applet.
+//
 func (o *AppManager) OnLeftClick(icon *gldi.Icon, container *gldi.Container, btnState uint) bool {
 	return o.sendIconOrSub(icon, container, "on_click", "on_click_sub_icon", int(btnState))
 }
 
+// OnMiddleClick forwards a click event to the applet.
+//
 func (o *AppManager) OnMiddleClick(icon *gldi.Icon, container *gldi.Container) bool {
 	return o.sendIconOrSub(icon, container, "on_middle_click", "on_middle_click_sub_icon")
 }
 
+// OnMouseScroll forwards a mouse event to the applet.
+//
 func (o *AppManager) OnMouseScroll(icon *gldi.Icon, container *gldi.Container, scrollUp bool) bool {
 	return o.sendIconOrSub(icon, container, "on_scroll", "on_scroll_sub_icon", scrollUp)
 }
 
+// OnDropData forwards a drop event to the applet.
+//
 func (o *AppManager) OnDropData(icon *gldi.Icon, container *gldi.Container, data string) bool {
 	return o.sendIconOrSub(icon, container, "on_drop_data", "on_drop_data_sub_icon", data)
 }
 
+// OnChangeFocus forwards a window focus event to the applet.
+//
 func (o *AppManager) OnChangeFocus(win *gldi.WindowActor) bool {
 	// Emit signal on the applet that had focus.
 	if o.activeIcon != nil {
@@ -395,6 +407,8 @@ func (o *AppManager) OnChangeFocus(win *gldi.WindowActor) bool {
 	return false
 }
 
+// BuildMenu forwards a build menu event to the applet.
+//
 func (o *AppManager) BuildMenu(m *backendmenu.DockMenu) int {
 	o.sendIconOrSub(m.Icon, m.Container, "on_build_menu", "on_build_menu_sub_icon", &MenuerLike{*m})
 	return 0 // don't intercept menu. (to check)
@@ -526,18 +540,26 @@ type MenuerLike struct {
 	backendmenu.DockMenu
 }
 
+// AddSubMenu adds a submenu to the menu.
+//
 func (m *MenuerLike) AddSubMenu(label, iconPath string) cdtype.Menuer {
 	return &MenuerLike{*m.DockMenu.AddSubMenu(label, iconPath)}
 }
 
+// AddEntry adds an item to the menu with its callback.
+//
 func (m *MenuerLike) AddEntry(label, iconPath string, call interface{}, userData ...interface{}) cdtype.MenuWidgeter {
 	return m.DockMenu.AddEntry(label, iconPath, call, userData...)
 }
 
+// AddCheckEntry adds a check entry to the menu.
+//
 func (m *MenuerLike) AddCheckEntry(label string, active bool, call interface{}, userData ...interface{}) cdtype.MenuWidgeter {
 	return m.DockMenu.AddCheckEntry(label, active, call, userData)
 }
 
+// AddRadioEntry adds a radio entry to the menu.
+//
 func (m *MenuerLike) AddRadioEntry(label string, active bool, group int, call interface{}, userData ...interface{}) cdtype.MenuWidgeter {
 	return m.DockMenu.AddRadioEntry(label, active, group, call, userData)
 }

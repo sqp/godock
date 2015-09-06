@@ -4,6 +4,7 @@ package menu
 import (
 	"github.com/sqp/godock/libs/gldi"             // Gldi access.
 	"github.com/sqp/godock/libs/gldi/backendmenu" // Menu types.
+	"github.com/sqp/godock/libs/gldi/current"     // Current theme settings.
 	"github.com/sqp/godock/libs/gldi/globals"     // Global variables.
 	"github.com/sqp/godock/libs/ternary"          // Helpers.
 	"github.com/sqp/godock/libs/text/tran"        // Translate.
@@ -31,7 +32,7 @@ func BuildMenuContainer(m *backendmenu.DockMenu) int {
 	//\_________________________ First item is the Cairo-Dock sub-menu.
 	dockmenu := m.AddSubMenu("Cairo-Dock", globals.FileCairoDockIcon())
 
-	if !globals.DockIsLocked() {
+	if !current.DockIsLocked() {
 		dockmenu.Entry(backendmenu.MenuConfigure)
 
 		if m.Dock != nil && !m.Dock.IsMainDock() && m.Dock.GetRefCount() == 0 { // root dock settings
@@ -90,7 +91,7 @@ func BuildMenuContainer(m *backendmenu.DockMenu) int {
 
 		// 	GtkWidget *pItemSubMenu = _add_item_sub_menu (pIcon, menu);
 
-		if globals.DockIsLocked() {
+		if current.DockIsLocked() {
 			switch {
 			case m.Icon.IsAppli() && m.Icon.GetCommand() != "":
 				items.Entry(backendmenu.MenuLaunchNew)
@@ -119,9 +120,9 @@ func BuildMenuContainer(m *backendmenu.DockMenu) int {
 				!m.Icon.ClassIsInhibited(): // if the class doesn't already have an inhibator somewhere.
 				items.Entry(backendmenu.MenuMakeLauncher)
 
-				if !globals.DocksParam.IsLockAll() && m.Icon.IsAppli() {
+				if !current.Docks.IsLockAll() && m.Icon.IsAppli() {
 
-					if globals.TaskbarParam.OverWriteXIcons() {
+					if current.Taskbar.OverWriteXIcons() {
 						items.Entry(backendmenu.MenuCustomIconRemove)
 					}
 
@@ -250,7 +251,7 @@ func BuildMenuIcon(m *backendmenu.DockMenu) int {
 
 	//\_________________________ Desklet positioning actions.
 
-	if !globals.DockIsLocked() && m.Container.IsDesklet() {
+	if !current.DockIsLocked() && m.Container.IsDesklet() {
 		if needSeparator {
 			m.AddSeparator()
 		}

@@ -16,10 +16,12 @@ import (
 
 	"github.com/bradfitz/iter" // easy for.
 
+	"github.com/sqp/godock/libs/cdglobal"
 	"github.com/sqp/godock/libs/cdtype"
 	"github.com/sqp/godock/libs/files"           // UpdateConfFile.
 	"github.com/sqp/godock/libs/gldi"            // Gldi access.
 	"github.com/sqp/godock/libs/gldi/backendgui" // GUI callbacks.
+	"github.com/sqp/godock/libs/gldi/current"    // Current theme settings.
 	"github.com/sqp/godock/libs/gldi/dialog"     // Popup dialog.
 	"github.com/sqp/godock/libs/gldi/globals"    // Global variables.
 	"github.com/sqp/godock/libs/ternary"         // Helpers.
@@ -50,10 +52,14 @@ var (
 	logger        cdtype.Logger
 )
 
+// SetLogger sets the menu logger.
+//
 func SetLogger(log cdtype.Logger) {
 	logger = log
 }
 
+// Register registers a menu to the backend, allowing it to receive menu events.
+//
 func Register(name string, menucontainer, menuicon func(*DockMenu) int) {
 	if menucontainer != nil {
 		if len(menuContainer) == 0 {
@@ -114,8 +120,11 @@ func convert(ic *C.Icon, cont *C.GldiContainer, cmenu *C.GtkWidget) *DockMenu {
 //
 //-------------------------------------------------------------[ MENU ENTRIES]--
 
+// MenuEntry represents common menu item entries type.
+//
 type MenuEntry int
 
+// Common menu item entries.
 const (
 	MenuAbout MenuEntry = iota
 	MenuAddApplet
@@ -158,8 +167,11 @@ const (
 	MenuWindowSticky
 )
 
+// MenuBtn represents common menu button entries type.
+//
 type MenuBtn int
 
+// Common menu button entries.
 const (
 	MenuWindowClose MenuBtn = iota
 	MenuWindowCloseAll
@@ -170,6 +182,8 @@ const (
 	MenuWindowShowAll
 )
 
+// DockMenu represents a dock menu.
+//
 type DockMenu struct {
 	menus.Menu
 	Icon      *gldi.Icon
@@ -177,6 +191,8 @@ type DockMenu struct {
 	Dock      *gldi.CairoDock // just a pointer to container with type dock.
 }
 
+// WrapDockMenu wraps a menu as DockMenu.
+//
 func WrapDockMenu(icon *gldi.Icon, container *gldi.Container, dock *gldi.CairoDock, menu *gtk.Menu) *DockMenu {
 	usermenu := menus.WrapMenu(menu)
 	usermenu.SetCallNewItem(gldi.MenuAddItem)
@@ -189,6 +205,8 @@ func WrapDockMenu(icon *gldi.Icon, container *gldi.Container, dock *gldi.CairoDo
 		Dock:      dock}
 }
 
+// AddSubMenu adds a submenu to the menu.
+//
 func (m *DockMenu) AddSubMenu(label, iconPath string) *DockMenu {
 	submenu := m.Menu.AddSubMenu(label, iconPath)
 	return WrapDockMenu(m.Icon, m.Container, m.Dock, &submenu.Menu)
@@ -203,7 +221,7 @@ func (m *DockMenu) Entry(entry MenuEntry) bool {
 		m.AddEntry(
 			tran.Slate("About"),
 			globals.IconNameAbout,
-			about.New,
+			func() { about.New(globals.DirShareData(cdglobal.ConfigDirDockImages, cdglobal.FileCairoDockLogo)) },
 		).SetTooltipText(tran.Slate("This will hide the dock until you hover over it with the mouse."))
 
 	case MenuAddApplet:
@@ -322,7 +340,7 @@ func (m *DockMenu) Entry(entry MenuEntry) bool {
 			globals.IconNameDelete,
 			func() {
 				if m.Dock.GetRefCount() != 0 {
-					dialog.DialogShowWithQuestion("Delete this dock?",
+					dialog.ShowWithQuestion("Delete this dock?",
 						m.Dock.GetPointedIcon(),
 						m.Container,
 						globals.FileCairoDockIcon(),
@@ -433,7 +451,7 @@ func (m *DockMenu) Entry(entry MenuEntry) bool {
 			func() {
 				switch m.Icon.GetDesktopFileName() {
 				case "", "none":
-					dialog.DialogShowTemporaryWithIcon("Sorry, this icon doesn't have a configuration file.", m.Icon, m.Container, 4000, "same icon")
+					dialog.ShowTemporaryWithIcon("Sorry, this icon doesn't have a configuration file.", m.Icon, m.Container, 4000, "same icon")
 
 				default:
 					backendgui.ShowItems(m.Icon, nil, nil, -1)
@@ -471,10 +489,10 @@ func (m *DockMenu) Entry(entry MenuEntry) bool {
 	case MenuLockIcons:
 		m.AddCheckEntry(
 			tran.Slate("Lock icons position"),
-			globals.DocksParam.IsLockIcons(),
+			current.Docks.IsLockIcons(),
 			func() {
-				globals.DocksParam.SetLockIcons(!globals.DocksParam.IsLockIcons())
-				files.UpdateConfFile(globals.ConfigFile(), "Accessibility", "lock icons", globals.DocksParam.IsLockIcons())
+				current.Docks.SetLockIcons(!current.Docks.IsLockIcons())
+				files.UpdateConfFile(globals.ConfigFile(), "Accessibility", "lock icons", current.Docks.IsLockIcons())
 			},
 		).SetTooltipText(tran.Slate("This will (un)lock the position of the icons."))
 
@@ -547,7 +565,7 @@ func (m *DockMenu) Entry(entry MenuEntry) bool {
 					newdock := gldi.DockGet(key)
 					if newdock != nil && newdock.GetRefCount() == 0 && len(newdock.Icons()) == 1 {
 						str := tran.Slate("The new dock has been created.\nYou can customize it by right-clicking on it -> cairo-dock -> configure this dock.")
-						dialog.DialogShowGeneralMessage(str, 8000) // we don't show it on the new dock as its window isn't positioned yet (0,0).
+						dialog.ShowGeneralMessage(str, 8000) // we don't show it on the new dock as its window isn't positioned yet (0,0).
 					}
 				})
 		}
@@ -568,7 +586,7 @@ func (m *DockMenu) Entry(entry MenuEntry) bool {
 
 				// gtk.MainQuit() // TODO: remove SQP HACK, easy quit no confirm for tests.
 
-				dialog.DialogShowWithQuestion("Quit Cairo-Dock?",
+				dialog.ShowWithQuestion("Quit Cairo-Dock?",
 					GetIconForDesklet(m.Icon, m.Container),
 					m.Container,
 					globals.FileCairoDockIcon(),
@@ -655,7 +673,7 @@ func (m *DockMenu) Entry(entry MenuEntry) bool {
 				// 	icon = (CAIRO_DESKLET (pContainer))->pIcon;  // l'icone cliquee du desklet n'est pas forcement celle qui contient le module !
 				// g_return_if_fail (CAIRO_DOCK_IS_APPLET (icon));
 
-				dialog.DialogShowWithQuestion(
+				dialog.ShowWithQuestion(
 					fmt.Sprintf("You're about to remove this applet (%s) from the dock. Are you sure?", m.Icon.ModuleInstance().Module().VisitCard().GetTitle()),
 					m.Icon,
 					m.Container,
@@ -674,14 +692,14 @@ func (m *DockMenu) Entry(entry MenuEntry) bool {
 				if name == "" {
 					name = ternary.String(m.Icon.IsSeparator(), tran.Slate("separator"), "no name")
 				}
-				dialog.DialogShowWithQuestion(
+				dialog.ShowWithQuestion(
 					fmt.Sprintf(tran.Slate("You're about to remove this icon (%s) from the dock. Are you sure?"), name),
 					m.Icon,
 					m.Container,
 					"same icon",
 					cbDialogIsOK(func() {
 						if m.Icon.IsStackIcon() && m.Icon.GetSubDock() != nil && len(m.Icon.GetSubDock().Icons()) > 0 {
-							dialog.DialogShowWithQuestion(
+							dialog.ShowWithQuestion(
 								tran.Slate("Do you want to re-dispatch the icons contained inside this container into the dock?\n(otherwise they will be destroyed)"),
 								m.Icon,
 								m.Container,
@@ -762,6 +780,8 @@ func (m *DockMenu) Entry(entry MenuEntry) bool {
 //
 //-----------------------------------------------------------[ BUTTONS ENTRY ]--
 
+// AddButtonsEntry adds an item with button entries to the menu.
+//
 func (m *DockMenu) AddButtonsEntry(label string, btns ...MenuBtn) *menus.ButtonsEntry {
 	entry := m.Menu.AddButtonsEntry(label)
 
@@ -833,7 +853,7 @@ func GetIconForDesklet(icon *gldi.Icon, container *gldi.Container) *gldi.Icon {
 // if it's matching the action ID provided.
 //
 func actionMiddleClick(icon *gldi.Icon, id int) string {
-	if globals.TaskbarParam.ActionOnMiddleClick() != id || icon.IsApplet() {
+	if current.Taskbar.ActionOnMiddleClick() != id || icon.IsApplet() {
 		return ""
 	}
 	return " (" + tran.Slate("middle-click") + ")"

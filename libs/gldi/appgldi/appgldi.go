@@ -493,7 +493,7 @@ func (o *IconBase) ShowDialog(message string, duration int32) error {
 		// Prevent stacking dialog messages.
 		o.RemoveDialogs()
 
-		dialog.DialogShowTemporaryWithIcon(message, o.Icon, o.Icon.GetContainer(), 1000*float64(duration), "same icon")
+		dialog.ShowTemporaryWithIcon(message, o.Icon, o.Icon.GetContainer(), 1000*float64(duration), "same icon")
 	})
 	return nil
 }

@@ -1,4 +1,4 @@
-// +build Mem || all
+// +build all Mem
 
 package allapps
 

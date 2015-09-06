@@ -50,10 +50,14 @@ func removeDialog() {
 	}
 }
 
+// Dialog wraps a dock dialog widget.
+//
 type Dialog struct {
 	Ptr *C.CairoDialog
 }
 
+// NewDialogFromNative wraps a pointer to a dock dialog.
+//
 func NewDialogFromNative(p unsafe.Pointer) *Dialog {
 	if p == nil {
 		return nil
@@ -61,6 +65,8 @@ func NewDialogFromNative(p unsafe.Pointer) *Dialog {
 	return &Dialog{(*C.CairoDialog)(p)}
 }
 
+// ToNative returns a pointer to the native dock dialog.
+//
 func (o *Dialog) ToNative() unsafe.Pointer {
 	return unsafe.Pointer(o.Ptr)
 }
@@ -68,13 +74,17 @@ func (o *Dialog) ToNative() unsafe.Pointer {
 //
 //----------------------------------------------------------[ COMMON DIALOGS ]--
 
-func DialogShowGeneralMessage(str string, duration float64) {
+// ShowGeneralMessage opens a simple dialog for general information message.
+//
+func ShowGeneralMessage(str string, duration float64) {
 	cstr := (*C.gchar)(C.CString(str))
 	defer C.free(unsafe.Pointer((*C.char)(cstr)))
 	C.gldi_dialog_show_general_message(cstr, C.double(duration))
 }
 
-func DialogShowTemporaryWithIcon(str string, icon *gldi.Icon, container *gldi.Container, duration float64, iconPath string) {
+// ShowTemporaryWithIcon opens a simple dialog with a timeout.
+//
+func ShowTemporaryWithIcon(str string, icon *gldi.Icon, container *gldi.Container, duration float64, iconPath string) {
 	cstr := (*C.gchar)(C.CString(str))
 	defer C.free(unsafe.Pointer((*C.char)(cstr)))
 	cpath := (*C.gchar)(C.CString(iconPath))
@@ -86,7 +96,9 @@ func DialogShowTemporaryWithIcon(str string, icon *gldi.Icon, container *gldi.Co
 	C.gldi_dialog_show_temporary_with_icon(cstr, cicon, ccontainer, C.double(duration), cpath)
 }
 
-func DialogShowWithQuestion(str string, icon *gldi.Icon, container *gldi.Container, iconPath string, onAnswer func(int, *gtk.Widget)) {
+// ShowWithQuestion opens a dialog with a question to answer.
+//
+func ShowWithQuestion(str string, icon *gldi.Icon, container *gldi.Container, iconPath string, onAnswer func(int, *gtk.Widget)) {
 	cstr := (*C.gchar)(C.CString(str))
 	defer C.free(unsafe.Pointer((*C.char)(cstr)))
 	cpath := (*C.gchar)(C.CString(iconPath))

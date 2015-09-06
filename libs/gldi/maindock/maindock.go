@@ -33,6 +33,7 @@ import (
 	"github.com/sqp/godock/libs/config"       // Config parser.
 	"github.com/sqp/godock/libs/files"        // Files operations.
 	"github.com/sqp/godock/libs/gldi"         // Gldi access.
+	"github.com/sqp/godock/libs/gldi/current" // Current theme settings.
 	"github.com/sqp/godock/libs/gldi/dialog"  // Popup dialog.
 	"github.com/sqp/godock/libs/gldi/globals" // Global variables.
 	"github.com/sqp/godock/libs/ternary"      // Ternary operators.
@@ -58,6 +59,8 @@ func SetLogger(l cdtype.Logger) {
 //
 //----------------------------------------------------------------[ MAINDOCK ]--
 
+// DockSettings defines the dock settings provided as command flags.
+//
 type DockSettings struct {
 	// --- Original Cairo-Dock settings ---
 	//
@@ -94,6 +97,8 @@ type DockSettings struct {
 	sessionWasUsed bool
 }
 
+// Init is the first step to initialize the dock.
+//
 func (settings *DockSettings) Init() {
 	confdir := cdglobal.ConfigDirDock(settings.UserDefinedDataDir)
 	_, e := os.Stat(confdir)
@@ -262,6 +267,8 @@ func (settings DockSettings) Prepare() {
 	// s_bCDSessionLaunched => settings.sessionWasUsed
 }
 
+// Start starts the dock theme.
+//
 func (settings *DockSettings) Start() {
 	gldi.CurrentThemeLoad() // was moved before registration when I had some problems with refresh on start. Removed here for now.
 
@@ -270,8 +277,8 @@ func (settings *DockSettings) Start() {
 	// comme on ne pourra pas ouvrir le panneau de conf, ces 2 variables resteront tel quel.
 	if settings.Locked {
 		println("Cairo-Dock will be locked.") // was cd_warning (so it was set just before Verbosity). TODO: improve
-		globals.DocksParam.SetLockIcons(true)
-		globals.DocksParam.SetLockAll(true)
+		current.Docks.SetLockIcons(true)
+		current.Docks.SetLockAll(true)
 		globals.FullLock = true
 		C.g_bLocked = C.gboolean(1) // forward for interaction
 	}
@@ -316,10 +323,14 @@ func (settings *DockSettings) Start() {
 	// 	g_timeout_add_seconds (5, _cairo_dock_successful_launch, GINT_TO_POINTER (bFirstLaunch));
 }
 
+// Lock runs the gtk main loop to lock the main thread.
+//
 func Lock() {
 	C.gtk_main()
 }
 
+// Clean cleans the dock variables on stop.
+//
 func Clean() {
 
 	// signal(SIGSEGV, NULL) // Segmentation violation
@@ -411,7 +422,7 @@ func dialogNoPlugins() {
 	icon := gldi.IconsGetAnyWithoutDialog()
 	container := globals.Maindock().ToContainer()
 	iconpath := globals.FileCairoDockIcon()
-	dialog.DialogShowTemporaryWithIcon(tran.Slate(str), icon, container, 0, iconpath)
+	dialog.ShowTemporaryWithIcon(tran.Slate(str), icon, container, 0, iconpath)
 }
 
 func dialogChangelog() {

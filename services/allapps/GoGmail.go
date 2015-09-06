@@ -1,4 +1,4 @@
-// +build GoGmail || all
+// +build all GoGmail
 
 package allapps
 

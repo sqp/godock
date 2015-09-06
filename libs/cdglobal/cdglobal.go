@@ -12,7 +12,7 @@ import (
 // The -git suffix is used to tag the default value, but it should be removed if
 // the Makefile was used for the build, and the real version was set.
 //
-var AppVersion = "0.0.3.3-git"
+var AppVersion = "0.0.3.4-git"
 
 // Version variables also set at build time.
 var (
@@ -50,6 +50,7 @@ const (
 	ConfigDirExtras       = "extras"        // Name of dir for extra themes    (CAIRO_DOCK_EXTRAS_DIR).
 	ConfigDirPlugIns      = "plug-ins"      // Name of dir for plugins         (CAIRO_DOCK_PLUG_INS_DIR).
 	ConfigDirAppletsGo    = "appletsgo"     // Name of dir for go applets      (in /usr/share/cairo-dock)
+	ConfigDirDockImages   = "images"        // Name of dir for dock images    (CAIRO_DOCK_LOCAL_IMAGES_DIR).
 )
 
 // User config dir names.
@@ -57,7 +58,6 @@ const (
 	// #define CAIRO_DOCK_LOCAL_EXTRAS_DIR "extras"
 	// #define CAIRO_DOCK_LAUNCHERS_DIR "launchers"
 	// #define CAIRO_DOCK_LOCAL_ICONS_DIR "icons"
-	// #define CAIRO_DOCK_LOCAL_IMAGES_DIR "images"
 
 	DirUserAppData = "appdata" // store user common applets data in ~/.cairo-dock/
 )
@@ -73,6 +73,7 @@ const (
 	FileChangelog     = "ChangeLog.txt"
 	FileConfigThemes  = "themes.conf"    // in DirShareData
 	FileCairoDockIcon = "cairo-dock.svg" // CAIRO_DOCK_ICON
+	FileCairoDockLogo = "cairo-dock-logo.png"
 )
 
 // AppBuildPath defines the application build location inside GOPATH.
@@ -90,7 +91,7 @@ func AppBuildPathFull(path ...string) string {
 	return filepath.Join(append(basedir, path...)...)
 }
 
-// ConfigDirDock returns a full path to the dock theme, according to the given user option.
+// ConfigDirDock returns a full path to the dock config dir, according to the given user option.
 //
 func ConfigDirDock(dir string) string {
 	if len(dir) > 0 {

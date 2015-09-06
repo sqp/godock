@@ -1,0 +1,88 @@
+Format: http://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: godock
+Source: <http://github.com/sqp/godock>
+
+Files: *
+Copyright: 2012-2015 SQP <sqp@glx-dock.org>
+License: GPL-3.0+
+
+Files: src/github.com/sqp/godock/*
+Copyright: 2012-2015 SQP <sqp@glx-dock.org>
+License: GPL-3.0+
+
+
+Files: debian/*
+Copyright: 2015 SQP <sqp@glx-dock.org>
+License: GPL-3.0+
+
+
+License: GPL-3.0+
+ This program is free software: you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+ .
+ This package is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU General Public License for more details.
+ .
+ You should have received a copy of the GNU General Public License
+ along with this program. If not, see <http://www.gnu.org/licenses/>.
+ .
+ On Debian systems, the complete text of the GNU General
+ Public License version 3 can be found in "/usr/share/common-licenses/GPL-3".
+
+
+
+## Go common libraries:
+
+Files: src/github.com/clbanning/mxj/*
+Copyright: 2012-2014 Charles Banning <clbanning@gmail.com>
+License: MIT
+
+Files: src/github.com/cloudfoundry/gosigar/*
+Copyright: 2009-2011] VMware, Inc.
+License: Apache v2
+
+Files: src/github.com/fatih/structs/*
+Copyright: 2014 Fatih Arslan
+License: ISC
+
+Files: src/github.com/godbus/dbus/*
+Copyright: 2013, Georg Reinke (<guelfey at gmail dot com>), Google
+License: ISC
+
+Files: src/github.com/gotk3/gotk3/*
+Copyright: 2013-2014 Conformal Systems LLC.
+License: ISC
+
+Files: src/github.com/robfig/config/*
+Copyright: Copyright 2009  The "config" Authors
+License: MPL-2.0
+
+Files: src/github.com/sqp/gupnp/*
+Copyright: 2014-2015 SQP <sqp@glx-dock.org>
+License: ISC
+
+Files: src/github.com/sqp/pulseaudio/*
+Copyright: 2014-2015 SQP <sqp@glx-dock.org>
+License: ISC
+
+
+## Go libs only used in full dock mode:
+
+Files: src/github.com/google/shlex/*
+Copyright: 2012 Google Inc.
+License: Apache v2
+
+Files: src/github.com/gosexy/gettext/*
+Copyright: 2012-2013 José Carlos Nieto, http://xiam.menteslibres.org/
+License: ISC
+
+
+## Go libs only used in external applet service:
+
+Files: src/github.com/aototto/clipboard/*
+Copyright: 2012 Google Inc.
+License: BSD

@@ -1,4 +1,4 @@
-// +build DiskActivity || all
+// +build all DiskActivity
 
 package allapps
 

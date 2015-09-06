@@ -1,4 +1,4 @@
-// +build DiskFree || all
+// +build all DiskFree
 
 package allapps
 

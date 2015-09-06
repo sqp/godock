@@ -91,7 +91,7 @@ type GuiInterface interface {
 
 var dockGui GuiInterface
 
-// RegisterGui registers a GUI to the backend, allowing it to receive GUI events.
+// Register registers a GUI to the backend, allowing it to receive GUI events.
 //
 func Register(gui GuiInterface) {
 	C.register_gui()
@@ -100,6 +100,10 @@ func Register(gui GuiInterface) {
 	registerEvents()
 }
 
+// CanManageThemes returns if the backend can configure themes.
+//
+// Unused yet (but should be possible to activate now).
+//
 func CanManageThemes() bool {
 	return false // TODO.
 }
@@ -245,6 +249,8 @@ func notifShortkeyUpdate(_ C.gpointer, _ C.gpointer) C.gboolean {
 //
 //-----------------------------------------------------------------[ FROM GO ]--
 
+// ShowMainGui shows the main config page of the GUI.
+//
 func ShowMainGui() *gtk.Window {
 	if dockGui == nil {
 		return nil
@@ -253,6 +259,8 @@ func ShowMainGui() *gtk.Window {
 	return dockGui.Window()
 }
 
+// ShowModuleGui opens the icons page of the GUI for the specific applet.
+//
 func ShowModuleGui(appletName string) *gtk.Window {
 	if dockGui == nil {
 		return nil
@@ -261,6 +269,8 @@ func ShowModuleGui(appletName string) *gtk.Window {
 	return dockGui.Window()
 }
 
+// ShowItems opens the icons page of the GUI to configure the given item.
+//
 func ShowItems(icon *gldi.Icon, container *gldi.Container, moduleInstance *gldi.ModuleInstance, showPage int) *gtk.Window {
 	if dockGui == nil {
 		return nil
@@ -269,6 +279,8 @@ func ShowItems(icon *gldi.Icon, container *gldi.Container, moduleInstance *gldi.
 	return dockGui.Window()
 }
 
+// ShowAddons opens the addons page of the GUI.
+//
 func ShowAddons() *gtk.Window {
 	if dockGui == nil {
 		return nil
@@ -277,6 +289,8 @@ func ShowAddons() *gtk.Window {
 	return dockGui.Window()
 }
 
+// ReloadItems reloads the items page.
+//
 //export ReloadItems
 func ReloadItems() {
 	if dockGui == nil {
@@ -285,6 +299,8 @@ func ReloadItems() {
 	dockGui.ReloadItems()
 }
 
+// UpdateModulesList updates the list of applets.
+//
 //export UpdateModulesList
 func UpdateModulesList() {
 	if dockGui == nil {
@@ -293,6 +309,8 @@ func UpdateModulesList() {
 	dockGui.UpdateModulesList()
 }
 
+// UpdateModuleState updates the state of an applet.
+//
 func UpdateModuleState(name string, active bool) {
 	if dockGui == nil {
 		return
@@ -300,6 +318,8 @@ func UpdateModuleState(name string, active bool) {
 	dockGui.UpdateModuleState(name, active)
 }
 
+// UpdateModuleInstanceContainer updates the container widget of an applet.
+//
 func UpdateModuleInstanceContainer(moduleInstance *gldi.ModuleInstance, detached bool) {
 	if dockGui == nil {
 		return
@@ -307,6 +327,8 @@ func UpdateModuleInstanceContainer(moduleInstance *gldi.ModuleInstance, detached
 	dockGui.UpdateModuleInstanceContainer(moduleInstance, detached)
 }
 
+// UpdateShortkeys updates the shortkeys list.
+//
 //export UpdateShortkeys
 func UpdateShortkeys() {
 	if dockGui == nil {
@@ -315,6 +337,8 @@ func UpdateShortkeys() {
 	dockGui.UpdateShortkeys()
 }
 
+// UpdateDeskletParams updates desklets params of an applet.
+//
 func UpdateDeskletParams(desklet *gldi.Desklet) {
 	if dockGui == nil {
 		return
@@ -322,6 +346,8 @@ func UpdateDeskletParams(desklet *gldi.Desklet) {
 	dockGui.UpdateDeskletParams(desklet)
 }
 
+// UpdateDeskletVisibility updates the desklet visibility widget of an applet.
+//
 func UpdateDeskletVisibility(desklet *gldi.Desklet) {
 	if dockGui == nil {
 		return
@@ -331,6 +357,8 @@ func UpdateDeskletVisibility(desklet *gldi.Desklet) {
 
 // CORE BACKEND
 
+// ShowModuleInstanceGui opens the icons page of the GUI to configure the given applet.
+//
 func ShowModuleInstanceGui(moduleInstance *gldi.ModuleInstance, showPage int) {
 	if dockGui == nil {
 		return
@@ -339,6 +367,8 @@ func ShowModuleInstanceGui(moduleInstance *gldi.ModuleInstance, showPage int) {
 
 }
 
+// SetStatusMessage is unused.
+//
 func SetStatusMessage(message string) {
 	if dockGui == nil {
 		return
@@ -346,6 +376,8 @@ func SetStatusMessage(message string) {
 	dockGui.SetStatusMessage(message)
 }
 
+// ReloadCurrentWidget reloads the current widget page.
+//
 func ReloadCurrentWidget(moduleInstance *gldi.ModuleInstance, showPage int) {
 	if dockGui == nil {
 		return

@@ -69,7 +69,7 @@ install: install-common
 		cp -Rv --preserve=timestamps "applets/$$f"  "$(PKGDIR)/$(APPDIRDBUS)" ;\
 		rm "$(PKGDIR)/$(APPDIRDBUS)/$$f/applet.go" ;\
 		rm "$(PKGDIR)/$(APPDIRDBUS)/$$f/Makefile" ;\
-		ln -s "$(PKGDIR)/usr/bin/tocdc"  "$(PKGDIR)/$(APPDIRDBUS)/$$f/$$f" ;\
+		ln -s "/usr/bin/tocdc"  "$(PKGDIR)/$(APPDIRDBUS)/$$f/$$f" ;\
 	done
 
 install-dock: install-common

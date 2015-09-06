@@ -85,7 +85,7 @@ everybody at the moment. But it also needs to be tested now.
 	// New dock settings.
 
 	newAppletsDisable := cmdDefault.Flag.Bool("N", false, "")
-	newHttpPprof := cmdDefault.Flag.Bool("H", false, "")
+	newHTTPPprof := cmdDefault.Flag.Bool("H", false, "")
 	newDebug := cmdDefault.Flag.Bool("D", false, "")
 
 	// Local flags. (static as they do not even start a dock).
@@ -119,7 +119,7 @@ everybody at the moment. But it also needs to be tested now.
 			NoSticky:           *userNoSticky,
 			ModulesDir:         *userModulesDir,
 
-			HttpPprof:      *newHttpPprof,
+			HttpPprof:      *newHTTPPprof,
 			AppletsDisable: *newAppletsDisable,
 			Debug:          *newDebug,
 		}

@@ -4,10 +4,9 @@ package globals
 /*
 #cgo pkg-config: gldi
 
-#include "cairo-dock-applications-manager.h"       // myTaskbarParam
 #include "cairo-dock-container.h"                  // NOTIFICATION_CLICK_ICON ...
 #include "cairo-dock-desklet-manager.h"            // myDeskletObjectMgr
-#include "cairo-dock-dock-manager.h"               // myDocksParam
+#include "cairo-dock-dock-manager.h"               // NOTIFICATION_ENTER_DOCK
 #include "cairo-dock-global-variables.h"           // g_pPrimaryContainer
 #include "cairo-dock-keybinder.h"                  // NOTIFICATION_SHORTKEY_CHANGED
 #include "cairo-dock-module-manager.h"             // myModuleObjectMgr
@@ -41,7 +40,9 @@ import (
 )
 
 var (
-	FullLock bool // Full settings lock from -k option at start. Config must not be changed if true.
+	// FullLock represents the full settings lock from -k option at start.
+	// Config must not be changed if true.
+	FullLock bool
 )
 
 // Version returns the current version of the dock.
@@ -56,32 +57,43 @@ func VersionSplit() (int, int, int) {
 	return int(C.g_iMajorVersion), int(C.g_iMinorVersion), int(C.g_iMicroVersion) // was CAIRO_DOCK_VERSION
 }
 
+// GtkVersion returns the GTK version used to compile gldi.
+//
 func GtkVersion() (int, int, int) {
 	return C.GTK_MAJOR_VERSION, C.GTK_MINOR_VERSION, C.GTK_MICRO_VERSION
 }
 
-func Maindock() *gldi.CairoDock {
-	return gldi.NewDockFromNative(unsafe.Pointer(C.g_pMainDock))
-}
+//
+//-------------------------------------------------------------------[ PATHS ]--
 
+// CurrentThemePath returns the path to the current theme (in use).
+//
 func CurrentThemePath(path ...string) string {
 	dir := C.GoString((*C.char)(C.g_cCurrentThemePath))
 	path = append([]string{dir}, path...)
 	return filepath.Join(path...)
 }
 
+// CurrentLaunchersPath returns the path to the launchers dir.
+//
 func CurrentLaunchersPath() string {
 	return C.GoString((*C.char)(C.g_cCurrentLaunchersPath))
 }
 
+// ConfigFile returns the path of the current config file (in use).
+//
 func ConfigFile() string {
 	return C.GoString((*C.char)(C.g_cConfFile))
 }
 
+// ConfigFileDefault returns the path of the default config file (unchanged).
+//
 func ConfigFileDefault() string {
 	return DirShareData(C.CAIRO_DOCK_CONF_FILE)
 }
 
+// DirDockData returns the path to the dock data dir.
+//
 func DirDockData(path ...string) string {
 	dir := C.GoString((*C.char)(C.g_cCairoDockDataDir))
 	path = append([]string{dir}, path...)
@@ -94,6 +106,8 @@ func DirCurrentIcons() string {
 	return C.GoString((*C.char)(C.g_cCurrentIconsPath))
 }
 
+// DirShareData returns the path to the share data dir.
+//
 func DirShareData(path ...string) string {
 	path = append([]string{C.GLDI_SHARE_DATA_DIR}, path...) // was CAIRO_DOCK_SHARE_DATA_DIR
 	return filepath.Join(path...)
@@ -114,6 +128,17 @@ func DirUserAppData(path ...string) (string, error) {
 	return full, e
 }
 
+//
+//------------------------------------------------------------[ MAIN OBJECTS ]--
+
+// Maindock returns the primary main dock object.
+//
+func Maindock() *gldi.CairoDock {
+	return gldi.NewDockFromNative(unsafe.Pointer(C.g_pMainDock))
+}
+
+// PrimaryContainer returns the main primary container object.
+//
 func PrimaryContainer() *gldi.Container {
 	return gldi.NewContainerFromNative(unsafe.Pointer(C.g_pPrimaryContainer))
 }
@@ -128,78 +153,9 @@ func PrimaryContainer() *gldi.Container {
 //
 //------------------------------------------------------------[ GLOBAL FILES ]--
 
+// FileCairoDockIcon gives the location of the cairo-dock icon.
+//
 func FileCairoDockIcon() string { return DirShareData(cdglobal.FileCairoDockIcon) }
-
-//
-//-------------------------------------------------------------[ DOCKS PARAM ]--
-
-var DocksParam DocksParamType
-
-type DocksParamType struct{}
-
-func (DocksParamType) IsLockAll() bool {
-	return gobool(C.myDocksParam.bLockAll)
-}
-
-func (DocksParamType) IsLockIcons() bool {
-	return gobool(C.myDocksParam.bLockIcons)
-}
-
-func (DocksParamType) SetLockAll(b bool) {
-	C.myDocksParam.bLockAll = cbool(b)
-}
-
-func (DocksParamType) SetLockIcons(b bool) {
-	C.myDocksParam.bLockIcons = cbool(b)
-}
-
-func DockIsLocked() bool {
-	return DocksParam.IsLockAll() || FullLock
-}
-
-//
-//-----------------------------------------------------------[ TASKBAR PARAM ]--
-
-// struct _CairoTaskbarParam {
-// 	gboolean bShowAppli;
-// 	gboolean bGroupAppliByClass;
-// 	gint iAppliMaxNameLength;
-// 	gboolean bMinimizeOnClick;
-// 	gboolean bPresentClassOnClick;
-// // 	gint iActionOnMiddleClick;
-// 	gboolean bHideVisibleApplis;
-// 	gdouble fVisibleAppliAlpha;
-// 	gboolean bAppliOnCurrentDesktopOnly;
-// 	gboolean bDemandsAttentionWithDialog;
-// 	gint iDialogDuration;
-// 	gchar *cAnimationOnDemandsAttention;
-// 	gchar *cAnimationOnActiveWindow;
-// 	gboolean bOverWriteXIcons;
-// 	gint iMinimizedWindowRenderType;
-// 	gboolean bMixLauncherAppli;
-// 	gchar *cOverwriteException;
-// 	gchar *cGroupException;
-// 	gchar *cForceDemandsAttention;
-// 	CairoTaskbarPlacement iIconPlacement;
-// 	gchar *cRelativeIconName;
-// 	gboolean bSeparateApplis;
-// 	} ;
-
-// var TaskbarParam TaskbarParamType
-
-var TaskbarParam = &TaskbarParamType{&C.myTaskbarParam}
-
-type TaskbarParamType struct {
-	Ptr *C.CairoTaskbarParam
-}
-
-func (o *TaskbarParamType) ActionOnMiddleClick() int {
-	return int(o.Ptr.iActionOnMiddleClick)
-}
-
-func (o *TaskbarParamType) OverWriteXIcons() bool {
-	return gobool(o.Ptr.bOverWriteXIcons)
-}
 
 //
 //--------------------------------------------------------------[ ICON NAMES ]--
@@ -296,11 +252,13 @@ const (
 //
 //-----------------------------------------------------------[ NOTIFICATIONS ]--
 
+// NotifRun defines if an event is received before or after others.
 type NotifRun int
 
+// Event registration call time.
 const (
-	RunAfter NotifRun = C.GLDI_RUN_AFTER
 	RunFirst NotifRun = C.GLDI_RUN_FIRST
+	RunAfter NotifRun = C.GLDI_RUN_AFTER
 )
 
 // type NotifContainer int
@@ -408,14 +366,20 @@ const (
 //
 //-----------------------------------------------------------------[ MANAGER ]--
 
+// ObjectManager is a wrapper around a C dock manager.
+//
 type ObjectManager struct {
 	Ptr *C.GldiObjectManager
 }
 
+// NewObjectManagerFromNative wraps a C dock manager object.
+//
 func NewObjectManagerFromNative(p unsafe.Pointer) *ObjectManager {
 	return &ObjectManager{(*C.GldiObjectManager)(p)}
 }
 
+// RegisterNotification registers a callback to a dock event.
+//
 func (o *ObjectManager) RegisterNotification(typ int, call unsafe.Pointer, run NotifRun) {
 	C.gldi_object_register_notification(C.gpointer(o.Ptr),
 		C.GldiNotificationType(typ),
@@ -423,26 +387,14 @@ func (o *ObjectManager) RegisterNotification(typ int, call unsafe.Pointer, run N
 		C.gboolean(run), nil)
 }
 
-var ContainerObjectMgr = &ObjectManager{&C.myContainerObjectMgr}
-var DeskletObjectMgr = &ObjectManager{&C.myDeskletObjectMgr}
-var DockObjectMgr = &ObjectManager{&C.myDockObjectMgr}
-var ModuleObjectMgr = &ObjectManager{&C.myModuleObjectMgr}
-var ModuleInstanceObjectMgr = &ObjectManager{&C.myModuleInstanceObjectMgr}
-var ShortkeyObjectMgr = &ObjectManager{&C.myShortkeyObjectMgr}
-var WindowObjectMgr = &ObjectManager{&C.myWindowObjectMgr}
-
+// Dock objects managers.
 //
-//-----------------------------------------------------------------[ HELPERS ]--
-
-func cbool(b bool) C.gboolean {
-	if b {
-		return C.gboolean(1)
-	}
-	return C.gboolean(0)
-}
-func gobool(b C.gboolean) bool {
-	if b == 1 {
-		return true
-	}
-	return false
-}
+var (
+	ContainerObjectMgr      = &ObjectManager{&C.myContainerObjectMgr}
+	DeskletObjectMgr        = &ObjectManager{&C.myDeskletObjectMgr}
+	DockObjectMgr           = &ObjectManager{&C.myDockObjectMgr}
+	ModuleObjectMgr         = &ObjectManager{&C.myModuleObjectMgr}
+	ModuleInstanceObjectMgr = &ObjectManager{&C.myModuleInstanceObjectMgr}
+	ShortkeyObjectMgr       = &ObjectManager{&C.myShortkeyObjectMgr}
+	WindowObjectMgr         = &ObjectManager{&C.myWindowObjectMgr}
+)

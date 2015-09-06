@@ -1,4 +1,4 @@
-// +build Update || all
+// +build all Update
 
 package allapps
 

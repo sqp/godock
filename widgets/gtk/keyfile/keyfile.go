@@ -47,6 +47,7 @@ const (
 // Error is a representation of GLib's KeyFileError.
 type Error C.gint
 
+// Error type list.
 const (
 	ErrorUnknownEncoding Error = 0
 	ErrorParse           Error = 1
@@ -96,49 +97,49 @@ func NewFromFile(file string, flags Flags) (*KeyFile, error) {
 }
 
 // Free is a wrapper around g_key_file_free().
-func (this *KeyFile) Free() {
-	C.g_key_file_free(this.cKey)
+func (kf *KeyFile) Free() {
+	C.g_key_file_free(kf.cKey)
 }
 
 // LoadFromFile is a wrapper around g_key_file_load_from_file().
-func (this *KeyFile) LoadFromFile(file string, flags Flags) (bool, error) {
-	var cstr *C.char = C.CString(file)
+func (kf *KeyFile) LoadFromFile(file string, flags Flags) (bool, error) {
+	var cstr = C.CString(file)
 	defer C.g_free(C.gpointer(cstr))
 	var cerr *C.GError
-	c := C.g_key_file_load_from_file(this.cKey, (*C.gchar)(cstr), C.GKeyFileFlags(flags), &cerr)
+	c := C.g_key_file_load_from_file(kf.cKey, (*C.gchar)(cstr), C.GKeyFileFlags(flags), &cerr)
 	return c != 0, goError(cerr)
 }
 
 // ToData is a wrapper around g_key_file_to_data().
-func (this *KeyFile) ToData() (uint64, string, error) {
+func (kf *KeyFile) ToData() (uint64, string, error) {
 	var clength C.gsize
 	var cerr *C.GError
-	c := C.g_key_file_to_data(this.cKey, &clength, &cerr)
+	c := C.g_key_file_to_data(kf.cKey, &clength, &cerr)
 	defer C.g_free(C.gpointer(c))
 	return uint64(clength), C.GoString((*C.char)(c)), goError(cerr)
 }
 
 // ToNative returns the pointer to the underlying GKeyFile.
-func (this *KeyFile) ToNative() *C.GKeyFile {
-	return this.cKey
+func (kf *KeyFile) ToNative() *C.GKeyFile {
+	return kf.cKey
 }
 
 // HasKey is a wrapper around g_key_file_has_key().
-func (this *KeyFile) HasKey(group string, key string) bool {
+func (kf *KeyFile) HasKey(group string, key string) bool {
 	cGroup := (*C.gchar)(C.CString(group))
 	defer C.g_free(C.gpointer(cGroup))
 	cKey := (*C.gchar)(C.CString(key))
 	defer C.g_free(C.gpointer(cKey))
-	return goBool(C.g_key_file_has_key(this.cKey, cGroup, cKey, nil))
+	return goBool(C.g_key_file_has_key(kf.cKey, cGroup, cKey, nil))
 }
 
 //
 //---------------------------------------------------------------------[ GET ]--
 
 // GetGroups is a wrapper around g_key_file_get_groups().
-func (this *KeyFile) GetGroups() (uint64, []string) {
+func (kf *KeyFile) GetGroups() (uint64, []string) {
 	var length C.gsize
-	c := C.g_key_file_get_groups(this.cKey, &length)
+	c := C.g_key_file_get_groups(kf.cKey, &length)
 	var list []string
 	for i := 0; i < int(length); i++ {
 		if str := C.GoString((*(*[999999]*C.char)(unsafe.Pointer(c)))[i]); str != "" {
@@ -152,12 +153,12 @@ func (this *KeyFile) GetGroups() (uint64, []string) {
 }
 
 // GetKeys is a wrapper around g_key_file_get_keys().
-func (this *KeyFile) GetKeys(group string) (uint64, []string, error) {
+func (kf *KeyFile) GetKeys(group string) (uint64, []string, error) {
 	cGroup := (*C.gchar)(C.CString(group))
 	defer C.g_free(C.gpointer(cGroup))
 	var length C.gsize
 	var cErr *C.GError
-	c := C.g_key_file_get_keys(this.cKey, cGroup, &length, &cErr)
+	c := C.g_key_file_get_keys(kf.cKey, cGroup, &length, &cErr)
 	list := make([]string, uint64(length))
 	for i := range list {
 		list[i] = C.GoString((*(*[999999]*C.char)(unsafe.Pointer(c)))[i])
@@ -167,9 +168,9 @@ func (this *KeyFile) GetKeys(group string) (uint64, []string, error) {
 }
 
 // ListBool is a wrapper around g_key_file_get_boolean_list().
-func (this *KeyFile) ListBool(group string, key string) ([]bool, error) {
+func (kf *KeyFile) ListBool(group string, key string) ([]bool, error) {
 	// var c C.gpointer
-	length, c, e := this.getList(group, key, "bool")
+	length, c, e := kf.getList(group, key, "bool")
 	defer C.g_free(c)
 	list := make([]bool, length)
 	for i := range list {
@@ -179,8 +180,8 @@ func (this *KeyFile) ListBool(group string, key string) ([]bool, error) {
 }
 
 // ListInt is a wrapper around g_key_file_get_integer_list().
-func (this *KeyFile) ListInt(group string, key string) ([]int, error) {
-	length, c, e := this.getList(group, key, "int")
+func (kf *KeyFile) ListInt(group string, key string) ([]int, error) {
+	length, c, e := kf.getList(group, key, "int")
 	defer C.g_free(c)
 	list := make([]int, length)
 	for i := range list {
@@ -190,9 +191,9 @@ func (this *KeyFile) ListInt(group string, key string) ([]int, error) {
 }
 
 // ListFloat is a wrapper around g_key_file_get_double_list().
-func (this *KeyFile) ListFloat(group string, key string) ([]float64, error) {
+func (kf *KeyFile) ListFloat(group string, key string) ([]float64, error) {
 	// var c C.gpointer
-	length, c, e := this.getList(group, key, "float64")
+	length, c, e := kf.getList(group, key, "float64")
 	defer C.g_free(c)
 	list := make([]float64, length)
 	for i := range list {
@@ -202,8 +203,8 @@ func (this *KeyFile) ListFloat(group string, key string) ([]float64, error) {
 }
 
 // ListString is a wrapper around g_key_file_get_string_list().
-func (this *KeyFile) ListString(group string, key string) ([]string, error) {
-	length, c, e := this.getList(group, key, "string")
+func (kf *KeyFile) ListString(group string, key string) ([]string, error) {
+	length, c, e := kf.getList(group, key, "string")
 	defer C.g_free(c)
 	list := make([]string, length)
 	for i := range list {
@@ -212,7 +213,7 @@ func (this *KeyFile) ListString(group string, key string) ([]string, error) {
 	return list, e
 }
 
-func (this *KeyFile) getList(group, key, typ string) (uint64, C.gpointer, error) {
+func (kf *KeyFile) getList(group, key, typ string) (uint64, C.gpointer, error) {
 	cGroup := (*C.gchar)(C.CString(group))
 	defer C.g_free(C.gpointer(cGroup))
 	cKey := (*C.gchar)(C.CString(key))
@@ -222,13 +223,13 @@ func (this *KeyFile) getList(group, key, typ string) (uint64, C.gpointer, error)
 	var c C.gpointer
 	switch typ {
 	case "bool":
-		c = C.gpointer(C.g_key_file_get_boolean_list(this.cKey, cGroup, cKey, &length, &cErr))
+		c = C.gpointer(C.g_key_file_get_boolean_list(kf.cKey, cGroup, cKey, &length, &cErr))
 	case "int":
-		c = C.gpointer(C.g_key_file_get_integer_list(this.cKey, cGroup, cKey, &length, &cErr))
+		c = C.gpointer(C.g_key_file_get_integer_list(kf.cKey, cGroup, cKey, &length, &cErr))
 	case "float64":
-		c = C.gpointer(C.g_key_file_get_double_list(this.cKey, cGroup, cKey, &length, &cErr))
+		c = C.gpointer(C.g_key_file_get_double_list(kf.cKey, cGroup, cKey, &length, &cErr))
 	case "string":
-		c = C.gpointer(C.g_key_file_get_string_list(this.cKey, cGroup, cKey, &length, &cErr))
+		c = C.gpointer(C.g_key_file_get_string_list(kf.cKey, cGroup, cKey, &length, &cErr))
 
 	}
 	return uint64(length), c, goError(cErr)
@@ -236,25 +237,25 @@ func (this *KeyFile) getList(group, key, typ string) (uint64, C.gpointer, error)
 
 // Get gets a value from the keyfile. Must be used with a pointer to value.
 //
-func (this *KeyFile) Get(group string, key string, val interface{}) error {
+func (kf *KeyFile) Get(group string, key string, val interface{}) error {
 	switch ptr := val.(type) {
 	case *[]bool:
-		cast, e := this.ListBool(group, key)
+		cast, e := kf.ListBool(group, key)
 		*ptr = cast
 		return e
 
 	case *[]int:
-		cast, e := this.ListInt(group, key)
+		cast, e := kf.ListInt(group, key)
 		*ptr = cast
 		return e
 
 	case *[]float64:
-		cast, e := this.ListFloat(group, key)
+		cast, e := kf.ListFloat(group, key)
 		*ptr = cast
 		return e
 
 	case *[]string:
-		cast, e := this.ListString(group, key)
+		cast, e := kf.ListString(group, key)
 		*ptr = cast
 		return e
 	}
@@ -267,16 +268,16 @@ func (this *KeyFile) Get(group string, key string, val interface{}) error {
 
 	switch ptr := val.(type) {
 	case *bool:
-		*ptr = goBool(C.g_key_file_get_boolean(this.cKey, cGroup, cKey, &cErr))
+		*ptr = goBool(C.g_key_file_get_boolean(kf.cKey, cGroup, cKey, &cErr))
 
 	case *int:
-		*ptr = int(C.g_key_file_get_integer(this.cKey, cGroup, cKey, &cErr))
+		*ptr = int(C.g_key_file_get_integer(kf.cKey, cGroup, cKey, &cErr))
 
 	case *float64:
-		*ptr = float64(C.g_key_file_get_double(this.cKey, cGroup, cKey, &cErr))
+		*ptr = float64(C.g_key_file_get_double(kf.cKey, cGroup, cKey, &cErr))
 
 	case *string:
-		cstr := C.g_key_file_get_string(this.cKey, cGroup, cKey, &cErr)
+		cstr := C.g_key_file_get_string(kf.cKey, cGroup, cKey, &cErr)
 		*ptr = C.GoString((*C.char)(cstr))
 		C.g_free(C.gpointer(cstr))
 
@@ -284,19 +285,25 @@ func (this *KeyFile) Get(group string, key string, val interface{}) error {
 	return goError(cErr)
 }
 
-func (this *KeyFile) GetOne(group string, key string, typ string) (interface{}, error) {
+// GetOne returns a key value as interface.
+//
+// valid types are:
+//   bool, int, float64, string, comment
+//   listbool, listint, listfloat64, liststring,
+//
+func (kf *KeyFile) GetOne(group string, key string, typ string) (interface{}, error) {
 	switch typ {
 	case "listbool":
-		return this.ListBool(group, key)
+		return kf.ListBool(group, key)
 
 	case "listint":
-		return this.ListInt(group, key)
+		return kf.ListInt(group, key)
 
 	case "listfloat64":
-		return this.ListFloat(group, key)
+		return kf.ListFloat(group, key)
 
 	case "liststring":
-		return this.ListString(group, key)
+		return kf.ListString(group, key)
 	}
 
 	cGroup := (*C.gchar)(C.CString(group))
@@ -308,21 +315,21 @@ func (this *KeyFile) GetOne(group string, key string, typ string) (interface{}, 
 	var c interface{}
 	switch typ {
 	case "bool":
-		c = goBool(C.g_key_file_get_boolean(this.cKey, cGroup, cKey, &cErr))
+		c = goBool(C.g_key_file_get_boolean(kf.cKey, cGroup, cKey, &cErr))
 
 	case "int":
-		c = int(C.g_key_file_get_integer(this.cKey, cGroup, cKey, &cErr))
+		c = int(C.g_key_file_get_integer(kf.cKey, cGroup, cKey, &cErr))
 
 	case "float64":
-		c = float64(C.g_key_file_get_double(this.cKey, cGroup, cKey, &cErr))
+		c = float64(C.g_key_file_get_double(kf.cKey, cGroup, cKey, &cErr))
 
 	case "comment":
-		cstr := C.g_key_file_get_comment(this.cKey, cGroup, cKey, &cErr)
+		cstr := C.g_key_file_get_comment(kf.cKey, cGroup, cKey, &cErr)
 		c = C.GoString((*C.char)(cstr))
 		C.g_free(C.gpointer(cstr))
 
 	case "string":
-		cstr := C.g_key_file_get_string(this.cKey, cGroup, cKey, &cErr)
+		cstr := C.g_key_file_get_string(kf.cKey, cGroup, cKey, &cErr)
 		c = C.GoString((*C.char)(cstr))
 		C.g_free(C.gpointer(cstr))
 
@@ -331,32 +338,32 @@ func (this *KeyFile) GetOne(group string, key string, typ string) (interface{}, 
 }
 
 // Bool is a wrapper around g_key_file_get_boolean().
-func (this *KeyFile) Bool(group string, key string) (bool, error) {
-	ret, e := this.GetOne(group, key, "bool")
+func (kf *KeyFile) Bool(group string, key string) (bool, error) {
+	ret, e := kf.GetOne(group, key, "bool")
 	return ret.(bool), e
 }
 
 // Int is a wrapper around g_key_file_get_integer().
-func (this *KeyFile) Int(group string, key string) (int, error) {
-	ret, e := this.GetOne(group, key, "int")
+func (kf *KeyFile) Int(group string, key string) (int, error) {
+	ret, e := kf.GetOne(group, key, "int")
 	return ret.(int), e
 }
 
 // Float is a wrapper around g_key_file_get_double().
-func (this *KeyFile) Float(group string, key string) (float64, error) {
-	ret, e := this.GetOne(group, key, "float64")
+func (kf *KeyFile) Float(group string, key string) (float64, error) {
+	ret, e := kf.GetOne(group, key, "float64")
 	return ret.(float64), e
 }
 
 // String is a wrapper around g_key_file_get_string().
-func (this *KeyFile) String(group string, key string) (string, error) {
-	ret, e := this.GetOne(group, key, "string")
+func (kf *KeyFile) String(group string, key string) (string, error) {
+	ret, e := kf.GetOne(group, key, "string")
 	return ret.(string), e
 }
 
 // GetComment is a wrapper around g_key_file_get_comment().
-func (this *KeyFile) GetComment(group string, key string) (string, error) {
-	ret, e := this.GetOne(group, key, "comment")
+func (kf *KeyFile) GetComment(group string, key string) (string, error) {
+	ret, e := kf.GetOne(group, key, "comment")
 	return ret.(string), e
 }
 
@@ -364,7 +371,7 @@ func (this *KeyFile) GetComment(group string, key string) (string, error) {
 //---------------------------------------------------------------------[ SET ]--
 
 // Set is a generic wrapper around g_key_file_set_xxx() with type assertion.
-func (this *KeyFile) Set(group string, key string, uncasted interface{}) error {
+func (kf *KeyFile) Set(group string, key string, uncasted interface{}) error {
 	cGroup := (*C.gchar)(C.CString(group))
 	defer C.g_free(C.gpointer(cGroup))
 	cKey := (*C.gchar)(C.CString(key))
@@ -372,37 +379,37 @@ func (this *KeyFile) Set(group string, key string, uncasted interface{}) error {
 
 	switch value := uncasted.(type) {
 	case bool:
-		C.g_key_file_set_boolean(this.cKey, cGroup, cKey, cBool(value))
+		C.g_key_file_set_boolean(kf.cKey, cGroup, cKey, cBool(value))
 
 	case int:
-		C.g_key_file_set_integer(this.cKey, cGroup, cKey, C.gint(value))
+		C.g_key_file_set_integer(kf.cKey, cGroup, cKey, C.gint(value))
 
 	case float64:
-		C.g_key_file_set_double(this.cKey, cGroup, cKey, C.gdouble(value))
+		C.g_key_file_set_double(kf.cKey, cGroup, cKey, C.gdouble(value))
 
 	case string:
 		cstr := (*C.gchar)(C.CString(value))
 		defer C.g_free(C.gpointer(cstr))
-		C.g_key_file_set_string(this.cKey, cGroup, cKey, cstr)
+		C.g_key_file_set_string(kf.cKey, cGroup, cKey, cstr)
 
 	case []bool:
 		clist := cListBool(value)
 		defer C.g_free(C.gpointer(clist))
-		C.g_key_file_set_boolean_list(this.cKey, cGroup, cKey, clist, C.gsize(len(value)))
+		C.g_key_file_set_boolean_list(kf.cKey, cGroup, cKey, clist, C.gsize(len(value)))
 
 	case []int:
 		clist := cListInt(value)
 		defer C.g_free(C.gpointer(clist))
-		C.g_key_file_set_integer_list(this.cKey, cGroup, cKey, clist, C.gsize(len(value)))
+		C.g_key_file_set_integer_list(kf.cKey, cGroup, cKey, clist, C.gsize(len(value)))
 
 	case []float64:
 		clist := cListDouble(value)
 		defer C.g_free(C.gpointer(clist))
-		C.g_key_file_set_double_list(this.cKey, cGroup, cKey, clist, C.gsize(len(value)))
+		C.g_key_file_set_double_list(kf.cKey, cGroup, cKey, clist, C.gsize(len(value)))
 
 	case []string:
 		clist := cListString(value)
-		C.g_key_file_set_string_list(this.cKey, cGroup, cKey, clist, C.gsize(len(value)))
+		C.g_key_file_set_string_list(kf.cKey, cGroup, cKey, clist, C.gsize(len(value)))
 		for i := range value {
 			C.g_free(C.gpointer((*(*[999999]*C.gchar)(unsafe.Pointer(clist)))[i]))
 		}
@@ -415,23 +422,23 @@ func (this *KeyFile) Set(group string, key string, uncasted interface{}) error {
 }
 
 // SetBool is a wrapper around g_key_file_set_boolean().
-func (this *KeyFile) SetBool(group string, key string, value bool) {
-	this.Set(group, key, value)
+func (kf *KeyFile) SetBool(group string, key string, value bool) {
+	kf.Set(group, key, value)
 }
 
 // SetListBool is a wrapper around g_key_file_set_boolean_list().
-func (this *KeyFile) SetListBool(group string, key string, value []bool) {
-	this.Set(group, key, value)
+func (kf *KeyFile) SetListBool(group string, key string, value []bool) {
+	kf.Set(group, key, value)
 }
 
 // SetFloat is a wrapper around g_key_file_set_double().
-func (this *KeyFile) SetFloat(group string, key string, value float64) {
-	this.Set(group, key, value)
+func (kf *KeyFile) SetFloat(group string, key string, value float64) {
+	kf.Set(group, key, value)
 }
 
 // SetListFloat is a wrapper around g_key_file_set_double_list().
-func (this *KeyFile) SetListFloat(group string, key string, value []float64) {
-	this.Set(group, key, value)
+func (kf *KeyFile) SetListFloat(group string, key string, value []float64) {
+	kf.Set(group, key, value)
 }
 
 // func (this0 *KeyFile) SetInt64(group_name0 string, key0 string, value0 int64) {
@@ -439,23 +446,23 @@ func (this *KeyFile) SetListFloat(group string, key string, value []float64) {
 // }
 
 // SetInt is a wrapper around g_key_file_set_integer().
-func (this *KeyFile) SetInt(group string, key string, value int) {
-	this.Set(group, key, value)
+func (kf *KeyFile) SetInt(group string, key string, value int) {
+	kf.Set(group, key, value)
 }
 
 // SetListInt is a wrapper around g_key_file_set_integer_list().
-func (this *KeyFile) SetListInt(group string, key string, value []int) {
-	this.Set(group, key, value)
+func (kf *KeyFile) SetListInt(group string, key string, value []int) {
+	kf.Set(group, key, value)
 }
 
 // SetString is a wrapper around g_key_file_set_string().
-func (this *KeyFile) SetString(group string, key string, value string) {
-	this.Set(group, key, value)
+func (kf *KeyFile) SetString(group string, key string, value string) {
+	kf.Set(group, key, value)
 }
 
 // SetListString is a wrapper around g_key_file_set_string_list().
-func (this *KeyFile) SetListString(group string, key string, value []string) {
-	this.Set(group, key, value)
+func (kf *KeyFile) SetListString(group string, key string, value []string) {
+	kf.Set(group, key, value)
 }
 
 //
@@ -479,23 +486,71 @@ func NewValuer(kf *KeyFile, group, name string) *Valuer {
 	}
 }
 
+// Get assigns the value to the given pointer to value (of the matching type).
+//
 func (o *Valuer) Get(v interface{}) { o.kf.Get(o.group, o.name, v) }
 
-func (o *Valuer) Bool() (v bool)           { o.kf.Get(o.group, o.name, &v); return }
-func (o *Valuer) Int() (v int)             { o.kf.Get(o.group, o.name, &v); return }
-func (o *Valuer) Float() (v float64)       { o.kf.Get(o.group, o.name, &v); return }
-func (o *Valuer) String() (v string)       { o.kf.Get(o.group, o.name, &v); return }
-func (o *Valuer) ListBool() (v []bool)     { o.kf.Get(o.group, o.name, &v); return }
-func (o *Valuer) ListInt() (v []int)       { o.kf.Get(o.group, o.name, &v); return }
-func (o *Valuer) ListFloat() (v []float64) { o.kf.Get(o.group, o.name, &v); return }
-func (o *Valuer) ListString() (v []string) { o.kf.Get(o.group, o.name, &v); return }
+// Bool returns the value as bool.
+func (o *Valuer) Bool() (v bool) {
+	o.kf.Get(o.group, o.name, &v)
+	return
+}
 
-func (o *Valuer) Set(v interface{}) { o.kf.Set(o.group, o.name, v) }
+// Int returns the value as bool.
+func (o *Valuer) Int() (v int) {
+	o.kf.Get(o.group, o.name, &v)
+	return
+}
 
+// Float returns the value as bool.
+func (o *Valuer) Float() (v float64) {
+	o.kf.Get(o.group, o.name, &v)
+	return
+}
+
+// String returns the value as bool.
+func (o *Valuer) String() (v string) {
+	o.kf.Get(o.group, o.name, &v)
+	return
+}
+
+// ListBool returns the value as bool.
+func (o *Valuer) ListBool() (v []bool) {
+	o.kf.Get(o.group, o.name, &v)
+	return
+}
+
+// ListInt returns the value as bool.
+func (o *Valuer) ListInt() (v []int) {
+	o.kf.Get(o.group, o.name, &v)
+	return
+}
+
+// ListFloat returns the value as bool.
+func (o *Valuer) ListFloat() (v []float64) {
+	o.kf.Get(o.group, o.name, &v)
+	return
+}
+
+// ListString returns the value as bool.
+func (o *Valuer) ListString() (v []string) {
+	o.kf.Get(o.group, o.name, &v)
+	return
+}
+
+// Set sets the pointed keyfile key value.
+func (o *Valuer) Set(v interface{}) {
+	o.kf.Set(o.group, o.name, v)
+}
+
+// Sprint returns the value as printable text.
 func (o *Valuer) Sprint() string {
 	return o.String()
 }
 
+// SprintI returns the value as printable text of the element at position I in
+// the list if possible.
+//
 func (o *Valuer) SprintI(id int) string {
 	list := o.ListString()
 	if id >= len(list) {
@@ -505,6 +560,8 @@ func (o *Valuer) SprintI(id int) string {
 	return list[id]
 }
 
+// Count returns the number of elements in the list.
+//
 func (o *Valuer) Count() int { return len(o.ListString()) } // unsure.
 
 //

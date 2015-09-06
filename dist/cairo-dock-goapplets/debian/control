@@ -1,0 +1,25 @@
+Source: cairo-dock-goapplets
+Section: graphics
+Priority: optional
+Maintainer: SQP <sqp@glx-dock.org>
+Build-Depends: debhelper (>= 9),
+	golang-go,
+	libgirepository1.0-dev,
+	libglib2.0-dev,
+	libgtk-3-dev,
+	libgupnp-av-1.0-dev
+Standards-Version: 3.9.6
+Homepage: https://github.com/sqp/godock
+
+Package: cairo-dock-goapplets
+Architecture: any
+Depends: libglib2.0-0,
+	libgtk-3-0,
+	libgupnp-av-1.0-2,
+	${shlibs:Depends}, ${misc:Depends}
+Recommends: curl, git
+Suggests: cmake, gksudo
+Conflicts: cairo-dock-rework
+Description: Cairo-Dock applets package (Audio GoGmail TVPlay...).
+ This package provides a bunch of new dock applets to fill all your needs.
+ This program is still experimental but need testers.
