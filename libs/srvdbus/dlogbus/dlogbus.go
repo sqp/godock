@@ -18,8 +18,7 @@ const SrvObj = "org.cairodock.DockLog"
 const SrvPath = "/org/cairodock/DockLog"
 
 // Introspec is the Dbus introspect text with service methods.
-const Introspec = `
-<node>
+const Introspec = `<node>
 	<interface name="` + SrvObj + `">
 		<method name="Restart">
 		</method>
@@ -58,8 +57,13 @@ func (client *Client) Restart() error {
 // Server defines a Dbus server that manage the state of a cdc program.
 //
 type Server struct {
-	*dbuscommon.Server
+	*dbuscommon.Server // Dbus connection.
+
 	DockArgs []string
+	Started  bool
+
+	needRestart bool
+	over        chan struct{}
 }
 
 // NewServer creates a dlogbus server instance with cdc command args.
@@ -69,13 +73,44 @@ func NewServer(dockArgs []string, log cdtype.Logger) *Server {
 	return &Server{
 		Server:   dbuscommon.NewServer(SrvObj, SrvPath, log),
 		DockArgs: dockArgs,
+		over:     make(chan struct{}),
 	}
+}
+
+// SetArgs sets the dock command args.
+//
+func (o *Server) SetArgs(args []string) *Server {
+	o.DockArgs = args
+	return o
 }
 
 // DockStart starts the dock.
 //
 func (o *Server) DockStart() error {
-	return o.Log.ExecAsync("cdc", o.DockArgs...)
+
+	if o.IsStarted() { // && !o.needRestart { // on restart, the dock is too slow to quit, but can be relaunched early.
+		return nil
+	}
+
+	cmd := o.Log.ExecCmd("cdc", o.DockArgs...)
+	e := cmd.Start()
+	if e != nil {
+		return e
+	}
+
+	go func() {
+		o.Started = true
+
+		cmd.Wait()
+
+		o.Started = false
+
+		if o.needRestart {
+			o.needRestart = false
+			o.over <- struct{}{}
+		}
+	}()
+	return nil
 }
 
 // DockStop stops the dock.
@@ -88,10 +123,24 @@ func (o *Server) DockStop() error {
 // DockRestart restarts the dock.
 //
 func (o *Server) DockRestart() error {
-	e := o.DockStop()
-	o.Log.Err(e, "StopDock")
+
+	if o.IsStarted() {
+		e := o.DockStop()
+		o.Log.Err(e, "StopDock")
+	}
+
+	// Wait dock quit
+	o.needRestart = true
+
+	<-o.over
 
 	return o.DockStart()
+}
+
+// IsStarted returns whether the managed dock is started or not.
+//
+func (o *Server) IsStarted() bool {
+	return o.Started
 }
 
 //
@@ -100,10 +149,6 @@ func (o *Server) DockRestart() error {
 // Restart restarts the dock.
 //
 func (o *Server) Restart() *dbus.Error {
-	// e :=
 	o.DockRestart()
-	// if e != nil {
-	// 	return &dbus.Error{Name: e.Error()}
-	// }
 	return nil
 }

@@ -2,11 +2,10 @@
 package confdata
 
 import (
-	"github.com/bradfitz/iter"
-
 	"github.com/sqp/godock/libs/cdglobal"
 	"github.com/sqp/godock/libs/gldi"
 	"github.com/sqp/godock/libs/gldi/desktopclass"
+	"github.com/sqp/godock/libs/gldi/docklist"
 	"github.com/sqp/godock/libs/gldi/globals"
 	"github.com/sqp/godock/libs/packages"
 	"github.com/sqp/godock/libs/ternary"
@@ -452,7 +451,7 @@ func (Data) DisplayMode() datatype.DisplayMode {
 //
 func (Data) ListKnownApplets() map[string]datatype.Appleter {
 	list := make(map[string]datatype.Appleter)
-	for name, app := range gldi.ModuleList() {
+	for name, app := range docklist.Module() {
 		if !app.IsAutoLoaded() { // don't display modules that can't be disabled
 			list[name] = &AppletConf{
 				VisitCard: *app.VisitCard(),
@@ -472,7 +471,7 @@ func (Data) ListDownloadApplets() (map[string]datatype.Appleter, error) {
 		return nil, e
 	}
 
-	applets := gldi.ModuleList()
+	applets := docklist.Module()
 	list := make(map[string]datatype.Appleter)
 	for k, v := range packs {
 		list[k] = &AppletDownload{
@@ -549,7 +548,7 @@ func (Data) ListIcons() *datatype.ListIcon {
 
 	// Add modules in desklets.
 	var desklets []datatype.Iconer
-	for _, desklet := range gldi.DeskletList() {
+	for _, desklet := range docklist.Desklet() {
 		icon := desklet.GetIcon()
 		if icon != nil {
 			desklets = append(desklets, &IconConf{*icon})
@@ -569,7 +568,7 @@ func (Data) ListIcons() *datatype.ListIcon {
 	// Add other modules (not in a dock or a desklet) : plug-in or detached applet.
 	// We need to create custom icons for them.
 	var services []datatype.Iconer
-	for _, mod := range gldi.ModuleList() {
+	for _, mod := range docklist.Module() {
 		cat := mod.VisitCard().GetCategory()
 
 		if cat != gldi.CategoryBehavior && cat != gldi.CategoryTheme && !mod.IsAutoLoaded() {
@@ -603,7 +602,7 @@ func (Data) ListIcons() *datatype.ListIcon {
 // ListShortkeys returns the list of dock shortkeys.
 //
 func (Data) ListShortkeys() (list []datatype.Shortkeyer) {
-	for _, rend := range gldi.ShortkeyList() {
+	for _, rend := range docklist.Shortkey() {
 		list = append(list, datatype.Shortkeyer(rend))
 	}
 	return list
@@ -619,13 +618,13 @@ func (Data) ListScreens() (list []datatype.Field) {
 	}
 
 	var xmax, ymax int
-	for i := range iter.N(nb) {
+	for i := 0; i < nb; i++ {
 		x, y := geo.ScreenPosition(i)
 		xmax = ternary.Max(x, xmax)
 		ymax = ternary.Max(y, ymax)
 	}
 
-	for i := range iter.N(nb) {
+	for i := 0; i < nb; i++ {
 		var xstr, ystr string
 		x, y := geo.ScreenPosition(i)
 		if xmax > 0 { // at least 2 screens horizontally
@@ -662,7 +661,7 @@ func (Data) ListScreens() (list []datatype.Field) {
 //
 func (Data) ListViews() map[string]datatype.Handbooker {
 	list := make(map[string]datatype.Handbooker)
-	for key, rend := range gldi.CairoDockRendererList() {
+	for key, rend := range docklist.CairoDockRenderer() {
 		list[key] = &HandbookDescTranslate{&datatype.HandbookDescDisk{Handbooker: &datatype.HandbookSimple{
 			Key:         key,
 			Title:       ternary.String(rend.GetDisplayedName() != "", rend.GetDisplayedName(), key),
@@ -676,7 +675,7 @@ func (Data) ListViews() map[string]datatype.Handbooker {
 // ListAnimations returns the list of animations.
 //
 func (Data) ListAnimations() (list []datatype.Field) {
-	for key, rend := range gldi.AnimationList() {
+	for key, rend := range docklist.Animation() {
 		list = append(list, displayerField(key, rend))
 	}
 	return list
@@ -685,7 +684,7 @@ func (Data) ListAnimations() (list []datatype.Field) {
 // ListDeskletDecorations returns the list of desklet decorations.
 //
 func (Data) ListDeskletDecorations() (list []datatype.Field) {
-	for key, rend := range gldi.CairoDeskletDecorationList() {
+	for key, rend := range docklist.CairoDeskletDecoration() {
 		list = append(list, displayerField(key, rend))
 	}
 	datatype.ListFieldsSortByName(list)
@@ -695,7 +694,7 @@ func (Data) ListDeskletDecorations() (list []datatype.Field) {
 // ListDialogDecorator returns the list of dialog decorators.
 //
 func (Data) ListDialogDecorator() (list []datatype.Field) {
-	for key, rend := range gldi.DialogDecoratorList() {
+	for key, rend := range docklist.DialogDecorator() {
 		list = append(list, displayerField(key, rend))
 	}
 	return list

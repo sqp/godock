@@ -110,7 +110,8 @@ func GetBoth(struc reflect.StructField) string {
 // Config file unmarshall. Parsing errors will be stacked in the Errors field.
 //
 type Config struct {
-	config.Config
+	config.Config // Extends the real config.
+
 	Errors []error
 }
 

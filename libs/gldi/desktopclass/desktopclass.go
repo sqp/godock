@@ -55,17 +55,17 @@ func (class Info) MenuItems() (ret [][]string) {
 	cClass := (*C.gchar)(C.CString(class.String()))
 	defer C.free(unsafe.Pointer((*C.char)(cClass)))
 	c := C.cairo_dock_get_class_menu_items(cClass) // do not free.
-	list := (*glib.List)(unsafe.Pointer(c))
+	list := glib.WrapList(uintptr(unsafe.Pointer(c)))
+	for i := list.Length(); i > uint(0); i-- {
 
-	for list != nil {
-		chars := (*[3]*C.gchar)(unsafe.Pointer(list.Data))
+		chars := (*[3]*C.gchar)(list.Data().(unsafe.Pointer))
 		ret = append(ret, []string{
 			C.GoString((*C.char)(chars[0])),
 			C.GoString((*C.char)(chars[1])),
 			C.GoString((*C.char)(chars[2])),
 		})
 
-		list = list.Next
+		list = list.Next()
 	}
 	return ret
 }

@@ -116,7 +116,7 @@ func (menu *Menu) AddCheckEntry(label string, active bool, call interface{}, use
 // AddRadioEntry adds a radio entry to the menu.
 //
 func (menu *Menu) AddRadioEntry(label string, active bool, groupID int, call interface{}, userData ...interface{}) (item *gtk.RadioMenuItem) {
-	group, _ := menu.groups[groupID]
+	group := menu.groups[groupID]
 
 	item = newgtk.RadioMenuItemWithLabel(group, label)
 	if group == nil {
@@ -124,6 +124,8 @@ func (menu *Menu) AddRadioEntry(label string, active bool, groupID int, call int
 		group, e = item.GetGroup()
 		if e == nil {
 			menu.groups[groupID] = group
+		} else {
+			println("Menu.AddRadioEntry", "GetGroup", e.Error())
 		}
 	}
 	item.SetActive(active)

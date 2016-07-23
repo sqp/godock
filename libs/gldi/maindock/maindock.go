@@ -87,7 +87,7 @@ type DockSettings struct {
 
 	// --- New Dock settings ---
 	//
-	HttpPprof      bool
+	HTTPPprof      bool
 	AppletsDisable bool
 	Debug          bool
 

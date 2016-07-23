@@ -69,6 +69,13 @@ func NewApplet() cdtype.AppInstance {
 
 	// Set "working" emblem during version check. It should be removed or changed by the check.
 	poller.SetPreCheck(func() { app.SetEmblem(app.FileLocation("img", app.conf.VersionEmblemWork), EmblemVersion) })
+	poller.SetPostCheck(func() {
+		for _, v := range app.version.Sources() {
+			v.Log = strings.Replace(v.Log, "&", "&amp;", -1) // Escape ampersand.
+			v.Log = strings.Replace(v.Log, "<", "&lt;", -1)  // Escape <.
+			v.Log = strings.Replace(v.Log, ">", "&gt;", -1)  // Escape >.
+		}
+	})
 
 	return app
 }

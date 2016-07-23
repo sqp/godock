@@ -110,6 +110,17 @@ func (build *builder) Free() {
 	}
 }
 
+// Clear clears the builder for another use.
+//
+func (build *builder) Clear() {
+	build.Storage().SetBuilder(nil)
+	for _, keys := range build.buildKeys {
+		for _, key := range keys {
+			key.Builder = nil
+		}
+	}
+}
+
 // AddGroup adds a group with optional keys.
 //
 func (build *builder) AddGroup(group string, keys ...*cftype.Key) {

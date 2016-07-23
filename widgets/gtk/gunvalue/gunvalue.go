@@ -25,9 +25,9 @@ func New(gval *glib.Value, err error) Conv {
 	if err != nil {
 		return Conv{err: err}
 	}
-	val, ego := gval.GoValue()
-	if ego != nil {
-		return Conv{err: ego}
+	val, err := gval.GoValue()
+	if err != nil {
+		return Conv{err: err}
 	}
 	return Conv{data: val}
 }
@@ -77,13 +77,12 @@ func SelectedIter(model *gtk.ListStore, selection *gtk.TreeSelection) (*gtk.Tree
 	if selection.CountSelectedRows() == 0 {
 		return nil, errors.New("no line selected")
 	}
-	var iter gtk.TreeIter
-	var treeModel gtk.ITreeModel = model
-	ok := selection.GetSelected(&treeModel, &iter)
+
+	_, iter, ok := selection.GetSelected()
 	if !ok {
 		return nil, errors.New("SelectedIter: GetSelected failed")
 	}
-	return &iter, nil
+	return iter, nil
 }
 
 // SelectedValue returns the liststore row value for the selected line as converter.

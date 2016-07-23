@@ -37,7 +37,7 @@ const (
 	DesktopKeyTerminal       = "Terminal"
 	DesktopKeyTryExec        = "TryExec"
 	DesktopKeyType           = "Type"
-	DesktopKeyUrl            = "URL"
+	DesktopKeyURL            = "URL"
 	DesktopKeyVersion        = "Version"
 	DesktopTypeApplication   = "Application"
 	DesktopTypeDirectory     = "Directory"

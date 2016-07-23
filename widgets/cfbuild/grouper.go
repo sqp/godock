@@ -158,7 +158,7 @@ func (build *grouper) BuildGroups(switcher *pageswitch.Switcher, groups []string
 	}
 
 	// Single group, hide the switcher. Multi groups, display it.
-	switcher.Set("visible", len(groups) > 1)
+	switcher.SetVisible(len(groups) > 1)
 
 	build.ShowAll()
 	return build

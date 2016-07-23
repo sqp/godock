@@ -154,9 +154,8 @@ func (o *dataRend) Graph(nbval int, typ cdtype.RendererGraphType) error {
 	attr.HighColor = make([]float64, nbval*3)
 	attr.LowColor = make([]float64, nbval*3)
 	for i := 0; i < nbval; i++ {
-		attr.HighColor[3*i] = 1  // High R
-		attr.LowColor[3*i+1] = 1 // Low G+B = yellow.
-		attr.LowColor[3*i+2] = 1
+		attr.HighColor[3*i] = 1  // High Red.
+		attr.LowColor[3*i+1] = 1 // Low  Green.
 	}
 
 	w, _ := o.icon.IconExtent()
@@ -167,7 +166,9 @@ func (o *dataRend) Graph(nbval int, typ cdtype.RendererGraphType) error {
 
 	addIdle(func() {
 		o.icon.AddNewDataRenderer(attr)
+		// o.icon.AddDataRendererWithText(attr, o.icon.DataRendererTextPercent)
 	})
+
 	return nil
 }
 
@@ -188,8 +189,7 @@ func (o *dataRend) Remove() error {
 
 func (o *dataRend) Render(values ...float64) error {
 	addIdle(func() {
-		o.icon.RenderNewData(values...)
-		o.icon.Redraw()
+		o.icon.Render(values...)
 	})
 	return nil
 }

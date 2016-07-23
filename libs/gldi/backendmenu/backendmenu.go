@@ -14,8 +14,6 @@ import (
 	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/gtk"
 
-	"github.com/bradfitz/iter" // easy for.
-
 	"github.com/sqp/godock/libs/cdglobal"
 	"github.com/sqp/godock/libs/cdtype"
 	"github.com/sqp/godock/libs/files"           // UpdateConfFile.
@@ -909,11 +907,11 @@ func (m *DockMenu) moveToDesktop(useAll bool) {
 
 	moveto := newMenuMoveToDesktop(m.Icon, useAll)
 
-	for i := range iter.N(geo.NbDesktops()) { // sort by desktop
+	for i := 0; i < geo.NbDesktops(); i++ { // sort by desktop
 
-		for j := range iter.N(geo.NbViewportY()) { // and by columns.
+		for j := 0; j < geo.NbViewportY(); j++ { // and by columns.
 
-			for k := range iter.N(geo.NbViewportX()) { // then rows.
+			for k := 0; k < geo.NbViewportX(); k++ { // then rows.
 
 				entry := m.AddEntry(moveto.Label(i, j, k), "", moveto.Callback(i, j, k))
 

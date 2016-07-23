@@ -73,7 +73,7 @@ func Run(log cdtype.Logger, getSettings func() maindock.DockSettings) bool {
 	}
 
 	// HTTP listener for the pprof debug.
-	if settings.HttpPprof {
+	if settings.HTTPPprof {
 		serviceHTTP()
 	}
 

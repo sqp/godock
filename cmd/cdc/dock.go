@@ -6,6 +6,8 @@ import (
 	"github.com/sqp/godock/libs/gldi/globals"
 	"github.com/sqp/godock/libs/gldi/maindock"
 	"github.com/sqp/godock/libs/gldi/startdock"
+
+	"fmt"
 )
 
 func init() {
@@ -70,7 +72,6 @@ everybody at the moment. But it also needs to be tested now.
 	userDir := cmdDefault.Flag.String("d", "", "")
 	userThemeServer := cmdDefault.Flag.String("S", "", "")
 
-	userDelay := cmdDefault.Flag.Int("w", 0, "")
 	// maintenance
 	userExclude := cmdDefault.Flag.String("x", "", "")
 	userSafeMode := cmdDefault.Flag.Bool("f", false, "")
@@ -87,6 +88,10 @@ everybody at the moment. But it also needs to be tested now.
 	newAppletsDisable := cmdDefault.Flag.Bool("N", false, "")
 	newHTTPPprof := cmdDefault.Flag.Bool("H", false, "")
 	newDebug := cmdDefault.Flag.Bool("D", false, "")
+
+	// Local flags. Common with remote.
+
+	userDelay = cmdDefault.Flag.Int("w", 0, "")
 
 	// Local flags. (static as they do not even start a dock).
 
@@ -119,7 +124,7 @@ everybody at the moment. But it also needs to be tested now.
 			NoSticky:           *userNoSticky,
 			ModulesDir:         *userModulesDir,
 
-			HttpPprof:      *newHTTPPprof,
+			HTTPPprof:      *newHTTPPprof,
 			AppletsDisable: *newAppletsDisable,
 			Debug:          *newDebug,
 		}
@@ -146,6 +151,7 @@ var (
 
 	// Local flags.
 
+	userDelay       *int
 	showVersionGldi *bool
 	showVersionAll  *bool
 )
@@ -155,7 +161,7 @@ var (
 func runDock(cmd *Command, args []string) {
 	switch {
 	case *showVersionGldi:
-		println(globals.Version()) // -v option only prints gldi version.
+		fmt.Println(globals.Version()) // -v option only prints gldi version.
 
 	case *showVersionAll:
 		startdock.PrintVersions() // -vv option only prints all versions.

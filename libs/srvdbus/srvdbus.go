@@ -19,21 +19,32 @@ const SrvObj = "org.cairodock.GoDock"
 const SrvPath = "/org/cairodock/GoDock"
 
 // Introspect returns the introspect text with methods provided on the Dbus service.
+//
 func Introspect(methods string) string {
-	return `
-<node>
+	return `<node>
 	<interface name="` + SrvObj + `">
-		<method name="Upload">
-			<arg direction="in" type="s"/>
-		</method>
-		<method name="Debug">
+		<method name="AppletDebug">
 			<arg direction="in" type="s"/>
 			<arg direction="in" type="b"/>
 		</method>
-		` + methods + `
-	</interface>
-` + introspect.IntrospectDataString + `
-</node>`
+		<method name="SourceCodeBuildTarget">
+		</method>
+		<method name="SourceCodeGrepTarget">
+			<arg direction="in" type="s"/>
+		</method>
+		<method name="SourceCodeOpenFile">
+			<arg direction="in" type="s"/>
+		</method>
+		<method name="Upload">
+			<arg direction="in" type="s"/>
+		</method>
+		<method name="UpToShareLastLink">
+			<arg direction="out" name="link" type="s"/>
+		</method>` +
+		methods +
+		"	</interface>" +
+		introspect.IntrospectDataString +
+		"</node>"
 }
 
 // AppService defines common applets service actions to remotely interact with applets.
@@ -136,30 +147,52 @@ func (load *Loader) dispatchDbusSignal(s *dbus.Signal) bool {
 //
 //----------------------------------------------------------[ DBUS CALLBACKS ]--
 
-type uploader interface {
-	Upload(string)
+// UpToShareLastLink gets the link of the last item sent to a one-click hosting
+// service.
+//
+func (load *Loader) UpToShareLastLink() (string, *dbus.Error) {
+	var link string
+	e := load.uploaderAction(func(app uploader) {
+		link = app.UpToShareLastLink()
+	})
+	return link, e
 }
 
 // Upload send data (raw text or file) to a one-click hosting service.
 //
 func (load *Loader) Upload(data string) *dbus.Error {
-	if load.apps == nil {
-		return nil
-	}
-
-	uncasts := load.apps.GetApplets("NetActivity")
-	if len(uncasts) == 0 {
-		return nil
-	}
-	app := uncasts[0].(uploader) // Send it to the first found. Should be safe for now, we can launch only one.
-	app.Upload(data)
-
-	return nil
+	return load.uploaderAction(func(app uploader) {
+		app.UpToShareUpload(data)
+	})
 }
 
-// Debug change the debug state of an active applet.
+// SourceCodeBuildTarget send data (raw text or file) to a one-click hosting service.
 //
-func (load *Loader) Debug(applet string, state bool) *dbus.Error {
+func (load *Loader) SourceCodeBuildTarget() *dbus.Error {
+	return load.sourceCoderAction(func(app sourceCoder) {
+		app.BuildTarget()
+	})
+}
+
+// SourceCodeGrepTarget send data (raw text or file) to a one-click hosting service.
+//
+func (load *Loader) SourceCodeGrepTarget(data string) *dbus.Error {
+	return load.sourceCoderAction(func(app sourceCoder) {
+		app.GrepTarget(data)
+	})
+}
+
+// SourceCodeOpenFile send data (raw text or file) to a one-click hosting service.
+//
+func (load *Loader) SourceCodeOpenFile(data string) *dbus.Error {
+	return load.sourceCoderAction(func(app sourceCoder) {
+		app.OpenFile(data)
+	})
+}
+
+// AppletDebug change the debug state of an active applet.
+//
+func (load *Loader) AppletDebug(applet string, state bool) *dbus.Error {
 	if load.apps == nil {
 		return nil
 	}
@@ -170,9 +203,9 @@ func (load *Loader) Debug(applet string, state bool) *dbus.Error {
 		found = true
 	}
 	if found {
-		load.Log.Info("set debug", applet, state)
+		load.Log.Info("set applet debug", applet, state)
 	} else {
-		load.Log.NewWarn("applet not found = "+applet, "set debug")
+		load.Log.NewWarn("applet not found = "+applet, "set applet debug")
 	}
 
 	return nil
@@ -181,14 +214,44 @@ func (load *Loader) Debug(applet string, state bool) *dbus.Error {
 //
 //------------------------------------------------------[ DBUS SEND COMMANDS ]--
 
-// Debug forwards action set debug to a remote applet.
+// AppletDebug forwards action set debug to a remote applet.
 //
-func Debug(applet string, state bool) error {
+func AppletDebug(applet string, state bool) error {
 	client, e := dbuscommon.GetClient(SrvObj, SrvPath)
 	if e != nil {
 		return e
 	}
-	return client.Call("Debug", applet, state)
+	return client.Call("AppletDebug", applet, state)
+}
+
+// SourceCodeBuildTarget forwards action open source code file to the dock.
+//
+func SourceCodeBuildTarget() error {
+	client, e := dbuscommon.GetClient(SrvObj, SrvPath)
+	if e != nil {
+		return e
+	}
+	return client.Call("SourceCodeBuildTarget")
+}
+
+// SourceCodeGrepTarget forwards action open source code file to the dock.
+//
+func SourceCodeGrepTarget(data string) error {
+	client, e := dbuscommon.GetClient(SrvObj, SrvPath)
+	if e != nil {
+		return e
+	}
+	return client.Call("SourceCodeGrepTarget", data)
+}
+
+// SourceCodeOpenFile forwards action open source code file to the dock.
+//
+func SourceCodeOpenFile(data string) error {
+	client, e := dbuscommon.GetClient(SrvObj, SrvPath)
+	if e != nil {
+		return e
+	}
+	return client.Call("SourceCodeOpenFile", data)
 }
 
 // Upload forwards action upload data to the dock.
@@ -199,4 +262,61 @@ func Upload(data string) error {
 		return e
 	}
 	return client.Call("Upload", data)
+}
+
+// UpToShareLastLink forwards action upload data to the dock.
+//
+func UpToShareLastLink() (string, error) {
+	client, e := dbuscommon.GetClient(SrvObj, SrvPath)
+	if e != nil {
+		return "", e
+	}
+
+	var link string
+	e = client.Get("UpToShareLastLink", []interface{}{&link})
+	return link, e
+}
+
+//
+//---------------------------------------------------------[ APPLETS OPTIONS ]--
+
+type sourceCoder interface {
+	BuildTarget() error
+	GrepTarget(string)
+	OpenFile(string)
+}
+
+func (load *Loader) sourceCoderAction(call func(sc sourceCoder)) *dbus.Error {
+	if load.apps == nil {
+		return nil
+	}
+
+	uncasts := load.apps.GetApplets("Update")
+	if len(uncasts) == 0 {
+		return nil
+	}
+	app := uncasts[0].(sourceCoder) // Send it to the first found. Should be safe for now, we can launch only one.
+	call(app)
+	return nil
+}
+
+type uploader interface {
+	UpToShareUpload(string)
+	UpToShareLastLink() string
+}
+
+func (load *Loader) uploaderAction(call func(sc uploader)) *dbus.Error {
+	if load.apps == nil {
+		load.Log.Info("no apps")
+		return nil
+	}
+
+	uncasts := load.apps.GetApplets("NetActivity")
+	if len(uncasts) == 0 {
+		load.Log.Info("no uploader app")
+		return nil
+	}
+	app := uncasts[0].(uploader) // Send it to the first found. Should be safe for now, we can launch only one.
+	call(app)
+	return nil
 }

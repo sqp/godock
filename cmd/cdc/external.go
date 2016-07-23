@@ -63,15 +63,17 @@ func init() {
 	cmdExternal.Run = runExternal // break init cycle
 }
 
-var listUserDir = cmdExternal.Flag.String("d", "", "")
-var listRemove = cmdExternal.Flag.Bool("r", false, "")
-var listVerbose = cmdExternal.Flag.Bool("v", false, "")
+var (
+	listUserDir = cmdExternal.Flag.String("d", "", "")
+	listRemove  = cmdExternal.Flag.Bool("r", false, "")
+	listVerbose = cmdExternal.Flag.Bool("v", false, "")
 
-var listServer = cmdExternal.Flag.Bool("s", false, "")
-var listLocal = cmdExternal.Flag.Bool("l", false, "")
+	listServer = cmdExternal.Flag.Bool("s", false, "")
+	listLocal  = cmdExternal.Flag.Bool("l", false, "")
 
-var listJSON = cmdExternal.Flag.Bool("json", false, "")
-var listFmt = cmdExternal.Flag.String("f", "", "")
+	listJSON = cmdExternal.Flag.Bool("json", false, "")
+	listFmt  = cmdExternal.Flag.String("f", "", "")
+)
 
 func runExternal(cmd *Command, args []string) {
 

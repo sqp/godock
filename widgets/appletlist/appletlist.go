@@ -114,11 +114,14 @@ func NewList(control ControlDownload, log cdtype.Logger) *List {
 // SetActive sets the active state of selected line.
 //
 func (widget *List) SetActive(state bool) {
-	sel, _ := widget.tree.GetSelection()
-	var iter gtk.TreeIter
-	var treeModel gtk.ITreeModel = widget.model
-	sel.GetSelected(&treeModel, &iter)
-	widget.setActiveIter(&iter, state)
+	sel, e := widget.tree.GetSelection()
+	if e != nil {
+		return
+	}
+	_, iter, ok := sel.GetSelected()
+	if ok {
+		widget.setActiveIter(iter, state)
+	}
 }
 
 // Set the active state of the iter argument.
@@ -134,17 +137,19 @@ func (widget *List) setActiveIter(iter *gtk.TreeIter, state bool) {
 // Selected returns the applet package for the selected line.
 //
 func (widget *List) Selected() datatype.Appleter {
-	sel, _ := widget.tree.GetSelection()
-	var iter gtk.TreeIter
-	var treeModel gtk.ITreeModel = widget.model
-	sel.GetSelected(&treeModel, &iter)
-	name, e := gunvalue.New(widget.model.GetValue(&iter, RowKey)).String()
+	sel, e := widget.tree.GetSelection()
+	if e != nil {
+		return nil
+	}
+
+	name, e := gunvalue.SelectedValue(widget.model, sel, RowKey).String()
 	if widget.log.Err(e, "Get selected iter name GoValue") {
 		return nil
 	}
 	if row, ok := widget.rows[name]; ok {
 		return row.Pack
 	}
+	widget.log.NewErr("List Selected: no matching row")
 	return nil
 }
 

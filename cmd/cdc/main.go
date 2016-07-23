@@ -20,8 +20,8 @@ import (
 // Commands lists the available commands and help topics.
 // The order here is the order in which they are printed by 'cdc help'.
 var Commands = CommandList{
-	cmdDebug,
 	cmdExternal,
+	cmdRemote,
 	cmdUpload,
 	cmdBuild,
 	cmdVersion,
@@ -126,9 +126,9 @@ func findCommandShortcut(name string) string {
 	}
 
 	cmdShortcuts := map[byte]string{
-		'd': "debug",
 		'e': "external",
 		'h': "help",
+		'r': "remote",
 		'u': "upload",
 	}
 	newname, ok := cmdShortcuts[name[0]]

@@ -189,7 +189,11 @@ func (app *Applet) UpToShareUpload(data string) {
 // UpToShareLastLink uploads data to a one-click site: file location or text.
 //
 func (app *Applet) UpToShareLastLink() string {
-	return "needlastlink"
+	hists := app.up.ListHistory()
+	if len(hists) == 0 {
+		return ""
+	}
+	return hists[0]["link"]
 }
 
 // DownloadVideo downloads the video from url.

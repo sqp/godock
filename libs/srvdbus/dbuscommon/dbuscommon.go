@@ -97,6 +97,13 @@ func parseShit(src, dest interface{}) error {
 
 		reflect.ValueOf(dest).Elem().Set(reflect.ValueOf(tmp))
 
+	case []dbus.Variant:
+		tmp := make([]interface{}, len(v))
+		for i, val := range v {
+			tmp[i] = val.Value()
+		}
+		reflect.ValueOf(dest).Elem().Set(reflect.ValueOf(tmp))
+
 	case map[string]dbus.Variant:
 		_, ok := dest.(*map[string]interface{})
 		if !ok {

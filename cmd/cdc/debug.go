@@ -1,36 +1,79 @@
 package main
 
-import "github.com/sqp/godock/libs/srvdbus"
+import (
+	"github.com/sqp/godock/libs/srvdbus"
 
-import "strings"
+	"fmt"
+	"strings"
+)
 
-var cmdDebug = &Command{
-	Run:       runDebug,
-	UsageLine: "debug appletname [false|no|0]",
-	Short:     "debug an active applet",
+var cmdRemote = &Command{
+	Run:       runRemote,
+	UsageLine: "remote command [args...]",
+	Short:     "remote control of the dock",
 	Long: `
-Debug sets the debug state of an applet.
+Remote sends a remote command to the active dock.
 
-The first argument must be the applet name.
+  d   Debug appletName [state]
+        Set the debug state of a go applet.
+          To disable the debug, use state: false, no, 0.
+          All other state value will enable the debug for the applet.
 
-Options:
-  false, no, 0    Disable debug.
-  (default)       Enable debug.
+  sb  SourceCodeBuildTarget
+        Build the current source code target.
+  sg  SourceCodeGrepTarget grepString
+        Grep text in the current source code target dir.
+  so  SourceCodeOpenFile filePath
+        Open a file in the current source code target dir (if relative).
+
+  ul  UpToShareLastLink
+        Print the link of the last uploaded item.
 `,
 }
 
-func runDebug(cmd *Command, args []string) {
+func runRemote(cmd *Command, args []string) {
 	if len(args) == 0 { // Ensure we have some data.
 		cmd.Usage()
 	}
 
-	state := true
-	if len(args) > 1 {
-		state = parseState(args[1])
+	var e error
+	switch args[0] {
+	case "d", "debug", "Debug", "AppletDebug":
+		if len(args) == 1 {
+			cmd.Usage()
+		}
+
+		state := true
+		if len(args) > 2 {
+			state = parseState(args[2])
+		}
+
+		e = srvdbus.AppletDebug(args[1], state)
+
+	case "sb", "SourceCodeBuildTarget":
+		e = srvdbus.SourceCodeBuildTarget()
+
+	case "sg", "SourceCodeGrepTarget":
+		e = srvdbus.SourceCodeGrepTarget(args[1])
+
+	case "so", "SourceCodeOpenFile":
+		e = srvdbus.SourceCodeOpenFile(args[1])
+
+	case "ul", "UpToShareLastLink":
+		var link string
+		link, e = srvdbus.UpToShareLastLink()
+		if e == nil {
+			fmt.Println(link)
+		}
+
+	default:
+		logger.NewErrf("unknown remote command", "%v", args)
+		cmd.Usage()
 	}
 
-	e := srvdbus.Debug(args[0], state)
-	logger.Err(e, "send debug")
+	if e != nil {
+		logger.NewErrf(e.Error(), "remote call %v  %s", args, e.Error())
+	}
 }
 
 func parseState(state string) bool {

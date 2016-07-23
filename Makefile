@@ -8,10 +8,10 @@ APPLETS=Audio Cpu DiskActivity DiskFree GoGmail Mem NetActivity Update
 
 # unstable applets requires unmerged patches to build.
 UNSTABLE=Notifications TVPlay
-UNSTABLE_TAGS=gtk
+UNSTABLE_TAGS=gtk gtk_3_12
 
 # and dock even more, plus the rewritten dock.
-DOCK=dock all
+DOCK=dock all gtk_3_12
 
 # Install prefix if any.
 PKGDIR=
@@ -20,19 +20,20 @@ APPDIRGLDI=usr/share/cairo-dock/appletsgo/
 APPDIRDBUS=usr/share/cairo-dock/plug-ins/Dbus/third-party/
 
 
+# old version had:
 # Could be useful for some distro packagers.
 # FLAGSHARETHEME=$(SOURCE)/libs/gldi/maindock.CairoDockShareThemesDir '/usr/share/cairo-dock/themes'
 # FLAGLOCALE=$(SOURCE)/libs/gldi/maindock.CairoDockLocaleDir '/usr/share/locale'
 
 BUILDDATE=$(shell date --rfc-3339=seconds)
 
-FLAGAPPVERSION=$(SOURCE)/libs/cdglobal.AppVersion '$(VERSION)'
-FLAGGITHASH=$(SOURCE)/libs/cdglobal.GitHash '$(shell git rev-parse HEAD)'
+FLAGAPPVERSION='$(SOURCE)/libs/cdglobal.AppVersion=$(VERSION)'
+FLAGGITHASH='$(SOURCE)/libs/cdglobal.GitHash=$(shell git rev-parse HEAD)'
 # git describe --tags
-FLAGBUILDDATE=$(SOURCE)/libs/cdglobal.BuildDate '$(BUILDDATE)'
+FLAGBUILDDATE='$(SOURCE)/libs/cdglobal.BuildDate=$(BUILDDATE)'
 
 
-FLAGS=-ldflags "-X $(FLAGAPPVERSION) -X $(FLAGBUILDDATE) -X $(FLAGGITHASH) "
+FLAGS=-ldflags "-X $(FLAGAPPVERSION) -X $(FLAGBUILDDATE) -X $(FLAGGITHASH)"
 
 
 %: build
@@ -49,7 +50,7 @@ dock:
 
 patch:
 	# Patch GTK - some patches required to build a dock.
-	cd "$(GOPATH)/src/github.com/gotk3/gotk3" && git pull --commit --no-edit origin few_methods deprecated
+	# cd "$(GOPATH)/src/github.com/gotk3/gotk3" && git pull --commit --no-edit origin few_methods deprecated
 	
 	# Patch Dbus (for Notifications)
 	cd "$(GOPATH)/src/github.com/godbus/dbus" && git pull --commit --no-edit https://github.com/sqp/dbus fixeavesdrop
@@ -57,7 +58,7 @@ patch:
 patch-dock: patch
 
 	# Patch gettext (for dock)
-	cd "$(GOPATH)/src/github.com/gosexy/gettext" && git pull --commit --no-edit https://github.com/sqp/gettext nil_string
+	# cd "$(GOPATH)/src/github.com/gosexy/gettext" && git pull --commit --no-edit https://github.com/sqp/gettext nil_string
 
 
 install: install-common

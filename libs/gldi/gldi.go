@@ -20,17 +20,17 @@ package gldi
 #include "cairo-dock-desklet-manager.h"          // myDeskletObjectMgr
 #include "cairo-dock-desktop-manager.h"          // g_desktopGeometry
 #include "cairo-dock-data-renderer.h"            // cairo_dock_render_new_data_on_icon
-#include "cairo-dock-desklet-manager.h"          // gldi_desklets_foreach
 #include "cairo-dock-dock-factory.h"             // CairoDock
 #include "cairo-dock-dock-facility.h"            // cairo_dock_get_available_docks
 #include "cairo-dock-dock-manager.h"             // gldi_dock_get_readable_name
+#include "cairo-dock-draw-opengl.h"              // cairo_dock_set_container_orientation_opengl
 #include "cairo-dock-file-manager.h"             // CAIRO_DOCK_GNOME...
 #include "cairo-dock-flying-container.h"         // myFlyingObjectMgr
 #include "cairo-dock-gauge.h"                    // CairoGaugeAttribute
 #include "cairo-dock-graph.h"                    // CairoGraphAttribute
 #include "cairo-dock-icon-factory.h"             // Icon
 #include "cairo-dock-icon-facility.h"        // Icon
-#include "cairo-dock-keybinder.h"                // gldi_shortkeys_foreach
+#include "cairo-dock-keybinder.h"                // gldi_shortkey_new
 #include "cairo-dock-keyfile-utilities.h"        // cairo_dock_conf_file_needs_update
 #include "cairo-dock-launcher-manager.h"         // CAIRO_DOCK_ICON_TYPE_IS_LAUNCHER
 #include "cairo-dock-log.h"                      // cd_log_set_level_from_name
@@ -44,6 +44,7 @@ package gldi
 #include "cairo-dock-separator-manager.h"        // CAIRO_DOCK_ICON_TYPE_IS_SEPARATOR
 #include "cairo-dock-struct.h"                   // CAIRO_DOCK_LAST_ORDER
 #include "cairo-dock-stack-icon-manager.h"       // CAIRO_DOCK_ICON_TYPE_IS_CONTAINER
+#include "cairo-dock-style-manager.h"            // gldi_style_colors_freeze
 #include "cairo-dock-themes-manager.h"           // cairo_dock_set_paths
 // #include "cairo-dock-utils.h"                    // cairo_dock_launch_command               TODO try remove;
 #include "cairo-dock-windows-manager.h"          // gldi_window_can_minimize_maximize_close
@@ -58,15 +59,15 @@ extern gchar *g_cCurrentLaunchersPath;
 
 extern GldiDesktopGeometry g_desktopGeometry;
 
-static int screen_position_x(int i) { return g_desktopGeometry.pScreens[i].x; }
-static int screen_position_y(int i) { return g_desktopGeometry.pScreens[i].y; }
+static int screen_position_x(int i)	{ return g_desktopGeometry.pScreens[i].x; }
+static int screen_position_y(int i)	{ return g_desktopGeometry.pScreens[i].y; }
+static int screen_width_i(int i) 	{ return g_desktopGeometry.pScreens[i].width; }
+static int screen_height_i(int i) 	{ return g_desktopGeometry.pScreens[i].height; }
 
 static gboolean IconIsSeparator    (Icon *icon) { return CAIRO_DOCK_ICON_TYPE_IS_SEPARATOR(icon); }
 static gboolean IconIsSeparatorAuto(Icon *icon) { return CAIRO_DOCK_IS_AUTOMATIC_SEPARATOR(icon); }
 static gboolean IconIsLauncher     (Icon *icon) { return CAIRO_DOCK_ICON_TYPE_IS_LAUNCHER(icon); }
 static gboolean IconIsStackIcon    (Icon *icon) { return CAIRO_DOCK_ICON_TYPE_IS_CONTAINER(icon); }
-
-extern void onShortkey(gchar*, gpointer);
 
 
 static void emitSignalDropData(GldiContainer* container, gchar* data, Icon* icon, double order) {
@@ -100,34 +101,28 @@ static gboolean _module_is_auto_loaded(GldiModule *module) {
 static gpointer  intToPointer(int i)  { return GINT_TO_POINTER(i); }
 
 
-//
-//---------------------------------------------------------[ LSTS FORWARDING ]--
-
-extern void addDesklet    (gpointer, gpointer);
-extern void addShortkey   (gpointer, gpointer);
-extern void addItemToList (gpointer, gchar*, gpointer);
-
-static void     fwd_one (const gchar *name, gpointer *item, gpointer p) { addItemToList(p, g_strdup(name), item); }
-static gboolean fwd_chk (      gchar *name, gpointer *item, gpointer p) { addItemToList(p, name,           item); return FALSE;}
-
-static void list_shortkey           (gpointer p){ gldi_shortkeys_foreach                ((GFunc)addShortkey, p); }
-static void list_desklets           (gpointer p){ gldi_desklets_foreach                 ((GldiDeskletForeachFunc)addDesklet, p); }
-
-static void list_animation          (gpointer p){ cairo_dock_foreach_animation          ((GHFunc)fwd_one, p); }
-static void list_desklet_decoration (gpointer p){ cairo_dock_foreach_desklet_decoration ((GHFunc)fwd_one, p); }
-static void list_dialog_decorator   (gpointer p){ cairo_dock_foreach_dialog_decorator   ((GHFunc)fwd_one, p); }
-static void list_dock_renderer      (gpointer p){ cairo_dock_foreach_dock_renderer      ((GHFunc)fwd_one, p); }
-
-static void list_dock_module        (gpointer p){ gldi_module_foreach                   ((GHRFunc)fwd_chk, p); }
+static CairoDockRenderer*  newDockRenderer()  { return g_new0 (CairoDockRenderer, 1); }
 
 
+static void render_new_data_on_icon (Icon *pIcon, double *pNewValues) {
+	GldiContainer *pContainer = pIcon->pModuleInstance->pContainer;
+
+	cairo_t *pDrawContext = cairo_create (pIcon->image.pSurface);
+	cairo_dock_render_new_data_on_icon (pIcon, pContainer, pDrawContext, pNewValues);
+	cairo_destroy (pDrawContext);
+}
+
+
+
+//-----------------------------------------------------------------[ C TO GO ]--
+
+extern void onShortkey(gchar*, gpointer);
 
 
 */
 import "C"
 
 import (
-	"github.com/bradfitz/iter"
 	// "github.com/gotk3/gotk3/cairo"
 	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/glib"
@@ -142,7 +137,9 @@ import (
 	"github.com/sqp/godock/widgets/gtk/togtk"
 
 	"errors"
+	"fmt"
 	"path/filepath"
+	"sync"
 	"unsafe"
 )
 
@@ -345,6 +342,10 @@ func LogForceUseColor() {
 	C.cd_log_force_use_color()
 }
 
+func StyleColorsFreeze() {
+	C.gldi_style_colors_freeze()
+}
+
 func DbusGThreadInit() {
 	C.dbus_g_thread_init() // it's a wrapper: it will use dbus_threads_init_default ();
 }
@@ -376,7 +377,8 @@ func GetAllAvailableDocks(parent, subdock *CairoDock) []*CairoDock {
 		cs = subdock.Ptr
 	}
 
-	clist := (*glib.List)(unsafe.Pointer(C.cairo_dock_get_available_docks(cp, cs)))
+	c := C.cairo_dock_get_available_docks(cp, cs)
+	clist := glib.WrapList(uintptr(unsafe.Pointer(c)))
 	defer clist.Free()
 	return goListDocks(clist)
 }
@@ -496,7 +498,8 @@ func MenuAddSubMenu(menu *gtk.Menu, label, iconPath string) (*gtk.Menu, *gtk.Men
 		defer C.free(unsafe.Pointer((*C.char)(cpath)))
 	}
 	var cmenuitem *C.GtkWidget
-	c := C.gldi_menu_add_sub_menu_full((*C.GtkWidget)(unsafe.Pointer(menu.Native())), cstr, cpath, &cmenuitem)
+	cmenu := (*C.GtkWidget)(C.gpointer(menu.Native()))
+	c := C.gldi_menu_add_sub_menu_full(cmenu, cstr, cpath, &cmenuitem)
 
 	if c == nil {
 		return nil, nil
@@ -543,14 +546,18 @@ func MenuAddItem(menu *gtk.Menu, label, iconPath string) *gtk.MenuItem {
 //---------------------------------------------------------------[ CAIRODOCK ]--
 
 type CairoDock struct {
-	Ptr *C.CairoDock
+	Ptr          *C.CairoDock
+	RendererData interface{} // View rendering data.
 }
 
 func NewDockFromNative(p unsafe.Pointer) *CairoDock {
 	if p == nil {
 		return nil
 	}
-	return &CairoDock{(*C.CairoDock)(p)}
+	return &CairoDock{
+		Ptr:          (*C.CairoDock)(p),
+		RendererData: nil,
+	}
 }
 
 func (o *CairoDock) ToNative() unsafe.Pointer {
@@ -562,7 +569,13 @@ func (o *CairoDock) ToContainer() *Container {
 }
 
 func (dock *CairoDock) Icons() (list []*Icon) {
-	clist := (*glib.List)(unsafe.Pointer(dock.Ptr.icons))
+	clist := glib.WrapList(uintptr(unsafe.Pointer(dock.Ptr.icons)))
+	return goListIcons(clist)
+}
+
+func (o *CairoDock) FirstDrawnElementLinear() []*Icon {
+	c := C.cairo_dock_get_first_drawn_element_linear(o.Ptr.icons)
+	clist := glib.WrapList(uintptr(unsafe.Pointer(c)))
 	return goListIcons(clist)
 }
 
@@ -611,6 +624,143 @@ func (o *CairoDock) GetNextIcon(icon *Icon) *Icon {
 func (o *CairoDock) GetPreviousIcon(icon *Icon) *Icon {
 	c := C.cairo_dock_get_previous_icon(o.Ptr.icons, icon.Ptr)
 	return NewIconFromNative(unsafe.Pointer(c))
+}
+
+func (o *CairoDock) ScreenNumber() int {
+	return int(o.Ptr.iNumScreen)
+}
+
+// cairo_dock_get_max_authorized_dock_width
+func (o *CairoDock) ScreenWidth() int {
+	geo := GetDesktopGeometry()
+	i := o.ScreenNumber()
+
+	if o.Container().IsHorizontal() {
+		if 0 <= i && i < geo.NbScreens() {
+			return geo.WidthScreen(i)
+		} else {
+			return geo.WidthAll()
+		}
+	} else {
+		if 0 <= i && i < geo.NbScreens() {
+			return geo.HeightScreen(i)
+		} else {
+			return geo.HeightAll()
+		}
+	}
+}
+
+func (o *CairoDock) MaxIconHeight() int {
+	return int(o.Ptr.iMaxIconHeight)
+}
+
+func (o *CairoDock) Align() float64 {
+	return float64(o.Ptr.fAlign)
+}
+
+func (o *CairoDock) SetDecorationsHeight(i int) {
+	o.Ptr.iDecorationsHeight = C.gint(i)
+}
+
+func (o *CairoDock) MinDockWidth() int {
+	return int(o.Ptr.iMinDockWidth)
+}
+
+func (o *CairoDock) MaxDockWidth() int {
+	return int(o.Ptr.iMaxDockWidth)
+}
+
+func (o *CairoDock) DecorationsHeight() int {
+	return int(o.Ptr.iDecorationsHeight)
+}
+
+func (o *CairoDock) SetMinDockWidth(val int) {
+	o.Ptr.iMinDockWidth = C.gint(val)
+}
+
+func (o *CairoDock) SetMaxDockWidth(val int) {
+	o.Ptr.iMaxDockWidth = C.gint(val)
+}
+
+func (o *CairoDock) SetActiveWidth(val int) {
+	o.Ptr.iActiveWidth = C.gint(val)
+}
+
+func (o *CairoDock) SetDecorationsWidth(val int) {
+	o.Ptr.iDecorationsWidth = C.gint(val)
+}
+
+func (o *CairoDock) MinDockHeight() int {
+	return int(o.Ptr.iMinDockHeight)
+}
+
+func (o *CairoDock) MaxDockHeight() int {
+	return int(o.Ptr.iMaxDockHeight)
+}
+
+func (o *CairoDock) SetMinDockHeight(val int) {
+	o.Ptr.iMinDockHeight = C.gint(val)
+}
+
+func (o *CairoDock) SetActiveHeight(val int) {
+	o.Ptr.iActiveHeight = C.gint(val)
+}
+
+func (o *CairoDock) SetMaxDockHeight(val int) {
+	o.Ptr.iMaxDockHeight = C.gint(val)
+}
+
+func (o *CairoDock) SetFlatDockWidth(val float64) {
+	o.Ptr.fFlatDockWidth = C.gdouble(val)
+}
+
+func (o *CairoDock) SetMagnitudeMax(val float64) {
+	o.Ptr.fMagnitudeMax = C.gdouble(val)
+}
+
+func (o *CairoDock) GlobalIconSize() bool {
+	return gobool(o.Ptr.bGlobalIconSize)
+}
+
+func (o *CairoDock) IconSize() int {
+	return int(o.Ptr.iIconSize)
+}
+
+func (o *CairoDock) IsExtendedDock() bool {
+	return gobool(o.Ptr.bExtendedMode) && o.GetRefCount() == 0
+}
+
+func (o *CairoDock) HasShapeBitmap() bool {
+	return o.Ptr.pShapeBitmap != nil
+}
+
+func (o *CairoDock) GetCurrentWidthLinear() float64 {
+	return float64(C.cairo_dock_get_current_dock_width_linear(o.Ptr))
+}
+
+func (o *CairoDock) ShapeBitmapSubstractRectangleInt(x, y, w, h int) {
+	var rect C.cairo_rectangle_int_t
+	rect.x = C.int(x)
+	rect.y = C.int(y)
+	rect.width = C.int(w)
+	rect.height = C.int(h)
+	C.cairo_region_subtract_rectangle(o.Ptr.pShapeBitmap, &rect)
+}
+
+func (o *CairoDock) CheckIfMouseInsideLinear() {
+	C.cairo_dock_check_if_mouse_inside_linear(o.Ptr)
+}
+
+func (o *CairoDock) CheckCanDropLinear() {
+	C.cairo_dock_check_can_drop_linear(o.Ptr)
+}
+
+func (o *CairoDock) CalculateMagnitude() float64 {
+	return float64(C.cairo_dock_calculate_magnitude(o.Ptr.iMagnitudeIndex))
+}
+
+func (o *CairoDock) BackgroundBufferTexture() uint32 {
+	return uint32(o.Ptr.backgroundBuffer.iTexture)
 }
 
 //
@@ -666,6 +816,18 @@ func (o *Container) IsFlyingContainer() bool {
 	return ObjectIsManagerChild(o, &C.myFlyingObjectMgr)
 }
 
+func (o *Container) Width() int {
+	return int(o.Ptr.iWidth)
+}
+
+func (o *Container) Height() int {
+	return int(o.Ptr.iHeight)
+}
+
+func (o *Container) Ratio() float64 {
+	return float64(o.Ptr.fRatio)
+}
+
 func (o *Container) MouseX() int {
 	return int(o.Ptr.iMouseX)
 }
@@ -719,20 +881,6 @@ func NewDeskletFromNative(p unsafe.Pointer) *Desklet {
 	return &Desklet{(*C.CairoDesklet)(p)}
 }
 
-// ListDesklets returns the list of active desklets.
-//
-func DeskletList() []*Desklet {
-	list := &listForward{[]*Desklet{}}
-	C.list_desklets(C.gpointer(list))
-	return list.p.([]*Desklet)
-}
-
-//export addDesklet
-func addDesklet(sk C.gpointer, l C.gpointer) {
-	list := (*listForward)(l)
-	list.p = append(list.p.([]*Desklet), NewDeskletFromNative(unsafe.Pointer(sk)))
-}
-
 func (o *Desklet) ToNative() unsafe.Pointer {
 	return unsafe.Pointer(o.Ptr)
 }
@@ -754,7 +902,7 @@ func (o *Desklet) HasIcons() bool {
 }
 
 func (o *Desklet) Icons() []*Icon {
-	clist := (*glib.List)(unsafe.Pointer(o.Ptr.icons))
+	clist := glib.WrapList(uintptr(unsafe.Pointer(o.Ptr.icons)))
 	return goListIcons(clist)
 }
 
@@ -794,7 +942,7 @@ func (o *Desklet) SetRendererByNameData(name string, unk1, unk2 bool) {
 	cstr := (*C.gchar)(C.CString(name))
 	defer C.free(unsafe.Pointer((*C.char)(cstr)))
 
-	data := [2]C.gpointer{C.intToPointer(C.int(cbool(unk1))), C.intToPointer(C.int(cbool(unk2)))}
+	data := [2]C.gpointer{CIntPointer(int(cbool(unk1))), CIntPointer(int(cbool(unk2)))}
 	C.cairo_dock_set_desklet_renderer_by_name(o.Ptr, cstr, C.CairoDeskletRendererConfigPtr(unsafe.Pointer(&data)))
 }
 
@@ -803,13 +951,18 @@ func (o *Desklet) SetRendererByNameData(name string, unk1, unk2 bool) {
 
 type Icon struct {
 	Ptr *C.Icon
+
+	dataRendererText DataRendererText // optional data renderer (when set, this will replace the C data rendering)
 }
 
 func NewIconFromNative(p unsafe.Pointer) *Icon {
 	if p == nil {
 		return nil
 	}
-	return &Icon{(*C.Icon)(p)}
+	return &Icon{
+		Ptr:              (*C.Icon)(p),
+		dataRendererText: nil,
+	}
 }
 
 func CreateDummyLauncher(name, iconPath, command, quickinfo string, order float64) *Icon {
@@ -884,6 +1037,14 @@ func (icon *Icon) GetIgnoreQuickList() bool {
 	return gobool(icon.Ptr.bIgnoreQuicklist)
 }
 
+func (o *Icon) X() float64 {
+	return float64(o.Ptr.fX)
+}
+
+func (o *Icon) Y() float64 {
+	return float64(o.Ptr.fY)
+}
+
 func (o *Icon) DrawX() float64 {
 	return float64(o.Ptr.fDrawX)
 }
@@ -900,9 +1061,95 @@ func (o *Icon) Height() float64 {
 	return float64(o.Ptr.fHeight)
 }
 
+func (o *Icon) RequestedWidth() int {
+	return int(o.Ptr.iRequestedWidth)
+}
+
+func (o *Icon) RequestedHeight() int {
+	return int(o.Ptr.iRequestedHeight)
+}
+
+func (o *Icon) RequestedDisplayWidth() int {
+	return int(o.Ptr.iRequestedDisplayWidth)
+}
+
+func (o *Icon) RequestedDisplayHeight() int {
+	return int(o.Ptr.iRequestedDisplayHeight)
+}
+
+func (o *Icon) IsPointed() bool {
+	return gobool(o.Ptr.bPointed)
+}
+
+func (o *Icon) SetPointed(val bool) {
+	o.Ptr.bPointed = cbool(val)
+}
+
+func (o *Icon) SetWidth(val float64) {
+	o.Ptr.fWidth = C.gdouble(val)
+}
+
+func (o *Icon) SetHeight(val float64) {
+	o.Ptr.fHeight = C.gdouble(val)
+}
+
+func (o *Icon) SetScale(val float64) {
+	o.Ptr.fScale = C.gdouble(val)
+}
+
+func (o *Icon) InsertRemoveFactor() float64 {
+	return float64(o.Ptr.fInsertRemoveFactor)
+}
+
 func (o *Icon) Scale() float64 {
 	return float64(o.Ptr.fScale)
 }
+
+func (o *Icon) XAtRest() float64 {
+	return float64(o.Ptr.fXAtRest)
+}
+
+func (o *Icon) SetX(f float64) {
+	o.Ptr.fX = C.gdouble(f)
+}
+
+func (o *Icon) SetY(f float64) {
+	o.Ptr.fY = C.gdouble(f)
+}
+
+func (o *Icon) SetDrawX(f float64) {
+	o.Ptr.fDrawX = C.gdouble(f)
+}
+
+func (o *Icon) SetDrawY(f float64) {
+	o.Ptr.fDrawY = C.gdouble(f)
+}
+
+func (o *Icon) SetXAtRest(f float64) {
+	o.Ptr.fXAtRest = C.gdouble(f)
+}
+
+func (o *Icon) SetAllocatedSize(w, h int) {
+	o.Ptr.iAllocatedWidth = C.gint(w)
+	o.Ptr.iAllocatedHeight = C.gint(h)
+}
+
+func (o *Icon) SetWidthFactor(f float64) {
+	o.Ptr.fWidthFactor = C.gdouble(f)
+}
+
+func (o *Icon) SetHeightFactor(f float64) {
+	o.Ptr.fHeightFactor = C.gdouble(f)
+}
+
+func (o *Icon) SetOrientation(f float64) {
+	o.Ptr.fOrientation = C.gdouble(f)
+}
+
+func (o *Icon) SetAlpha(f float64) {
+	o.Ptr.fAlpha = C.gdouble(f)
+}
+
 func (o *Icon) Order() float64 {
 	return float64(o.Ptr.fOrder)
 }
@@ -1054,7 +1301,7 @@ func (icon *Icon) SubDockIcons() []*Icon {
 	if icon.Ptr == nil || icon.Ptr.pSubDock == nil {
 		return nil
 	}
-	clist := (*glib.List)(unsafe.Pointer(icon.Ptr.pSubDock.icons))
+	clist := glib.WrapList(uintptr(unsafe.Pointer(icon.Ptr.pSubDock.icons)))
 	return goListIcons(clist)
 }
 
@@ -1100,28 +1347,52 @@ func (icon *Icon) SetIcon(str string) error {
 	return nil
 }
 
-func (icon *Icon) RenderNewData(values ...float64) error {
-	if icon.Ptr.image.pSurface == nil {
-		return errors.New("icon has no image.pSurface")
-	}
-	if icon.GetContainer() == nil {
-		return errors.New("icon has no container")
-	}
-
-	ctx := C.cairo_create(icon.Ptr.image.pSurface)
-	C.cairo_dock_render_new_data_on_icon(icon.Ptr, icon.GetContainer().Ptr, ctx, cListDouble(values))
-	C.cairo_destroy(ctx)
-	return nil
-}
-
 func (icon *Icon) AddNewDataRenderer(attr DataRendererAttributer) {
 	cAttr, free := attr.ToAttribute()
 	C.cairo_dock_add_new_data_renderer_on_icon(icon.Ptr, icon.GetContainer().Ptr, cAttr)
 	free()
 }
 
-func (o *Icon) RemoveDataRenderer() {
-	C.cairo_dock_remove_data_renderer_on_icon(o.Ptr)
+func (icon *Icon) AddDataRendererWithText(attr DataRendererAttributer, dataRendererText DataRendererText) {
+	cAttr, free := attr.ToAttribute()
+	C.cairo_dock_add_new_data_renderer_on_icon(icon.Ptr, icon.GetContainer().Ptr, cAttr)
+	icon.dataRendererText = dataRendererText
+	free()
+}
+
+func (icon *Icon) Render(values ...float64) error {
+	if icon.Ptr.image.pSurface == nil {
+		return errors.New("Render: icon has no image.pSurface")
+	}
+	if icon.GetContainer() == nil {
+		return errors.New("Render: icon has no container")
+	}
+
+	list := make([]C.double, len(values))
+	for i, val := range values {
+		list[i] = C.double(val)
+	}
+
+	C.render_new_data_on_icon(icon.Ptr, &list[0]) // points to the first element of the slice array (good enough for C).
+	return nil
+}
+
+type DataRendererText func(...float64) []string
+
+func (icon *Icon) DataRendererTextPercent(values ...float64) []string {
+	list := make([]string, len(values))
+	for i, val := range values {
+		list[i] = fmt.Sprintf("%.1f%%%%", val*100)
+
+		//snprintf (cFormatBuffer, iBufferLength, fValue < .0995 ? "%.1f%%" : (fValue < 1 ? " %.0f%%" : "%.0f%%"), fValue * 100.);
+
+	}
+	return list
+}
+
+func (icon *Icon) RemoveDataRenderer() {
+	C.cairo_dock_remove_data_renderer_on_icon(icon.Ptr)
+	icon.dataRendererText = nil
 }
 
 // AddOverlayFromImage adds an overlay on the icon.
@@ -1294,7 +1565,7 @@ func (o *DataRendererAttributeGraph) ToAttribute() (*C.CairoDataRendererAttribut
 	attr.fHighColor = cListGdouble(o.HighColor)
 	attr.fLowColor = cListGdouble(o.LowColor)
 
-	for i := range iter.N(4) { // copy background colors.
+	for i := 0; i < 4; i++ { // copy background colors.
 		attr.fBackGroundColor[i] = C.gdouble(o.BackGroundColor[i])
 	}
 	free := func() {
@@ -1317,12 +1588,6 @@ func ModuleGet(name string) *Module {
 	defer C.free(unsafe.Pointer((*C.char)(cstr)))
 	c := C.gldi_module_get(cstr)
 	return NewModuleFromNative(unsafe.Pointer(c))
-}
-
-func ModuleList() map[string]*Module {
-	list := make(map[string]*Module)
-	C.list_dock_module(C.gpointer(&listForward{list}))
-	return list
 }
 
 func NewModuleFromNative(p unsafe.Pointer) *Module {
@@ -1351,7 +1616,7 @@ func (m *Module) VisitCard() *VisitCard {
 }
 
 func (m *Module) InstancesList() (list []*ModuleInstance) {
-	clist := (*glib.List)(unsafe.Pointer(m.Ptr.pInstancesList))
+	clist := glib.WrapList(uintptr(unsafe.Pointer(m.Ptr.pInstancesList)))
 	return goListModuleInstance(clist)
 }
 
@@ -1370,10 +1635,15 @@ func (m *Module) AddInstance() {
 //
 //----------------------------------------------------------[ MODULEINSTANCE ]--
 
+var (
+	shortkeyMapStatic = make(map[int]func(string))
+	shortkeyMapMutex  = &sync.Mutex{}
+)
+
 type ModuleInstance struct {
 	Ptr *C.GldiModuleInstance
 
-	onShortkeyCallback func(string) // for go applets.
+	shortkeys map[string]int // index = group+key, value = shortkeyMapStatic reference.
 }
 
 // /// container of the icon.
@@ -1387,7 +1657,9 @@ type ModuleInstance struct {
 
 func NewModuleInstanceFromNative(p unsafe.Pointer) *ModuleInstance {
 	return &ModuleInstance{
-		Ptr: (*C.GldiModuleInstance)(p)}
+		Ptr:       (*C.GldiModuleInstance)(p),
+		shortkeys: make(map[string]int),
+	}
 }
 
 func (mi *ModuleInstance) ToNative() unsafe.Pointer {
@@ -1459,7 +1731,7 @@ func (mi *ModuleInstance) PrepareNewIcons(fields []string) (map[string]*Icon, *C
 }
 
 func (mi *ModuleInstance) InsertIcons(clist *C.GList, dockRenderer, deskletRenderer string) {
-	data := [3]C.gpointer{C.intToPointer(0), C.intToPointer(1), nil}
+	data := [3]C.gpointer{CIntPointer(0), CIntPointer(1), nil}
 
 	C.cairo_dock_insert_icons_in_applet(mi.Ptr,
 		clist,
@@ -1490,22 +1762,49 @@ func (mi *ModuleInstance) NewShortkey(group, key, desc, shortkey string, call fu
 		defer C.free(unsafe.Pointer((*C.char)(cShortkey)))
 	}
 
-	mi.onShortkeyCallback = call // I wished I could have passed the go callback as gpointer, but I can't get this one working.
+	// find a new shortkeyMapStatic ID.
+	max := 0
+	shortkeyMapMutex.Lock()
 
+	for k := range shortkeyMapStatic {
+		if k > max {
+			max = k
+		}
+	}
+
+	ID := max + 1
+	shortkeyMapStatic[ID] = call
+
+	shortkeyMapMutex.Unlock()
+
+	// Save callback reference.
+	mi.shortkeys[group+key] = ID
+
+	// Create and return the shortkey.
 	c := C.gldi_shortkey_new(cShortkey,
 		vc.Ptr.cTitle,
 		cDesc,
 		vc.Ptr.cIconFilePath, // original conf.
 		mi.Ptr.cConfFilePath, // current conf.
 		cGroup, cKey,
-		C.CDBindkeyHandler(C.onShortkey), C.gpointer(mi)) // last arg should have been C.gpointer(&listForward{call})
+		C.CDBindkeyHandler(C.onShortkey),
+		CIntPointer(ID),
+	)
+
 	return NewShortkeyFromNative(unsafe.Pointer(c))
 }
 
 //export onShortkey
-func onShortkey(cShortkey *C.gchar, p C.gpointer) {
-	mi := (*ModuleInstance)(p)
-	mi.onShortkeyCallback(C.GoString((*C.char)(cShortkey)))
+func onShortkey(cShortkey *C.gchar, cid C.gpointer) {
+	id := int(uintptr(cid))
+	call := shortkeyMapStatic[id]
+	call(C.GoString((*C.char)(cShortkey)))
+}
+
+func (mi *ModuleInstance) removeShortkeyMap() {
+	// 	shortkeyMapMutex.Lock()
+	// 	delete(shortkeyMapStatic, id)
+	// 	shortkeyMapMutex.Unlock()
 }
 
 //
@@ -1738,10 +2037,10 @@ func (o *WindowActor) SetVisibility(show bool) {
 }
 
 func (o *WindowActor) ToggleVisibility() {
-	if o.IsHidden() {
-		o.Show()
-	} else {
+	if o.IsActive() {
 		o.Minimize()
+	} else {
+		o.Show()
 	}
 }
 
@@ -1752,12 +2051,6 @@ func (o *WindowActor) GetAppliIcon() *Icon {
 
 //
 //---------------------------------------------------------------[ ANIMATION ]--
-
-func AnimationList() map[string]*Animation {
-	list := make(map[string]*Animation)
-	C.list_animation(C.gpointer(&listForward{list}))
-	return list
-}
 
 type Animation struct {
 	Ptr *C.CairoDockAnimationRecord
@@ -1774,12 +2067,6 @@ func (dr *Animation) GetDisplayedName() string {
 //
 //--------------------------------------------------[ CAIRODESKLETDECORATION ]--
 
-func CairoDeskletDecorationList() map[string]*CairoDeskletDecoration {
-	list := make(map[string]*CairoDeskletDecoration)
-	C.list_desklet_decoration(C.gpointer(&listForward{list}))
-	return list
-}
-
 type CairoDeskletDecoration struct {
 	Ptr *C.CairoDeskletDecoration
 }
@@ -1795,12 +2082,6 @@ func (dr *CairoDeskletDecoration) GetDisplayedName() string {
 //
 //---------------------------------------------------------[ DIALOGDECORATOR ]--
 
-func DialogDecoratorList() map[string]*DialogDecorator {
-	list := make(map[string]*DialogDecorator)
-	C.list_dialog_decorator(C.gpointer(&listForward{list}))
-	return list
-}
-
 type DialogDecorator struct {
 	Ptr *C.CairoDialogDecorator
 }
@@ -1813,20 +2094,32 @@ func (dr *DialogDecorator) GetDisplayedName() string {
 	return C.GoString((*C.char)(dr.Ptr.cDisplayedName))
 }
 
-// cairo_dock_foreach_dialog_decorator
-
 //
 //-------------------------------------------------------[ CAIRODOCKRENDERER ]--
-
-func CairoDockRendererList() map[string]*CairoDockRenderer {
-	list := make(map[string]*CairoDockRenderer)
-	C.list_dock_renderer(C.gpointer(&listForward{list}))
-	return list
-}
 
 // AKA views.
 type CairoDockRenderer struct {
 	Ptr *C.CairoDockRenderer
+}
+
+func NewCairoDockRenderer(title, readmePath, previewPath string) *CairoDockRenderer {
+	c := C.newDockRenderer()
+
+	// do not free strings.
+	c.cDisplayedName = (*C.gchar)(C.CString(title))
+	c.cReadmeFilePath = (*C.gchar)(C.CString(readmePath))
+	c.cPreviewFilePath = (*C.gchar)(C.CString(previewPath))
+
+	// pRenderer->cDisplayedName = _ (name);
+
+	// parameters
+	c.bUseReflect = 0 // false
+
+	return NewCairoDockRendererFromNative(unsafe.Pointer(c))
+}
+
+func (dr *CairoDockRenderer) ToNative() unsafe.Pointer {
+	return unsafe.Pointer(dr.Ptr)
 }
 
 func NewCairoDockRendererFromNative(p unsafe.Pointer) *CairoDockRenderer {
@@ -1843,6 +2136,11 @@ func (dr *CairoDockRenderer) GetReadmeFilePath() string {
 
 func (dr *CairoDockRenderer) GetPreviewFilePath() string {
 	return C.GoString((*C.char)(dr.Ptr.cPreviewFilePath))
+}
+
+func (dr *CairoDockRenderer) Register(name string) {
+	cname := (*C.gchar)(C.CString(name))
+	C.cairo_dock_register_renderer(cname, dr.Ptr)
 }
 
 //
@@ -1904,6 +2202,22 @@ func (dg *DesktopGeometry) NbViewportY() int {
 	return int(dg.Ptr.iNbViewportY)
 }
 
+func (dg *DesktopGeometry) WidthAll() int {
+	return int(dg.Ptr.Xscreen.width)
+}
+
+func (dg *DesktopGeometry) WidthScreen(screenNb int) int {
+	return int(C.screen_width_i(C.int(screenNb)))
+}
+
+func (dg *DesktopGeometry) HeightAll() int {
+	return int(dg.Ptr.Xscreen.height)
+}
+
+func (dg *DesktopGeometry) HeightScreen(screenNb int) int {
+	return int(C.screen_height_i(C.int(screenNb)))
+}
+
 // int iCurrentDesktop, iCurrentViewportX, iCurrentViewportY;
 
 func (dg *DesktopGeometry) ScreenPosition(i int) (int, int) {
@@ -1917,20 +2231,6 @@ func (dg *DesktopGeometry) ScreenPosition(i int) (int, int) {
 
 //
 //----------------------------------------------------------------[ SHORTKEY ]--
-
-// ListShortkeys returns the list of dock shortkeys.
-//
-func ShortkeyList() []*Shortkey {
-	list := &listForward{[]*Shortkey{}}
-	C.list_shortkey(C.gpointer(list))
-	return list.p.([]*Shortkey)
-}
-
-//export addShortkey
-func addShortkey(sk C.gpointer, l C.gpointer) {
-	list := (*listForward)(l)
-	list.p = append(list.p.([]*Shortkey), NewShortkeyFromNative(unsafe.Pointer(sk)))
-}
 
 type Shortkey struct {
 	Ptr *C.GldiShortkey
@@ -1998,6 +2298,7 @@ func cbool(b bool) C.gboolean {
 	}
 	return C.gboolean(0)
 }
+
 func gobool(b C.gboolean) bool {
 	if b == 1 {
 		return true
@@ -2012,73 +2313,34 @@ func gchar(str string) *C.gchar {
 	return (*C.gchar)(C.CString(str))
 }
 
-// List forwarding from c callbacks.
-type listForward struct{ p interface{} }
-
-//export addItemToList
-func addItemToList(p C.gpointer, cstr *C.gchar, cdr C.gpointer) {
-	name := C.GoString((*C.char)(cstr))
-	free := true
-
-	list := (*listForward)(p)
-	switch v := list.p.(type) {
-	case map[string]*Animation:
-		v[name] = NewAnimationFromNative(unsafe.Pointer(cdr))
-
-	case map[string]*DialogDecorator:
-		v[name] = NewDialogDecoratorFromNative(unsafe.Pointer(cdr))
-
-	case map[string]*CairoDeskletDecoration:
-		v[name] = NewCairoDeskletDecorationFromNative(unsafe.Pointer(cdr))
-
-	case map[string]*Module:
-		v[name] = NewModuleFromNative(unsafe.Pointer(cdr))
-		free = false
-
-	case map[string]*CairoDockRenderer:
-		v[name] = NewCairoDockRendererFromNative(unsafe.Pointer(cdr))
-	}
-
-	if free {
-		C.free(unsafe.Pointer((*C.char)(cstr)))
-	}
-
+func CIntPointer(i int) C.gpointer {
+	return C.intToPointer(C.int(i))
 }
 
+// //
+
+//
+//---------------------------------------------------------[ LISTS TO NATIVE ]--
+
 func goListDocks(clist *glib.List) (list []*CairoDock) {
-	for _ = range iter.N(int(clist.Length())) {
-		item := NewDockFromNative(unsafe.Pointer(clist.Data))
-		list = append(list, item)
-		clist = clist.Next
-	}
+	clist.Foreach(func(data interface{}) {
+		list = append(list, NewDockFromNative(data.(unsafe.Pointer)))
+	})
 	return
 }
 
 func goListIcons(clist *glib.List) (list []*Icon) {
-	for _ = range iter.N(int(clist.Length())) {
-		item := NewIconFromNative(unsafe.Pointer(clist.Data))
-		list = append(list, item)
-		clist = clist.Next
-	}
+	clist.Foreach(func(data interface{}) {
+		list = append(list, NewIconFromNative(data.(unsafe.Pointer)))
+	})
 	return
 }
 
 func goListModuleInstance(clist *glib.List) (list []*ModuleInstance) {
-	for _ = range iter.N(int(clist.Length())) {
-		item := NewModuleInstanceFromNative(unsafe.Pointer(clist.Data))
-		list = append(list, item)
-		clist = clist.Next
-	}
+	clist.Foreach(func(data interface{}) {
+		list = append(list, NewModuleInstanceFromNative(data.(unsafe.Pointer)))
+	})
 	return
-}
-
-func cListDouble(value []float64) *C.double {
-	var clist *C.double
-	clist = (*C.double)(C.malloc(C.size_t(int(unsafe.Sizeof(*clist)) * len(value))))
-	for i, e := range value {
-		(*(*[999999]C.double)(unsafe.Pointer(clist)))[i] = C.double(e)
-	}
-	return clist
 }
 
 func cListGdouble(value []float64) *C.gdouble {

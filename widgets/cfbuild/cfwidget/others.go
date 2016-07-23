@@ -574,36 +574,42 @@ type treeViewData struct {
 }
 
 func onTreeviewMoveUp(_ *gtk.Button, data treeViewData) {
-	var treeModel gtk.ITreeModel = data.model
-	var iter gtk.TreeIter
 	sel, e := data.widget.GetSelection()
-	if data.log.Err(e, "WidgetTreeView widget.GetSelection") || !sel.GetSelected(&treeModel, &iter) {
+	if data.log.Err(e, "WidgetTreeView widget.GetSelection") {
 		return
 	}
 
-	order, e := gunvalue.New(data.model.GetValue(&iter, 5)).Int()
+	_, iter, ok := sel.GetSelected()
+	if !ok {
+		return
+	}
+
+	order, e := gunvalue.New(data.model.GetValue(iter, 5)).Int()
 	if data.log.Err(e, "WidgetTreeView model.GetValue order") {
 		return
 	}
 
-	data.model.SetValue(&iter, 5, order-1) // Set the new order value.
+	data.model.SetValue(iter, 5, order-1) // Set the new order value.
 
-	if !data.model.IterPrevious(&iter) { // Get previous iter.
+	if !data.model.IterPrevious(iter) { // Get previous iter.
 		return
 	}
-	data.model.SetValue(&iter, 5, order) // Set it to its new order.
+	data.model.SetValue(iter, 5, order) // Set it to its new order.
 }
 
 // Move treeview selection down.
 //
 func onTreeviewMoveDown(_ *gtk.Button, data treeViewData) {
-	var treeModel gtk.ITreeModel = data.model
-	var iter gtk.TreeIter
 	sel, e := data.widget.GetSelection()
-	if data.log.Err(e, "WidgetTreeView widget.GetSelection") || !sel.GetSelected(&treeModel, &iter) {
+	if data.log.Err(e, "WidgetTreeView widget.GetSelection") {
 		return
 	}
-	order, e := gunvalue.New(data.model.GetValue(&iter, 5)).Int()
+
+	_, iter, ok := sel.GetSelected()
+	if !ok {
+		return
+	}
+	order, e := gunvalue.New(data.model.GetValue(iter, 5)).Int()
 	if data.log.Err(e, "WidgetTreeView model.GetValue order") {
 		return
 	}
@@ -612,12 +618,12 @@ func onTreeviewMoveDown(_ *gtk.Button, data treeViewData) {
 		return
 	}
 
-	data.model.SetValue(&iter, 5, order+1) // Set the new order value.
+	data.model.SetValue(iter, 5, order+1) // Set the new order value.
 
-	if !data.model.IterNext(&iter) { // Get next iter.
+	if !data.model.IterNext(iter) { // Get next iter.
 		return
 	}
-	data.model.SetValue(&iter, 5, order) // Set it to its new order.
+	data.model.SetValue(iter, 5, order) // Set it to its new order.
 }
 
 func onTreeviewAddText(_ *gtk.Button, data treeViewData) {
@@ -645,23 +651,22 @@ func onTreeviewAddText(_ *gtk.Button, data treeViewData) {
 // Remove selected iter from model. Set its value to the entry widget.
 //
 func onTreeviewRemoveText(_ *gtk.Button, data treeViewData) {
-
-	var treeModel gtk.ITreeModel = data.model
-	var iter gtk.TreeIter
 	sel, e := data.widget.GetSelection()
-	if !data.log.Err(e, "WidgetTreeView widget.GetSelection") {
-		if !sel.GetSelected(&treeModel, &iter) {
-			return
-		}
+	if data.log.Err(e, "WidgetTreeView widget.GetSelection") {
+		return
+	}
+	_, iter, ok := sel.GetSelected()
+	if !ok {
+		return
 	}
 
-	name, e := gunvalue.New(data.model.GetValue(&iter, RowName)).String()
+	name, e := gunvalue.New(data.model.GetValue(iter, RowName)).String()
 	if !data.log.Err(e, "WidgetTreeView model.GetValue RowName") {
 		data.entry.SetText(name)
 	}
 
-	order, e := gunvalue.New(data.model.GetValue(&iter, 5)).Int()
-	data.model.Remove(&iter)
+	order, e := gunvalue.New(data.model.GetValue(iter, 5)).Int()
+	data.model.Remove(iter)
 	if data.log.Err(e, "WidgetTreeView model.GetValue order") { // no order nor iters. can't do shit.
 		return
 	}
@@ -675,7 +680,6 @@ func onTreeviewRemoveText(_ *gtk.Button, data treeViewData) {
 		}
 		ok = data.model.IterNext(it)
 	}
-
 }
 
 type textGrabData struct {
