@@ -29,7 +29,7 @@ const (
 // Mail client action settings.
 //
 const (
-	MailClientLocation = iota // Open mail client as location, with xdg-open.
+	MailClientLocation = iota // Open mail client as location, with cdglobal.CmdOpen.
 	MailClientProgram         // Open mail client as command.
 	MailClientMonitor         // Open mail client as command and monitor it.
 )

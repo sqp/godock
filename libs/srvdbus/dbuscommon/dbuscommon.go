@@ -4,6 +4,7 @@ package dbuscommon
 import (
 	"github.com/godbus/dbus"
 	"github.com/godbus/dbus/introspect"
+	"github.com/godbus/dbus/prop"
 
 	"github.com/sqp/godock/libs/cdtype" // Logger type.
 
@@ -14,6 +15,10 @@ import (
 
 //
 //------------------------------------------------------------------[ CLIENT ]--
+
+func NewError(msg string) *dbus.Error {
+	return dbus.NewError("org.freedesktop.DBus.Error.Failed", []interface{}{msg})
+}
 
 // Client is a Dbus client to connect to the internal Dbus server.
 //
@@ -165,12 +170,20 @@ func NewServer(srvObj, srvPath string, log cdtype.Logger) *Server {
 	return load
 }
 
+// Find this doc location
+
 // Start will try to start and manage the applets server.
 // You must provide the applet arguments used to launch the applet.
 // If a server was already active, the applet start request is forwarded and
 // no loop will be started, the function just return with the error if any.
+
 //
-func (load *Server) Start(obj interface{}, introspec string) (bool, error) {
+
+// Start starts the DBus service with the given object.
+// Introspection will be managed and the provided properties exposed.
+// Methods will also be auto discovered.
+//
+func (load *Server) Start(obj interface{}, propsSpec map[string]map[string]*prop.Prop) (bool, error) {
 	reply, e := load.Conn.RequestName(load.srvObj, dbus.NameFlagDoNotQueue)
 	if e != nil {
 		return false, e
@@ -180,16 +193,55 @@ func (load *Server) Start(obj interface{}, introspec string) (bool, error) {
 		return false, nil
 	}
 
-	// logger.Err(Export(s, load.conn), "export")
-
 	// Everything OK, we can register our Dbus methods.
 	e = load.Conn.Export(obj, dbus.ObjectPath(load.srvPath), load.srvObj)
-	load.Log.Err(e, "register service object")
+	if load.Log.Err(e, "register service object") {
+		return false, e
+	}
 
-	e = load.Conn.Export(introspect.Introspectable(introspec), dbus.ObjectPath(load.srvPath), "org.freedesktop.DBus.Introspectable")
-	load.Log.Err(e, "register service introspect")
-
+	introNode := load.Introspect(obj, propsSpec)
+	e = load.Conn.Export(introspect.NewIntrospectable(introNode), dbus.ObjectPath(load.srvPath), "org.freedesktop.DBus.Introspectable")
+	if load.Log.Err(e, "register service introspect") {
+		return false, e
+	}
 	return true, nil
+}
+
+// Introspect provides introspection data for the DBus service to start.
+//
+// propsSpec example:
+//
+//	var propsSpec = map[string]map[string]*prop.Prop{
+//		SrvObj: {
+//			"Restart": {
+//				int32(0),
+//				true,
+//				prop.EmitTrue,
+//				func(c *prop.Change) *dbus.Error {
+//					fmt.Println(c.Name, "changed to", c.Value)
+//					return nil
+//				},
+//			},
+//		},
+//	}
+//
+func (load *Server) Introspect(obj interface{}, propsSpec map[string]map[string]*prop.Prop) *introspect.Node {
+	var props []introspect.Property
+	if propsSpec != nil {
+		tmp := prop.New(load.Conn, dbus.ObjectPath(load.srvPath), propsSpec)
+		props = tmp.Introspection(load.srvObj)
+	}
+	return &introspect.Node{
+		Name: load.srvPath,
+		Interfaces: []introspect.Interface{
+			prop.IntrospectData,
+			{
+				Name:       load.srvObj,
+				Methods:    introspect.Methods(obj),
+				Properties: props,
+			},
+		},
+	}
 }
 
 //

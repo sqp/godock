@@ -1,4 +1,4 @@
-// Package NetActivity is a monitoring and upload applet for Cairo-Dock.
+// Package NetActivity is a monitoring, upload and download applet for Cairo-Dock.
 /*
 
 Improvements since original DropToShare version:
@@ -9,11 +9,9 @@ Improvements since original DropToShare version:
   Code simple and maintainable (350 lines for 12 backends).
 
 Dependencies:
-  glib-2.0
-
   xsel or xclip command for clipboard interaction when build without gtk.
 
-  curl is needed for those backends:
+  curl command is needed for those backends:
     Text:  none
     Image: all
     Video: all
@@ -23,7 +21,7 @@ Not implemented (yet):
   Icon for the applet.
   Upload raw text with FileForAll option. I'm trying to find a way to do it
     without the temp file option before falling back to this method.
-  More menu options, due to lack of proper AddMenuItem method.
+  More menu options.
   Save image copy (and display).
   Custom upload scripts.
   Url shortener (as I'm not fan of those, you better do it yourself if you want it).
@@ -56,7 +54,7 @@ type Applet struct {
 	conf    *appletConf
 	service *sysinfo.IOActivity
 	up      *uptoshare.Uploader
-	video   *videodl.Manager
+	video   videodl.Downloader
 }
 
 // NewApplet create a new applet instance.
@@ -71,15 +69,6 @@ func NewApplet() cdtype.AppInstance {
 	app.up.SetPostCheck(func() { app.SetEmblem("none", EmblemAction) })
 	app.up.SetOnResult(app.onUploadDone)
 
-	// Video download actions.
-	ActionsVideoDL := 0
-	app.video = videodl.NewManager(app, app.Log())
-	app.video.SetBackend(videodl.BackendYoutubeDL)
-	app.video.SetPreCheck(func() error { return app.SetEmblem(app.FileLocation("img", "go-down.svg"), EmblemDownload) })
-	app.video.SetPostCheck(func() error { return app.SetEmblem("none", EmblemDownload) })
-	// app.up.SetOnResult(app.onUploadDone)
-	app.video.Actions(ActionsVideoDL, app.Action().Add)
-
 	// Network activity actions.
 	app.service = sysinfo.NewIOActivity(app)
 	app.service.Log = app.Log()
@@ -92,10 +81,31 @@ func NewApplet() cdtype.AppInstance {
 	return app
 }
 
+func (app *Applet) initVideo() {
+	// Video download actions.
+	ActionsVideoDL := 0
+
+	hist := videodl.NewHistoryVideo(app, videodl.HistoryFile)
+	app.video = videodl.NewManager(app, app.Log(), hist)
+
+	app.video.SetBackend(videodl.BackendInternal)
+	app.video.SetPreCheck(func() error { return app.SetEmblem(app.FileLocation("img", "go-down.svg"), EmblemDownload) })
+	app.video.SetPostCheck(func() error { return app.SetEmblem("none", EmblemDownload) })
+	app.video.Actions(ActionsVideoDL, app.Action().Add)
+
+	app.video.WebRegister()
+
+	hist.Load()
+}
+
 // Init load user configuration if needed and initialise applet.
 //
 func (app *Applet) Init(loadConf bool) {
 	app.LoadConfig(loadConf, &app.conf) // Load config will crash if fail. Expected.
+
+	if app.video == nil { // Delayed because we need FileLocation, not available at creation.
+		app.initVideo()
+	}
 
 	// Uptoshare settings.
 	app.up.SetHistoryFile(app.FileDataDir(cdglobal.DirUserAppData, uptoshare.HistoryFile))
@@ -109,9 +119,15 @@ func (app *Applet) Init(loadConf bool) {
 	app.up.SiteFile(app.conf.SiteFile)
 
 	// Video download settings.
+	app.video.SetBackend(videodl.BackendID(app.conf.VideoDLBackendID))
 	app.video.SetPath(app.conf.VideoDLPath)
-	app.video.SetQuality(videodl.Quality(app.conf.VideoDLQuality))
 	app.video.SetBlacklist(app.conf.VideoDLBlacklist)
+	app.video.SetEnabledDL(app.conf.VideoDLEnabledDL)
+	app.video.SetEnabledWeb(videodl.WebState(app.conf.VideoDLEnabledWeb))
+	app.video.SetTypeDL(videodl.TypeDL(app.conf.VideoDLTypeDL))
+	app.video.SetQuality(videodl.Quality(app.conf.VideoDLQuality))
+	app.video.SetCommands(app.conf.VideoDLOpenDir, app.conf.VideoDLOpenVideo, app.conf.VideoDLOpenWeb)
+	app.video.SetJSWindowOption(app.conf.VideoDLJSWindowOption)
 
 	// Settings for poller and IOActivity (force renderer reset in case of reload).
 	app.conf.UpdateDelay = cdtype.PollerInterval(app.conf.UpdateDelay, defaultUpdateDelay)
@@ -145,16 +161,18 @@ func (app *Applet) OnBuildMenu(menu cdtype.Menuer) {
 	if needSep {
 		menu.AddSeparator()
 	}
+	subup := menu.AddSubMenu("Upload", "")
 	for _, hist := range app.up.ListHistory() {
 		hist := hist
-		menu.AddEntry(hist["file"], "", func() {
+		subup.AddEntry(hist["file"], "", func() {
 			app.Log().Info(hist["link"])
 			clipboard.Write(hist["link"])
 			// app.ShowDialog(link, 5)
 		})
 	}
 
-	// app.video.MenuQuality(menu)
+	menu.AddSeparator()
+	app.video.Menu(menu)
 }
 
 // OnDropData uploads file(s) or text dropped on the icon.
@@ -169,12 +187,17 @@ func (app *Applet) OnDropData(data string) {
 	}
 }
 
+// End unregisters the web service.
+//
+func (app *Applet) End() {
+	app.video.WebUnregister()
+}
+
 // DefineEvents set applet events callbacks.
 //
 func (app *Applet) DefineEvents(events *cdtype.Events) {
 	events.OnClick = app.Command().CallbackInt(cmdLeft)
 	events.OnMiddleClick = app.Command().CallbackNoArg(cmdMiddle)
-	events.OnBuildMenu = app.video.MenuQuality
 }
 
 //

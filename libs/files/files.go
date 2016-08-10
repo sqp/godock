@@ -2,6 +2,7 @@
 package files
 
 import (
+	"github.com/sqp/godock/libs/cdtype"         // ConfUpdater
 	"github.com/sqp/godock/widgets/gtk/keyfile" // Write config file.
 
 	"io"
@@ -9,30 +10,75 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 )
+
+//
+//------------------------------------------------------------[ CONF UPDATER ]--
+
+// Access prevents concurrent access to config files.
+// Could be improved, but it may be safer to use for now.
+//
+var Access = sync.Mutex{}
 
 // UpdateConfFile udates a key in a configuration file.
 //
 func UpdateConfFile(configFile, group, key string, value interface{}) error {
-	// Get the file access rights to preserve them.
+	cu, e := NewConfUpdater(configFile)
+	if e != nil {
+		return e
+	}
+	cu.Set(group, key, value)
+	return cu.Save()
+}
+
+// NewConfUpdater creates a ConfUpdater for the given config file (full path).
+//
+func NewConfUpdater(configFile string) (cdtype.ConfUpdater, error) {
+	// Ensure the file exists and get the file access rights to preserve them.
 	fi, e := os.Stat(configFile)
 	if e != nil {
-		return e
+		return nil, e
 	}
 
-	pKeyF, e := keyfile.NewFromFile(configFile, keyfile.FlagsKeepComments|keyfile.FlagsKeepTranslations)
-	if e != nil {
-		return e
-	}
-	defer pKeyF.Free()
+	Access.Lock()
 
-	pKeyF.Set(group, key, value)
-	_, content, e := pKeyF.ToData()
+	flags := keyfile.FlagsKeepComments | keyfile.FlagsKeepTranslations
+	pKeyF, e := keyfile.NewFromFile(configFile, flags)
 	if e != nil {
-		return e
+		Access.Unlock()
+		return nil, e
 	}
-	return ioutil.WriteFile(configFile, []byte(content), fi.Mode())
+
+	return &confUpdate{
+		KeyFile:  *pKeyF,
+		filePath: configFile,
+		fileMode: fi.Mode(),
+	}, nil
 }
+
+type confUpdate struct {
+	keyfile.KeyFile             // Provides the Set method.
+	filePath        string      // Full path to config file.
+	fileMode        os.FileMode // File access rights.
+}
+
+func (cu *confUpdate) Save() error {
+	defer cu.Cancel()
+	_, content, e := cu.ToData()
+	if e != nil {
+		return e
+	}
+	return ioutil.WriteFile(cu.filePath, []byte(content), cu.fileMode)
+}
+
+func (cu *confUpdate) Cancel() {
+	cu.KeyFile.Free()
+	Access.Unlock()
+}
+
+//
+//--------------------------------------------------------------------[ COPY ]--
 
 // CopyDir copies files recursively from source to destination dir.
 //

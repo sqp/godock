@@ -3,15 +3,15 @@ VERSION=0.0.3.4
 
 SOURCE=github.com/sqp/godock
 
-APPLETS=Audio Cpu DiskActivity DiskFree GoGmail Mem NetActivity Update
+APPLETS=Audio Clouds Cpu DiskActivity DiskFree GoGmail Mem NetActivity Update
 
 
 # unstable applets requires unmerged patches to build.
 UNSTABLE=Notifications TVPlay
-UNSTABLE_TAGS=gtk gtk_3_12
+UNSTABLE_TAGS=gtk
 
 # and dock even more, plus the rewritten dock.
-DOCK=dock all gtk_3_12
+DOCK=dock all
 
 # Install prefix if any.
 PKGDIR=
@@ -49,16 +49,10 @@ dock:
 	go install -tags '$(DOCK)' $(FLAGS) $(SOURCE)/cmd/$(TARGET)
 
 patch:
-	# Patch GTK - some patches required to build a dock.
-	# cd "$(GOPATH)/src/github.com/gotk3/gotk3" && git pull --commit --no-edit origin few_methods deprecated
-	
 	# Patch Dbus (for Notifications)
 	cd "$(GOPATH)/src/github.com/godbus/dbus" && git pull --commit --no-edit https://github.com/sqp/dbus fixeavesdrop
 
 patch-dock: patch
-
-	# Patch gettext (for dock)
-	# cd "$(GOPATH)/src/github.com/gosexy/gettext" && git pull --commit --no-edit https://github.com/sqp/gettext nil_string
 
 
 install: install-common

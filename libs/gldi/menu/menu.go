@@ -2,11 +2,9 @@
 package menu
 
 import (
-	"github.com/sqp/godock/libs/gldi"             // Gldi access.
 	"github.com/sqp/godock/libs/gldi/backendmenu" // Menu types.
 	"github.com/sqp/godock/libs/gldi/current"     // Current theme settings.
 	"github.com/sqp/godock/libs/gldi/globals"     // Global variables.
-	"github.com/sqp/godock/libs/ternary"          // Helpers.
 	"github.com/sqp/godock/libs/text/tran"        // Translate.
 )
 
@@ -44,14 +42,21 @@ func BuildMenuContainer(m *backendmenu.DockMenu) int {
 		// dockmenu.Entry(backendmenu.MenuThemes)
 		// 	}
 
-		// add new item
-		if m.Dock != nil {
-			sub := dockmenu.AddSubMenu(tran.Slate("Add"), globals.IconNameAdd)
-			sub.Entry(backendmenu.MenuAddSubDock)
-			sub.Entry(backendmenu.MenuAddMainDock)
-			sub.Entry(backendmenu.MenuAddSeparator)
-			sub.Entry(backendmenu.MenuAddLauncher)
-			sub.Entry(backendmenu.MenuAddApplet)
+		// Show edit icon below edit dock when icons are locked (only thing needed from the icon submenu).
+		if current.Docks.LockIcons() {
+			dockmenu.Entry(backendmenu.MenuEditTarget)
+
+		} else {
+
+			// Submenu add new item.
+			if m.Dock != nil {
+				sub := dockmenu.AddSubMenu(tran.Slate("Add"), globals.IconNameAdd)
+				sub.Entry(backendmenu.MenuAddSubDock)
+				sub.Entry(backendmenu.MenuAddMainDock)
+				sub.Entry(backendmenu.MenuAddSeparator)
+				sub.Entry(backendmenu.MenuAddLauncher)
+				sub.Entry(backendmenu.MenuAddApplet)
+			}
 		}
 
 		dockmenu.AddSeparator()
@@ -85,9 +90,9 @@ func BuildMenuContainer(m *backendmenu.DockMenu) int {
 
 	// pIcon := GetIconForDesklet(icon, container)
 
-	if m.Icon != nil && !m.Icon.IsSeparatorAuto() {
+	if m.Icon != nil && !m.Icon.IsSeparatorAuto() && !current.Docks.LockIcons() {
 
-		items := m.AddSubMenu(DefaultNameIcon(m.Icon))
+		items := m.AddSubMenu(m.Icon.DefaultNameIcon())
 
 		// 	GtkWidget *pItemSubMenu = _add_item_sub_menu (pIcon, menu);
 
@@ -120,7 +125,7 @@ func BuildMenuContainer(m *backendmenu.DockMenu) int {
 				!m.Icon.ClassIsInhibited(): // if the class doesn't already have an inhibator somewhere.
 				items.Entry(backendmenu.MenuMakeLauncher)
 
-				if !current.Docks.IsLockAll() && m.Icon.IsAppli() {
+				if !current.Docks.LockAll() && m.Icon.IsAppli() {
 
 					if current.Taskbar.OverWriteXIcons() {
 						items.Entry(backendmenu.MenuCustomIconRemove)
@@ -255,7 +260,7 @@ func BuildMenuIcon(m *backendmenu.DockMenu) int {
 		if needSeparator {
 			m.AddSeparator()
 		}
-		needSeparator = true
+		// needSeparator = true
 
 		m.Entry(backendmenu.MenuDeskletVisibility)
 		m.Entry(backendmenu.MenuDeskletSticky)
@@ -366,26 +371,3 @@ func BuildMenuIcon(m *backendmenu.DockMenu) int {
 // g_free (cIconFile);
 // return pItemSubMenu;
 // }
-
-// DefaultNameIcon returns improved name and image for the icon if possible.
-// TODO: facto with version in datagldi
-//
-func DefaultNameIcon(icon *gldi.Icon) (name, img string) {
-	switch {
-	case icon.IsApplet():
-		vc := icon.ModuleInstance().Module().VisitCard()
-		return vc.GetTitle(), vc.GetIconFilePath()
-
-	case icon.IsSeparator():
-		return "--------", ""
-
-	case icon.IsLauncher(), icon.IsStackIcon(), icon.IsAppli(), icon.IsClassIcon():
-		name := icon.GetClass().Name()
-		if name != "" {
-			return name, icon.GetFileName() // icon.GetClassInfo(ClassIcon)
-		}
-		return ternary.String(icon.GetInitialName() != "", icon.GetInitialName(), icon.GetName()), icon.GetFileName()
-
-	}
-	return icon.GetName(), icon.GetFileName()
-}

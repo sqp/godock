@@ -12,6 +12,7 @@ import (
 	"github.com/sqp/godock/libs/gldi/maindock"
 	"github.com/sqp/godock/libs/gldi/menu"
 	"github.com/sqp/godock/libs/gldi/mgrgldi"
+	"github.com/sqp/godock/libs/net/websrv"
 	"github.com/sqp/godock/libs/ternary"
 	"github.com/sqp/godock/libs/text/color"
 	"github.com/sqp/godock/libs/text/strhelp"
@@ -21,13 +22,9 @@ import (
 	"github.com/sqp/godock/libs/srvdbus"
 	"github.com/sqp/godock/libs/srvdbus/dockpath" // hack dock dbus path
 
-	// web inspection.
-	// "github.com/pkg/profile"
-	"net/http"
-	_ "net/http/pprof" // pprof as local.
-
 	"errors"
 	"fmt"
+	"net/http/pprof"
 )
 
 var (
@@ -74,7 +71,8 @@ func Run(log cdtype.Logger, getSettings func() maindock.DockSettings) bool {
 
 	// HTTP listener for the pprof debug.
 	if settings.HTTPPprof {
-		serviceHTTP()
+		websrv.Service.Register("debug/pprof", pprof.Index, log)
+		websrv.Service.Start("debug/pprof")
 	}
 
 	PrintVersions()
@@ -118,20 +116,14 @@ func serviceDbus(log cdtype.Logger) (*srvdbus.Loader, error) {
 		return nil, errors.New("Dbus service failed to start")
 	}
 
-	active, e := loader.Start(loader, srvdbus.Introspect(""))
+	active, e := loader.Connect()
 	switch {
 	case e != nil:
 		return nil, e
+
 	case !active:
 		return nil, errors.New("service already active")
 	}
 
 	return loader, nil
-}
-
-func serviceHTTP() {
-	// p := profile.Start()
-	// defer p.Stop()
-
-	go func() { http.ListenAndServe("localhost:6987", nil) }()
 }

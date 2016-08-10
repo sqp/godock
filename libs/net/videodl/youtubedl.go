@@ -5,6 +5,7 @@ import (
 	"github.com/sqp/godock/libs/text/linesplit" // Parse command output.
 
 	"os/exec"
+	"strconv"
 	"strings"
 )
 
@@ -12,49 +13,65 @@ const (
 	cmdName = "youtube-dl"
 )
 
+// YoutubeDL implements the VideoDler interface with external youtube-dl command.
+//
+type YoutubeDL struct{}
+
+func (f YoutubeDL) New(log cdtype.Logger, url string) (Filer, error) {
+	return NewYoutubeDLFile(log, url)
+}
+
+// MenuQuality returns the list of available streams and formats for the video.
+//
+func (f YoutubeDL) MenuQuality() []Quality {
+	return []Quality{QualityAsk, QualityBestFound, QualityBestPossible}
+}
+
 //
 //--------------------------------------------------------------------[ FILE ]--
 
-// YoutubeDL defines a video file downloader around the youtube-dl command.
+// YoutubeDLFile defines a video file downloader around the youtube-dl command.
 //
-type YoutubeDL struct {
+type YoutubeDLFile struct {
 	url     string
-	formats []Format
+	formats []*Format
 
 	log cdtype.Logger
+	cmd *exec.Cmd
 }
 
-// NewYoutubeDL creates a video file downloader.
+// NewYoutubeDLFile creates a video file downloader.
 //
-func NewYoutubeDL(log cdtype.Logger, url string) Filer {
-	return &YoutubeDL{
+func NewYoutubeDLFile(log cdtype.Logger, url string) (Filer, error) {
+	return &YoutubeDLFile{
 		url: url,
 		log: log,
-	}
+	}, nil
 }
 
 // Title gets the title of the video.
 //
-func (f *YoutubeDL) Title() (string, error) {
+func (f *YoutubeDLFile) Title() (string, error) {
 	return f.log.ExecSync(cmdName, "--get-filename", "-i", f.url) // -i: ignore errors.
 }
 
 // DownloadCmd downloads the video file from server.
 //
-func (f *YoutubeDL) DownloadCmd(path, quality string) *exec.Cmd {
+func (f *YoutubeDLFile) DownloadCmd(path string, format *Format, progress *Progress) func() error {
 	args := []string{"--all-subs", "-i", f.url}
-	if quality != "" {
-		args = append([]string{"-f", quality}, args...)
-	}
+	// if quality < len(f.formats) {
+	q := strconv.Itoa(format.Itag)
+	args = append([]string{"-f", q}, args...)
+	// }
 	cmd := f.log.ExecCmd(cmdName, args...)
 	cmd.Dir = path
 
-	return cmd
+	return f.runCmd(cmd)
 }
 
 // Formats returns the list of available streams and formats for the video.
 //
-func (f *YoutubeDL) Formats() ([]Format, error) {
+func (f *YoutubeDLFile) Formats() ([]*Format, error) {
 	init := false
 
 	cmd := f.log.ExecCmd(cmdName, "-F", f.url)
@@ -69,21 +86,23 @@ func (f *YoutubeDL) Formats() ([]Format, error) {
 		}
 
 		args := strings.Fields(s)
+		code, e := strconv.Atoi(args[0])
+		f.log.Err(e, "convert code ID")
 		if len(args) >= 3 {
-			form := Format{
-				Code: args[0],
-				Ext:  args[1],
-				Res:  args[2],
+			form := &Format{
+				Itag:       code,
+				Extension:  args[1],
+				Resolution: args[2],
 			}
 
 			if len(args) > 3 {
-				form.Note = args[3]
+				// form.Note = args[3]
 			}
 			if len(args) > 4 {
 				last := args[len(args)-1]
 				if strings.HasSuffix(last, "iB") {
 					if strings.HasSuffix(last, "MiB") {
-						form.Size = last[:len(last)-3]
+						// form.Size = last[:len(last)-3]
 						// f.log.Info("SIZE M", last[:len(last)-3])
 					}
 					args = args[:len(args)-1]
@@ -97,6 +116,27 @@ func (f *YoutubeDL) Formats() ([]Format, error) {
 		}
 	})
 
+	lastID := len(f.formats) - 1
+	// ids := ""
+	sel := []*Format{}
+	for i := range f.formats {
+		form := f.formats[lastID-i] // Reverse list order (best quality first).
+		sel = append(sel, form)
+		// if form.Note == "" || form.Note == "(best)" { // TODO: improve.
+		// ids = strhelp.Separator(ids, ";", strhelp.Separator(form.Extension, ": ", form.Resolution))
+		// }
+	}
+	f.formats = sel
+
 	e := cmd.Run()
 	return f.formats, e
+}
+
+func (f *YoutubeDLFile) runCmd(cmd *exec.Cmd) func() error {
+	return func() error {
+		f.cmd = cmd
+		e := f.cmd.Run()
+		f.cmd = nil
+		return e
+	}
 }

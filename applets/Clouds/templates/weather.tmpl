@@ -1,0 +1,8 @@
+{{define "ListCurrent"}}currentFirst,tempReal,tempFelt,wind,humidity,pressure,sun{{end}}
+{{define "currentFirst"}}{{.WeatherDescription}} ({{.UpdateTime}}, {{.Observatory}}){{end}}
+{{define "tempReal"}}{{.TempReal}}{{.UnitTemp}}{{end}}
+{{define "tempFelt"}}{{.TempFelt}}{{.UnitTemp}}{{end}}
+{{define "wind"}}{{.WindSpeed}} {{.UnitSpeed}} ({{.WindDirection}}){{end}}
+{{define "humidity"}}{{.Humidity}}%{{end}}
+{{define "pressure"}}{{.Pressure}}{{.UnitPressure}}{{end}}
+{{define "sun"}}{{.Sunrise}} - {{.Sunset}}{{end}}

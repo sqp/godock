@@ -2,22 +2,48 @@
 package videodl
 
 import (
+	"github.com/sqp/godock/libs/cdglobal"
 	"github.com/sqp/godock/libs/cdtype"
-	"github.com/sqp/godock/libs/text/strhelp"
+	"github.com/sqp/godock/libs/ternary"
 
 	"os/exec"
+	"strconv"
+	"strings"
+	"time"
+)
+
+// others possible backends :
+// https://github.com/dwarvesf/glod-cli
+// https://github.com/frou/yt2pod
+
+// HistoryFile defines the name of the default history file.
+//
+const (
+	HistoryFile     = "videodl_history.txt"
+	WebPath         = "video"
+	iconMenuMain    = "video-x-generic"
+	iconMenuQuality = "video-x-generic"
+	iconMenuTypeDL  = "video-x-generic"
 )
 
 // Videodl actions.
 const (
 	ActionOpenFolder = iota
 	ActionCancelDownload
+	ActionEnableDownload
+	ActionEnableWeb
+	ActionEditList
 	ActionCount // Number of defined actions
 )
 
-// FuncDownload defines a quality set function.
+const (
+	groupQuality = 442
+	groupTypeDL  = 443
+)
+
+// DownloadFunc defines a quality set function.
 //
-type FuncDownload func(quality string)
+type DownloadFunc func(*Video, *Format)
 
 // FuncPopupDialog defines a dialog display function.
 //
@@ -25,15 +51,25 @@ type FuncPopupDialog func(cdtype.DialogData) error
 
 // FuncFilterFormats defines a filter format test callback.
 //
-type FuncFilterFormats func([]Format) []Format
+type FuncFilterFormats func([]*Format) []*Format
 
 // FuncFilterFormatTest defines a filter format test callback.
 //
-type FuncFilterFormatTest func(Format) bool
+type FuncFilterFormatTest func(*Format) bool
 
 // FuncNewFiler defines the filer creation from a download backend.
 //
-type FuncNewFiler func(log cdtype.Logger, url string) Filer
+type FuncNewFiler func(log cdtype.Logger, url string) (Filer, error)
+
+//
+//---------------------------------------------------------------[ VIDEODLER ]--
+
+// VideoDler defines the backend interface.
+//
+type VideoDler interface {
+	New(log cdtype.Logger, url string) (Filer, error)
+	MenuQuality() []Quality
+}
 
 //
 //-------------------------------------------------------------------[ FILER ]--
@@ -42,8 +78,8 @@ type FuncNewFiler func(log cdtype.Logger, url string) Filer
 //
 type Filer interface {
 	Title() (string, error)
-	DownloadCmd(path, quality string) *exec.Cmd
-	Formats() ([]Format, error)
+	DownloadCmd(path string, format *Format, progress *Progress) func() error
+	Formats() ([]*Format, error)
 }
 
 //
@@ -73,17 +109,131 @@ func (q Quality) String() string {
 	return ""
 }
 
+func (q Quality) Tooltip() string {
+	switch q {
+	case QualityAsk:
+		return "Use a popup to ask quality for every file"
+	case QualityBestPossible:
+		return "If available, this will merge the best audio and video streams into a single file."
+	}
+	return ""
+}
+
+//
+//------------------------------------------------------------------[ TYPEDL ]--
+
+type WebState int
+
+// TypeDL settings.
+const (
+	WebStateDisabled WebState = iota
+	WebStateStopped
+	WebStateStarted
+)
+
+func (s WebState) Tooltip() string {
+	return "The web service allows links forwarding directly from your browser\nand the web page to edit the download history."
+}
+
+type TypeDL int
+
+// TypeDL settings.
+const (
+	TypeDLAll TypeDL = iota
+	TypeDLAudio
+	TypeDLVideo
+	TypeDLVideoWithAudio
+)
+
+func (t TypeDL) String() string {
+	switch t {
+	case TypeDLAll:
+		return "All files"
+	case TypeDLAudio:
+		return "Audio"
+	case TypeDLVideo:
+		return "Video"
+	case TypeDLVideoWithAudio:
+		return "Video with audio"
+	}
+	return ""
+}
+
+func (t TypeDL) Tooltip() string {
+	switch t {
+	case TypeDLAll:
+		return "No filter on file type."
+	case TypeDLAudio:
+		return "Display only audio files (without video)"
+	case TypeDLVideo:
+		return "Display only video files (with video, and maybe audio)"
+	case TypeDLVideoWithAudio:
+		return "Display only files with audio and video"
+	}
+	return ""
+}
+
+//
+//----------------------------------------------------------------[ PROGRESS ]--
+
+type Progress struct {
+	cur int64
+	max int64
+}
+
+func NewProgress() *Progress { return &Progress{} }
+
+func (p *Progress) SetMax(m int64) { p.max = m }
+
+func (p *Progress) Write(data []byte) (n int, e error) {
+	p.cur += int64(len(data))
+	return 0, nil
+}
+
 //
 //------------------------------------------------------------------[ FORMAT ]--
+
+type Video struct {
+	*Format
+
+	Name      string
+	URL       string
+	DateAdded time.Time
+	DateDone  *time.Time
+	Fail      bool
+	Viewed    bool
+	Category  string
+
+	filer Filer
+}
+
+func NewVideo(url string, filer Filer) (*Video, error) {
+	title, e := filer.Title()
+	if e != nil {
+		return nil, e
+	}
+	return &Video{
+		Name:      title,
+		URL:       url,
+		DateAdded: time.Now(),
+		filer:     filer,
+	}, nil
+}
 
 // Format defines the format of a media stream (audio or video).
 //
 type Format struct {
-	Code string // Key reference for the stream.
-	Ext  string // Media extension (mp4, flv...)
-	Res  string // Video resolution.
-	Note string // Unparsed informations provided by the backend.
-	Size string // Stream size in MiB.
+	Itag       int    // Key reference for the stream.
+	Extension  string // Media extension (mp4, flv...)
+	Resolution string // Video resolution.
+	Size       int    // File size in MiB.
+	// 	Note string // Unparsed informations provided by the backend.
+
+	VideoEncoding string
+	AudioEncoding string
+	AudioBitrate  int
+
+	needDeleteFile string // Set to extension to delete if active.
 }
 
 //
@@ -95,7 +245,8 @@ type BackendID int
 
 // Backends list.
 const (
-	BackendYoutubeDL BackendID = iota
+	BackendInternal BackendID = iota
+	BackendYoutubeDL
 )
 
 //
@@ -104,11 +255,15 @@ const (
 // Downloader defines the usage of the video download manager.
 //
 type Downloader interface {
+	// SetBackend sets the downloader backend ID.
+	//
 	SetBackend(ID BackendID)
 
 	// SetPath sets the download location.
 	//
 	SetPath(path string)
+
+	SetTypeDL(typ TypeDL)
 
 	// SetQuality sets the default format quality.
 	//
@@ -117,6 +272,10 @@ type Downloader interface {
 	// SetBlacklist sets the formats blacklist.
 	//
 	SetBlacklist(bl []string)
+
+	SetCommands(openDir, openVideo, openWeb string)
+
+	SetEditList(call func() error)
 
 	// SetPreCheck sets the pre-upload action.
 	//
@@ -134,7 +293,19 @@ type Downloader interface {
 	//
 	FilterBlacklist() FuncFilterFormats
 
+	SetEnabledWeb(WebState)
+	SetJSWindowOption(string)
+
+	WebRegister()
+	WebUnregister()
+
+	WebAutoStart() func()
+
+	WebURL() string
+
 	//----------------------------------------------------------------[ DOWNLOAD ]--
+
+	SetEnabledDL(bool)
 
 	// Download downloads a video file from the server at configured quality (can be ask).
 	//
@@ -142,8 +313,8 @@ type Downloader interface {
 
 	// Enqueue enqueues an item to the download list.
 	//
-	Enqueue(call func() error)
-	EnqueueStart(call func() error)
+	Enqueue(*Video)
+	EnqueueAndStart(*Video)
 	Start()
 
 	//-----------------------------------------------------------------[ ACTIONS ]--
@@ -152,8 +323,8 @@ type Downloader interface {
 
 	//------------------------------------------------------------[ DOCK HELPERS ]--
 	Actions(firstID int, actionAdd func(...*cdtype.Action))
-	MenuQuality(cdtype.Menuer)
-	DialogQuality(filterFormats FuncFilterFormats, callDialog FuncPopupDialog, callDL FuncDownload, f Filer)
+	Menu(cdtype.Menuer)
+	DialogQuality(filterFormats FuncFilterFormats, callDialog FuncPopupDialog, callDL DownloadFunc, v *Video)
 }
 
 // Controler defines actions needed from a cdtype.AppBase.
@@ -166,24 +337,38 @@ type Controler interface {
 // Manager defines a video file download manager.
 //
 type Manager struct {
-	Path      string
-	Quality   Quality
+	Path           string
+	Quality        Quality
+	TypeDL         TypeDL
+	EnabledDL      bool
+	EnabledWeb     bool
+	StartedWeb     bool
+	JSWindowOption string
+
+	cmdOpenDir   string
+	cmdOpenWeb   string
+	cmdOpenVideo string
+
 	blacklist []string
 
 	newFiler FuncNewFiler
+
+	backend VideoDler
 
 	firstID int // Position of first action, when used with other applets services.
 
 	active     bool // true when downloading.
 	actionPre  func() error
 	actionPost func() error
-	queue      chan func() error
 	cmd        *exec.Cmd
-	// onResult   func(Links)
 
-	// history     []Links
-	// historyMax  int
-	// historyFile string
+	history *HistoryVideo
+
+	progress *Progress
+
+	category string // currently selected category (group / dir).
+
+	editList func() error
 
 	control Controler
 	log     cdtype.Logger
@@ -191,86 +376,101 @@ type Manager struct {
 
 // NewManager creates a video file download manager.
 //
-func NewManager(control Controler, log cdtype.Logger) *Manager {
-	return &Manager{
-		control: control,
-		log:     log,
-		queue:   make(chan func() error, 10),
+func NewManager(control Controler, log cdtype.Logger, hist *HistoryVideo) *Manager {
+	m := &Manager{
+		control:      control,
+		log:          log,
+		backend:      YTDL{},
+		history:      hist,
+		cmdOpenDir:   cdglobal.CmdOpen,
+		cmdOpenWeb:   cdglobal.CmdOpen,
+		cmdOpenVideo: cdglobal.CmdOpen,
 	}
+	m.editList = func() error {
+		m.SetStartedWeb(true)
+		return m.log.ExecAsync(m.cmdOpenWeb, m.WebURL())
+	}
+	return m
 }
 
 //
 //----------------------------------------------------------------[ SETTINGS ]--
 
-// SetBackend sets the download location.
-//
-func (d *Manager) SetBackend(ID BackendID) {
-	d.newFiler = NewYoutubeDL
-}
-
 // SetPath sets the download location.
 //
-func (d *Manager) SetPath(path string) {
-	d.Path = path
+func (m *Manager) SetPath(path string) {
+	m.Path = path
 }
 
 // SetQuality sets the default format quality.
 //
-func (d *Manager) SetQuality(quality Quality) {
-	d.Quality = quality
+func (m *Manager) SetQuality(quality Quality) {
+	m.Quality = quality
 }
 
 // SetBlacklist sets the formats blacklist.
 //
-func (d *Manager) SetBlacklist(bl []string) {
-	d.blacklist = bl
+func (m *Manager) SetBlacklist(bl []string) {
+	m.blacklist = bl
 }
 
 // SetPreCheck sets the pre-upload action.
 //
-func (d *Manager) SetPreCheck(call func() error) {
-	d.actionPre = call
+func (m *Manager) SetPreCheck(call func() error) {
+	m.actionPre = call
 }
 
 // SetPostCheck sets the post-upload action.
 //
-func (d *Manager) SetPostCheck(call func() error) {
-	d.actionPost = call
+func (m *Manager) SetPostCheck(call func() error) {
+	m.actionPost = call
 }
-
-// SetOnResult sets the result return method.
-//
-// func (up *Uploader) SetOnResult(call func(Links)) {
-// 	up.onResult = call
-// }
 
 // IsActive returns whether a download is in progress or not.
 //
-func (d *Manager) IsActive() bool { return d.active }
+func (m *Manager) IsActive() bool { return m.active }
 
 // FilterBlacklist provides a filter formats call to remove blacklisted file types.
 //
-func (d *Manager) FilterBlacklist() FuncFilterFormats {
-	testBlacklist := func(form Format) bool {
-		for _, ext := range d.blacklist {
-			if form.Ext == ext {
+func (m *Manager) FilterBlacklist() FuncFilterFormats {
+	testBlacklist := func(form *Format) bool {
+		for _, ext := range m.blacklist {
+			if form.Extension == ext {
 				return false
 			}
 		}
 		return true
 	}
 
-	return func(formats []Format) []Format {
-		return FilterFormats(testBlacklist, formats)
+	testTypeDL := func(form *Format) bool {
+		switch m.TypeDL {
+		case TypeDLAudio:
+			return form.AudioEncoding != "" && form.VideoEncoding == ""
+
+		case TypeDLVideo:
+			return form.VideoEncoding != ""
+
+		case TypeDLVideoWithAudio:
+			return form.VideoEncoding != "" && form.AudioEncoding != ""
+		}
+		return true
+	}
+
+	return func(formats []*Format) []*Format {
+		return FilterFormats(formats, testBlacklist, testTypeDL)
 	}
 }
 
 // FilterFormats filters a list of formats with the provided test.
 //
-func FilterFormats(filter FuncFilterFormatTest, formats []Format) []Format {
-	var out []Format
+func FilterFormats(formats []*Format, filters ...FuncFilterFormatTest) []*Format {
+	var out []*Format
 	for _, form := range formats {
-		if filter(form) {
+		ok := true
+		for _, f := range filters {
+			ok = ok && f(form)
+		}
+		if ok {
 			out = append(out, form)
 		}
 	}
@@ -282,201 +482,234 @@ func FilterFormats(filter FuncFilterFormatTest, formats []Format) []Format {
 
 // Download downloads a video file from the server at configured quality (can be ask).
 //
-func (d *Manager) Download(url string) {
-	filer := d.newFiler(d.log, url)
-	download := func(quality string) {
-		d.EnqueueStart(d.runCmd(filer.DownloadCmd(d.Path, quality)))
+func (m *Manager) Download(url string) {
+	filer, e := m.backend.New(m.log, url)
+	if m.log.Err(e, "videodl init", url) {
+		return
+	}
+	vid, e := NewVideo(url, filer)
+	vid.Category = m.category
+
+	if m.log.Err(e, "videodl: add to queue (get title)") {
+		return
+	}
+	m.getQuality(vid)
+}
+
+func (m *Manager) getQuality(vid *Video) {
+	download := func(vid *Video, format *Format) {
+		// invert need delete (default = true).
+		if vid.Format != nil {
+			switch {
+			case format.Extension == vid.Extension: // no post deletion, the current file will be overwritten.
+
+			case vid.Format.needDeleteFile != "": // set to false
+				format.needDeleteFile = ""
+
+			default: // set to true
+				format.needDeleteFile = vid.Extension
+			}
+
+			e := m.history.Remove(vid, &m.history.List)
+			m.log.Err(e, "videodl: getQuality remove from list")
+		}
+
+		vid.Format = format
+		m.EnqueueAndStart(vid)
 	}
 
-	switch d.Quality {
+	if !m.testFiler(vid) {
+		return
+	}
+
+	switch m.Quality {
 	case QualityAsk:
 		go func() {
-			d.DialogQuality(d.FilterBlacklist(), d.control.PopupDialog, download, filer)
+			m.DialogQuality(m.FilterBlacklist(), m.control.PopupDialog, download, vid)
 		}()
 
-	case QualityBestFound:
-		download("best")
+		// case QualityBestFound:
+		// 	download("best")
 
-	case QualityBestPossible:
-		download("")
+		// case QualityBestPossible:
+		// 	download("")
 	}
 }
 
 // Enqueue enqueues an item to the download list.
 //
-func (d *Manager) Enqueue(call func() error) {
-	d.queue <- call
+func (m *Manager) Enqueue(vid *Video) {
+	e := m.history.Add(vid)
+	m.log.Err(e, "videodl: save data")
 }
 
-// EnqueueStart enqueues an item and starts downloading.
+// EnqueueAndStart enqueues an item and starts downloading.
 //
-func (d *Manager) EnqueueStart(call func() error) {
-	d.Enqueue(call)
-	d.Start()
+func (m *Manager) EnqueueAndStart(vid *Video) {
+	m.Enqueue(vid)
+	m.Start()
 }
 
 // Start starts downloading queued items.
 //
-func (d *Manager) Start() {
-	if d.IsActive() || len(d.queue) == 0 { // Only one worker.
+func (m *Manager) Start() {
+	if m.IsActive() || m.history.Queued() == 0 { // Only one worker.
 		return
 	}
 	go func() {
-		d.active = true
-		if d.actionPre != nil {
-			d.log.Err(d.actionPre(), "actionPre")
+		m.active = true
+		if m.actionPre != nil {
+			m.log.Err(m.actionPre(), "actionPre")
 		}
-		for call := range d.queue {
-			e := call()
-			d.log.Err(e, "Download")
+		defer func() {
+			if m.actionPost != nil {
+				m.log.Err(m.actionPost(), "actionPost")
+			}
+			m.active = false
+		}()
 
-			// if _, ok := links["error"]; !ok {
-			// 	d.addHistory(links)
-			// }
-			// if d.onResult != nil {
-			// 	d.onResult(links)
-			// }
-		}
+		var e error
+		for {
+			vid, ok := m.history.Next()
+			if !ok || !m.EnabledDL {
+				return
+			}
 
-		if d.actionPost != nil {
-			d.log.Err(d.actionPost(), "actionPost")
+			if !m.testFiler(vid) {
+				return
+			}
+
+			if vid.filer == nil {
+				vid.filer, e = m.backend.New(m.log, vid.URL)
+				if m.log.Err(e, "videodl: get data") {
+					return
+				}
+			}
+
+			m.progress = NewProgress()
+			e = vid.filer.DownloadCmd(m.Path, vid.Format, m.progress)()
+			if m.log.Err(e, "Download") {
+				vid.Fail = true
+			} else if vid.Format.needDeleteFile != "" {
+				m.log.Info("to delete", vid.Category, vid.Name, vid.needDeleteFile)
+			}
+
+			// Remove from queue.
+			// Whether it was a success or not, we cannot chain loop over the same item.
+			e = m.history.Done()
+			m.log.Err(e, "videodl: save data")
 		}
-		d.active = false
 	}()
 }
 
-func (d *Manager) runCmd(cmd *exec.Cmd) func() error {
-	return func() error {
-		d.cmd = cmd
-		e := d.cmd.Run()
-		d.cmd = nil
-		return e
+//
+//--------------------------------------------------------------------[ MENU ]--
+
+// Menu fills an applet actions list with videodl actions.
+//
+func (m *Manager) Menu(menu cdtype.Menuer) {
+	m.control.Action().BuildMenu(menu, []int{m.firstID + ActionOpenFolder, m.firstID + ActionEnableDownload})
+
+	if m.active {
+		m.control.Action().BuildMenu(menu, []int{m.firstID + ActionCancelDownload})
 	}
-}
 
-//
-//-----------------------------------------------------------------[ ACTIONS ]--
-
-// OpenFolder opens the destination folder.
-//
-func (d *Manager) OpenFolder() {
-	e := d.log.ExecAsync("xdg-open", d.Path)
-	d.log.Err(e, "open folder")
-}
-
-// CancelDownload stops the current download.
-//
-func (d *Manager) CancelDownload() {
-	if d.cmd != nil {
-		d.cmd.Process.Kill()
-		d.cmd = nil
+	subTitle := "Video Download"
+	if !m.EnabledDL {
+		subTitle += " (paused)"
 	}
-}
-
-//
-//------------------------------------------------------------[ DOCK HELPERS ]--
-
-// Actions fills an applet actions list with videodl actions.
-//
-func (d *Manager) Actions(firstID int, actionAdd func(acts ...*cdtype.Action)) {
-	d.firstID = firstID
-	actionAdd(
-		&cdtype.Action{
-			ID:      firstID + ActionOpenFolder,
-			Name:    "Open video folder",
-			Icon:    "folder",
-			Menu:    cdtype.MenuEntry,
-			Call:    d.OpenFolder,
-			Tooltip: "WTF",
-		},
-		&cdtype.Action{
-			ID:   firstID + ActionCancelDownload,
-			Name: "Cancel download",
-			Icon: "edit-undo",
-			Menu: cdtype.MenuEntry,
-			Call: d.CancelDownload,
-		},
-	)
-}
-
-// MenuQuality fills an applet actions list with videodl actions.
-//
-func (d *Manager) MenuQuality(menu cdtype.Menuer) {
-	d.control.Action().BuildMenu(menu, []int{d.firstID + ActionOpenFolder})
-
-	if d.active {
-		d.control.Action().BuildMenu(menu, []int{d.firstID + ActionCancelDownload})
+	sub := menu.AddSubMenu(subTitle, iconMenuMain)
+	if m.history.Queued() > 0 {
+		sub.AddEntry("Queued: "+strconv.Itoa(m.history.Queued()), "emblem-downloads", nil)
+		sub.AddSeparator()
 	}
-	group := 42
 
-	sub := menu.AddSubMenu("Quality: "+d.Quality.String(), "video-x-generic")
-	sub.AddRadioEntry(
-		QualityAsk.String(),
-		d.Quality == QualityAsk,
-		group,
-		func() { d.Quality = QualityAsk },
-	)
+	// sub.AddEntry("Edit list", "media-playlist-repeat", func() { m.log.ExecAsync(m.cmdOpenWeb, m.WebURL()) }).
+	// 	SetTooltipText("Note that this will enable the web service\nYou may have to stop it manually when not needed anymore if you prefer.")
+	m.control.Action().BuildMenu(sub, []int{m.firstID + ActionEditList, m.firstID + ActionEnableWeb})
 
-	sub.AddRadioEntry(
-		QualityBestFound.String(),
-		d.Quality == QualityBestFound,
-		group,
-		func() { d.Quality = QualityBestFound },
-	)
-
-	sub.AddRadioEntry(
-		QualityBestPossible.String(),
-		d.Quality == QualityBestPossible,
-		group,
-		func() { d.Quality = QualityBestPossible },
-	).SetTooltipText("If available, this will merge the best audio and video streams into a single file.")
+	m.MenuTypeDL(sub, &m.TypeDL)
+	m.MenuQuality(sub, &m.Quality, m.backend.MenuQuality())
 }
+
+//
+//------------------------------------------------------------------[ DIALOG ]--
 
 // DialogQuality prepares a dialog to ask the desired quality and download.
 //
-func (d *Manager) DialogQuality(filterFormats FuncFilterFormats, callDialog FuncPopupDialog, callDL FuncDownload, f Filer) {
-	title, e := f.Title()
-	if !d.log.Err(e, "youtube title") {
-		d.log.Info("youtube title", title)
+func (m *Manager) DialogQuality(filterFormats FuncFilterFormats, callDialog FuncPopupDialog, callDL DownloadFunc, vid *Video) {
+	if vid.Name == "" {
+		var e error
+		vid.Name, e = vid.filer.Title()
+		if m.log.Err(e, "videodl: missing title") {
+			return
+		}
 	}
 
-	formats, e := f.Formats()
-	if d.log.Err(e, "format") || len(formats) == 0 {
+	formats, e := vid.filer.Formats()
+	if m.log.Err(e, "format") || len(formats) == 0 {
 		return
 	}
 
-	formats = append(formats,
-		Format{Res: QualityBestFound.String(), Code: "best"},
-		Format{Res: QualityBestPossible.String()},
-	)
+	// formats = append(formats,
+	// Format{Res: QualityBestFound.String(), Code: "best"},
+	// Format{Res: QualityBestPossible.String()},
+	// )
 
 	// Reduce list of formats.
 	formats = filterFormats(formats)
 
-	lastID := len(formats) - 1
-	ids := ""
-	sel := []Format{}
-	for i := range formats {
-		form := formats[lastID-i]                     // Reverse list order (best quality first).
-		if form.Note == "" || form.Note == "(best)" { // TODO: improve.
-			sel = append(sel, form)
-			ids = strhelp.Separator(ids, ";", strhelp.Separator(form.Ext, ": ", form.Res))
+	var ids []string
+	for _, form := range formats {
+		size := "?"
+		if form.Size > 0 {
+			size = strconv.Itoa(form.Size)
 		}
+
+		ids = append(ids, size+" MB\t"+
+			form.Extension+"\t"+form.Resolution+"\t"+
+			form.AudioEncoding+"\t"+form.VideoEncoding,
+		)
+	}
+
+	ids = append(ids, "Category: "+m.category)
+	if vid.Format != nil {
+		if vid.Format.needDeleteFile == "" {
+			vid.Format.needDeleteFile = vid.Extension
+		} else {
+			vid.Format.needDeleteFile = ""
+		}
+		ids = append(ids, "Delete current file: "+ternary.String(vid.Format.needDeleteFile != "", "Yes", "No"))
+
 	}
 
 	e = callDialog(cdtype.DialogData{
-		Message: title + "\n\nSelect quality:",
+		Message: vid.Name + "\n\nSelect quality:",
 		// UseMarkup: true,
 		Widget: cdtype.DialogWidgetList{
-			Values:       ids,
-			InitialValue: int32(0),
+			Values:       strings.Join(ids, ";"),
+			InitialValue: 0,
 		},
 		Buttons: "ok;cancel",
 		Callback: cdtype.DialogCallbackValidInt(func(id int) {
-			if id < len(sel) { // Shouldn't be out of range, but just to be safe...
-				callDL(sel[id].Code)
+			switch {
+			case id > len(formats)+1:
+				m.log.NewErr("ID out of range", "videodl DialogQuality")
+
+			case id == len(formats)+1:
+				if vid.Format == nil {
+					m.log.NewErr("select delete file but format missing", "videodl DialogQuality")
+				} else {
+					m.DialogQuality(filterFormats, callDialog, callDL, vid)
+				}
+
+			case id == len(formats):
+				m.DialogCategory(filterFormats, callDialog, callDL, vid)
+
+			default:
+				callDL(vid, formats[id])
 			}
 		}),
 	})
-	d.log.Err(e, "popup")
+	m.log.Err(e, "popup")
 }

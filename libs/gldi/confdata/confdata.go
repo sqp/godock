@@ -27,28 +27,6 @@ type IconConf struct {
 	gldi.Icon
 }
 
-// DefaultNameIcon returns improved name and image for the icon if possible.
-//
-func (icon *IconConf) DefaultNameIcon() (name, img string) {
-	switch {
-	case icon.IsApplet():
-		vc := icon.ModuleInstance().Module().VisitCard()
-		return vc.GetTitle(), vc.GetIconFilePath()
-
-	case icon.IsSeparator():
-		return "--------", ""
-
-	case icon.IsLauncher(), icon.IsStackIcon(), icon.IsAppli(), icon.IsClassIcon():
-		name := icon.GetClass().Name()
-		if name != "" {
-			return name, icon.GetFileName() // icon.GetClassInfo(ClassIcon)
-		}
-		return ternary.String(icon.GetInitialName() != "", icon.GetInitialName(), icon.GetName()), icon.GetFileName()
-
-	}
-	return icon.GetName(), icon.GetFileName()
-}
-
 // Reload reloads the icon to apply the new configuration.
 //
 func (icon *IconConf) Reload() {

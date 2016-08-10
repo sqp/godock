@@ -131,6 +131,13 @@ type AppBase interface {
 	//
 	LoadConfig(loadConf bool, v interface{})
 
+	// UpdateConfig opens the applet config file for edition.
+
+	// You must ensure that Save or Cancel is called, and fast to prevent memory
+	// leaks and deadlocks.
+	//
+	UpdateConfig() (ConfUpdater, error)
+
 	// ConfFile returns the config file location.
 	//
 	// ConfFile() string // ConfFile returns the config file location.
@@ -570,7 +577,7 @@ type Commands map[int]*Command
 //
 type Command struct {
 	Name      string // Command or location to open.
-	UseOpen   bool   // If true, open with xdg-open.
+	UseOpen   bool   // If true, open with the cdglobal.CmdOpen command.
 	Monitored bool   // If true, the window will be monitored by the dock. (don't work wit UseOpen)
 	Class     string // Window class if needed.
 }
@@ -836,6 +843,37 @@ type Shortkey struct {
 	ConfKey   string
 	Desc      string
 	Shortkey  string
+}
+
+//
+//-------------------------------------------------------------[ CONF STRUCT ]--
+
+type ConfGroupIconName struct {
+	Name string `conf:"name"`
+}
+
+type ConfGroupIconBoth struct {
+	Icon string `conf:"icon"`
+	Name string `conf:"name"`
+}
+
+// ConfUpdater updates a config file.
+//
+// You must ensure that Save or Cancel is called, and fast to prevent memory
+// leaks and deadlocks.
+//
+type ConfUpdater interface {
+	// Set sets a new value for the group/key reference.
+	//
+	Set(group, key string, value interface{}) error
+
+	// Save saves the edited config to disk, and release locks and memory.
+	//
+	Save() error
+
+	// Cancel releases locks and memory.
+	//
+	Cancel()
 }
 
 //

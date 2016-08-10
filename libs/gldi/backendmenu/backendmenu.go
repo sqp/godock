@@ -14,7 +14,6 @@ import (
 	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/gtk"
 
-	"github.com/sqp/godock/libs/cdglobal"
 	"github.com/sqp/godock/libs/cdtype"
 	"github.com/sqp/godock/libs/files"           // UpdateConfFile.
 	"github.com/sqp/godock/libs/gldi"            // Gldi access.
@@ -143,6 +142,7 @@ const (
 	MenuDuplicateApplet
 	MenuEditApplet
 	MenuEditIcon
+	MenuEditTarget
 	MenuHandbook
 	MenuHelp
 	MenuLaunchNew
@@ -219,8 +219,8 @@ func (m *DockMenu) Entry(entry MenuEntry) bool {
 		m.AddEntry(
 			tran.Slate("About"),
 			globals.IconNameAbout,
-			func() { about.New(globals.DirShareData(cdglobal.ConfigDirDockImages, cdglobal.FileCairoDockLogo)) },
-		).SetTooltipText(tran.Slate("This will hide the dock until you hover over it with the mouse."))
+			about.New,
+		)
 
 	case MenuAddApplet:
 		m.AddEntry(
@@ -456,6 +456,18 @@ func (m *DockMenu) Entry(entry MenuEntry) bool {
 				}
 			})
 
+	case MenuEditTarget:
+		_, img := m.Icon.DefaultNameIcon()
+		m.AddEntry(
+			tran.Slate("Edit icon"),
+			img,
+			func() {
+				// if (CAIRO_DOCK_IS_DESKLET (pContainer))
+				// 	icon = (CAIRO_DESKLET (pContainer))->pIcon;  // l'icone cliquee du desklet n'est pas forcement celle qui contient le module.
+				// g_return_if_fail (CAIRO_DOCK_IS_APPLET (icon));
+				backendgui.ShowItems(m.Icon, nil, nil, -1)
+			})
+
 	case MenuHandbook:
 		m.AddEntry(
 			tran.Slate("Applet's handbook"),
@@ -487,10 +499,10 @@ func (m *DockMenu) Entry(entry MenuEntry) bool {
 	case MenuLockIcons:
 		m.AddCheckEntry(
 			tran.Slate("Lock icons position"),
-			current.Docks.IsLockIcons(),
+			current.Docks.LockIcons(),
 			func() {
-				current.Docks.SetLockIcons(!current.Docks.IsLockIcons())
-				files.UpdateConfFile(globals.ConfigFile(), "Accessibility", "lock icons", current.Docks.IsLockIcons())
+				current.Docks.LockIcons(!current.Docks.LockIcons())
+				files.UpdateConfFile(globals.ConfigFile(), "Accessibility", "lock icons", current.Docks.LockIcons())
 			},
 		).SetTooltipText(tran.Slate("This will (un)lock the position of the icons."))
 

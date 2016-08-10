@@ -29,6 +29,19 @@ var (
 
 // iconSize = int(gtk.ICON_SIZE_LARGE_TOOLBAR)
 
+var css *gtk.CssProvider
+
+func MainCSS() *gtk.CssProvider {
+	if css == nil {
+		css, _ = gtk.CssProviderNew()
+		e := css.LoadFromData(".DefaultValue {\n color: rgba(" + cftype.DefaultTextColor + ");\n}")
+		if e != nil {
+			println(e.Error())
+		}
+	}
+	return css
+}
+
 //
 //----------------------------------------------------------[ GET/SET ACTIVE ]--
 
@@ -455,7 +468,8 @@ type textDefaultData struct {
 // text changed by the user. Restore color and the ability to save the value.
 func onTextDefaultChanged(entry *gtk.Entry, key *cftype.Key) {
 	key.IsDefault = false
-	entry.OverrideColor(gtk.STATE_FLAG_NORMAL, nil)
+	context, _ := entry.GetStyleContext()
+	context.RemoveClass("DefaultValue")
 }
 
 // got focus, removing default text if any.
@@ -476,8 +490,8 @@ func onTextDefaultFocusOut(widget *gtk.Entry, _ *gdk.Event, data textDefaultData
 		widget.SetText(data.text)
 		widget.HandlerUnblock(data.cbID)
 
-		color := gdk.NewRGBA(cftype.DefaultTextColor, cftype.DefaultTextColor, cftype.DefaultTextColor, 1)
-		widget.OverrideColor(gtk.STATE_FLAG_NORMAL, color)
+		context, _ := widget.GetStyleContext()
+		context.AddClass("DefaultValue")
 	}
 }
 

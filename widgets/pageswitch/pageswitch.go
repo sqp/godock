@@ -13,9 +13,9 @@ import (
 // Page defines a switcher page.
 //
 type Page struct {
-	Key  string // key reference.
-	Name string // Visible name.
-	// Icon    string
+	Key     string // key reference.
+	Name    string // Visible name.
+	Icon    string // Or Visible Icon. Optional, but replace text when set.
 	OnLoad  func()
 	OnShow  func()
 	OnHide  func()
@@ -23,7 +23,7 @@ type Page struct {
 	// Widget  gtk.IWidget
 
 	// internal
-	btn     *gtk.ToggleButton
+	btn     *gtk.ToggleButton // Save/apply button.
 	handler glib.SignalHandle
 }
 
@@ -39,8 +39,12 @@ type Switcher struct {
 // New creates a switcher box to handle page switching.
 //
 func New() *Switcher {
+	box := newgtk.Box(gtk.ORIENTATION_HORIZONTAL, 0)
+	context, _ := box.GetStyleContext()
+	context.AddClass("linked")
+
 	return &Switcher{
-		Box:   *newgtk.Box(gtk.ORIENTATION_HORIZONTAL, 0),
+		Box:   *box,
 		pages: make(map[string]*Page),
 	}
 }
@@ -48,12 +52,27 @@ func New() *Switcher {
 // AddPage connects a page to a new button.
 //
 func (widget *Switcher) AddPage(page *Page) {
-	page.btn = newgtk.ToggleButtonWithLabel(page.Name)
+	if page.Icon != "" {
+		img := newgtk.ImageFromIconName(page.Icon, gtk.ICON_SIZE_SMALL_TOOLBAR)
+		if img != nil {
+			page.btn = newgtk.ToggleButton()
+			page.btn.SetTooltipText(page.Name)
+			page.btn.SetImage(img)
+		}
+	}
+
+	if page.btn == nil {
+		page.btn = newgtk.ToggleButtonWithLabel(page.Name)
+	}
+
+	context, _ := page.btn.GetStyleContext()
+	context.RemoveClass("text-button")
+
 	widget.PackStart(page.btn, false, false, 0)
-	page.btn.Show()
 	page.handler, _ = page.btn.Connect("clicked", func() { widget.clickedBtn(page.Key) })
 
 	widget.pages[page.Key] = page
+	page.btn.Show()
 }
 
 // Activate selects a page.

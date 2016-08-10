@@ -2,18 +2,19 @@
 Package confgui is a configuration window for Cairo-Dock.
 
 
-Using GTK 3.10 library https://github.com/gotk3/gotk3
+Using GTK 3.10 to 3.20 library https://github.com/gotk3/gotk3
 
 If you use GTK 3.10, you will have to add a flag to compile it:
   go get -tags gtk_3_10 github.com/gotk3/gotk3/gtk
 
 
-Gui xml files are compressed with github.com/jteeuwen/go-bindata
+GUI XML files are compressed with github.com/jteeuwen/go-bindata
 
 */
 package confgui
 
 import (
+	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
 
 	"github.com/sqp/godock/libs/cdtype" // Logger type.
@@ -103,9 +104,10 @@ type GuiConfigure struct {
 
 	datatype.Source // embeds the data source.
 
-	window *gtk.Window       // pointer to the parent window.
-	Menu   *confmenu.MenuBar // GUI menu widget.
-	stack  *gtk.Stack        // GUI main switcher (icons/add/config).
+	window     *gtk.Window          // pointer to the parent window.
+	Menu       *confmenu.MenuBar    // GUI menu widget.
+	mainSwitch *pageswitch.Switcher // Main group switcher (icons/add/config)
+	stack      *gtk.Stack           // GUI main switch content (icons/add/config).
 
 	OnQuit func() // On clicked Quit callback.
 
@@ -152,9 +154,7 @@ func NewWidget(source datatype.Source, log cdtype.Logger) *GuiConfigure {
 	boxIcons.PackStart(menuIcons, false, false, 0)
 	boxIcons.PackStart(menuCore, false, false, 0)
 
-	sw := newgtk.StackSwitcher()
-	sw.SetStack(widget.stack)
-	sw.SetHomogeneous(false)
+	widget.mainSwitch = pageswitch.New()
 
 	btnIcons := btnaction.New(widget.Menu.Save)
 	btnCore := btnaction.New(widget.Menu.Save)
@@ -168,22 +168,15 @@ func NewWidget(source datatype.Source, log cdtype.Logger) *GuiConfigure {
 
 	// Add pages to the switcher. This will pack the pages widgets to the gui box.
 
-	widget.AddPage(GroupIcons, icons, btnIcons, menuIcons.Show, menuIcons.Hide)
-	widget.AddPage(GroupAdd, add, btnAdd, nil, nil)
-	widget.AddPage(GroupConfig, core, btnCore, menuCore.Show, menuCore.Hide)
-
-	// widget.stack.ChildSetProperty(core, "icon-name", "cairo-dock")
-	widget.stack.ChildSetProperty(add, "icon-name", "list-add")
-
-	widget.stack.Connect("notify::visible-child-name", func() {
-		widget.OnSelectPage(widget.stack.GetVisibleChildName())
-	})
+	widget.AddPage(GroupIcons, "", icons, btnIcons, menuIcons.Show, menuIcons.Hide)
+	widget.AddPage(GroupAdd, "list-add", add, btnAdd, nil, nil)
+	widget.AddPage(GroupConfig, "", core, btnCore, menuCore.Show, menuCore.Hide)
 
 	// Packing menu.
 
 	sep := newgtk.Separator(gtk.ORIENTATION_HORIZONTAL)
 
-	widget.Menu.PackStart(sw, false, false, 0)
+	widget.Menu.PackStart(widget.mainSwitch, false, false, 0)
 	widget.Menu.PackStart(boxIcons, false, false, 0)
 
 	widget.PackStart(widget.Menu, false, false, 2)
@@ -200,7 +193,6 @@ func NewWidget(source datatype.Source, log cdtype.Logger) *GuiConfigure {
 // Page defines a switcher page.
 //
 type Page struct {
-	Name   string
 	Widget Saver
 	OnShow func()
 	OnHide func()
@@ -209,10 +201,17 @@ type Page struct {
 
 // AddPage adds a tab to the main config switcher with its widget.
 //
-func (widget *GuiConfigure) AddPage(name string, saver Saver, btn btnaction.Tune, onShow, onHide func()) {
-	widget.stack.AddTitled(saver, name, tran.Slate(name))
+func (widget *GuiConfigure) AddPage(name, iconName string, saver Saver, btn btnaction.Tune, onShow, onHide func()) {
+	widget.stack.AddNamed(saver, name)
+
+	widget.mainSwitch.AddPage(&pageswitch.Page{
+		Key:    name,
+		Name:   tran.Slate(name),
+		Icon:   iconName,
+		OnShow: func() { widget.OnSelectPage(name) },
+	})
+
 	widget.pages[name] = &Page{
-		Name:   name,
 		Widget: saver,
 		OnShow: onShow,
 		OnHide: onHide,
@@ -238,10 +237,12 @@ func (widget *GuiConfigure) ClickedSave() {
 }
 
 // ClickedQuit launches the OnQuit event defined.
+// The OnQuit action is delayed to the next glib iteration to let GTK finish
+// its current action (like closing a menu before the close window).
 //
 func (widget *GuiConfigure) ClickedQuit() {
 	if widget.OnQuit != nil {
-		go widget.OnQuit()
+		glib.IdleAdd(widget.OnQuit)
 	}
 }
 
@@ -261,57 +262,61 @@ func (widget *GuiConfigure) SelectIcons(item string) {
 // Select selects the given group page and may also select a specific item in the page.
 //
 func (widget *GuiConfigure) Select(page string, item ...string) bool {
-	// Show placeholders if needed.
-	defer widget.pages[GroupIcons].Widget.(ShowWelcomer).ShowWelcome(false)
-	defer widget.pages[GroupConfig].Widget.(ShowWelcomer).ShowWelcome(false)
+	// Press the button, this will reset others buttons and trigger OnSelectPage.
+	widget.mainSwitch.Activate(page)
 
-	// widget.log.Info("newpage selected", page, item)
+	if len(item) == 0 {
+		return false
+	}
 
 	child, ok := widget.pages[page]
 	if !ok {
-		widget.log.Info("config select, no matching page:", page, item)
-		return false
-	}
-	widget.stack.SetVisibleChild(child.Widget)
-
-	if widget.current == nil {
-		widget.log.Info("config select", "no page selected", page)
+		widget.log.NewWarn("GUI Select", "no matching page:", page)
 		return false
 	}
 
 	// Select a specific item in the page.
-	if len(item) > 0 {
-		selecter, ok := widget.current.Widget.(Selecter) // Detect if the widget can Select.
-		if ok {
-			return selecter.Select(item[0])
-		}
-		widget.log.Info("config select: no selecter", page, item)
+	selecter, ok := child.Widget.(Selecter) // Detect if the widget can Select.
+	if !ok {
+		widget.log.Info("GUI Select: no selecter", page, item)
+		return false
 	}
 
-	return false
+	return selecter.Select(item[0])
 }
 
 // OnSelectPage reacts when the page is changed to set the button state and
 // trigger OnHide and OnShow additional callbacks.
 //
 func (widget *GuiConfigure) OnSelectPage(page string) {
+	widget.log.Debug("GUI OnSelectPage", page)
+
+	// Show placeholders if needed.
+	defer widget.pages[GroupIcons].Widget.(ShowWelcomer).ShowWelcome(false)
+	defer widget.pages[GroupConfig].Widget.(ShowWelcomer).ShowWelcome(false)
+
+	// Ensure we have a valid page to display.
+	newpage, ok := widget.pages[page]
+	if !ok {
+		widget.log.NewWarn("GUI OnSelectPage", "no matching page:", page)
+		return
+	}
+
+	// Remove previous page extra.
 	if widget.current != nil {
 		widget.current.btn.Hide()
-		if widget.current.OnHide != nil { // Hide previous page.
+		if widget.current.OnHide != nil {
 			widget.current.OnHide()
 		}
 	}
 
-	widget.log.Debug("OnSelectPage", page)
+	// Set new page as current.
+	widget.current = newpage
+	widget.stack.SetVisibleChild(widget.current.Widget)
 
-	current, ok := widget.pages[page] // Set new current.
-	if !ok {
-		return
-	}
-	widget.current = current
-
+	// Apply new page extra.
 	widget.current.btn.Display()
-	if widget.current.OnShow != nil { // Show new page.
+	if widget.current.OnShow != nil {
 		widget.current.OnShow()
 	}
 }

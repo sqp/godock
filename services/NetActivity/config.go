@@ -21,14 +21,11 @@ const (
 //------------------------------------------------------------------[ CONFIG ]--
 
 type appletConf struct {
-	groupIcon          `group:"Icon"`
-	groupConfiguration `group:"Configuration"`
-	groupUpload        `group:"Upload"`
-	groupActions       `group:"Actions"`
-}
-
-type groupIcon struct {
-	Name string `conf:"name"`
+	cdtype.ConfGroupIconName `group:"Icon"`
+	groupConfiguration       `group:"Network"`
+	groupUpload              `group:"Upload"`
+	groupVideo               `group:"VideoDL"`
+	groupActions             `group:"Actions"`
 }
 
 type groupConfiguration struct {
@@ -47,11 +44,6 @@ type groupConfiguration struct {
 	MonitoringEnabled bool
 	UpdateDelay       int
 	Devices           []string
-
-	VideoDLEnabled   bool
-	VideoDLPath      string
-	VideoDLQuality   int
-	VideoDLBlacklist []string
 }
 
 type groupUpload struct {
@@ -66,6 +58,23 @@ type groupUpload struct {
 	SiteVideo     string
 	SiteFile      string
 	PostAnonymous bool
+}
+
+type groupVideo struct {
+	VideoDLEnabled   bool
+	VideoDLBackendID int
+	VideoDLPath      string
+	VideoDLQuality   int
+	VideoDLTypeDL    int
+	VideoDLBlacklist []string
+
+	VideoDLEnabledDL       bool
+	VideoDLEnabledWeb      int
+	VideoDLOpenDir         string
+	VideoDLOpenVideo       string
+	VideoDLOpenWeb         string
+	VideoDLCategoryCurrent string
+	VideoDLJSWindowOption  string
 }
 
 type groupActions struct {

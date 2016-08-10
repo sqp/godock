@@ -66,12 +66,10 @@ func service(args []string) {
 		return
 	}
 
-	introspect := srvdbus.Introspect(mgrdbus.IntrospectApplets)
-
 	mgr := mgrdbus.NewManager(loader, logger, allapps.List())
 	loader.SetManager(mgr)
 
-	active, e := loader.Start(mgr, introspect)
+	active, e := loader.Start(mgr, nil)
 	if logger.Err(e, "StartServer") {
 		return
 	}

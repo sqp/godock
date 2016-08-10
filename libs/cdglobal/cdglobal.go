@@ -76,6 +76,11 @@ const (
 	FileCairoDockLogo = "cairo-dock-logo.png"
 )
 
+// CmdOpen defines the default open file/dir/url system command.
+// May not be portable (lol), but it's still grouped here.
+//
+const CmdOpen = "xdg-open"
+
 // AppBuildPath defines the application build location inside GOPATH.
 var AppBuildPath = []string{"github.com", "sqp", "godock"}
 

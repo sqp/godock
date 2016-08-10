@@ -676,13 +676,14 @@ func LaunchCommand(key *cftype.Key) {
 
 	if key.IsType(cftype.KeyLaunchCmdIf) {
 
-		key.Log().Info("KeyLaunchCmdIf : disabled for now")
-		return
-
 		if len(key.AuthorizedValues) < 2 {
 			key.Label().SetSensitive(false)
 			return
 		}
+
+		key.Log().Info("KeyLaunchCmdIf : disabled for now")
+		return
+
 		// key.Log().Info("test", key.AuthorizedValues[1])
 
 		// key.Log().Err(key.Log().ExecShow(key.AuthorizedValues[1]), "exec test")
@@ -1213,6 +1214,9 @@ func Strings(key *cftype.Key) {
 		// TODO: check other use of those fields.
 		// 	 g_object_set_data (G_OBJECT (pEntry), "ignore-value", GINT_TO_POINTER (TRUE));
 		// 	 g_object_set_data (G_OBJECT (pOneWidget), "default-text", cDefaultText);
+
+		context, _ := widget.GetStyleContext()
+		context.AddProvider(MainCSS(), gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
 
 		setValue = func(uncast interface{}) {
 			// if !key.IsDefault { // not sure why this was here.

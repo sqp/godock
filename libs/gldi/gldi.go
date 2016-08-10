@@ -131,6 +131,7 @@ import (
 	"github.com/sqp/godock/libs/cdtype" // Dock types.
 	"github.com/sqp/godock/libs/gldi/desktopclass"
 	"github.com/sqp/godock/libs/packages"
+	"github.com/sqp/godock/libs/ternary"
 	"github.com/sqp/godock/libs/text/tran"
 
 	"github.com/sqp/godock/widgets/gtk/keyfile"
@@ -981,6 +982,28 @@ func IconsGetAnyWithoutDialog() *Icon {
 
 func (o *Icon) ToNative() unsafe.Pointer {
 	return unsafe.Pointer(o.Ptr)
+}
+
+// DefaultNameIcon returns improved name and image for the icon if possible.
+//
+func (icon *Icon) DefaultNameIcon() (name, img string) {
+	switch {
+	case icon.IsApplet():
+		vc := icon.ModuleInstance().Module().VisitCard()
+		return vc.GetTitle(), vc.GetIconFilePath()
+
+	case icon.IsSeparator():
+		return "--------", ""
+
+	case icon.IsLauncher(), icon.IsStackIcon(), icon.IsAppli(), icon.IsClassIcon():
+		name := icon.GetClass().Name()
+		if name != "" {
+			return name, icon.GetFileName() // icon.GetClassInfo(ClassIcon)
+		}
+		return ternary.String(icon.GetInitialName() != "", icon.GetInitialName(), icon.GetName()), icon.GetFileName()
+
+	}
+	return icon.GetName(), icon.GetFileName()
 }
 
 func (icon *Icon) GetClass() desktopclass.Info {

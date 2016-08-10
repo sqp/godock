@@ -3,8 +3,10 @@ package cdapplet
 
 import (
 	"github.com/sqp/godock/libs/cdapplet/action"
+	"github.com/sqp/godock/libs/cdglobal"
 	"github.com/sqp/godock/libs/cdtype"
 	"github.com/sqp/godock/libs/config"
+	"github.com/sqp/godock/libs/files"
 	"github.com/sqp/godock/libs/log"     // Display info in terminal.
 	"github.com/sqp/godock/libs/poller"  // Polling counter.
 	"github.com/sqp/godock/libs/ternary" // Ternary operators.
@@ -262,7 +264,7 @@ func (ac *appCmd) Launch(ID int) {
 		splitted := strings.Split(cmd.Name, " ")
 
 		if cmd.UseOpen {
-			ac.app.Log().ExecAsync("xdg-open", splitted...)
+			ac.app.Log().ExecAsync(cdglobal.CmdOpen, splitted...)
 		} else {
 			ac.app.Log().ExecAsync(splitted[0], splitted[1:]...)
 		}
@@ -312,9 +314,15 @@ func (ac *appCmd) Clear() {
 // Won't do anything if loadConf is false.
 //
 func (cda *CDApplet) LoadConfig(loadConf bool, v interface{}) {
+	files.Access.Lock()
+	defer files.Access.Unlock()
 	if loadConf { // Try to load config. Exit if not found.
 		log.Fatal(config.Load(cda.confFile, v, config.GetBoth), "config")
 	}
+}
+
+func (cda *CDApplet) UpdateConfig() (cdtype.ConfUpdater, error) {
+	return files.NewConfUpdater(cda.confFile)
 }
 
 //

@@ -39,6 +39,7 @@ import (
 	"github.com/sqp/godock/libs/ternary"      // Ternary operators.
 	"github.com/sqp/godock/libs/text/tran"    // Translate.
 
+	"github.com/sqp/godock/widgets/about"
 	"github.com/sqp/godock/widgets/gtk/newgtk"
 
 	"fmt"
@@ -185,6 +186,8 @@ func (settings *DockSettings) Init() {
 		cdglobal.DockThemeServerTag,
 		settings.ThemeServer)
 
+	about.Img = globals.DirShareData(cdglobal.ConfigDirDockImages, cdglobal.FileCairoDockLogo)
+
 	//\___________________ Check that OpenGL is safely usable, if not ask the user what to do.
 
 	// Unsafe OpenGL requires to be confirmed to use (need forced in conf or user validation).
@@ -277,8 +280,8 @@ func (settings *DockSettings) Start() {
 	// comme on ne pourra pas ouvrir le panneau de conf, ces 2 variables resteront tel quel.
 	if settings.Locked {
 		println("Cairo-Dock will be locked.") // was cd_warning (so it was set just before Verbosity). TODO: improve
-		current.Docks.SetLockIcons(true)
-		current.Docks.SetLockAll(true)
+		current.Docks.LockIcons(true)
+		current.Docks.LockAll(true)
 		globals.FullLock = true
 		C.g_bLocked = C.gboolean(1) // forward for interaction
 	}

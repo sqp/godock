@@ -1,0 +1,316 @@
+<!doctype html>
+<html>
+<head>
+<style>
+body {
+	font-family: sans-serif;
+}
+
+#player {
+	width:500px;
+}
+#boxlist {
+	border-radius: 10px;
+	padding: 5px 5px 3px 5px;
+	width: 300px;
+	float: left;
+	margin-right: 15px;
+	overflow: auto;
+}
+
+#browser, #queue, #actionlistone, .info {
+	border-radius: 10px;
+	padding: 5px 5px 3px 5px;
+	overflow: auto;
+}
+
+#browser, #queue {
+	height: 500px;
+}
+#actionlistone {
+	height: 100px;
+	border-width:2px;
+	border-color:red;
+}
+#fileinfo span {
+	width:55%;
+	float:left;
+}
+#fileinfo div {
+	width:45%;
+	float:right;
+}
+
+#browser a, #queue a {
+	display: block;
+	cursor: pointer;
+	padding: 2px 4px;
+	border-radius: 5px;
+	overflow: hidden;
+	margin-bottom: 2px;
+}
+#browser { background: #8C9A20; }
+#browser a.dir { background: #BECD53; color: black; }
+#browser a.file { background: #5A640A; color: white; }
+#browser a.fail { background: red; color: white; }
+#browser .selected { background: blue; color: white; }
+#queue { background: #881C46; }
+#queue a { background: #C44F7C; }
+#queue a.playing { background: #3B1E6C; color: white; }
+#browser a:hover, #queue a:hover { background: #200A46; color: white; }
+#controls { margin-top: 10px; }
+#controls a, #actionlistone a, #fileinfo a {
+	cursor: pointer;
+	background: #eee;
+	padding: 5px;
+	border-radius: 5px;
+}
+.info{
+	background: orange;
+}
+</style>
+<script src="http://www.google.com/jsapi" type="text/javascript"></script>
+<script type="text/javascript">
+var root = "/video/";
+var path = [];
+var cache = {};
+var selected = {};
+function init() {
+	load(path);
+	$('#player').bind('ended', next);
+	$('#addall').click(addAll);
+	$('#next').click(next);
+	$('#listremoveone').click(listremoveone);
+	$('#clearlist').click(clearlist);
+	$('#openvideo').click(openvideo);
+	$('#editquality').click(editquality);
+	setlinkadd();
+}
+function setlinkadd() {
+	$.ajax({
+		url: "/video/linkadd",
+		success: function(data) { $('#linkcopy a').attr('href', data); },
+	});
+}
+function load(path) {
+	loadList(path);
+	loadQueue(path);
+}
+function populate(files) {
+	var $b = $('#browser').empty();
+	function add(i, f) {
+		if (f.Name[0] == '.' || f.Name[0] == ':') return;
+    var dir = f.IsDir;
+		var cl = dir ? "dir" : "file";
+		f.Path = path.join('/');
+		f.a = $('<a></a>').text(f.Name).data('file', f)
+			.addClass(cl).appendTo($b)
+			.click(dir?clickDir:clickFile);
+		if (f.Fail) f.a.addClass("fail");
+	}
+	// files.sort(function(a, b) {
+	// 	a = a.Name.toLowerCase();
+	// 	b = b.Name.toLowerCase();
+	// 	if (a > b) return 1;
+	// 	if (a < b) return -1;
+	// 	return 0;
+	// });
+
+	// $b.append(up());
+	$.each(files, add);
+}
+function loadList(path) {
+	$.ajax({
+		url: root+"list/"+path.join('/'),
+		dataType: "json",
+		success: function(data) {
+			// fillQuery( $('#browser') , data);
+			populate(data)
+			// cache[url] = data;
+		}
+	});
+}
+function loadQueue(path) {
+	$.ajax({
+		url: root+"queue/"+path.join('/'),
+		dataType: "json",
+		success: function(data) { fillQuery($('#queue'), data); }
+	});
+}
+function fillQuery(box, files) {
+	box.empty();
+	function add(i, f) {
+		f.Path = path.join('/');
+		var $a = $('<a></a>').text(f.Name).data('file', f)
+			.appendTo(box).click(clickQuery);
+	}
+	$.each(files, add);
+}
+function clickQuery() {}
+function up() {
+	return $('<a class="dir">..</a>').click(function() {
+		path.pop();
+		load(path);
+	});
+}
+function clickDir(e) {
+	path.push($(e.target).data('file').Name);
+	load(path);
+}
+function clickFile(e) {
+	var f = $(e.target).data('file')
+	setFileInfo(f);
+	// setViewed(f);
+	
+	$(selected.a).removeClass("selected").addClass("file")
+	selected = f
+	f.a.removeClass("file").addClass("selected")
+	playnew(f)
+	// addToPlaylist($(e.target).data('file'));
+}
+
+
+function setFileInfo(f) {
+	document.getElementById("viewed").innerHTML=""  // Clear viewed.
+	$.ajax({
+		url: "/video/fileinfo/?path="+path.join('/')+"&url="+f.URL,
+		dataType: "json",
+		success: function(data) {
+			f.Viewed=data.Viewed
+			setViewed(f);
+
+			$('#resolution').text(data.Resolution)
+			$('#videoencoding').text(data.VideoEncoding)
+			$('#audioencoding').text(data.AudioEncoding)
+			$('#audiobitrate').text(data.AudioBitrate)
+			$('#extension').text(data.Extension)
+			$('#size').text(data.Size)
+		}
+	});
+}
+
+function setViewed(f) {
+    var isviewed = f.Viewed;
+	var $dest = $('#viewed');
+	$('<a></a>').text((isviewed ? "Yes":"No")).addClass("file").appendTo($dest).click(function(e) { 
+		$.ajax({
+			url: "/video/fileinfo/?path="+path.join('/')+"&url="+f.URL+"&viewed="+!isviewed,
+			dataType: "json",
+			success: function(data) {
+				f.Viewed=data
+				setFileInfo(f);
+			}
+		});
+	});
+}
+
+function addToPlaylist(f) {
+	var $p = $('#queue');
+	var playnow = ($p.find('a').length == 0);
+	var $d = $('<a></a>').text(f.Name).data('file', f)
+		.appendTo($p)
+		.click(function(e) { play(e.target); });
+	if (playnow) $d.click();
+}
+function addAll() {
+	$('#browser a.file').each(function(i, e) {
+		addToPlaylist($(e).data('file'));
+	});
+}
+function play(el) {
+	var name = $(el).data('file').Name;
+	var path = $(el).data('file').Path;
+	var url = root+"file/"+path+'/'+name;
+	$('#queue a').removeClass('playing');
+	$(el).addClass('playing')
+	$('#player').attr('src', url);
+}
+function playnew(f) {
+
+	// var name = $(el).data('file').Name;
+	// var path = $(el).data('file').Path;
+	var url = root+"viewfile"+"?path="+path.join('/')+"&url="+selected.URL;
+	// $('#queue a').removeClass('playing');
+	// $(el).addClass('playing')
+	$('#player').attr('src', url);
+}
+function next() {
+	var $next = $('#queue a.playing').next();
+	if ($next.length) play($next);
+}
+function listremoveone() {
+	$.ajax({
+		url: "/video/listremoveone/?path="+path.join('/')+"&url="+selected.URL,
+		dataType: "json",
+		success: function(data) {
+			loadList(path)
+		}
+	});
+}
+function clearlist() {
+	var $b = $('#browser').empty();
+}
+function clearqueue() {
+	var $b = $('#browser').empty();
+}
+function openvideo() {
+	var $e = $('#browser');
+	var f = $e.data('file')
+	var url = "/video/openvideo/?path="+path.join('/')+"&url="+selected.URL;
+	$.ajax({
+		url: url,
+		dataType: "json",
+		success: function(data) {}
+	});
+}
+function editquality() {
+	var $e = $('#browser');
+	var f = $e.data('file')
+	var url = "/video/editquality/?path="+path.join('/')+"&url="+selected.URL;
+	$.ajax({
+		url: url,
+		dataType: "json",
+		success: function(data) {}
+	});
+}
+google.load("jquery", "1");
+google.setOnLoadCallback(init);
+</script>
+</head>
+<body>
+<video id="player" controls autobuffer>
+<p>What? Your browser doesn't support &lt;video&gt;?! Lame.</p>
+</video>
+<div id="boxlist">
+	<div id="actionlisttop">
+		<a id="listremoveone">Remove selected</a>
+		<a id="clearlist">Clear List</a>
+	</div>
+	<div id="browser"></div>
+	<div id="actionlistone">
+		<a id="openvideo">Open Video</a>
+		<a id="editquality">Edit Quality</a>
+	</div>
+	<div id="fileinfo">
+		<span>Viewed</span><div id="viewed"></div>
+		<span>Resolution</span><div id="resolution"></div>
+		<span>VideoEncoding</span><div id="videoencoding"></div>
+		<span>AudioEncoding</span><div id="audioencoding"></div>
+		<span>AudioBitrate</span><div id="audiobitrate"></div>
+		<span>Extension</span><div id="extension"></div>
+		<span>Size</span><div id="size"></div>
+	</div>
+</div>
+<div id="queue"></div>
+<!--
+<div id="controls">
+<a id="addall">Add all</a>
+<a id="next">Next</a>
+</div>
+-->
+<div class="info">
+	Link to copy to your shortcuts bar: 
+	<div id="linkcopy"><a>Video to dock</a></div>
+</div>
+</body>
+</html>

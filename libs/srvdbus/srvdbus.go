@@ -3,7 +3,6 @@ package srvdbus
 
 import (
 	"github.com/godbus/dbus"
-	"github.com/godbus/dbus/introspect"
 
 	"github.com/sqp/godock/libs/cdtype"             // Logger type.
 	"github.com/sqp/godock/libs/srvdbus/dbuscommon" // Dbus service.
@@ -17,35 +16,6 @@ const SrvObj = "org.cairodock.GoDock"
 
 // SrvPath is the Dbus path name for the service.
 const SrvPath = "/org/cairodock/GoDock"
-
-// Introspect returns the introspect text with methods provided on the Dbus service.
-//
-func Introspect(methods string) string {
-	return `<node>
-	<interface name="` + SrvObj + `">
-		<method name="AppletDebug">
-			<arg direction="in" type="s"/>
-			<arg direction="in" type="b"/>
-		</method>
-		<method name="SourceCodeBuildTarget">
-		</method>
-		<method name="SourceCodeGrepTarget">
-			<arg direction="in" type="s"/>
-		</method>
-		<method name="SourceCodeOpenFile">
-			<arg direction="in" type="s"/>
-		</method>
-		<method name="Upload">
-			<arg direction="in" type="s"/>
-		</method>
-		<method name="UpToShareLastLink">
-			<arg direction="out" name="link" type="s"/>
-		</method>` +
-		methods +
-		"	</interface>" +
-		introspect.IntrospectDataString +
-		"</node>"
-}
 
 // AppService defines common applets service actions to remotely interact with applets.
 //
@@ -87,6 +57,16 @@ func (load *Loader) SetManager(mgr AppService) {
 	if db, ok := mgr.(MgrDbus); ok {
 		load.mgr = db
 	}
+}
+
+// Connect connects to the DBus API and starts the remote applets service.
+//
+func (load *Loader) Connect() (bool, error) {
+	// var propsSpec = map[string]map[string]*prop.Prop{
+	// 	SrvObj: {},
+	// }
+
+	return load.Start(load, nil)
 }
 
 //
@@ -145,7 +125,7 @@ func (load *Loader) dispatchDbusSignal(s *dbus.Signal) bool {
 }
 
 //
-//----------------------------------------------------------[ DBUS CALLBACKS ]--
+//----------------------------------------------------------------[ DBUS API ]--
 
 // UpToShareLastLink gets the link of the last item sent to a one-click hosting
 // service.
@@ -194,7 +174,7 @@ func (load *Loader) SourceCodeOpenFile(data string) *dbus.Error {
 //
 func (load *Loader) AppletDebug(applet string, state bool) *dbus.Error {
 	if load.apps == nil {
-		return nil
+		return dbuscommon.NewError("no active application")
 	}
 
 	found := false
@@ -202,12 +182,12 @@ func (load *Loader) AppletDebug(applet string, state bool) *dbus.Error {
 		app.Log().SetDebug(state)
 		found = true
 	}
-	if found {
-		load.Log.Info("set applet debug", applet, state)
-	} else {
+	if !found {
 		load.Log.NewWarn("applet not found = "+applet, "set applet debug")
+		return dbuscommon.NewError("applet not found = " + applet)
 	}
 
+	load.Log.Info("set applet debug", applet, state)
 	return nil
 }
 
@@ -288,12 +268,12 @@ type sourceCoder interface {
 
 func (load *Loader) sourceCoderAction(call func(sc sourceCoder)) *dbus.Error {
 	if load.apps == nil {
-		return nil
+		return dbuscommon.NewError("no active application")
 	}
 
 	uncasts := load.apps.GetApplets("Update")
 	if len(uncasts) == 0 {
-		return nil
+		return dbuscommon.NewError("no active sourceCoder found")
 	}
 	app := uncasts[0].(sourceCoder) // Send it to the first found. Should be safe for now, we can launch only one.
 	call(app)
@@ -307,14 +287,12 @@ type uploader interface {
 
 func (load *Loader) uploaderAction(call func(sc uploader)) *dbus.Error {
 	if load.apps == nil {
-		load.Log.Info("no apps")
-		return nil
+		return dbuscommon.NewError("no active application")
 	}
 
 	uncasts := load.apps.GetApplets("NetActivity")
 	if len(uncasts) == 0 {
-		load.Log.Info("no uploader app")
-		return nil
+		return dbuscommon.NewError("no active uploader found")
 	}
 	app := uncasts[0].(uploader) // Send it to the first found. Should be safe for now, we can launch only one.
 	call(app)

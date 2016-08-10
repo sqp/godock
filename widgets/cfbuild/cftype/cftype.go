@@ -25,7 +25,7 @@ const (
 	// CAIRO_DOCK_TAB_ICON_SIZE   = 24 // 32
 	// CAIRO_DOCK_FRAME_ICON_SIZE = 24
 
-	DefaultTextColor = 0.6 // light grey
+	DefaultTextColor = "153,153,153,255" // RGBA light grey
 )
 
 // Dock icon types.

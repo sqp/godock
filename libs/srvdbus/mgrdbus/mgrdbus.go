@@ -97,7 +97,7 @@ func (load *Manager) StartApplet(a, b, c, d, e, f, g, h string) *dbus.Error {
 	split := strings.Split(c, "/")
 	if len(split) < 4 {
 		load.log.NewErr("StartApplet: incorrect dbus path", c)
-		return nil
+		return dbuscommon.NewError("StartApplet: incorrect dbus path " + c)
 	}
 	name := split[4] //path is /org/cairodock/CairoDock/appletName or  /org/cairodock/CairoDock/appletName/sub_icons
 
@@ -106,13 +106,13 @@ func (load *Manager) StartApplet(a, b, c, d, e, f, g, h string) *dbus.Error {
 
 	if _, ok := load.actives[c]; ok {
 		load.log.NewErr("StartApplet: applet already started", name)
-		return nil
+		return dbuscommon.NewError("StartApplet: applet already started " + name)
 	}
 
 	fn, ok := load.services[name]
 	if !ok {
 		load.log.NewErr(strings.Join(args, " "), "StartApplet: applet unknown (maybe not enabled at compile)")
-		return nil
+		return dbuscommon.NewError("StartApplet: applet unknown (maybe not enabled at compile) " + strings.Join(args, " "))
 	}
 
 	// Create applet instance.
@@ -120,9 +120,8 @@ func (load *Manager) StartApplet(a, b, c, d, e, f, g, h string) *dbus.Error {
 	app := fn()
 
 	if app == nil {
-		load.log.NewErr(name, "failed to start applet")
-		return nil
-		// return &dbus.Error{Name: "start failed: " + name}
+		load.log.NewErr(name, "failed to create applet")
+		return dbuscommon.NewError("failed to create applet" + name)
 	}
 
 	backend := appdbus.NewWithApp(app, args, h)

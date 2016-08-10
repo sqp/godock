@@ -3,6 +3,8 @@
 package main
 
 import (
+	"github.com/pkg/profile"
+
 	"github.com/sqp/godock/libs/gldi/globals"
 	"github.com/sqp/godock/libs/gldi/maindock"
 	"github.com/sqp/godock/libs/gldi/startdock"
@@ -17,7 +19,7 @@ func init() {
 		Short:     "cdc starts a custom version of cairo-dock with a new config GUI.",
 		Long: `Without command, the dock will be started with those arguments:
 
-Backend:
+Display Backend:
   -c          Use Cairo backend.
   -o          Use OpenGL backend.
   -O          Use OpenGL backend with indirect rendering.
@@ -47,7 +49,8 @@ Debug:
   -F          Force to display some output messages with colors.
   -D          Debug mode for the go part of the code (including applets).
   -N          Don't start Dbus and go applets services.
-  -H          Http debug server: http://localhost:6987/debug/pprof
+  -pf         pprof file output:   go tool pprof $(which cdc) /pathToFile
+  -pw         pprof web service:   http://localhost:port/debug/pprof
 
 Versions:
   -v          Print gldi version.
@@ -86,8 +89,11 @@ everybody at the moment. But it also needs to be tested now.
 	// New dock settings.
 
 	newAppletsDisable := cmdDefault.Flag.Bool("N", false, "")
-	newHTTPPprof := cmdDefault.Flag.Bool("H", false, "")
 	newDebug := cmdDefault.Flag.Bool("D", false, "")
+
+	// pprof.
+	pprofWeb := cmdDefault.Flag.Bool("pw", false, "")
+	pprofFile = cmdDefault.Flag.Bool("pf", false, "")
 
 	// Local flags. Common with remote.
 
@@ -124,7 +130,7 @@ everybody at the moment. But it also needs to be tested now.
 			NoSticky:           *userNoSticky,
 			ModulesDir:         *userModulesDir,
 
-			HTTPPprof:      *newHTTPPprof,
+			HTTPPprof:      *pprofWeb,
 			AppletsDisable: *newAppletsDisable,
 			Debug:          *newDebug,
 		}
@@ -151,6 +157,7 @@ var (
 
 	// Local flags.
 
+	pprofFile       *bool
 	userDelay       *int
 	showVersionGldi *bool
 	showVersionAll  *bool
@@ -159,6 +166,10 @@ var (
 // runDock starts dock routines and locks the main thread with gtk.
 //
 func runDock(cmd *Command, args []string) {
+	if *pprofFile {
+		defer profile.Start().Stop()
+	}
+
 	switch {
 	case *showVersionGldi:
 		fmt.Println(globals.Version()) // -v option only prints gldi version.

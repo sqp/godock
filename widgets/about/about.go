@@ -25,6 +25,8 @@ const (
 	URLdockFlattr = "http://flattr.com/thing/370779/Support-Cairo-Dock-development"
 )
 
+var Img string
+
 //
 //------------------------------------------------------------[ ABOUT DIALOG ]--
 
@@ -34,7 +36,7 @@ type About gtk.Dialog
 
 // New creates a GuiIcons widget to edit cairo-dock icons config.
 //
-func New(imgPath string) *About {
+func New() *About {
 	// GtkWidget *pDialog = gtk_dialog_new_with_buttons (_(""),
 	// 	GTK_WINDOW (pContainer->pWidget),
 	// 	GTK_DIALOG_DESTROY_WITH_PARENT,
@@ -49,7 +51,7 @@ func New(imgPath string) *About {
 	dialog.Connect("response", dialog.Destroy)
 
 	// Widgets.
-	image := newgtk.ImageFromFile(imgPath)
+	image := newgtk.ImageFromFile(Img)
 	notebook := addNotebook()
 	links := addLinks()
 

@@ -15,7 +15,7 @@ import "github.com/sqp/godock/libs/gldi/globals" // Global consts.
 // DockIsLocked returns if the dock is locked or not.
 //
 func DockIsLocked() bool {
-	return Docks.IsLockAll() || globals.FullLock
+	return Docks.LockAll() || globals.FullLock
 }
 
 //
@@ -29,13 +29,27 @@ var Docks DocksParamType
 //
 type DocksParamType struct{}
 
-func (DocksParamType) FrameMargin() int    { return int(C.myDocksParam.iFrameMargin) }
-func (DocksParamType) IsLockAll() bool     { return gobool(C.myDocksParam.bLockAll) }
-func (DocksParamType) IsLockIcons() bool   { return gobool(C.myDocksParam.bLockIcons) }
-func (DocksParamType) LineWidth() int      { return int(C.myDocksParam.iDockLineWidth) }
-func (DocksParamType) Radius() int         { return int(C.myDocksParam.iDockRadius) }
-func (DocksParamType) SetLockAll(b bool)   { C.myDocksParam.bLockAll = cbool(b) }
-func (DocksParamType) SetLockIcons(b bool) { C.myDocksParam.bLockIcons = cbool(b) }
+func (DocksParamType) FrameMargin() int { return int(C.myDocksParam.iFrameMargin) }
+func (DocksParamType) LineWidth() int   { return int(C.myDocksParam.iDockLineWidth) }
+func (DocksParamType) Radius() int      { return int(C.myDocksParam.iDockRadius) }
+
+// LockAll gets and sets the lock all state.
+//
+func (DocksParamType) LockAll(b ...bool) bool {
+	if len(b) > 0 {
+		C.myDocksParam.bLockAll = cbool(b[0])
+	}
+	return gobool(C.myDocksParam.bLockAll)
+}
+
+// LockIcons gets and sets the user lock icon state.
+//
+func (DocksParamType) LockIcons(b ...bool) bool {
+	if len(b) > 0 {
+		C.myDocksParam.bLockIcons = cbool(b[0])
+	}
+	return gobool(C.myDocksParam.bLockIcons)
+}
 
 //
 //-------------------------------------------------------------[ ICONS PARAM ]--
