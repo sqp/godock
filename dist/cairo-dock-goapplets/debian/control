@@ -4,6 +4,7 @@ Priority: optional
 Maintainer: SQP <sqp@glx-dock.org>
 Build-Depends: debhelper (>= 9),
 	golang-go,
+	git,
 	libgirepository1.0-dev,
 	libglib2.0-dev,
 	libgtk-3-dev,
@@ -20,6 +21,6 @@ Depends: libglib2.0-0,
 Recommends: curl, git
 Suggests: cmake, gksudo
 Conflicts: cairo-dock-rework
-Description: Cairo-Dock applets package (Audio GoGmail TVPlay...).
- This package provides a bunch of new dock applets to fill all your needs.
+Description: Cairo-Dock applets package (Audio Clouds NetActivity TVPlay...).
+ This package provides a bunch of new dock applets of the new generation.
  This program is still experimental but need testers.

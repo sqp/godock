@@ -88,7 +88,6 @@ func (app *Applet) initVideo() {
 	hist := videodl.NewHistoryVideo(app, videodl.HistoryFile)
 	app.video = videodl.NewManager(app, app.Log(), hist)
 
-	app.video.SetBackend(videodl.BackendInternal)
 	app.video.SetPreCheck(func() error { return app.SetEmblem(app.FileLocation("img", "go-down.svg"), EmblemDownload) })
 	app.video.SetPostCheck(func() error { return app.SetEmblem("none", EmblemDownload) })
 	app.video.Actions(ActionsVideoDL, app.Action().Add)
@@ -119,15 +118,8 @@ func (app *Applet) Init(loadConf bool) {
 	app.up.SiteFile(app.conf.SiteFile)
 
 	// Video download settings.
-	app.video.SetBackend(videodl.BackendID(app.conf.VideoDLBackendID))
-	app.video.SetPath(app.conf.VideoDLPath)
-	app.video.SetBlacklist(app.conf.VideoDLBlacklist)
-	app.video.SetEnabledDL(app.conf.VideoDLEnabledDL)
-	app.video.SetEnabledWeb(videodl.WebState(app.conf.VideoDLEnabledWeb))
-	app.video.SetTypeDL(videodl.TypeDL(app.conf.VideoDLTypeDL))
-	app.video.SetQuality(videodl.Quality(app.conf.VideoDLQuality))
-	app.video.SetCommands(app.conf.VideoDLOpenDir, app.conf.VideoDLOpenVideo, app.conf.VideoDLOpenWeb)
-	app.video.SetJSWindowOption(app.conf.VideoDLJSWindowOption)
+	app.video.SetConfig(&app.conf.Config)
+	app.video.SetEnabledWeb(videodl.WebState(app.conf.EnabledWeb))
 
 	// Settings for poller and IOActivity (force renderer reset in case of reload).
 	app.conf.UpdateDelay = cdtype.PollerInterval(app.conf.UpdateDelay, defaultUpdateDelay)

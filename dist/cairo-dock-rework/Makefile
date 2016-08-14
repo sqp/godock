@@ -8,7 +8,7 @@
 SOURCE=github.com/sqp/godock
 
 TAGS=dock gtk_3_10 # limit gtk version for trusty.
-APPLETS=Audio Cpu DiskActivity DiskFree GoGmail Mem NetActivity Notifications TVPlay Update
+APPLETS=Audio Clouds Cpu DiskActivity DiskFree GoGmail Mem NetActivity Notifications TVPlay Update
 
 
 export GOPATH=$(CURDIR)

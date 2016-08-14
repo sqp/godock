@@ -1,6 +1,7 @@
 package NetActivity
 
 import "github.com/sqp/godock/libs/cdtype"
+import "github.com/sqp/godock/libs/net/videodl"
 
 const defaultUpdateDelay = 3
 
@@ -25,6 +26,7 @@ type appletConf struct {
 	groupConfiguration       `group:"Network"`
 	groupUpload              `group:"Upload"`
 	groupVideo               `group:"VideoDL"`
+	videodl.Config           `group:"VideoDL"`
 	groupActions             `group:"Actions"`
 }
 
@@ -48,7 +50,7 @@ type groupConfiguration struct {
 
 type groupUpload struct {
 	DialogEnabled   bool
-	DialogDuration  int32
+	DialogDuration  int
 	UploadHistory   int
 	UploadRateLimit int
 
@@ -61,20 +63,9 @@ type groupUpload struct {
 }
 
 type groupVideo struct {
-	VideoDLEnabled   bool
-	VideoDLBackendID int
-	VideoDLPath      string
-	VideoDLQuality   int
-	VideoDLTypeDL    int
-	VideoDLBlacklist []string
-
-	VideoDLEnabledDL       bool
-	VideoDLEnabledWeb      int
-	VideoDLOpenDir         string
-	VideoDLOpenVideo       string
-	VideoDLOpenWeb         string
-	VideoDLCategoryCurrent string
-	VideoDLJSWindowOption  string
+	VideoDLEnabled bool
+	EnabledDL      bool
+	EnabledWeb     int
 }
 
 type groupActions struct {
@@ -83,9 +74,6 @@ type groupActions struct {
 	LeftClass     string
 	MiddleAction  int
 	MiddleCommand string
-
-	// Still hidden.
-	Debug bool
 }
 
 /*

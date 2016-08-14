@@ -196,6 +196,7 @@ func (cda *CDDbus) OnSignal(s *dbus.Signal) (exit bool) {
 		return false
 	}
 
+	//  Events on applet main icon.
 	name := strings.TrimPrefix(string(s.Name), dockpath.DbusInterfaceApplet+".")
 	if name != s.Name { // dbus interface matched.
 		switch name {
@@ -223,6 +224,7 @@ func (cda *CDDbus) OnSignal(s *dbus.Signal) (exit bool) {
 		return cda.onEvent(name, s.Body...) // New and old callbacks methods.
 	}
 
+	//  Events on applet sub icon.
 	name = strings.TrimPrefix(string(s.Name), dockpath.DbusInterfaceSubapplet+".")
 	if name != s.Name { // dbus subicons interface matched.
 		switch name {
@@ -274,8 +276,8 @@ func (cda *CDDbus) SetEmblem(icon string, position cdtype.EmblemPosition) error 
 
 // Animate animates the icon for a given number of rounds.
 //
-func (cda *CDDbus) Animate(animation string, rounds int32) error {
-	return cda.dbusIcon.Call("Animate", animation, rounds)
+func (cda *CDDbus) Animate(animation string, rounds int) error {
+	return cda.dbusIcon.Call("Animate", animation, int32(rounds))
 }
 
 // DemandsAttention is an endless Animate method.
@@ -286,8 +288,8 @@ func (cda *CDDbus) DemandsAttention(start bool, animation string) error {
 
 // ShowDialog pops up a simple dialog bubble on the icon.
 //
-func (cda *CDDbus) ShowDialog(message string, duration int32) error {
-	return cda.dbusIcon.Go(dockpath.DbusInterfaceApplet+".ShowDialog", 0, nil, message, duration).Err
+func (cda *CDDbus) ShowDialog(message string, duration int) error {
+	return cda.dbusIcon.Go(dockpath.DbusInterfaceApplet+".ShowDialog", 0, nil, message, int32(duration)).Err
 }
 
 // PopupDialog open a dialog box . See cdtype.AppIcon.
@@ -623,14 +625,14 @@ func (cdi *SubIcon) SetEmblem(icon string, position cdtype.EmblemPosition) error
 // Animate animates the subicon, with a given animation and for a given number of
 // rounds. See Icon.
 //
-func (cdi *SubIcon) Animate(animation string, rounds int32) error {
-	return cdi.dbusSub.Call("Animate", animation, rounds, cdi.id)
+func (cdi *SubIcon) Animate(animation string, rounds int) error {
+	return cdi.dbusSub.Call("Animate", animation, int32(rounds), cdi.id)
 }
 
 // ShowDialog pops up a simple dialog bubble on the subicon. See Icon.
 //
-func (cdi *SubIcon) ShowDialog(message string, duration int32) error {
-	return cdi.dbusSub.Call("ShowDialog", message, duration, cdi.id)
+func (cdi *SubIcon) ShowDialog(message string, duration int) error {
+	return cdi.dbusSub.Call("ShowDialog", message, int32(duration), cdi.id)
 }
 
 //

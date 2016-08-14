@@ -473,7 +473,7 @@ func (o *IconBase) SetEmblem(iconPath string, position cdtype.EmblemPosition) er
 
 // Animate animates the icon for a given number of rounds.
 //
-func (o *IconBase) Animate(animation string, rounds int32) error {
+func (o *IconBase) Animate(animation string, rounds int) error {
 	if !gldi.ObjectIsDock(o.Icon.GetContainer()) {
 		return errors.New("container is not a dock")
 	}
@@ -488,7 +488,7 @@ func (o *IconBase) Animate(animation string, rounds int32) error {
 
 // ShowDialog pops up a simple dialog bubble on the icon. See cdtype.AppIcon.
 //
-func (o *IconBase) ShowDialog(message string, duration int32) error {
+func (o *IconBase) ShowDialog(message string, duration int) error {
 	addIdle(func() {
 		// Prevent stacking dialog messages.
 		o.RemoveDialogs()

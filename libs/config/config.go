@@ -33,17 +33,12 @@ the config file.
 
 Structs data for the examples
 
-This is an example of applet data with multiple groups and able to use the
-lowercase keys of the Icon group.
+This is an example of applet data with the common Icon group (Name, Debug, and
+optional Icon).
 
 	type appletConf struct {
-		groupIcon          `group:"Icon"`
-		groupConfiguration `group:"Configuration"`
-	}
-
-	type groupIcon struct {
-		Icon string `conf:"icon"`
-		Name string `conf:"name"`
+		cdtype.ConfGroupIconBoth `group:"Icon"`
+		groupConfiguration       `group:"Configuration"`
 	}
 
 	type groupConfiguration struct {
@@ -55,9 +50,6 @@ lowercase keys of the Icon group.
 		IconBroken  string
 		VolumeStep  int
 		StreamIcons bool
-
-		// Still hidden.
-		Debug bool
 	}
 
 */
@@ -70,6 +62,7 @@ import (
 
 	"bufio"
 	"errors"
+	"fmt"
 	"io"
 	"reflect"
 	"strings"
@@ -112,6 +105,7 @@ func GetBoth(struc reflect.StructField) string {
 type Config struct {
 	config.Config // Extends the real config.
 
+	appdir string // applet dir for templates loading.
 	Errors []error
 }
 
@@ -149,13 +143,14 @@ func NewFromReader(reader io.Reader) (*Config, error) {
 //   Second argument is the func to choose what key to load for each field.
 //     Default methods provided: GetKey, GetTag, GetBoth.
 //
-func Load(filename string, v interface{}, fieldKey GetFieldKey) error {
+func Load(filename, appdir string, v interface{}, fieldKey GetFieldKey) (error, []error) {
 	conf, e := NewFromFile(filename)
 	if e != nil {
-		return e
+		return e, nil
 	}
+	conf.appdir = appdir
 	conf.Unmarshall(v, fieldKey)
-	return nil
+	return nil, conf.Errors
 }
 
 //
@@ -209,13 +204,13 @@ func (c *Config) UnmarshalGroup(v interface{}, group string, fieldKey GetFieldKe
 func (c *Config) unmarshalGroup(conf reflect.Value, group string, fieldKey GetFieldKey) {
 	typ := conf.Type()
 	for i := 0; i < typ.NumField(); i++ { // Parsing all fields in type.
-		c.getField(conf.Field(i), group, fieldKey(typ.Field(i)))
+		c.getField(conf.Field(i), group, fieldKey(typ.Field(i)), typ.Field(i).Tag)
 	}
 }
 
 // Fill a single reflected field if it has the conf tag.
 //
-func (c *Config) getField(elem reflect.Value, group, key string) {
+func (c *Config) getField(elem reflect.Value, group, key string, tag reflect.StructTag) {
 	var e error
 	switch elem.Interface().(type) {
 
@@ -248,19 +243,43 @@ func (c *Config) getField(elem reflect.Value, group, key string) {
 		}
 		elem.Set(reflect.ValueOf(list))
 
-	default:
-		c.logError(errors.New("Parse conf: wrong type: " + elem.Kind().String()))
-	}
-	if e != nil {
-		c.logError(errors.New("Parse conf: " + e.Error()))
-	}
-}
+	case cdtype.Shortkey:
+		var val string
+		val, e = c.String(group, key)
+		elem.Set(reflect.ValueOf(cdtype.Shortkey{
+			ConfGroup: group,
+			ConfKey:   key,
+			Desc:      tag.Get("desc"),
+			Shortkey:  val,
+		}))
 
-// Test an error and append to the stack if needed.
-//
-func (c *Config) logError(e error) {
+	case cdtype.Template:
+		var name string
+		name, e = c.String(group, key)
+		if name == "" {
+			name = tag.Get("default")
+		}
+		if e == nil {
+			tmpl, e := cdtype.NewTemplate(name, c.appdir)
+
+			if e == nil {
+				elem.Set(reflect.ValueOf(*tmpl))
+			} else {
+				elem.Set(reflect.ValueOf(cdtype.Template{FilePath: name}))
+			}
+		}
+
+	default:
+		if elem.Kind().String() == "int" { // Force int like often used as ref types.
+			var val int
+			val, e = c.Int(group, key)
+			elem.SetInt(int64(val))
+		} else {
+			e = fmt.Errorf("unknown type: %s", elem.Kind().String())
+		}
+	}
 	if e != nil {
-		c.Errors = append(c.Errors, e)
+		c.Errors = append(c.Errors, fmt.Errorf("Parse conf: %s / %s -- %s", group, key, e.Error()))
 	}
 }
 

@@ -22,16 +22,22 @@ type Entry struct {
 	Fail   bool
 }
 
+// WebRegister registers the web service.
+//
 func (m *Manager) WebRegister() {
 	e := websrv.Service.Register(WebPath, m.ServeHTTP, m.log)
 	m.log.Err(e, "WebRegister")
 }
 
+// WebUnregister unregister the web service.
+//
 func (m *Manager) WebUnregister() {
 	e := websrv.Service.Unregister(WebPath)
 	m.log.Err(e, "WebUnregister")
 }
 
+// WebStart starts the web service.
+//
 func (m *Manager) WebStart() {
 	if !m.EnabledWeb || m.StartedWeb {
 		return
@@ -42,6 +48,8 @@ func (m *Manager) WebStart() {
 	}
 }
 
+// WebStop stops the web service.
+//
 func (m *Manager) WebStop() {
 	if !m.StartedWeb {
 		return
@@ -53,6 +61,9 @@ func (m *Manager) WebStop() {
 	}
 }
 
+// WebAutoStart starts temporarily the web service,
+// until the returned stop func is called.
+//
 func (m *Manager) WebAutoStart() func() {
 	if !m.StartedWeb {
 		e := websrv.Service.Start(WebPath)
@@ -66,6 +77,8 @@ func (m *Manager) WebAutoStart() func() {
 	}
 }
 
+// SetStartedWeb sets the status of the web service.
+//
 func (m *Manager) SetStartedWeb(b bool) {
 	if b {
 		m.WebStart()
@@ -73,10 +86,9 @@ func (m *Manager) SetStartedWeb(b bool) {
 		m.WebStop()
 	}
 }
-func (m *Manager) SetJSWindowOption(str string) {
-	m.JSWindowOption = str
-}
 
+// WebURL formats the web service base url.
+//
 func (m *Manager) WebURL() string {
 	url := "http://" // TODO: need https
 	if websrv.Service.Host == "" {
@@ -263,7 +275,7 @@ func (m *Manager) webVideoOpenVideo(w http.ResponseWriter, r *http.Request) {
 	if vid == nil {
 		return
 	}
-	m.log.ExecAsync(m.cmdOpenVideo, m.FilePath(*vid))
+	m.log.ExecAsync(m.CmdOpenVideo, m.FilePath(*vid))
 }
 
 func (m *Manager) findVideo(r *http.Request) *Video {

@@ -56,8 +56,8 @@ func (app *Applet) Init(loadConf bool) {
 		Label: app.conf.Name,
 		Commands: cdtype.Commands{
 			cmdMixer: cdtype.NewCommand(app.conf.LeftAction == 1, app.conf.MixerCommand, app.conf.MixerClass)},
-		Shortkeys: []cdtype.Shortkey{
-			{"Actions", "MixerShortkey", "Open volume mixer", app.conf.MixerShortkey},
+		ShortkeyActions: []cdtype.ShortkeyAction{
+			{app.openMixer, app.conf.MixerShortkey},
 		},
 		Debug: app.conf.Debug})
 
@@ -129,14 +129,6 @@ func (app *Applet) OnBuildMenu(menu cdtype.Menuer) {
 	app.menuAddDevices(menu, app.pulse.sink, "Managed device", app.pulse.SetSink)
 }
 
-// OnShortkey opens the mixer if found.
-//
-func (app *Applet) OnShortkey(string) {
-	if app.conf.MixerCommand != "" {
-		app.Command().Launch(cmdMixer)
-	}
-}
-
 // OnSubMiddleClick tries to launch the configured action.
 //
 func (app *Applet) OnSubMiddleClick(icon string) {
@@ -203,6 +195,14 @@ func (app *Applet) menuAddDevices(menu cdtype.Menuer, selected dbus.ObjectPath, 
 		v, e := dev.MapString("PropertyList")
 		name := ternary.String(e == nil, v["device.description"], "unknown")
 		menu.AddCheckEntry(name, sink == selected, func() { log.Err(call(sink)) })
+	}
+}
+
+// openMixer opens the mixer if found.
+//
+func (app *Applet) openMixer() {
+	if app.conf.MixerCommand != "" {
+		app.Command().Launch(cmdMixer)
 	}
 }
 

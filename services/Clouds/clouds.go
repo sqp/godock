@@ -4,16 +4,22 @@
 //
 // Added:
 //   Autodetect location based on IP.
-//   Shortcuts: show dialog, open Webpage, recheck
+//   Shortcuts: show dialog today, show tomorrow, open Webpage, recheck, set location.
+//   Editable template.
+//
 //
 // Possible problem (to confirm):
-//   External applets left and middle clicks disabled when
+//   External applets left and middle clicks disabled when a subdock is set.
+//     For me, even when the subdock is removed, clicks actions aren't restored.
+//     This can be tested by disabling the subdock (set forecast days to 0).
 //
 // Dropped, because it's impossible to do for an external app:
+//     (but it could be possible to try in dock mode.
+//      The problem would be the config file differences between both)
 //
-//   Always visible option and its background color
-//   Render desklet in 3D?
-//   Sub-dock view
+//   Always visible option and its background color.
+//   Render desklet in 3D
+//   Sub-dock view type.
 //
 package Clouds
 
@@ -24,6 +30,7 @@ import (
 	"github.com/sqp/godock/libs/cdapplet" // Applet base.
 	"github.com/sqp/godock/libs/cdglobal"
 	"github.com/sqp/godock/libs/cdtype" // Applet types.
+	"github.com/sqp/godock/libs/ternary"
 
 	"fmt"
 	"path/filepath"
@@ -38,19 +45,23 @@ import (
 // theme location : conf and real
 // reduce timer when fail on first try?
 
+// reenable show current dialog when show on icon is disabled (need to dl data)
+// maybe other backends (at least one to provide a fallback and comparisons)
+
 func trans(str string) string { return str }
 
 //
 //-------------------------------------------------------------------[ CONST ]--
 
 const (
-	minUpdateDelay     = 5  // in minutes.
-	defaultUpdateDelay = 15 // in minutes.
-	defaultTheme       = "Classic"
+	minUpdateDelay     = 5         // in minutes.
+	defaultUpdateDelay = 15        // in minutes.
+	defaultTheme       = "Classic" // dir located in applet "themes" subdir.
 
-	EmblemWork  = cdtype.EmblemTopLeft
-	IconWork    = "EmblemWork.svg"
+	IconWork    = "EmblemWork.svg" // file located in applet "img" subdir.
 	IconMissing = "default-icon"
+
+	EmblemWork = cdtype.EmblemTopLeft
 )
 
 //------------------------------------------------------------------[ CONFIG ]--
@@ -68,15 +79,15 @@ type groupConfig struct {
 	DisplayNights      bool
 	DisplayTemperature bool
 	WeatherTheme       string
-	Renderer           string
-	Desket3D           bool
+	DialogTemplate     cdtype.Template `default:"weather"`
 }
 
 type groupActions struct {
-	ShortkeyShowCurrent string
-	ShortkeyOpenWeb     string
-	ShortkeyRecheck     string
-	Debug               bool
+	ShortkeyShowCurrent  cdtype.Shortkey `desc:"Show current conditions dialog"`
+	ShortkeyShowTomorrow cdtype.Shortkey `desc:"Show conditions for tomorrow"`
+	ShortkeyOpenWeb      cdtype.Shortkey `desc:"Open webpage"`
+	ShortkeyRecheck      cdtype.Shortkey `desc:"Recheck now"`
+	ShortkeySetLocation  cdtype.Shortkey `desc:"Set location"`
 }
 
 //
@@ -98,6 +109,7 @@ func NewApplet() cdtype.AppInstance {
 		AppBase: cdapplet.New(), // Icon controler and interface to cairo-dock.
 		weather: weather.New(weather.BackendWeatherCom),
 	}
+	app.defineActions()
 
 	app.Poller().Add(app.Check)
 	app.Poller().SetPreCheck(func() { app.SetEmblem(app.FileLocation("img", IconWork), EmblemWork) })
@@ -111,19 +123,10 @@ func NewApplet() cdtype.AppInstance {
 func (app *Applet) Init(loadConf bool) {
 	app.LoadConfig(loadConf, &app.conf) // Load config will crash if fail. Expected.
 
+	app.weather.Clear()
+
 	// Share the conf with the weather service.
 	app.weather.SetConfig(&app.conf.Config)
-
-	if app.conf.LocationCode == "" {
-		loc, e := iplocation.Get()
-		if !app.Log().Err(e, "autodetect location") {
-			locations, e := weather.FindLocation(loc.City + ", " + loc.Country)
-			if !app.Log().Err(e, "FindLocation") && len(locations) > 0 {
-				app.conf.LocationCode = locations[0].ID // do not save, just set live value.
-				app.Log().Info("autodetect location", locations[0].Name)
-			}
-		}
-	}
 
 	// if app.conf.WeatherTheme == "" {
 	app.conf.WeatherTheme = defaultTheme
@@ -135,16 +138,21 @@ func (app *Applet) Init(loadConf bool) {
 		interval = minUpdateDelay * 60
 	}
 
+	if app.conf.LocationCode == "" {
+		app.DetectLocation()
+	}
+
 	// Set defaults to dock icon: display and controls.
 	app.SetDefaults(cdtype.Defaults{
 		Label:          app.conf.Name,
 		Icon:           app.conf.Icon,
 		PollerInterval: interval,
-		Templates:      []string{"weather"},
-		Shortkeys: []cdtype.Shortkey{
-			{"Actions", "ShortkeyShowCurrent", "Show current conditions dialog", app.conf.ShortkeyShowCurrent},
-			{"Actions", "ShortkeyOpenWeb", "Open Webpage", app.conf.ShortkeyOpenWeb},
-			{"Actions", "ShortkeyRecheck", "Recheck now", app.conf.ShortkeyRecheck},
+		ShortkeyActions: []cdtype.ShortkeyAction{
+			{ActionShowCurrent, app.conf.ShortkeyShowCurrent},
+			{ActionShowTomorrow, app.conf.ShortkeyShowTomorrow},
+			{ActionOpenWebpage, app.conf.ShortkeyOpenWeb},
+			{ActionRecheckNow, app.conf.ShortkeyRecheck},
+			{ActionSetLocation, app.conf.ShortkeySetLocation},
 		},
 		Debug: app.conf.Debug,
 	})
@@ -170,40 +178,98 @@ func (app *Applet) DefineEvents(events *cdtype.Events) {
 	// Right click menu. Provide actions list or registration request.
 	//
 	events.OnBuildMenu = func(menu cdtype.Menuer) {
-		if app.conf.LocationCode != "" {
+		var items []int
+		if app.weather.Current() != nil || app.weather.Forecast() != nil {
 			if app.weather.Current() != nil {
-				menu.AddEntry(trans("Show current conditions"), "dialog-information", app.DialogWeatherCurrent)
+				items = append(items, ActionShowCurrent)
 			}
-			menu.AddEntry(trans("Open webpage"), "go-jump", func() { app.OpenWeb(0) })
-
-			menu.AddEntry(trans("Recheck now"), "view-refresh", app.Check)
+			items = append(items, ActionOpenWebpage, ActionRecheckNow)
 		}
-		menu.AddEntry(trans("Set location"), "user-home", func() { app.AskLocationText("") })
+		items = append(items, ActionSetLocation)
+		app.Action().BuildMenu(menu, items)
 	}
+}
 
-	// Launch action configured for given shortkey.
-	//
-	events.OnShortkey = func(key string) {
-		switch key {
-		case app.conf.ShortkeyShowCurrent:
-			app.DialogWeatherCurrent()
+//
+//-----------------------------------------------------------------[ ACTIONS ]--
 
-		case app.conf.ShortkeyOpenWeb:
-			app.OpenWeb(0)
+// List of actions defined in this applet.
+// Actions order in this list must match the order in defineActions.
+//
+const (
+	ActionNone = iota
+	ActionShowCurrent
+	ActionShowTomorrow
+	ActionOpenWebpage
+	ActionRecheckNow
+	ActionSetLocation
+)
 
-		case app.conf.ShortkeyRecheck:
-			app.Check()
-		}
-	}
+// Define applet actions.
+// Actions order in this list must match the order of defined actions numbers.
+//
+func (app *Applet) defineActions() {
+	// app.Action().SetMax(1)
+	app.Action().Add(
+		&cdtype.Action{
+			ID:   ActionNone,
+			Menu: cdtype.MenuSeparator,
+		},
+		&cdtype.Action{
+			ID:   ActionShowCurrent,
+			Name: "Show current conditions",
+			Icon: "dialog-information",
+			Call: app.DialogWeatherCurrent,
+		},
+		&cdtype.Action{
+			ID:   ActionShowTomorrow,
+			Name: "Show conditions for tomorrow",
+			Icon: "dialog-information",
+			Call: func() { app.DialogWeatherForecast("1") },
+		},
+		&cdtype.Action{
+			ID:   ActionOpenWebpage,
+			Name: "Open webpage",
+			Icon: "go-jump",
+			Call: func() { app.OpenWeb(0) },
+		},
+		&cdtype.Action{
+			ID:   ActionRecheckNow,
+			Name: "Recheck now",
+			Icon: "view-refresh",
+			Call: app.Check,
+		},
+		&cdtype.Action{
+			ID:   ActionSetLocation,
+			Name: "Set location",
+			Icon: "user-home",
+			Call: func() { app.AskLocationText("") },
+		},
+	)
 }
 
 //
 //-----------------------------------------------------------------[ WEATHER ]--
 
 func (app *Applet) Check() {
-	e := app.weather.Get()
-	if !app.Log().Err(e, "weather") {
+	var (
+		fail  int
+		count int
+		errs  []string
+	)
+	for e := range app.weather.Get() {
+		count++
+		if app.Log().Err(e, "get data") {
+			fail++
+			errs = append(errs, e.Error())
+		}
+	}
+	if fail == 0 {
 		app.Draw()
+	} else {
+		all := ternary.String(fail == count, " All failed", "")
+		msg := "Get weather errors:" + all + "\n" + strings.Join(errs, "\n")
+		app.ShowDialog(msg, app.conf.DialogDuration)
 	}
 }
 
@@ -228,11 +294,16 @@ func (app *Applet) OpenWeb(numDay int) {
 // SetLocationCode updates the config file with the new location and ...
 // (TODO: need reload, to check).
 //
-func (app *Applet) SetLocationCode(locationCode string) {
+func (app *Applet) SetLocationCode(locationCode, locationName string) {
 	// Reset weather data from previous location.
 	app.weather.Clear()
 
 	app.conf.LocationCode = locationCode
+
+	//  Autodetect location if missing. Won't be saved.
+	if locationCode == "" {
+		app.DetectLocation()
+	}
 
 	cu, e := app.UpdateConfig()
 	if app.Log().Err(e, "UpdateConfig") {
@@ -240,6 +311,7 @@ func (app *Applet) SetLocationCode(locationCode string) {
 	}
 
 	cu.Set("Configuration", "LocationCode", locationCode)
+	cu.Set("Configuration", "LocationName", locationName)
 	e = cu.Save()
 	if app.Log().Err(e, "UpdateConfig") {
 		return
@@ -247,6 +319,19 @@ func (app *Applet) SetLocationCode(locationCode string) {
 
 	app.Log().Info("Updated LocationID", locationCode)
 	app.Poller().Restart()
+}
+
+func (app *Applet) DetectLocation() {
+	loc, e := iplocation.Get()
+	if app.Log().Err(e, "autodetect location") {
+		return
+	}
+	locations, e := weather.FindLocation(loc.City + ", " + loc.Country)
+	if app.Log().Err(e, "FindLocation") || len(locations) == 0 {
+		return
+	}
+	app.conf.LocationCode = locations[0].ID // do not save, just set live value.
+	app.Log().Debug("autodetect location", locations[0].Name)
 }
 
 //
@@ -258,14 +343,14 @@ func (app *Applet) Draw() {
 
 	// Show current info.
 	if app.weather.Current() == nil {
-		app.Log().NewErr("weather: missing Current data")
+		app.Log().NewErr("missing Current data")
 	} else if app.conf.DisplayCurrentIcon {
 		cur := app.weather.Current()
 		app.SetLabel(cur.LocName)
 		if app.conf.DisplayTemperature {
 			info := fmt.Sprintf("%d%s", cur.TempReal, cur.UnitTemp)
 			app.SetQuickInfo(info)
-			app.Log().Info("weather info", info)
+			app.Log().Debug(info, cur.WeatherDescription)
 		}
 
 		// if errordata{...}
@@ -315,44 +400,16 @@ func (app *Applet) DialogWeatherCurrent() {
 		// e := app.ShowDialog(tran(("No data available\nRetrying now...")), 30)
 		return
 	}
-
-	liststr, e := app.Template().Execute("weather", "ListCurrent", nil)
-	if app.Log().Err(e, "Template Current") {
+	message, e := app.weather.Current().Format(&app.conf.DialogTemplate)
+	if app.Log().Err(e, "template current") {
 		return
 	}
 
-	var (
-		cur  = app.weather.Current()
-		out  string
-		pre  string
-		post string
-		ok   bool
-		list = strings.Split(liststr, ",")
-		args = map[string]string{
-			"tempReal": trans("Temperature"),
-			"tempFelt": trans("Feels like"),
-			"wind":     trans("Wind"),
-			"humidity": trans("Humidity"),
-			"pressure": trans("Pressure"),
-			"sun":      trans("Sunrise") + " - " + trans("Sunset"),
-		}
-	)
-	for _, key := range list {
-		post, e = app.Template().Execute("weather", key, cur)
-		app.Log().Err(e, "Template Current")
-		pre, ok = args[key]
-		if ok {
-			out += pre + "\t"
-		}
-		out += post + "\n"
-	}
-
-	out = weather.AlignTab(out)    // align our tabs.
-	out = strings.Trim(out, " \n") // trim spaces and endlines.
+	app.Log().Debug("message", message)
 
 	// Show a dialog with the current conditions.
 	e = app.PopupDialog(cdtype.DialogData{
-		Message:    "<tt>" + out + "</tt>",
+		Message:    message,
 		Icon:       app.WeatherIcon(app.weather.Current().WeatherIcon),
 		TimeLength: app.conf.DialogDuration,
 		UseMarkup:  true,
@@ -373,14 +430,15 @@ func (app *Applet) DialogWeatherForecast(ref string) {
 		return
 	}
 
-	part := app.weather.Forecast().DayPart(dayNum, false)
-	if part == nil {
-		return
+	message, e := app.weather.Forecast().Format(&app.conf.DialogTemplate, dayNum, app.conf.Time24H)
+	if app.Log().Err(e, "template forecast") {
+		// 	return
 	}
+	part := app.weather.Forecast().DayPart(dayNum, false)
 
 	// Show a dialog with the forecast info.
 	e = app.PopupDialog(cdtype.DialogData{
-		Message:    app.weather.Forecast().Format(dayNum),
+		Message:    message,
 		Icon:       app.WeatherIcon(part.WeatherIcon),
 		TimeLength: app.conf.DialogDuration,
 		UseMarkup:  true,
@@ -393,7 +451,8 @@ func (app *Applet) DialogWeatherForecast(ref string) {
 //
 func (app *Applet) AskLocationText(deftxt string) {
 	e := app.PopupDialog(cdtype.DialogData{
-		Message: trans("Enter your location:"),
+		Message: trans("Enter your location:") + "\n\n" +
+			trans("Leave empty to autodetect."),
 		Widget: cdtype.DialogWidgetText{
 			InitialValue: deftxt,
 			Editable:     true,
@@ -412,6 +471,10 @@ func (app *Applet) AskLocationText(deftxt string) {
 // the text he provided.
 //
 func (app *Applet) AskLocationConfirm(locstr string) {
+	if locstr == "" {
+		app.SetLocationCode("", "*AUTODETECT*")
+		return
+	}
 	locations, e := weather.FindLocation(locstr)
 	if app.Log().Err(e, "FindLocation") {
 		app.ShowDialog("Find location: "+e.Error(), 10)
@@ -435,7 +498,7 @@ func (app *Applet) AskLocationConfirm(locstr string) {
 		},
 		Buttons: "ok;cancel",
 		Callback: cdtype.DialogCallbackValidInt(func(id int) {
-			app.SetLocationCode(locations[id].ID)
+			app.SetLocationCode(locations[id].ID, locations[id].Name)
 		}),
 	})
 	app.Log().Err(e, "popup AskLocation")

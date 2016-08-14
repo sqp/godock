@@ -24,6 +24,8 @@ import (
 //
 type YTDL struct{}
 
+// New creates a filer with the ytdl backend for the given url.
+//
 func (f YTDL) New(log cdtype.Logger, url string) (Filer, error) {
 	return NewYTDLFile(log, url)
 }

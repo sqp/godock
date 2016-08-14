@@ -28,15 +28,12 @@ package cdtype_test
 //
 //-----------------------------------------------------------[ src/config.go ]--
 
+import "github.com/sqp/godock/libs/cdtype"
+
 //
 type appletConf struct {
-	groupIcon          `group:"Icon"`
-	groupConfiguration `group:"Configuration"`
-}
-
-type groupIcon struct {
-	Name string `conf:"name"`
-	Icon string `conf:"icon"`
+	cdtype.ConfGroupIconBoth `group:"Icon"`
+	groupConfiguration       `group:"Configuration"`
 }
 
 type groupConfiguration struct {
@@ -50,8 +47,18 @@ type groupConfiguration struct {
 	MiddleAction  int
 	MiddleCommand string
 
-	Debug bool
+	// We can parse an int like type, used with iota definitions lists.
+	LocalID LocalID
+
+	// The template is loaded from appletDir/cdtype.TemplateDir or absolute.
+	DialogTemplate cdtype.Template `default:"myfile"`
+
+	// The shortkey definition is filled, but the desc tag is still needed for global shortcut config.
+	// (desc is not possible as external. Known dock TODO).
+	ShortkeyOpenThing cdtype.Shortkey `desc:"Open that thing"`
 }
+
+type LocalID int
 
 //
 //---------------------------------------------------------------------[ doc ]--

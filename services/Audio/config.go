@@ -19,14 +19,9 @@ const (
 //------------------------------------------------------------------[ CONFIG ]--
 
 type appletConf struct {
-	groupIcon          `group:"Icon"`
-	groupConfiguration `group:"Configuration"`
-	groupActions       `group:"Actions"`
-}
-
-type groupIcon struct {
-	Icon string `conf:"icon"`
-	Name string `conf:"name"`
+	cdtype.ConfGroupIconBoth `group:"Icon"`
+	groupConfiguration       `group:"Configuration"`
+	groupActions             `group:"Actions"`
 }
 
 type groupConfiguration struct {
@@ -48,8 +43,5 @@ type groupActions struct {
 
 	MixerCommand  string
 	MixerClass    string
-	MixerShortkey string
-
-	// Still hidden.
-	Debug bool
+	MixerShortkey cdtype.Shortkey `desc:"Open volume mixer"`
 }

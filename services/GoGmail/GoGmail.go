@@ -78,14 +78,15 @@ func (app *Applet) Init(loadConf bool) {
 	app.SetDefaults(cdtype.Defaults{
 		Label:          "Mail unchecked",
 		Icon:           icon,
-		Templates:      []string{DialogTemplate},
 		PollerInterval: cdtype.PollerInterval(app.conf.UpdateDelay*60, defaultUpdateDelay),
 		Commands: cdtype.Commands{
 			cmdMailClient: cdtype.NewCommandStd(app.conf.MailClientAction+1, app.conf.MailClientName, app.conf.MailClientClass)}, // Add 1 to action as we don't provide the none option.
-		Shortkeys: []cdtype.Shortkey{
-			{"Actions", "ShortkeyOpen", "Open mail client", app.conf.ShortkeyOpen},
-			{"Actions", "ShortkeyCheck", "Check mails now", app.conf.ShortkeyCheck}},
-		Debug: app.conf.Debug})
+		ShortkeyActions: []cdtype.ShortkeyAction{
+			{func() { app.testAction(ActionOpenClient) }, app.conf.ShortkeyOpen},
+			{func() { app.testAction(ActionCheckMail) }, app.conf.ShortkeyCheck},
+		},
+		Debug: app.conf.Debug,
+	})
 
 	// Create the renderer.
 	switch app.conf.Renderer {
@@ -133,17 +134,6 @@ func (app *Applet) DefineEvents(events *cdtype.Events) {
 
 		default:
 			app.Action().BuildMenu(menu, menuFull)
-		}
-	}
-
-	// Launch action configured for given shortkey.
-	//
-	events.OnShortkey = func(key string) {
-		if key == app.conf.ShortkeyOpen {
-			app.testAction(ActionOpenClient)
-		}
-		if key == app.conf.ShortkeyCheck {
-			app.testAction(ActionCheckMail)
 		}
 	}
 }
@@ -260,7 +250,7 @@ func (app *Applet) updateDisplay(delta int, first bool, e error) {
 		log.Err(e, "Check mail")
 		if app.err == nil || e.Error() != app.err.Error() { // Error buffer, dont warn twice the same information.
 			app.render.Error(e)
-			app.ShowDialog("Mail check error"+e.Error(), int32(app.conf.DialogTimer))
+			app.ShowDialog("Mail check error"+e.Error(), app.conf.DialogTimer)
 			// app.PopUp("Mail check error", e.Error())
 			app.err = e
 		}
@@ -295,7 +285,7 @@ func (app *Applet) sendAlert(delta int) {
 		app.mailPopup(nb, app.conf.DialogTimer, "ListMailsNew")
 	}
 	if app.conf.AlertAnimName != "" {
-		app.Animate(app.conf.AlertAnimName, int32(app.conf.AlertAnimDuration))
+		app.Animate(app.conf.AlertAnimName, app.conf.AlertAnimDuration)
 	}
 	if app.conf.AlertSoundEnabled {
 		sound := app.conf.AlertSoundFile
@@ -317,7 +307,7 @@ func (app *Applet) sendAlert(delta int) {
 // Show dialog with information for the given number of mails. Can display an
 // additional comment about mails being new if the second param is set to true.
 //
-func (app *Applet) mailPopup(nb, duration int, template string) {
+func (app *Applet) mailPopup(nb, duration int, templateFunc string) {
 	// feed := app.data.Data().(*Feed)
 	feed := app.data.(*Feed)
 
@@ -331,7 +321,7 @@ func (app *Applet) mailPopup(nb, duration int, template string) {
 	}
 
 	// if app.conf.DialogType == dialogInternal {
-	text, e := app.Template().Execute(DialogTemplate, template, feed)
+	text, e := app.conf.DialogTemplate.ToString(templateFunc, feed)
 	if log.Err(e, "Template ListMailsNew") {
 		return
 	}

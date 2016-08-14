@@ -264,12 +264,12 @@ type IconBase interface {
 
 	// Animate animates the icon for a given number of rounds.
 	//
-	Animate(animation string, rounds int32) error
+	Animate(animation string, rounds int) error
 
 	// ShowDialog pops up a simple dialog bubble on the icon.
 	// The dialog can be closed by clicking on it.
 	//
-	ShowDialog(message string, duration int32) error
+	ShowDialog(message string, duration int) error
 }
 
 // RenderSimple defines a subset of AppBase for simple renderers like data pollers.
@@ -824,10 +824,11 @@ type MenuWidgeter interface {
 //    })
 //
 type Defaults struct {
-	Icon      string
-	Label     string
-	QuickInfo string
-	Shortkeys []Shortkey
+	Icon            string
+	Label           string
+	QuickInfo       string
+	Shortkeys       []Shortkey
+	ShortkeyActions []ShortkeyAction
 
 	PollerInterval int
 	Commands       Commands
@@ -836,25 +837,25 @@ type Defaults struct {
 	Debug     bool // Enable debug flood.
 }
 
-// Shortkey defines mandatory informations to register a shortkey.
-//
-type Shortkey struct {
-	ConfGroup string
-	ConfKey   string
-	Desc      string
-	Shortkey  string
-}
-
 //
 //-------------------------------------------------------------[ CONF STRUCT ]--
 
-type ConfGroupIconName struct {
-	Name string `conf:"name"`
+// ConfGroupIconBoth defines a common config struct for the Icon tab.
+//
+type ConfGroupIconBoth struct {
+	Icon  string `conf:"icon"`
+	Name  string `conf:"name"`
+	Debug bool
 }
 
-type ConfGroupIconBoth struct {
-	Icon string `conf:"icon"`
-	Name string `conf:"name"`
+// ConfGroupIconName defines a special config struct for the Icon tab.
+//
+// This if the version without Icon, which shouldn't be the first choice, unless
+// you know what you're doing (like a poller locked in gauge/graph).
+//
+type ConfGroupIconName struct {
+	Name  string `conf:"name"`
+	Debug bool
 }
 
 // ConfUpdater updates a config file.

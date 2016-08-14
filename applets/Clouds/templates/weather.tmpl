@@ -1,8 +1,23 @@
-{{define "ListCurrent"}}currentFirst,tempReal,tempFelt,wind,humidity,pressure,sun{{end}}
-{{define "currentFirst"}}{{.WeatherDescription}} ({{.UpdateTime}}, {{.Observatory}}){{end}}
-{{define "tempReal"}}{{.TempReal}}{{.UnitTemp}}{{end}}
-{{define "tempFelt"}}{{.TempFelt}}{{.UnitTemp}}{{end}}
+{{/* current weather */}}
+{{define "Current"}}<big><b>{{.WeatherDescription}}</b></big>		{{.TxtUpdateTime}} - {{.Observatory}}
+<tt>{{.Fields "tempReal" "tempFelt" "wind" "humidity" "pressure" "sun"}}</tt>{{end}}
+
+{{/* forecast weather */}}
+{{define "Forecast"}}<big><b>{{.DayName}}</b> {{.MonthDay}} - <b>{{.WeatherDescription}}</b></big>
+
+<tt>{{.Fields "tempDay" "precipitation" "wind" "humidity" "sun"}}</tt>{{end}}
+
+{{/* items definition. format tags not allowed (breaks indent) */}}
+{{/* common */}}
 {{define "wind"}}{{.WindSpeed}} {{.UnitSpeed}} ({{.WindDirection}}){{end}}
 {{define "humidity"}}{{.Humidity}}%{{end}}
+{{define "sun"}}{{.TxtSunrise}} - {{.TxtSunset}}{{end}}
+
+{{/* Current */}}
+{{define "tempReal"}}{{.TempReal}}{{.UnitTemp}}{{end}}
+{{define "tempFelt"}}{{.TempFelt}}{{.UnitTemp}}{{end}}
 {{define "pressure"}}{{.Pressure}}{{.UnitPressure}}{{end}}
-{{define "sun"}}{{.Sunrise}} - {{.Sunset}}{{end}}
+
+{{/* Forecast */}}
+{{define "tempDay"}}{{.TempMin}}{{.UnitTemp}} -> {{.TempMax}}{{.UnitTemp}}{{end}}
+{{define "precipitation"}}{{.PrecipitationProba}}%{{end}}

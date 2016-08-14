@@ -13,6 +13,7 @@ import (
 
 	"bytes"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"text/template"
@@ -32,13 +33,14 @@ type CDApplet struct {
 	shareDataDir string // Location of applet data files. As an external applet, it is the same as binary dir.
 	rootDataDir  string // Path to the config root dir (~/.config/cairo-dock).
 
-	events   cdtype.Events      // Applet events callbacks (if DefineEvents was used).
-	hooker   *Hooker            // Applet events callbacks (for applet self implemented methods).
-	action   cdtype.AppAction   // Actions handler. Where an applet can declare its list of actions.
-	poller   cdtype.AppPoller   // Poller counter. If you want more than one, use a common denominator.
-	command  cdtype.AppCommand  // Programs and locations configured by the user, including application monitor.
-	template cdtype.AppTemplate // Templates for text formating.
-	log      cdtype.Logger      // Applet logger.
+	events    cdtype.Events           // Applet events callbacks (if DefineEvents was used).
+	hooker    *Hooker                 // Applet events callbacks (for applet self implemented methods).
+	action    cdtype.AppAction        // Actions handler. Where an applet can declare its list of actions.
+	poller    cdtype.AppPoller        // Poller counter. If you want more than one, use a common denominator.
+	command   cdtype.AppCommand       // Programs and locations configured by the user, including application monitor.
+	template  cdtype.AppTemplate      // Templates for text formating.
+	log       cdtype.Logger           // Applet logger.
+	Shortkeys []cdtype.ShortkeyAction // Shortkeys and callbacks.
 
 	cdtype.AppIcon // Dock applet connection, Can be Gldi or Dbus (will be Gldi with build tag dock).
 }
@@ -122,7 +124,20 @@ func (cda *CDApplet) SetDefaults(def cdtype.Defaults) {
 	cda.SetIcon(ternary.String(def.Icon != "", def.Icon, cda.FileLocation("icon")))
 	cda.SetLabel(ternary.String(def.Label != "", def.Label, cda.Name()))
 	cda.SetQuickInfo(def.QuickInfo)
-	cda.BindShortkey(def.Shortkeys...)
+
+	cda.Shortkeys = def.ShortkeyActions
+	var sk []cdtype.Shortkey
+	for i, sa := range cda.Shortkeys {
+		// add to the need register list.
+		sk = append(sk, sa.Shortkey)
+
+		// convert ActionID to its callback.
+		switch act := sa.Action.(type) {
+		case int:
+			cda.Shortkeys[i].Action = cda.Action().CallbackNoArg(act)
+		}
+	}
+	cda.BindShortkey(append(sk, def.Shortkeys...)...)
 
 	cda.Command().Clear()
 	for key, cmd := range def.Commands {
@@ -168,6 +183,14 @@ type appTemplate struct {
 func (o *appTemplate) Load(names ...string) {
 	for _, name := range names {
 		fileloc := o.app.FileLocation("templates", name+".tmpl")
+		if !files.IsExist(fileloc) {
+			o.app.Log().Info("not found", fileloc)
+			if !files.IsExist(name) { // trying using the name as full path.
+				o.app.Log().NewErr("file not found:"+name, "Template")
+				continue
+			}
+			fileloc = name
+		}
 		template, e := template.ParseFiles(fileloc)
 		o.app.Log().Err(e, "Template")
 		o.templates[name] = template
@@ -314,10 +337,25 @@ func (ac *appCmd) Clear() {
 // Won't do anything if loadConf is false.
 //
 func (cda *CDApplet) LoadConfig(loadConf bool, v interface{}) {
+	if !loadConf {
+		return
+	}
 	files.Access.Lock()
 	defer files.Access.Unlock()
-	if loadConf { // Try to load config. Exit if not found.
-		log.Fatal(config.Load(cda.confFile, v, config.GetBoth), "config")
+
+	// Try to load config. Exit if not found.
+	e, liste := config.Load(cda.confFile, cda.FileLocation(), v, config.GetBoth)
+	if cda.Log().Err(e, "LoadConfig") {
+		// TODO: try only to use in standalone mode.
+		// Find a way to unload the applet without the crash in dock and DBus service mode.
+		// But this is only a tricky safety net. The dock must have provided the file.
+		// File not found/readable should only happen on disk (full) error or bad source file.
+		os.Exit(1)
+	}
+
+	// Display non fatal errors.
+	for _, e := range liste {
+		cda.Log().Err(e, "LoadConfig")
 	}
 }
 

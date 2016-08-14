@@ -1,16 +1,17 @@
 package weather
 
 import (
-	"encoding/xml"
+	"github.com/sqp/godock/libs/net/download"
+
 	"fmt"
-	"io/ioutil"
-	"net/http"
 	"sync"
 	"time"
 )
 
+// DegreeSymbol needs to be added before unit temperature (C or F).
 const DegreeSymbol = "°"
 
+// URL for backend data.
 const (
 	WeatherComURLBase        = "http://wxdata.weather.com/wxdata"
 	WeatherComSuffixCurrent  = "/weather/local/%s?cc=*"
@@ -18,6 +19,7 @@ const (
 	WeatherComSuffixCelcius  = "&unit=m"
 )
 
+// URL for webpages to open.
 const (
 	URLWeatherComHour    = "http://www.weather.com/weather/hourbyhour/graph/%s"
 	URLWeatherComToday   = "http://www.weather.com/weather/today/%s"
@@ -61,14 +63,18 @@ func (w *weatherCom) WebpageURL(numDay int) string {
 //
 //----------------------------------------------------------------[ GET DATA ]--
 
-func (w *weatherCom) Get() error {
+func (w *weatherCom) Get() chan error {
+	chane := make(chan error, 2)
+	defer close(chane)
 
 	if w.Config == nil {
-		return ErrMissingConfObject
+		chane <- ErrMissingConfObject
+		return chane
 	}
 
 	if w.LocationCode == "" {
-		return ErrMissingLocationCode
+		chane <- ErrMissingLocationCode
+		return chane
 	}
 
 	wait := sync.WaitGroup{}
@@ -76,22 +82,12 @@ func (w *weatherCom) Get() error {
 		wait.Add(1)
 		call := call
 		go func() {
-			e := call()
-			if e != nil {
-				println(e.Error())
-			}
+			chane <- call()
 			wait.Done()
 		}()
 	}
 	wait.Wait()
-
-	return nil
-}
-
-func (w *weatherCom) download(query string, args ...interface{}) ([]byte, error) {
-	format := WeatherComURLBase + query + unitTemp(w.UseCelcius)
-	URL := fmt.Sprintf(format, args...)
-	return Download(URL)
+	return chane
 }
 
 func (w *weatherCom) dlCurrent() error {
@@ -99,89 +95,93 @@ func (w *weatherCom) dlCurrent() error {
 		return nil
 	}
 
-	data, e := w.download(WeatherComSuffixCurrent, w.LocationCode)
+	cur := &Current{}
+	url := fmt.Sprintf(WeatherComURLBase+WeatherComSuffixCurrent+unitTemp(w.UseCelcius), w.LocationCode)
+	e := download.XML(url, cur)
 	if e != nil {
 		return e
 	}
 
-	w.current = &Current{}
-
-	e = xml.Unmarshal(data, w.current)
-	if e != nil {
-		return e
-	}
+	// Received data is valid, update it.
+	w.current = cur
 
 	// Prepend degree symbol to unit if missing.
-	w.current.UnitTemp = unitDegree(w.current.UnitTemp)
+	cur.UnitTemp = unitDegree(cur.UnitTemp)
 
-	upd, e := time.Parse("2/01/06 3:04 PM MST", w.current.UpdateTime)
+	// Parse sun time.
+	cur.TxtSunrise, cur.TxtSunset, cur.IsNight, e = FormatSun(cur.Sunrise, cur.Sunset, w.Time24H)
+
+	// Parse update time.
+	upd, e := time.Parse("1/2/06 3:04 PM MST", cur.UpdateTime)
 	if e != nil {
 		return e
 	}
-	w.current.Updated = upd
-	w.current.UpdateHour = upd.Hour()
-	w.current.UpdateMinute = upd.Minute()
+	cur.TxtUpdateTime = upd.Format(timeFormat(w.Time24H))
+
 	return nil
 }
 
 func (w *weatherCom) dlForecast() error {
-	data, e := w.download(WeatherComSuffixForecast, w.LocationCode, w.NbDays)
-	if e != nil {
-		return e
-	}
-
 	w.forecast = &Forecast{}
-
-	e = xml.Unmarshal(data, w.forecast)
-	if e == nil {
+	url := fmt.Sprintf(WeatherComURLBase+WeatherComSuffixForecast+unitTemp(w.UseCelcius), w.LocationCode, w.NbDays)
+	e := download.XML(url, w.forecast)
+	if e != nil {
 		return e
 	}
 	w.forecast.UnitTemp = unitDegree(w.forecast.UnitTemp)
 
+	// Parse day number and sun time.
+	for i := range w.forecast.Days {
+		day := &w.forecast.Days[i]
+		date, e := time.Parse("Jan 2", day.Date)
+		if e != nil {
+			return e
+		}
+		day.MonthDay = date.Day()
+
+		day.TxtSunrise, day.TxtSunset, _, e = FormatSun(day.Sunrise, day.Sunset, w.Time24H)
+		if e != nil {
+			return e
+		}
+
+		for i := range day.Part {
+			if day.Part[i].WeatherDescription == "" {
+				day.Part[i].WeatherDescription = ValueMissing
+			}
+		}
+	}
+
 	return nil
-}
-
-func Download(URL string) ([]byte, error) {
-	resp, e := http.Get(URL)
-	if e != nil {
-		return nil, e
-	}
-	body, e := ioutil.ReadAll(resp.Body)
-	resp.Body.Close()
-	if e != nil {
-		return nil, e
-	}
-
-	return body, nil
 }
 
 //
 //-----------------------------------------------------------[ FIND LOCATION ]--
 
+// Search represents the xml base struct for the search location query.
+//
 type Search struct {
 	Ver string `xml:"ver,attr"`
 	Loc []Loc  `xml:"loc"`
 }
 
+// Loc represents a location found in the search location query.
+//
 type Loc struct {
 	Type string `xml:"type,attr"`
 	Name string `xml:",chardata"`
 	ID   string `xml:"id,attr"`
 }
 
+// FindLocation asks the server the list of locations matching the given name.
+//
 func FindLocation(locationName string) ([]Loc, error) {
-	data, e := Download(WeatherComURLBase + "/search/search?where=" + locationName)
+	var search Search
+	e := download.XML(WeatherComURLBase+"/search/search?where="+locationName, &search)
 	if e != nil {
 		return nil, e
 	}
 
-	var locations Search
-	e = xml.Unmarshal(data, &locations)
-	if e != nil {
-		return nil, e
-	}
-
-	return locations.Loc, nil
+	return search.Loc, nil
 }
 
 func unitTemp(useCelcius bool) string {

@@ -2,8 +2,8 @@
 
 pkgname=cairo-dock-goapplets
 pkgver=0.0.3.4
-pkgrel=1
-pkgdesc="Cairo-Dock applets package (Audio GoGmail TVPlay...)."
+pkgrel=3
+pkgdesc="Cairo-Dock applets package (Audio Clouds NetActivity TVPlay...)."
 arch=('x86_64' 'i686')
 url="http://github.com/sqp/godock"
 license=('GPL3')
@@ -19,27 +19,30 @@ optdepends=(
 conflicts=('cairo-dock-rework')
 options=('!strip' '!emptydirs')
 
-srcpath=github.com/sqp/godock
-applets="Audio Cpu DiskActivity DiskFree GoGmail Mem NetActivity Notifications TVPlay Update"
-cdctags="gtk" # dock or gtk
+_srcpath=github.com/sqp/godock
+_applets="Audio Clouds Cpu DiskActivity DiskFree GoGmail Mem NetActivity Notifications TVPlay Update"
+_cdctags="gtk" # dock or gtk
+
+# pkgver() {
+#   cd "$pkgname"
+
+#   git describe --long | sed 's/^v//;s/\([^-]*-g\)/r\1/;s/-/./g'
+# }
+
+prepare() {
+  GOPATH="$srcdir" go get -d -u -tags "$_applets $_cdctags" $_srcpath/cmd/cdc
+}
 
 build() {
-  # Download
-  GOPATH="$srcdir" go get -d -u -tags "$applets $cdctags" $srcpath/cmd/cdc
-
-  # Patch
-  cd "$srcdir/src/$srcpath" && GOPATH="$srcdir" make patch
-
-  # Build
-  cd "$srcdir/src/$srcpath" && GOPATH="$srcdir" make APPLETS="$cdctags $applets" build
+  cd "$srcdir/src/$_srcpath" && GOPATH="$srcdir" make APPLETS="$_applets $_cdctags" build
 }
 
 #check() {
-#  GOPATH="$GOPATH:$srcdir" go test -v -x $srcpath/...
+#  GOPATH="$GOPATH:$srcdir" go test -v -x $_srcpath/...
 #}
 
 package() {
-  cd "$srcdir/src/$srcpath" && GOPATH="$srcdir" make PKGDIR="$pkgdir" APPLETS="$applets" install
+  cd "$srcdir/src/$_srcpath" && GOPATH="$srcdir" make PKGDIR="$pkgdir" APPLETS="$_applets" install
 }
 
 # vim:set ts=2 sw=2 et:

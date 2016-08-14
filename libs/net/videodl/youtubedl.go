@@ -17,6 +17,8 @@ const (
 //
 type YoutubeDL struct{}
 
+// New creates a filer with the youtube-dl backend for the given url.
+//
 func (f YoutubeDL) New(log cdtype.Logger, url string) (Filer, error) {
 	return NewYoutubeDLFile(log, url)
 }

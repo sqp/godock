@@ -2,7 +2,7 @@
 
 pkgname=cairo-dock-rework
 pkgver=0.0.3.4
-pkgrel=1
+pkgrel=3
 pkgdesc="Cairo-Dock reworked version with a new GUI and more applets (WIP)."
 arch=('x86_64' 'i686')
 url="http://github.com/sqp/godock"
@@ -20,7 +20,7 @@ conflicts=('cairo-dock-goapplets')
 options=('!strip' '!emptydirs')
 
 srcpath=github.com/sqp/godock
-applets="Audio Cpu DiskActivity DiskFree GoGmail Mem NetActivity Notifications TVPlay Update"
+applets="Audio Clouds Cpu DiskActivity DiskFree GoGmail Mem NetActivity Notifications TVPlay Update"
 cdctags="dock"
 
 build() {

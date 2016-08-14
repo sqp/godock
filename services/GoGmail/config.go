@@ -1,13 +1,14 @@
 package GoGmail
 
+import "github.com/sqp/godock/libs/cdtype"
+
 // Constants it's better not to have in conf.
 //
 const (
 	defaultUpdateDelay = 15 * 60 // 15 min.
 
-	loginLocation  = ".Gmail_subscription"
-	feedGmail      = "https://mail.google.com/mail/feed/atom/"
-	DialogTemplate = "InternalDialog"
+	loginLocation = ".Gmail_subscription"
+	feedGmail     = "https://mail.google.com/mail/feed/atom/"
 )
 
 // Dialog types.
@@ -44,13 +45,9 @@ const (
 // Global struct conf.
 //
 type mailConf struct {
-	groupIcon    `group:"Icon"`
-	groupConfig  `group:"Configuration"`
-	groupActions `group:"Actions"`
-}
-
-type groupIcon struct {
-	Icon string `conf:"icon"`
+	cdtype.ConfGroupIconBoth `group:"Icon"`
+	groupConfig              `group:"Configuration"`
+	groupActions             `group:"Actions"`
 }
 
 type groupConfig struct {
@@ -66,21 +63,21 @@ type groupConfig struct {
 	AlertAnimDuration int
 	AlertSoundEnabled bool
 	AlertSoundFile    string
+	DialogTemplate    cdtype.Template `default:"dialogmail"`
 }
 
 type groupActions struct {
 	ActionClickLeft   string
 	ActionClickMiddle string
 
-	ShortkeyOpen  string
-	ShortkeyCheck string
+	ShortkeyOpen  cdtype.Shortkey `desc:"Open mail client"`
+	ShortkeyCheck cdtype.Shortkey `desc:"Show mail dialog"`
 
 	MailClientAction int
 	MailClientName   string
 	MailClientClass  string
 
 	// Still hidden.
-	Debug          bool
 	PollingEnabled bool
 	// FeedGmail      string // Url of the Atom feed source. Unused yet. See const
 	//~ DebugLevel int // unused

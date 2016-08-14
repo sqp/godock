@@ -44,7 +44,7 @@ func CheckButton(key *cftype.Key) {
 		if k < len(values) {
 			value = values[k]
 		}
-		w := newgtk.CheckButton()
+		w := newgtk.Switch()
 		w.SetActive(value)
 		key.PackSubWidget(w)
 		activers = append(activers, w)

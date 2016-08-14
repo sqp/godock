@@ -50,8 +50,15 @@ func (cda *CDApplet) OnEvent(event string, data ...interface{}) (exit bool) {
 			go cda.events.OnDropData(data[0].(string))
 		}
 	case "on_shortkey":
-		if cda.events.OnShortkey != nil {
-			go cda.events.OnShortkey(data[0].(string))
+		key := data[0].(string)
+		found := false
+		for _, sk := range cda.Shortkeys {
+			test, e := sk.TestKey(key)
+			cda.log.Err(e, "shortkey="+key)
+			found = found || test
+		}
+		if !found && cda.events.OnShortkey != nil {
+			go cda.events.OnShortkey(key)
 		}
 	case "on_change_focus":
 		if cda.events.OnChangeFocus != nil {
