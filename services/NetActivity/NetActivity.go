@@ -60,7 +60,8 @@ type Applet struct {
 // NewApplet create a new applet instance.
 //
 func NewApplet() cdtype.AppInstance {
-	app := &Applet{AppBase: cdapplet.New()} // Icon controler and interface to cairo-dock.
+	app := &Applet{}
+	app.AppBase = cdapplet.New(&app.conf) // Icon controler and interface to cairo-dock.
 
 	// Uptoshare actions
 	app.up = uptoshare.New()
@@ -99,9 +100,7 @@ func (app *Applet) initVideo() {
 
 // Init load user configuration if needed and initialise applet.
 //
-func (app *Applet) Init(loadConf bool) {
-	app.LoadConfig(loadConf, &app.conf) // Load config will crash if fail. Expected.
-
+func (app *Applet) Init(def *cdtype.Defaults, confLoaded bool) {
 	if app.video == nil { // Delayed because we need FileLocation, not available at creation.
 		app.initVideo()
 	}
@@ -112,27 +111,25 @@ func (app *Applet) Init(loadConf bool) {
 	app.up.LimitRate = app.conf.UploadRateLimit
 	app.up.PostAnonymous = app.conf.PostAnonymous
 	app.up.FileForAll = app.conf.FileForAll
+	app.up.SiteFile(app.conf.SiteFile)
 	app.up.SiteImage(app.conf.SiteImage)
 	app.up.SiteText(app.conf.SiteText)
 	app.up.SiteVideo(app.conf.SiteVideo)
-	app.up.SiteFile(app.conf.SiteFile)
 
 	// Video download settings.
 	app.video.SetConfig(&app.conf.Config)
 	app.video.SetEnabledWeb(videodl.WebState(app.conf.EnabledWeb))
 
 	// Settings for poller and IOActivity (force renderer reset in case of reload).
-	app.conf.UpdateDelay = cdtype.PollerInterval(app.conf.UpdateDelay, defaultUpdateDelay)
-	app.service.Settings(uint64(app.conf.UpdateDelay), cdtype.InfoPosition(app.conf.DisplayText), app.conf.DisplayValues, app.conf.GraphType, app.conf.GaugeName, app.conf.Devices...)
+	app.service.Settings(uint64(app.conf.UpdateDelay.Value()), app.conf.DisplayText,
+		app.conf.DisplayValues, app.conf.GraphType, app.conf.GaugeName, app.conf.Devices...)
 
-	// Set defaults to dock icon: display and controls.
-	app.SetDefaults(cdtype.Defaults{
-		Label:          app.conf.Name,
-		PollerInterval: app.conf.UpdateDelay,
-		Commands: cdtype.Commands{
-			cmdLeft:   cdtype.NewCommandStd(app.conf.LeftAction, app.conf.LeftCommand, app.conf.LeftClass),
-			cmdMiddle: cdtype.NewCommandStd(app.conf.MiddleAction, app.conf.MiddleCommand)},
-		Debug: app.conf.Debug})
+	// Defaults.
+	def.PollerInterval = app.conf.UpdateDelay.Value()
+	def.Commands = cdtype.Commands{
+		cmdLeft:   cdtype.NewCommandStd(app.conf.LeftAction, app.conf.LeftCommand, app.conf.LeftClass),
+		cmdMiddle: cdtype.NewCommandStd(app.conf.MiddleAction, app.conf.MiddleCommand),
+	}
 }
 
 //
@@ -226,6 +223,10 @@ func (app *Applet) onUploadDone(links uptoshare.Links) {
 	if e, ok := links["error"]; ok {
 		app.ShowDialog("Error: "+e, 10)
 		return
+	}
+
+	if msg, ok := links["support"]; ok {
+		app.Log().Info("support message", msg)
 	}
 
 	if app.conf.DialogEnabled {

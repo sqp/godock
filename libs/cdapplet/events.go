@@ -52,7 +52,7 @@ func (cda *CDApplet) OnEvent(event string, data ...interface{}) (exit bool) {
 	case "on_shortkey":
 		key := data[0].(string)
 		found := false
-		for _, sk := range cda.Shortkeys {
+		for _, sk := range cda.shortkeys {
 			test, e := sk.TestKey(key)
 			cda.log.Err(e, "shortkey="+key)
 			found = found || test

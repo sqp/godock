@@ -49,11 +49,13 @@ type Config struct {
 	// StartedWeb     bool
 	JSWindowOption string
 
+	Blacklist []string
+}
+
+type Commands struct {
 	CmdOpenDir   string
 	CmdOpenWeb   string
 	CmdOpenVideo string
-
-	Blacklist []string
 }
 
 // DownloadFunc defines a quality set function.

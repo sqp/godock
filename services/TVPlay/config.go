@@ -1,16 +1,14 @@
 package TVPlay
 
-import "github.com/sqp/gupnp/upnptype"
+import (
+	"github.com/sqp/godock/libs/cdtype"
+	"github.com/sqp/gupnp/upnptype"
+)
 
 type appletConf struct {
-	groupIcon          `group:"Icon"`
-	groupConfiguration `group:"Configuration"`
-	groupActions       `group:"Actions"`
-}
-
-type groupIcon struct {
-	Icon string `conf:"icon"`
-	Name string `conf:"name"`
+	cdtype.ConfGroupIconBoth `group:"Icon"`
+	groupConfiguration       `group:"Configuration"`
+	groupActions             `group:"Actions"`
 }
 
 type groupConfiguration struct {
@@ -32,16 +30,13 @@ type groupActions struct {
 	ActionClickMiddle string
 	ActionMouseWheel  string
 
-	ShortkeyMute         string
-	ShortkeyVolumeUp     string
-	ShortkeyVolumeDown   string
-	ShortkeyPlayPause    string
-	ShortkeyStop         string
-	ShortkeySeekBackward string
-	ShortkeySeekForward  string
-
-	// Still hidden.
-	Debug bool
+	ShortkeyMute         *cdtype.Shortkey `action:"1" desc:"Mute volume"`
+	ShortkeyVolumeUp     *cdtype.Shortkey `action:"2" desc:"Lower volume"`
+	ShortkeyVolumeDown   *cdtype.Shortkey `action:"3" desc:"Increase volume"`
+	ShortkeyPlayPause    *cdtype.Shortkey `action:"4" desc:"Play / Pause"`
+	ShortkeyStop         *cdtype.Shortkey `action:"5" desc:"Stop"`
+	ShortkeySeekBackward *cdtype.Shortkey `action:"6" desc:"Seek backward"`
+	ShortkeySeekForward  *cdtype.Shortkey `action:"7" desc:"Seek forward"`
 }
 
 // Actions available in right click menu.

@@ -65,6 +65,7 @@ import (
 	"fmt"
 	"io"
 	"reflect"
+	"strconv"
 	"strings"
 )
 
@@ -105,8 +106,9 @@ func GetBoth(struc reflect.StructField) string {
 type Config struct {
 	config.Config // Extends the real config.
 
-	appdir string // applet dir for templates loading.
-	Errors []error
+	Errors    []error
+	appdir    string             // applet dir for templates loading.
+	shortkeys []*cdtype.Shortkey // shortkeys found.
 }
 
 // New creates a new Config parser.
@@ -137,20 +139,26 @@ func NewFromReader(reader io.Reader) (*Config, error) {
 	return c, nil
 }
 
-// Load config file and fills a config data struct.
+// Load loads a config file and fills a config data struct.
 //
-//   First argument must be a the pointer to the data struct.
-//   Second argument is the func to choose what key to load for each field.
-//     Default methods provided: GetKey, GetTag, GetBoth.
+// Returns parsed defaults data, the list of parsing errors, and the main error
+// if the load failed (file missing / not readable).
 //
-func Load(filename, appdir string, v interface{}, fieldKey GetFieldKey) (error, []error) {
+//   filename   Full path to the config file.
+//   appdir     Application directory, to find templates.
+//   v          The pointer to the data struct.
+//   fieldKey   Func to choose what key to load for each field.
+//              Usable methods provided: GetKey, GetTag, GetBoth.
+//
+func Load(filename, appdir string, v interface{}, fieldKey GetFieldKey) (cdtype.Defaults, []error, error) {
 	conf, e := NewFromFile(filename)
 	if e != nil {
-		return e, nil
+		return cdtype.Defaults{}, nil, e
 	}
 	conf.appdir = appdir
-	conf.Unmarshall(v, fieldKey)
-	return nil, conf.Errors
+	def := conf.Unmarshall(v, fieldKey)
+	def.Shortkeys = conf.shortkeys
+	return def, conf.Errors, nil
 }
 
 //
@@ -160,16 +168,29 @@ func Load(filename, appdir string, v interface{}, fieldKey GetFieldKey) (error, 
 // The First level is config group, matched by the key group.
 // Second level is data fields, matched by the supplied GetFieldKey func.
 //
-func (c *Config) Unmarshall(v interface{}, fieldKey GetFieldKey) error {
+func (c *Config) Unmarshall(v interface{}, fieldKey GetFieldKey) cdtype.Defaults {
 	typ := reflect.Indirect(reflect.ValueOf(v)).Type().Elem() // Get the type of the struct behind the pointer.
 	val := reflect.ValueOf(v).Elem()                          // ReflectValue of the config struct.
 
 	val.Set(reflect.New(typ)) // Create a new empty struct.
 
+	def := cdtype.Defaults{Commands: cdtype.Commands{}} // Empty defaults to gather groups auto set defaults.
+
+	// Range over the first level of fields to find struct with tag "group".
 	for i := 0; i < typ.NumField(); i++ { // Parsing all fields in grre.
 		// log.Info("field", i, typ.Field(i).Name, typ.Field(i).Tag.Get("group"))
 		if group := typ.Field(i).Tag.Get("group"); group != "" {
+			// Get user data from the group.
 			c.unmarshalGroup(val.Elem().Field(i), group, fieldKey)
+
+			// Get applet defaults from the group if it's public and provides a ToDefaults method.
+			if val.Elem().Field(i).CanInterface() {
+				uncast := val.Elem().Field(i).Interface()
+				getDef, ok := uncast.(cdtype.ToDefaultser)
+				if ok {
+					getDef.ToDefaults(&def)
+				}
+			}
 		}
 	}
 
@@ -187,7 +208,7 @@ func (c *Config) Unmarshall(v interface{}, fieldKey GetFieldKey) error {
 	// 		c.UnmarshalGroup(val.Field(i), group, fieldKey)
 	// 	}
 	// }
-	return nil
+	return def
 }
 
 // UnmarshalGroup parse config to fill the struct provided with values from the
@@ -211,51 +232,82 @@ func (c *Config) unmarshalGroup(conf reflect.Value, group string, fieldKey GetFi
 // Fill a single reflected field if it has the conf tag.
 //
 func (c *Config) getField(elem reflect.Value, group, key string, tag reflect.StructTag) {
-	var e error
+	// tagInt makes the call only if there is a valid value.
+	tagInt := func(str string, call func(int)) {
+		if str == "" {
+			return
+		}
+		def, e := strconv.Atoi(str)
+		if !c.testerr(e, group, key, "tag int") {
+			call(def)
+		}
+	}
+
 	switch elem.Interface().(type) {
 
 	case bool:
-		var val bool
-		val, e = c.Bool(group, key)
+		val, e := c.Bool(group, key)
+		c.testerr(e, group, key, "bool value")
 		elem.SetBool(val)
 
-	case int, int32, cdtype.InfoPosition, cdtype.RendererGraphType:
-		var val int
-		val, e = c.Int(group, key)
+	case int, int32, int64, cdtype.InfoPosition, cdtype.RendererGraphType:
+		val, e := c.Int(group, key)
+		c.testerr(e, group, key, "int value")
 		elem.SetInt(int64(val))
 
+	case cdtype.Duration:
+		val, e := c.Int(group, key)
+		c.testerr(e, group, key, "Duration value")
+
+		dur := cdtype.NewDuration(val)
+		e = dur.SetUnit(tag.Get("unit"))
+
+		tagInt(tag.Get("default"), dur.SetDefault)
+		tagInt(tag.Get("min"), dur.SetMin)
+
+		elem.Set(reflect.ValueOf(*dur))
+
 	case string:
-		var val string
-		val, e = c.String(group, key)
+		val, e := c.String(group, key)
+		c.testerr(e, group, key, "string value")
+		if val == "" {
+			val = tag.Get("default")
+		}
 		elem.SetString(val)
 
 	case float64:
-		var val float64
-		val, e = c.Float(group, key)
+		val, e := c.Float(group, key)
+		c.testerr(e, group, key, "float64 value")
 		elem.SetFloat(val)
 
 	case []string:
-		var val string
-		val, e = c.String(group, key)
+		val, e := c.String(group, key)
+		c.testerr(e, group, key, "[]string value")
 		list := strings.Split(strings.TrimRight(val, ";"), ";")
 		if list[len(list)-1] == "" {
 			list = list[:len(list)-1]
 		}
 		elem.Set(reflect.ValueOf(list))
 
-	case cdtype.Shortkey:
-		var val string
-		val, e = c.String(group, key)
-		elem.Set(reflect.ValueOf(cdtype.Shortkey{
+	case *cdtype.Shortkey:
+		val, e := c.String(group, key)
+
+		c.testerr(e, group, key, "Shortkey value")
+		sk := &cdtype.Shortkey{
 			ConfGroup: group,
 			ConfKey:   key,
 			Desc:      tag.Get("desc"),
 			Shortkey:  val,
-		}))
+		}
+		tagInt(tag.Get("action"), func(id int) {
+			sk.ActionID = id
+		})
+		elem.Set(reflect.ValueOf(sk))
+		c.shortkeys = append(c.shortkeys, sk)
 
 	case cdtype.Template:
-		var name string
-		name, e = c.String(group, key)
+		name, e := c.String(group, key)
+		c.testerr(e, group, key, "Template value")
 		if name == "" {
 			name = tag.Get("default")
 		}
@@ -270,17 +322,28 @@ func (c *Config) getField(elem reflect.Value, group, key string, tag reflect.Str
 		}
 
 	default:
-		if elem.Kind().String() == "int" { // Force int like often used as ref types.
-			var val int
-			val, e = c.Int(group, key)
+		if elem.Kind().String() == "int" { // Int like types often used as ref types.
+			val, e := c.Int(group, key)
+			c.testerr(e, group, key, "int like value")
 			elem.SetInt(int64(val))
+
 		} else {
-			e = fmt.Errorf("unknown type: %s", elem.Kind().String())
+			c.adderr(group, key, "unknown type: %s", elem.Kind().String())
 		}
 	}
-	if e != nil {
-		c.Errors = append(c.Errors, fmt.Errorf("Parse conf: %s / %s -- %s", group, key, e.Error()))
+}
+
+func (c *Config) testerr(e error, group, key, msg string, args ...interface{}) bool {
+	if e == nil {
+		return false
 	}
+	c.adderr(group, key, msg+": %s", append(args, e.Error())...)
+	return true
+}
+
+func (c *Config) adderr(group, key, msg string, args ...interface{}) {
+	args = append([]interface{}{group, key}, args...)
+	c.Errors = append(c.Errors, fmt.Errorf("config: %s / %s -- "+msg, args...))
 }
 
 //------------------------------------------------------------[ TEMP ]--

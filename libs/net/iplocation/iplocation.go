@@ -2,9 +2,7 @@
 package iplocation
 
 import (
-	"encoding/json"
-	"io/ioutil"
-	"net/http"
+	"github.com/sqp/godock/libs/net/download"
 )
 
 // URL points to the location of the IP locale info API.
@@ -34,19 +32,8 @@ type Data struct {
 // Get will get the location details based on current IP location.
 //
 func Get() (*Data, error) {
-	response, e := http.Get(URL)
-	if e != nil {
-		return nil, e
-	}
-	defer response.Body.Close()
-
-	result, e := ioutil.ReadAll(response.Body)
-	if e != nil {
-		return nil, e
-	}
-
 	r := &Data{}
-	e = json.Unmarshal(result, &r)
+	e := download.JSON(URL, r)
 	if e != nil {
 		return nil, e
 	}

@@ -15,13 +15,9 @@ const (
 //------------------------------------------------------------------[ CONFIG ]--
 
 type appletConf struct {
-	groupIcon          `group:"Icon"`
-	groupConfiguration `group:"Configuration"`
-	groupActions       `group:"Actions"`
-}
-
-type groupIcon struct {
-	Name string `conf:"name"`
+	cdtype.ConfGroupIconBoth `group:"Icon"`
+	groupConfiguration       `group:"Configuration"`
+	groupActions             `group:"Actions"`
 }
 
 type groupConfiguration struct {
@@ -37,7 +33,7 @@ type groupConfiguration struct {
 	// GraphColorBg   []float64
 	// GraphMix bool
 
-	UpdateDelay int
+	UpdateDelay cdtype.Duration `default:"3"`
 }
 
 type groupActions struct {

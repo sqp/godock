@@ -32,7 +32,8 @@ type Applet struct {
 // NewApplet create a new applet instance.
 //
 func NewApplet() cdtype.AppInstance {
-	app := &Applet{AppBase: cdapplet.New()} // Icon controler and interface to cairo-dock.
+	app := &Applet{}
+	app.AppBase = cdapplet.New(&app.conf) // Icon controler and interface to cairo-dock.
 	log = app.Log()
 	var e error
 	app.pulse, e = NewAppPulse(app)
@@ -44,27 +45,26 @@ func NewApplet() cdtype.AppInstance {
 
 // Init load user configuration if needed and initialise applet.
 //
-func (app *Applet) Init(loadConf bool) {
-	app.LoadConfig(loadConf, &app.conf) // Load config will crash if fail. Expected.
-
+func (app *Applet) Init(def *cdtype.Defaults, confLoaded bool) {
+	// Try to get a mixer command.
 	if app.conf.MixerCommand == "" {
 		app.conf.MixerCommand = findMixer()
 	}
 
-	app.SetDefaults(cdtype.Defaults{
-		Icon:  app.conf.Icon,
-		Label: app.conf.Name,
-		Commands: cdtype.Commands{
-			cmdMixer: cdtype.NewCommand(app.conf.LeftAction == 1, app.conf.MixerCommand, app.conf.MixerClass)},
-		ShortkeyActions: []cdtype.ShortkeyAction{
-			{app.openMixer, app.conf.MixerShortkey},
-		},
-		Debug: app.conf.Debug})
+	// Defaults
+	def.Commands[cmdMixer] = cdtype.NewCommand(app.conf.LeftAction == 1, app.conf.MixerCommand, app.conf.MixerClass)
 
-	// pulse config.
+	// Shortkeys.
+	app.conf.MixerShortkey.Call = app.openMixer
+	app.conf.ShortkeyAllMute.CallE = app.pulse.ToggleMute
+	app.conf.ShortkeyAllIncrease.Call = app.globalVolumeIncrease
+	app.conf.ShortkeyAllDecrease.Call = app.globalVolumeDecrease
+
+	// Config pulse.
 	app.pulse.StreamIcons = app.conf.StreamIcons
 	app.RemoveSubIcons()
 
+	// Volume renderer.
 	app.DataRenderer().Remove() // Remove renderer when settings changed to be sure.
 	switch app.conf.DisplayValues {
 	case 0:
@@ -74,6 +74,7 @@ func (app *Applet) Init(loadConf bool) {
 		app.DataRenderer().Gauge(1, app.conf.GaugeName)
 	}
 
+	// Text renderer.
 	switch app.conf.DisplayText {
 	case 0:
 		app.pulse.showText = func(string) error { return nil }
@@ -83,8 +84,9 @@ func (app *Applet) Init(loadConf bool) {
 		app.pulse.showText = app.SetLabel
 	}
 
-	// find sound card and display current volume, and maybe show subicons.
-	log.Err(app.pulse.Init(), "pulseaudio init")
+	// Find sound card and display current volume, and maybe show subicons.
+	e := app.pulse.Init()
+	app.Log().Err(e, "pulseaudio init")
 }
 
 //
@@ -113,9 +115,11 @@ func (app *Applet) OnMiddleClick() {
 // OnScroll tries to launch the configured action (mouse wheel).
 //
 func (app *Applet) OnScroll(up bool) {
-	delta := int64(ternary.Int(up, app.conf.VolumeStep, -app.conf.VolumeStep))
-	e := app.pulse.SetVolumeDelta(delta)
-	log.Err(e, "SetVolumeDelta")
+	if up {
+		app.globalVolumeIncrease()
+	} else {
+		app.globalVolumeDecrease()
+	}
 }
 
 // OnBuildMenu fills the menu with device actions: mute, mixer, select device (right click).
@@ -147,7 +151,10 @@ func (app *Applet) OnSubScroll(icon string, up bool) {
 	if log.Err(e) {
 		return
 	}
-	delta := int64(ternary.Int(up, app.conf.VolumeStep, -app.conf.VolumeStep))
+	delta := app.conf.VolumeStep
+	if !up {
+		delta = -delta
+	}
 	log.Err(dev.Set("Volume", VolumeDelta(values, delta)))
 }
 
@@ -204,6 +211,16 @@ func (app *Applet) openMixer() {
 	if app.conf.MixerCommand != "" {
 		app.Command().Launch(cmdMixer)
 	}
+}
+
+func (app *Applet) globalVolumeIncrease() {
+	e := app.pulse.SetVolumeDelta(app.conf.VolumeStep)
+	app.Log().Err(e, "SetVolumeDelta")
+}
+
+func (app *Applet) globalVolumeDecrease() {
+	e := app.pulse.SetVolumeDelta(-app.conf.VolumeStep)
+	app.Log().Err(e, "SetVolumeDelta")
 }
 
 //

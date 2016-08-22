@@ -38,8 +38,8 @@ func TestDockbus(t *testing.T) {
 	assert.NoError(t, e, "DockProperties")
 	assert.NotEmpty(t, props, "DockProperties")
 
-	applets := dockbus.ListKnownApplets()
-	if assert.NotEmpty(t, applets, "ListKnownApplets") {
+	applets, e := dockbus.ListKnownApplets()
+	if assert.NoError(t, e, "DockProperties") && assert.NotEmpty(t, applets, "ListKnownApplets") {
 		app, ok := applets["clock"]
 		if assert.True(t, ok, "ListKnownApplets field clock") {
 			assert.Equal(t, app.DisplayedName, "clock", "ListKnownApplets name clock")

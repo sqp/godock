@@ -54,13 +54,15 @@ func trans(str string) string { return str }
 //-------------------------------------------------------------------[ CONST ]--
 
 const (
-	minUpdateDelay     = 5         // in minutes.
-	defaultUpdateDelay = 15        // in minutes.
-	defaultTheme       = "Classic" // dir located in applet "themes" subdir.
+	defaultTheme = "Classic" // dir located in applet "themes" subdir.
 
-	IconWork    = "EmblemWork.svg" // file located in applet "img" subdir.
+	// IconWork is the name of icon displayed during polling.
+	IconWork = "EmblemWork.svg" // file located in applet "img" subdir.
+
+	// IconMissing is the name of the icon displayed when a weather icon is not found.
 	IconMissing = "default-icon"
 
+	// EmblemWork is the position of the emblem displayed during polling.
 	EmblemWork = cdtype.EmblemTopLeft
 )
 
@@ -74,7 +76,7 @@ type appletConf struct {
 }
 
 type groupConfig struct {
-	UpdateDelay        int
+	UpdateDelay        cdtype.Duration `unit:"minute" default:"15" min:"5"`
 	DialogDuration     int
 	DisplayNights      bool
 	DisplayTemperature bool
@@ -83,11 +85,11 @@ type groupConfig struct {
 }
 
 type groupActions struct {
-	ShortkeyShowCurrent  cdtype.Shortkey `desc:"Show current conditions dialog"`
-	ShortkeyShowTomorrow cdtype.Shortkey `desc:"Show conditions for tomorrow"`
-	ShortkeyOpenWeb      cdtype.Shortkey `desc:"Open webpage"`
-	ShortkeyRecheck      cdtype.Shortkey `desc:"Recheck now"`
-	ShortkeySetLocation  cdtype.Shortkey `desc:"Set location"`
+	ShortkeyShowCurrent  *cdtype.Shortkey `action:"1" desc:"Show current conditions dialog"`
+	ShortkeyShowTomorrow *cdtype.Shortkey `action:"2" desc:"Show conditions for tomorrow"`
+	ShortkeyOpenWeb      *cdtype.Shortkey `action:"3" desc:"Open webpage"`
+	ShortkeyRecheck      *cdtype.Shortkey `action:"4" desc:"Recheck now"`
+	ShortkeySetLocation  *cdtype.Shortkey `action:"5" desc:"Set location"`
 }
 
 //
@@ -105,11 +107,8 @@ type Applet struct {
 // NewApplet create a new applet instance.
 //
 func NewApplet() cdtype.AppInstance {
-	app := &Applet{
-		AppBase: cdapplet.New(), // Icon controler and interface to cairo-dock.
-		weather: weather.New(weather.BackendWeatherCom),
-	}
-	app.defineActions()
+	app := &Applet{weather: weather.New()}
+	app.AppBase = cdapplet.New(&app.conf, app.defineActions()...)
 
 	app.Poller().Add(app.Check)
 	app.Poller().SetPreCheck(func() { app.SetEmblem(app.FileLocation("img", IconWork), EmblemWork) })
@@ -120,42 +119,24 @@ func NewApplet() cdtype.AppInstance {
 
 // Init load user configuration if needed and initialise applet.
 //
-func (app *Applet) Init(loadConf bool) {
-	app.LoadConfig(loadConf, &app.conf) // Load config will crash if fail. Expected.
-
-	app.weather.Clear()
+func (app *Applet) Init(def *cdtype.Defaults, confLoaded bool) {
+	// Defaults.
+	def.PollerInterval = app.conf.UpdateDelay.Value()
 
 	// Share the conf with the weather service.
 	app.weather.SetConfig(&app.conf.Config)
+	app.weather.Clear()
 
 	// if app.conf.WeatherTheme == "" {
 	app.conf.WeatherTheme = defaultTheme
 	// }
-	app.conf.WeatherTheme = app.ThemePath(app.conf.WeatherTheme)
 
-	interval := cdtype.PollerInterval(app.conf.UpdateDelay*60, defaultUpdateDelay*60)
-	if interval < minUpdateDelay*60 {
-		interval = minUpdateDelay * 60
-	}
+	// Set theme full path.
+	app.conf.WeatherTheme = app.ThemePath(app.conf.WeatherTheme)
 
 	if app.conf.LocationCode == "" {
 		app.DetectLocation()
 	}
-
-	// Set defaults to dock icon: display and controls.
-	app.SetDefaults(cdtype.Defaults{
-		Label:          app.conf.Name,
-		Icon:           app.conf.Icon,
-		PollerInterval: interval,
-		ShortkeyActions: []cdtype.ShortkeyAction{
-			{ActionShowCurrent, app.conf.ShortkeyShowCurrent},
-			{ActionShowTomorrow, app.conf.ShortkeyShowTomorrow},
-			{ActionOpenWebpage, app.conf.ShortkeyOpenWeb},
-			{ActionRecheckNow, app.conf.ShortkeyRecheck},
-			{ActionSetLocation, app.conf.ShortkeySetLocation},
-		},
-		Debug: app.conf.Debug,
-	})
 }
 
 //
@@ -208,49 +189,45 @@ const (
 // Define applet actions.
 // Actions order in this list must match the order of defined actions numbers.
 //
-func (app *Applet) defineActions() {
-	// app.Action().SetMax(1)
-	app.Action().Add(
-		&cdtype.Action{
+func (app *Applet) defineActions() []*cdtype.Action {
+	return []*cdtype.Action{
+		{
 			ID:   ActionNone,
 			Menu: cdtype.MenuSeparator,
-		},
-		&cdtype.Action{
+		}, {
 			ID:   ActionShowCurrent,
 			Name: "Show current conditions",
 			Icon: "dialog-information",
 			Call: app.DialogWeatherCurrent,
-		},
-		&cdtype.Action{
+		}, {
 			ID:   ActionShowTomorrow,
 			Name: "Show conditions for tomorrow",
 			Icon: "dialog-information",
 			Call: func() { app.DialogWeatherForecast("1") },
-		},
-		&cdtype.Action{
+		}, {
 			ID:   ActionOpenWebpage,
 			Name: "Open webpage",
 			Icon: "go-jump",
 			Call: func() { app.OpenWeb(0) },
-		},
-		&cdtype.Action{
+		}, {
 			ID:   ActionRecheckNow,
 			Name: "Recheck now",
 			Icon: "view-refresh",
 			Call: app.Check,
-		},
-		&cdtype.Action{
+		}, {
 			ID:   ActionSetLocation,
 			Name: "Set location",
 			Icon: "user-home",
 			Call: func() { app.AskLocationText("") },
 		},
-	)
+	}
 }
 
 //
 //-----------------------------------------------------------------[ WEATHER ]--
 
+// Check gets and displays updated weather informations.
+//
 func (app *Applet) Check() {
 	var (
 		fail  int
@@ -273,6 +250,8 @@ func (app *Applet) Check() {
 	}
 }
 
+// ThemePath gives the full path to the weather theme dir.
+//
 func (app *Applet) ThemePath(themeName string) string {
 	return app.FileLocation("themes", themeName)
 	// return filepath.Join(pathtoDockData/plug-ins/weather/themes, themeName)
@@ -287,6 +266,8 @@ func (app *Applet) WeatherIcon(icon string) string {
 	return filepath.Join(app.conf.WeatherTheme, icon+".png")
 }
 
+// OpenWeb opens a web page on the provider site for the given day.
+//
 func (app *Applet) OpenWeb(numDay int) {
 	app.Log().ExecAsync(cdglobal.CmdOpen, app.weather.WebpageURL(numDay))
 }
@@ -297,10 +278,11 @@ func (app *Applet) OpenWeb(numDay int) {
 func (app *Applet) SetLocationCode(locationCode, locationName string) {
 	// Reset weather data from previous location.
 	app.weather.Clear()
+	defer app.Poller().Restart()
 
 	app.conf.LocationCode = locationCode
 
-	//  Autodetect location if missing. Won't be saved.
+	//  Autodetect location if missing.
 	if locationCode == "" {
 		app.DetectLocation()
 	}
@@ -313,14 +295,13 @@ func (app *Applet) SetLocationCode(locationCode, locationName string) {
 	cu.Set("Configuration", "LocationCode", locationCode)
 	cu.Set("Configuration", "LocationName", locationName)
 	e = cu.Save()
-	if app.Log().Err(e, "UpdateConfig") {
-		return
+	if !app.Log().Err(e, "UpdateConfig") {
+		app.Log().Info("Updated LocationID", locationCode)
 	}
-
-	app.Log().Info("Updated LocationID", locationCode)
-	app.Poller().Restart()
 }
 
+// DetectLocation tries to detect your location from IP and get the matching code.
+//
 func (app *Applet) DetectLocation() {
 	loc, e := iplocation.Get()
 	if app.Log().Err(e, "autodetect location") {
@@ -447,17 +428,17 @@ func (app *Applet) DialogWeatherForecast(ref string) {
 }
 
 // AskLocationText asks the user his location name.
-// If confirmed, continues the selection process
+//
+// If confirmed, continues the selection process.
+// A default text may be used as argument.
 //
 func (app *Applet) AskLocationText(deftxt string) {
+	msg := trans("Enter your location:") + "\n\n" +
+		trans("Leave empty to autodetect.")
+
 	e := app.PopupDialog(cdtype.DialogData{
-		Message: trans("Enter your location:") + "\n\n" +
-			trans("Leave empty to autodetect."),
-		Widget: cdtype.DialogWidgetText{
-			InitialValue: deftxt,
-			Editable:     true,
-			Visible:      true,
-		},
+		Message:  msg,
+		Widget:   cdtype.DialogWidgetText{InitialValue: deftxt},
 		Buttons:  "ok;cancel",
 		Callback: cdtype.DialogCallbackValidString(app.AskLocationConfirm),
 	})
@@ -494,7 +475,7 @@ func (app *Applet) AskLocationConfirm(locstr string) {
 	e = app.PopupDialog(cdtype.DialogData{
 		Message: trans("Select your location:"),
 		Widget: cdtype.DialogWidgetList{
-			Values: strings.Join(ids, ";"),
+			Values: ids,
 		},
 		Buttons: "ok;cancel",
 		Callback: cdtype.DialogCallbackValidInt(func(id int) {

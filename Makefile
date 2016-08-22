@@ -82,6 +82,8 @@ install-common:
 
 	install -Dm644 "$(GOPATH)/src/$(SOURCE)/LICENSE"  "$(PKGDIR)/usr/share/licenses/$(TARGET)/LICENSE"
 
+	install -D "$(GOPATH)/src/$(SOURCE)/cmd/$(TARGET)/data/upload.nemo_action"  "$(PKGDIR)/usr/share/nemo/actions/cdc-upload.nemo_action"
+
 	gzip -9 < $(GOPATH)/src/$(SOURCE)/cmd/$(TARGET)/data/man.1 > $(GOPATH)/src/$(SOURCE)/cmd/$(TARGET)/data/man.1.gz
 	install -pD $(GOPATH)/src/$(SOURCE)/cmd/$(TARGET)/data/man.1.gz $(PKGDIR)/usr/share/man/man1/cdc.1.gz
 

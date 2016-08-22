@@ -2,10 +2,6 @@ package DiskFree
 
 import "github.com/sqp/godock/libs/cdtype"
 
-const (
-	defaultUpdateDelay = 60 // every minute.
-)
-
 // Commands references.
 const (
 	cmdLeft = iota
@@ -15,13 +11,9 @@ const (
 //------------------------------------------------------------------[ CONFIG ]--
 
 type appletConf struct {
-	groupIcon          `group:"Icon"`
-	groupConfiguration `group:"Configuration"`
-	groupActions       `group:"Actions"`
-}
-
-type groupIcon struct {
-	Name string `conf:"name"`
+	cdtype.ConfGroupIconBoth `group:"Icon"`
+	groupConfiguration       `group:"Configuration"`
+	groupActions             `group:"Actions"`
 }
 
 type groupConfiguration struct {
@@ -29,7 +21,7 @@ type groupConfiguration struct {
 
 	GaugeName string
 
-	UpdateDelay int
+	UpdateDelay cdtype.Duration `default:"60"`
 	AutoDetect  bool
 	Partitions  []string
 }
@@ -40,7 +32,4 @@ type groupActions struct {
 	LeftClass     string
 	MiddleAction  int
 	MiddleCommand string
-
-	// Still hidden.
-	Debug bool
 }

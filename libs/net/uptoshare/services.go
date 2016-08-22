@@ -1,352 +1,454 @@
 package uptoshare
 
 import (
-	"net/url"
+	"github.com/sqp/godock/libs/net/upload"
+
+	"encoding/json"
+	"path/filepath"
 	"strings"
 )
 
+var (
+	backendImage = map[string]Sender{
+		"Imagebam.com":  ImagebamCom,
+		"Imagebin.ca":   ImageBinCa,
+		"ImageShack.us": ImageShackUs,
+		"Imgclick.net":  ImgclickNet,
+		"Imgland.net":   ImglandNet,
+		"Imgur.com":     ImgurCom, // Broken for me. Left for tests.
+		// "pix.Toile-Libre.org": PixToileLibreOrg, // Need curl. Disabled unless someone really asks for it.
+		"Postimage.org": PostimageOrg,
+	}
+
+	backendText = map[string]Sender{
+		"Codepad.org":          CodePadOrg,
+		"Pastebin.com":         PasteBinCom,
+		"Pastebin.mozilla.org": PasteBinMozillaOrg,
+		"Paste-ubuntu.com":     PasteUbuntuCom,
+		"Play.golang.org":      PlayGolangOrg,
+	}
+
+	backendVideo = map[string]Sender{
+		"VideoBin.org": VideoBinOrg,
+	}
+
+	backendFile = map[string]Sender{
+		// "dl.free.fr":  DlFreeFr, // Need curl. Disabled unless someone really asks for it.
+		"Filebin.ca":      FileBinCa,
+		"Freemov.top":     FreemovTop,
+		"Leopard.hosting": LeopardHosting,
+		"Pixeldra.in":     PixeldraIn,
+		"Transfer.sh":     TransferSh,
+	}
+)
+
 //
-//-----------------------------------------------------------[ TEXT BACKENDS ]--
+//===========================================================[ TEXT BACKENDS ]==
 
 //
 //------------------------------------------------------------[ PASTEBIN.COM ]--
 
-// PasteBinCom settings.
-const (
-	// URLPasteBinCom is the POST url for that service.
-	URLPasteBinCom    = "http://pastebin.com/api/api_post.php"
-	PasteBinComFormat = "text"                             // pastebin is only used for text.
-	PasteBinComExpire = "1M"                               // 1 month
-	PasteBinComKey    = "4dacb211338b25bfad20bc6d4358e555" // if you re-use this code, please make your own key !
-	PasteBinComOption = "paste"
-)
-
-// PasteBinCom uploads text data to this website.
+// PasteBinCom implements a Text Sender to the pastebin.com website.
 //
-func PasteBinCom(text, cLocalDir string, bAnonymous bool, limitRate int) Links { //, gchar **cResultUrls, GError **pError)
-	values := make(url.Values)
-	values.Set("api_option", PasteBinComOption)
-	values.Set("api_user_key", "")
-	values.Set("api_paste_private", "1") // bAnonymous ? "1" : "0", // unlisted or public
-	// values.Set("api_paste_name", ) // bAnonymous ? "" : g_getenv ("USER"),
-	values.Set("api_paste_expire_date", PasteBinComExpire)
-	values.Set("api_paste_format", PasteBinComFormat)
-	values.Set("api_dev_key", PasteBinComKey)
-
-	values.Set("api_paste_code", text)
-
-	link, e := postSimple(URLPasteBinCom, values)
-	if e != nil {
-		return linkErr(e, "Pastebin")
-	}
-
-	if !strings.HasPrefix(link, "http://") {
-		return linkWarn("Pastebin bad format: " + link)
-	}
-
-	return NewLinks().Add("link", link)
+var PasteBinCom = &Host{
+	Poster: &upload.AsPostFormHTTP{
+		UpBase:     upload.NewBaseURL("http://pastebin.com/api/api_post.php"),
+		ContentRef: "api_paste_code",
+		Options: map[string]string{
+			"api_option":            "paste",
+			"api_paste_private":     "1",                                // bAnonymous ? "1" : "0", // unlisted or public
+			"api_paste_expire_date": "1M",                               // 1 month
+			"api_paste_format":      "text",                             // pastebin is only used for text.
+			"api_dev_key":           "4dacb211338b25bfad20bc6d4358e555", // if you re-use this code, please make your own key !
+		},
+		PrePost: func(hp *upload.AsPostFormHTTP, content *string) error {
+			hp.Options["api_user_key"] = ""
+			// "api_paste_name": , // bAnonymous ? "" : g_getenv ("USER"),
+			return nil
+		},
+	},
+	Parse: func(h *Host, data string) Links {
+		if !strings.HasPrefix(data, "http://") {
+			return linkWarn(h.Name() + ": bad format: " + data)
+		}
+		return NewLinks(data)
+	},
 }
 
 //
 //--------------------------------------------------------[ PASTE.UBUNTU.COM ]--
 
-// PasteUbuntuCom settings.
-const (
-	URLPasteUbuntuCom    = "http://paste.ubuntu.com"
-	PasteUbuntuComFormat = "text"   // only used for text.
-	PasteUbuntuComSubmit = "Paste!" // button.
-)
-
-// PasteUbuntuCom uploads text data to this website.
+// PasteUbuntuCom implements a Text Sender to the paste.ubuntu.com website.
 //
-func PasteUbuntuCom(text, cLocalDir string, bAnonymous bool, limitRate int) Links {
-	values := make(url.Values)
-	values.Set("syntax", PasteUbuntuComFormat)
-	values.Set("submit", PasteUbuntuComSubmit)
-	values.Set("poster", "Anonymous") // bAnonymous ? "" : g_getenv ("USER"),
-
-	values.Set("content", text)
-
-	data, e := postSimple(URLPasteUbuntuCom, values)
-	if e != nil {
-		return linkErr(e, "PasteUbuntuCom")
-	}
-
-	ID := findPrefix(data, `class="pturl" href="/`, "/plain/")
-	if ID == "" {
-		return linkWarn("PasteUbuntuCom: parse failed\n" + data)
-	}
-
-	return NewLinks().Add("link", URLPasteUbuntuCom+"/"+ID)
+var PasteUbuntuCom = &Host{
+	Poster: &upload.AsPostFormHTTP{
+		UpBase:     upload.NewBaseURL("http://paste.ubuntu.com"),
+		ContentRef: "content",
+		Options: map[string]string{
+			"syntax": "text",
+			"submit": "Paste!",
+		},
+		PrePost: func(hp *upload.AsPostFormHTTP, content *string) error {
+			hp.Options["poster"] = "Anonymous" // bAnonymous ? "" : g_getenv ("USER"),
+			return nil
+		},
+	},
+	Parse: func(h *Host, data string) Links {
+		ID := findPrefix(data, `class="pturl" href="/`, "/plain/")
+		if ID == "" {
+			return linkWarn(h.Name() + ": parse failed\n" + data)
+		}
+		return NewLinks(h.GetURL("") + "/" + ID)
+	},
 }
 
 //
 //----------------------------------------------------[ PASTEBIN.MOZILLA.ORG ]--
 
-// PasteBinMozillaOrg settings.
-const (
-	URLPasteBinMozillaOrg    = "http://pastebin.mozilla.org"
-	PasteBinMozillaOrgFormat = "text" // only used for text.
-	PasteBinMozillaOrgExpiry = "d"    // a day?
-	PasteBinMozillaOrgSubmit = "Send" // button.
-)
-
-// PasteBinMozillaOrg uploads text data to this website.
+// PasteBinMozillaOrg implements a Text Sender to the pastebin.mozilla.org website.
 //
-func PasteBinMozillaOrg(text, cLocalDir string, bAnonymous bool, limitRate int) Links {
-	values := make(url.Values)
-	values.Set("format", PasteBinMozillaOrgFormat)
-	values.Set("paste", PasteBinMozillaOrgSubmit)
-	values.Set("expiry", PasteBinMozillaOrgExpiry)
-	values.Set("remember", "0")
-	values.Set("parent_pid", "")
-	values.Set("poster", "Anonymous") // bAnonymous ? "" : g_getenv ("USER"),
-
-	values.Set("code2", text)
-
-	data, e := postSimple(URLPasteBinMozillaOrg, values)
-	if e != nil {
-		return linkErr(e, "PasteBinMozillaOrg")
-	}
-
-	ID := findLink(data, "/?dl=", `"`)
-	if ID == "" {
-		return linkWarn("PasteBinMozillaOrg: parse failed\n" + data)
-	}
-
-	list := NewLinks()
-	list.Add("link", URLPasteBinMozillaOrg+ID)
-	list.Add("dl", URLPasteBinMozillaOrg+"/"+ID[5:])
-	return list
+var PasteBinMozillaOrg = &Host{
+	Poster: &upload.AsPostFormHTTP{
+		UpBase:     upload.NewBaseURL("https://pastebin.mozilla.org"),
+		ContentRef: "code2",
+		Options: map[string]string{
+			"format":     "text",
+			"paste":      "Send",
+			"expiry":     "d",
+			"remember":   "0",
+			"parent_pid": "",
+		},
+		PrePost: func(hp *upload.AsPostFormHTTP, content *string) error {
+			hp.Options["poster"] = "Anonymous" // bAnonymous ? "" : g_getenv ("USER"),
+			return nil
+		},
+	},
+	Parse: func(h *Host, data string) Links {
+		ID := findLink(data, "/?dl=", `"`)
+		if ID == "" {
+			return linkWarn(h.Name() + ": parse failed\n" + data)
+		}
+		uri := h.GetURL("")
+		return NewLinks(uri+ID).
+			Add("dl", uri+"/"+ID[5:])
+	},
 }
 
 //
 //-------------------------------------------------------------[ CODEPAD.ORG ]--
 
-// CodePadOrg settings
-const (
-	URLCodePadOrg    = "http://codepad.org"
-	CodePadOrgFormat = "Plain Text" // only used for text.
-	CodePadOrgSubmit = "Submit"     // button.
-)
-
-// CodePadOrg uploads text data to this website.
+// CodePadOrg implements a Text Sender to the codepad.org website.
 //
-func CodePadOrg(text, cLocalDir string, bAnonymous bool, limitRate int) Links {
-	values := make(url.Values)
-	values.Set("lang", CodePadOrgFormat)
-	values.Set("submit", CodePadOrgSubmit)
-
-	values.Set("code", text)
-
-	data, e := postSimple(URLCodePadOrg, values)
-	if e != nil {
-		return linkErr(e, "CodePadOrg")
-	}
-
-	ID := findLink(string(data), "http://codepad.org/", "\"")
-	if ID == "" {
-		return linkWarn("CodePadOrg: parse failed") // \n" + data
-	}
-
-	return Links{
-		"link": ID,
-		"dl":   ID + "/raw.txt",
-		"fork": ID + "/fork",
-	}
+var CodePadOrg = &Host{
+	Poster: upload.NewPostForm("http://codepad.org/",
+		"code",
+		"lang", "Plain Text",
+		"submit", "Submit",
+	),
+	Parse: func(h *Host, data string) Links {
+		uri := h.GetURL("")
+		ID := findLink(string(data), uri, "\"")
+		if ID == "" {
+			return linkWarn(h.Name() + ": parse failed") // \n" + data
+		}
+		return NewLinks(ID).
+			Add("dl", ID+"/raw.txt").
+			Add("fork", ID+"/fork")
+	},
 }
 
 //
-//----------------------------------------------------------[ IMAGE BACKENDS ]--
+//---------------------------------------------------------[ PLAY.GOLANG.ORG ]--
+
+// PlayGolangOrg implements a Text Sender to the play.golang.org website.
+//
+var PlayGolangOrg = &Host{
+	Poster: upload.NewRequester("POST", "https://play.golang.org/share"),
+	Parse: func(h *Host, data string) Links {
+		return NewLinks("https://play.golang.org/p/" + data)
+	},
+}
+
+//
+//==========================================================[ IMAGE BACKENDS ]==
+
+//
+//------------------------------------------------------------[ IMAGEBAM.COM ]--
+
+// ImagebamCom implements an Image Sender to the imagebam.com website.
+//
+var ImagebamCom = &Host{
+	Poster: upload.NewMultiparter("http://www.imagebam.com/sys/upload/save",
+		"file[]",
+		"content_type", "1", // 1 == NSFW            Options: 0, 1.
+		"thumb_size", "250", // 250x250.             Options: 150, 180, 250, 300, 350.
+		"thumb_aspect_ratio", "resize", // resize= keep ratio.  Options: resize, crop.
+		"thumb_file_type", "jpg", //                      Options: jpg, gif.
+	),
+	Parse: func(h *Host, data string) Links {
+		return NewLinks(findPrefix(data, "[URL=", "][IMG]")).
+			Add("del", findLink(data, "http://www.imagebam.com/remove/", "'></div>"))
+	},
+}
 
 //
 //-------------------------------------------------------------[ IMAGEBIN.CA ]--
 
-// ImageBinCa settings.
-const URLImageBinCa = "http://imagebin.ca/upload.php"
-
-// ImageBinCa uploads an image file to this website.
+// ImageBinCa implements an Image Sender to the imagebin.ca website.
 //
-func ImageBinCa(filepath, cLocalDir string, bAnonymous bool, limitRate int) Links {
-	opts := []string{"private=true"}
-	data, e := curlExec(URLImageBinCa, limitRate, "file", filepath, opts)
-	if e != nil {
-		return linkErr(e, "ImageBinCa")
-	}
-
-	ID := findLink(data, "http://", "\n")
-	if ID == "" {
-		return linkWarn("ImageBinCa: parse failed")
-	}
-
-	return Links{
-		"link": ID,
-		"page": strings.Replace(ID, "http://ibin.co/", "http://imagebin.ca/v/", 1)}
+var ImageBinCa = &Host{
+	Poster: upload.NewMultiparter("https://imagebin.ca/upload.php",
+		"file",
+		"private", "true",
+	),
+	Parse: func(h *Host, data string) Links {
+		ID := findPrefix(data, "url:", "\n")
+		if ID == "" {
+			return linkWarn(h.Name() + ": parse failed")
+		}
+		return NewLinks(ID).
+			Add("page", strings.Replace(ID, "http://ibin.co/", "http://imagebin.ca/v/", 1))
+	},
 }
 
 //
 //-----------------------------------------------------------[ IMAGESHACK.US ]--
 
-// ImageShackUs settings.
-const (
-	URLImageShackUs = "http://imageshack.us/upload_api.php"
-	ImageShackUsKey = "ABDGHOQS7d32e206ee33ef8cefb208d55dd030a6"
-)
-
-// ImageShackUs uploads an image file to this website.
+// ImageShackUs implements an Image Sender to the imageshack.us website.
 //
-func ImageShackUs(filepath, cLocalDir string, bAnonymous bool, limitRate int) Links {
-	opts := []string{
-		"key=" + ImageShackUsKey,
-		"public=no",
-		"xml=yes",
-	}
-	data, e := curlExec(URLImageShackUs, limitRate, "fileupload", filepath, opts)
-	if e != nil {
-		return linkErr(e, "ImageShackUs")
-	}
+var ImageShackUs = &Host{
+	Poster: upload.NewMultiparter("http://imageshack.us/upload_api.php",
+		"fileupload",
+		"key", "ABDGHOQS7d32e206ee33ef8cefb208d55dd030a6",
+		"public", "no",
+		"xml", "yes",
+	),
+	Parse: func(h *Host, data string) Links {
+		return NewLinks(findPrefix(data, "<image_link>", "</image_link>")).
+			Add("thumb", findPrefix(data, "<thumb_link>", "</thumb_link>"))
+	},
+}
 
-	list := NewLinks()
-	list.Add("link", findPrefix(data, "<image_link>", "</image_link>"))
-	list.Add("thumb", findPrefix(data, "<thumb_link>", "</thumb_link>"))
-	return list
+//
+//------------------------------------------------------------[ FREEIMAGEHOSTING.NET ]--
+
+// ImglandNet implements an Image Sender to the imagebam.com website.
+//
+var ImglandNet = &Host{
+	Poster: upload.NewMultiparter("https://imgland.net/process.php?subAPI=mainsite",
+		"imagefile[]",
+		"usubmit", "true",
+	),
+	Parse: func(h *Host, data string) Links {
+		ret := &imglandNetJSON{}
+		e := json.Unmarshal([]byte(data), ret)
+		if e != nil {
+			return linkErr(e, h.Name())
+		}
+		return NewLinks(ret.URL)
+	},
+}
+
+type imglandNetJSON struct {
+	URL string `json:"url"`
+}
+
+//
+//------------------------------------------------------------[ IMGCLICK.NET ]--
+
+// ImgclickNet implements an Image Sender to the imgclick.net website.
+//
+var ImgclickNet = &Host{
+	Poster: upload.NewMultiparter("http://main.imgclick.net/cgi-bin/upload_file.cgi?upload_id=",
+		"file_0",
+		"upload_type", "file",
+	),
+	Parse: func(h *Host, data string) Links {
+		return NewLinks(findLink(data, "http://main.imgclick.net/i/", "[/IMG][/URL]"))
+	},
 }
 
 //
 //---------------------------------------------------------------[ IMGUR.COM ]--
 
-// ImgurComKey settings.
-const (
-	URLImgurCom = "http://imgur.com/api/upload.xml"
-	ImgurComKey = "b3625162d3418ac51a9ee805b1840452"
-)
-
-// ImgurCom uploads an image file to this website.
+// ImgurCom implements an Image Sender to the imgur.com website.
 //
-func ImgurCom(filepath, cLocalDir string, bAnonymous bool, limitRate int) Links {
-	opts := []string{"key=" + ImgurComKey}
-	data, e := curlExec(URLImgurCom, limitRate, "image", filepath, opts)
-	if e != nil {
-		return linkErr(e, "ImgurCom")
-	}
-
-	list := NewLinks()
-	list.Add("link", findPrefix(data, "<original_image>", "</original_image>"))
-	list.Add("thumb", findPrefix(data, "<small_thumbnail>", "</small_thumbnail>"))
-	list.Add("large", findPrefix(data, "<large_thumbnail>", "</large_thumbnail>"))
-	list.Add("page", findPrefix(data, "<imgur_page>", "</imgur_page>"))
-	list.Add("del", findPrefix(data, "<delete_page>", "</delete_page>"))
-
-	return list
-}
-
-//
-//-----------------------------------------------------[ PIX.TOILE-LIBRE.ORG ]--
-
-// PixToileLibreOrg settings.
-const URLPixToileLibreOrg = "http://pix.toile-libre.org/?action=upload"
-
-// PixToileLibreOrg uploads an image file to this website.
-//
-func PixToileLibreOrg(filepath, cLocalDir string, bAnonymous bool, limitRate int) Links {
-	data, e := curlExecArgs("-L",
-		"-F", "MAX_FILE_SIZE=15360000",
-		"-F", "img=@"+filepath+";type=image/png;filename="+filepath,
-		URLPixToileLibreOrg)
-
-	if e != nil {
-		return linkErr(e, "PixToileLibreOrg")
-	}
-
-	return Links{
-		"link":   findLink(data, "http://pix.toile-libre.org/upload/original", "</textarea>"),
-		"thumb":  findLink(data, "http://pix.toile-libre.org/upload/thumb", "[/img]"),
-		"medium": findLink(data, "http://pix.toile-libre.org/upload/img", "[/img]")}
+var ImgurCom = &Host{
+	Poster: upload.NewMultiparter("http://imgur.com/api/upload.xml",
+		"image",
+		"key", "b3625162d3418ac51a9ee805b1840452",
+	),
+	Parse: func(h *Host, data string) Links {
+		println(data)
+		return NewLinks(findPrefix(data, "<original_image>", "</original_image>")).
+			Add("thumb", findPrefix(data, "<small_thumbnail>", "</small_thumbnail>")).
+			Add("large", findPrefix(data, "<large_thumbnail>", "</large_thumbnail>")).
+			Add("page", findPrefix(data, "<imgur_page>", "</imgur_page>")).
+			Add("del", findPrefix(data, "<delete_page>", "</delete_page>"))
+	},
 }
 
 //
 //-----------------------------------------------------------[ POSTIMAGE.ORG ]--
 
-// PostimageOrg settings.
-const URLPostimageOrg = "http://postimage.org/"
-
-// PostimageOrg uploads an image file to this website.
+// PostimageOrg implements an Image Sender to the postimage.org website.
 //
-func PostimageOrg(filepath, cLocalDir string, bAnonymous bool, limitRate int) Links {
-	opts := []string{"adult=no"}
-	data, e := curlExec(URLPostimageOrg, limitRate, "upload[]", filepath, opts)
-	if e != nil {
-		return linkErr(e, "PostimageOrg")
-	}
-
-	list := NewLinks()
-	list.Add("link", findLink(data, "http://postimg.org/image/", "' "))
-	list.Add("thumb", findPrefix(data, "[img]", "[/img]"))
-	list.Add("del", findLink(data, "http://postimg.org/delete/", "<"))
-	return list
+var PostimageOrg = &Host{
+	Poster: upload.NewMultiparter("https://old.postimage.org/",
+		"upload[]",
+		"adult", "no",
+	),
+	Parse: func(h *Host, data string) Links {
+		return NewLinks(findLink(data, "http://postimg.org/image/", "' ")).
+			Add("thumb", findPrefix(data, "[img]", "[/img]")).
+			Add("del", findLink(data, "http://postimg.org/delete/", "<"))
+	},
 }
 
 //
-//---------------------------------------------------------------[ UPPIX.COM ]--
-
-// UppixCom settings.
-const URLUppixCom = "http://uppix.com/upload"
-
-// UppixCom uploads an image file to this website.
-//
-func UppixCom(filepath, cLocalDir string, bAnonymous bool, limitRate int) Links {
-	opts := []string{"u_submit=Upload", "u_agb=yes"}
-	data, e := curlExec(URLUppixCom, limitRate, "u_file", filepath, opts)
-	if e != nil {
-		return linkErr(e, "UppixCom")
-	}
-
-	list := NewLinks()
-	list.Add("link", findLink(data, "http://uppix.com/f-", "&quot;"))
-	list.Add("thumb", findLink(data, "http://uppix.com/t-", "&quot;"))
-	return list
-}
-
-//
-//----------------------------------------------------------[ VIDEO BACKENDS ]--
+//==========================================================[ VIDEO BACKENDS ]==
 
 //
 //------------------------------------------------------------[ VIDEOBIN.ORG ]--
 
-// VideoBinOrg settings.
-const URLVideoBinOrg = "http://videobin.org/add"
-
-// VideoBinOrg uploads a video file to this website.
+// VideoBinOrg implements a Video Sender to the postimage.org website.
 //
-func VideoBinOrg(filepath, cLocalDir string, bAnonymous bool, limitRate int) Links {
-	opts := []string{"api=1"}
-	data, e := curlExec(URLVideoBinOrg, limitRate, "videoFile", filepath, opts)
-	if e != nil {
-		return linkErr(e, "VideoBinOrg")
-	}
-
-	return NewLinks().Add("link", data)
+var VideoBinOrg = &Host{
+	Poster: upload.NewMultiparter("https://videobin.org/add",
+		"videoFile",
+		"api", "1",
+	),
+	Parse: func(h *Host, data string) Links {
+		return NewLinks(data)
+	},
 }
 
 //
-//-----------------------------------------------------------[ FILE BACKENDS ]--
+//===========================================================[ FILE BACKENDS ]==
 
 //
-//-----------------------------------------------------------------[ FREE.FR ]--
+//--------------------------------------------------------------[ FILEBIN.CA ]--
 
-// DlFreeFr settings.
-const URLDlFreeFr = "ftp://dl.free.fr/"
-
-// DlFreeFr uploads any file to this website.
+// FileBinCa implements a File Sender to the imagebin.ca website.
 //
-func DlFreeFr(filepath, cLocalDir string, bAnonymous bool, limitRate int) Links {
-	body, e := curlExecArgs("-q", "-v", "-T", filepath, "-u", "cairo@dock.org:toto", URLDlFreeFr)
-	if e != nil {
-		return linkErr(e, "FreeFr")
-	}
+var FileBinCa = &Host{
+	Poster: upload.NewMultiparter("http://filebin.ca/upload.php", "file"),
+	Parse: func(h *Host, data string) Links {
+		ID := findPrefix(data, "url:", "\n")
+		if ID == "" {
+			return linkWarn(h.Name() + ": parse failed\n" + data)
+		}
+		return NewLinks(ID).
+			Add("page", strings.Replace(ID, "http://ibin.co/", "http://filebin.ca/v/", 1))
+	},
+}
 
-	list := NewLinks()
-	list.Add("link", findLink(body, "http://dl.free.fr/", "\r\n"))
-	list.Add("del", findLink(body, "http://dl.free.fr/rm.pl?", "\r\n"))
-	return list
+//
+//-------------------------------------------------------------[ FREEMOV.TOP ]--
+
+// FreemovTop implements a File Sender to the freemov.top website.
+//
+var FreemovTop = &Host{
+	Poster: upload.NewMultiparter("http://freemov.top/",
+		"upload[]",
+		"submit", "submit",
+	),
+	Parse: func(h *Host, data string) Links {
+		link := findPrefix(data, `id="name" value=`, ` />`)
+		if link == "" {
+			println(h.Name()+" -- ANSWER\n", data)
+			return linkWarn(h.Name() + ": bad format")
+		}
+		return NewLinks("http://" + link)
+	},
+}
+
+//
+//---------------------------------------------------------[ LEOPARD.HOSTING ]--
+
+// LeopardHosting implements a File Sender to the leopard.hosting website.
+//
+var LeopardHosting = &Host{
+	Poster: upload.NewMultiparter("http://leopard.hosting/upload.php",
+		"uploadContent",
+		// "password", "",
+		"public", "no",
+		"showname", "no",
+		"json", "true",
+	),
+	Parse: func(h *Host, data string) Links {
+		ret := &leopardHostingJSON{}
+		e := json.Unmarshal([]byte(data), ret)
+		if e != nil {
+			return linkErr(e, h.Name())
+		}
+		return NewLinks(ret.Upload.DownloadURL).
+			Add("del", ret.Upload.DeleteURL).
+			Add("support", ret.Upload.Support).
+			Add("ID", ret.Upload.FileCode)
+	},
+}
+
+type leopardHostingJSON struct {
+	Upload struct {
+		Support     string `json:"support"`
+		DownloadURL string `json:"downloadURL"`
+		FileCode    string `json:"fileCode"`
+		// DeleteKey   string `json:"deleteKey"`
+		DeleteURL string `json:"deleteURL"`
+	} `json:"upload"`
+}
+
+//
+//-------------------------------------------------------------[ PIXELDRA.IN ]--
+
+// PixeldraIn implements a File Sender to the pixeldra.in website.
+//
+var PixeldraIn = &Host{
+	Poster: &upload.AsMultipart{
+		UpBase:  upload.NewBaseURL("http://pixeldra.in/api/upload"),
+		FileRef: "file",
+		PrePost: func(m *upload.AsMultipart, file string) error {
+			m.Options = map[string]string{
+				"fileName": filepath.Base(file),
+			}
+			return nil
+		},
+	},
+	Parse: func(h *Host, data string) Links {
+		ret := pixeldraInJSON{}
+		e := json.Unmarshal([]byte(data), &ret)
+		if e != nil {
+			return linkErr(e, h.Name())
+		}
+		return NewLinks(ret.URL).
+			Add("del", ret.ID)
+	},
+}
+
+type pixeldraInJSON struct {
+	ID   string `json:"id"`
+	Type string `json:"type"`
+	URL  string `json:"url"`
+}
+
+//
+//-------------------------------------------------------------[ TRANSFER.SH ]--
+
+// TransferSh implements a File Sender to the transfer.sh website.
+//
+var TransferSh = &Host{
+	Poster: &upload.AsRequestHTTP{
+		Method: "PUT",
+		UpBase: upload.NewBaseCB(func(file string) string {
+			return "https://transfer.sh/" + filepath.Base(file)
+		}),
+	},
+	Parse: func(h *Host, data string) Links {
+		data = strings.Trim(data, " \n")
+		if data == "Not Found" {
+			return linkWarn(h.Name() + " has answered: " + data)
+		}
+		return NewLinks(data)
+	},
 }

@@ -274,7 +274,7 @@ type AppletPackage struct {
 	Icon            string
 	Title           string `conf:"name"`
 	Preview         string
-	IsMultiInstance bool
+	IsMultiInstance bool `conf:"multi-instance"`
 	Instances       []string
 	ModuleType      int
 }

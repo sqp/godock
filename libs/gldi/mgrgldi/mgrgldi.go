@@ -236,12 +236,16 @@ func (o *AppManager) startApplet(mi *gldi.ModuleInstance, kf *keyfile.KeyFile) {
 
 	app.SetBase(name, mi.GetConfFilePath(), globals.DirDockData(), vc.GetShareDataDir()) // TODO: need rootdir
 	app.SetBackend(appgldi.New(mi))
-	app.SetEvents(app)
+	callinit := app.SetEvents(app)
+	e := callinit()
+	if app.Log().Err(e, "failed to init") {
+
+		// TODO DISABLE CRAP APPLET
+
+		return
+	}
 
 	o.log.Debug("Applet started", name)
-
-	// Initialise applet: Load config and apply user settings.
-	app.Init(true)
 
 	if o.log.GetDebug() { // If the service debug is active, force it also on applets.
 		app.Log().SetDebug(true)

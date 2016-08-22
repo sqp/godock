@@ -5,17 +5,8 @@ import "github.com/sqp/godock/libs/cdtype"
 // Constants it's better not to have in conf.
 //
 const (
-	defaultUpdateDelay = 15 * 60 // 15 min.
-
 	loginLocation = ".Gmail_subscription"
 	feedGmail     = "https://mail.google.com/mail/feed/atom/"
-)
-
-// Dialog types.
-//
-const (
-	dialogInternal = "Internal dialog"
-	dialogNotify   = "Desktop notifications"
 )
 
 // Renderers.
@@ -51,7 +42,7 @@ type mailConf struct {
 }
 
 type groupConfig struct {
-	UpdateDelay  int
+	UpdateDelay  cdtype.Duration `unit:"minute" default:"15"`
 	Renderer     string
 	DialogTimer  int
 	DialogNbMail int
@@ -62,7 +53,7 @@ type groupConfig struct {
 	AlertAnimName     string
 	AlertAnimDuration int
 	AlertSoundEnabled bool
-	AlertSoundFile    string
+	AlertSoundFile    string          `default:"snd/pop.wav"`
 	DialogTemplate    cdtype.Template `default:"dialogmail"`
 }
 
@@ -70,8 +61,9 @@ type groupActions struct {
 	ActionClickLeft   string
 	ActionClickMiddle string
 
-	ShortkeyOpen  cdtype.Shortkey `desc:"Open mail client"`
-	ShortkeyCheck cdtype.Shortkey `desc:"Show mail dialog"`
+	ShortkeyOpenClient *cdtype.Shortkey `action:"1" desc:"Open mail client"`
+	ShortkeyShowMails  *cdtype.Shortkey `action:"2" desc:"Show last mails dialog"`
+	ShortkeyCheck      *cdtype.Shortkey `action:"3" desc:"Check now"`
 
 	MailClientAction int
 	MailClientName   string
@@ -79,28 +71,26 @@ type groupActions struct {
 
 	// Still hidden.
 	PollingEnabled bool
-	// FeedGmail      string // Url of the Atom feed source. Unused yet. See const
-	//~ DebugLevel int // unused
 
 	// Defaults are currently added to the last tab of config. This could evolve,
 	// but atm, this sound like a sane choice to have something consistant. All
 	// values that would be hardcoded are grouped here so we have a good overview
 	// of what is used (const & var). And in the conf file, we have all possibly
 	// tweakable or fixable values.
-	DefaultMonitorName    string // Default application or webpage to open.
-	DefaultAlertSoundFile string //
+	DefaultMonitorName string // Default application or webpage to open.
 }
 
 //----------------------------------------------------------[ ACTIONS & MENU ]--
 
-// List of actions defined in this applet. Order must match defineActions
-// declaration order.
+// List of actions defined in this applet.
+// Actions order in this list must match the order in defineActions.
+// The reference in shortkey declaration must also match.
 //
 const (
 	ActionNone = iota
 	ActionOpenClient
-	ActionCheckMail
 	ActionShowMails
+	ActionCheckMail
 	ActionRegister
 )
 
@@ -108,8 +98,8 @@ const (
 //
 var menuFull = []int{
 	ActionOpenClient,
-	ActionCheckMail,
 	ActionShowMails,
+	ActionCheckMail,
 	ActionNone,
 	ActionRegister,
 }

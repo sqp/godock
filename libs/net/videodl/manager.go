@@ -23,6 +23,7 @@ type Controler interface {
 //
 type Manager struct {
 	*Config
+	*Commands
 
 	EnabledWeb bool
 	StartedWeb bool
@@ -58,7 +59,8 @@ func NewManager(control Controler, log cdtype.Logger, hist *HistoryVideo) *Manag
 		log:     log,
 		backend: YTDL{},
 		history: hist,
-		Config: &Config{
+		Config:  &Config{},
+		Commands: &Commands{
 			CmdOpenDir:   cdglobal.CmdOpen,
 			CmdOpenWeb:   cdglobal.CmdOpen,
 			CmdOpenVideo: cdglobal.CmdOpen},
@@ -333,7 +335,7 @@ func (m *Manager) DialogQuality(filterFormats FuncFilterFormats, callDialog Func
 		Message: vid.Name + "\n\nSelect quality:",
 		// UseMarkup: true,
 		Widget: cdtype.DialogWidgetList{
-			Values:       strings.Join(ids, ";"),
+			Values:       ids,
 			InitialValue: 0,
 		},
 		Buttons: "ok;cancel",
@@ -375,7 +377,7 @@ func (m *Manager) DialogCategory(filterFormats FuncFilterFormats, callDialog Fun
 	e := callDialog(cdtype.DialogData{
 		Message: vid.Name + "\n\nSelect category:",
 		Widget: cdtype.DialogWidgetList{
-			Values:       strings.Join(ids, ";"),
+			Values:       ids,
 			InitialValue: sel,
 		},
 		Buttons: "ok;cancel",

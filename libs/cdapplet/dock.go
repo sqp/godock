@@ -11,12 +11,9 @@ import (
 	"github.com/sqp/godock/libs/poller"  // Polling counter.
 	"github.com/sqp/godock/libs/ternary" // Ternary operators.
 
-	"bytes"
-	"fmt"
-	"os"
+	"errors"
 	"path/filepath"
 	"strings"
-	"text/template"
 )
 
 //
@@ -33,36 +30,34 @@ type CDApplet struct {
 	shareDataDir string // Location of applet data files. As an external applet, it is the same as binary dir.
 	rootDataDir  string // Path to the config root dir (~/.config/cairo-dock).
 
-	events    cdtype.Events           // Applet events callbacks (if DefineEvents was used).
-	hooker    *Hooker                 // Applet events callbacks (for applet self implemented methods).
-	action    cdtype.AppAction        // Actions handler. Where an applet can declare its list of actions.
-	poller    cdtype.AppPoller        // Poller counter. If you want more than one, use a common denominator.
-	command   cdtype.AppCommand       // Programs and locations configured by the user, including application monitor.
-	template  cdtype.AppTemplate      // Templates for text formating.
-	log       cdtype.Logger           // Applet logger.
-	Shortkeys []cdtype.ShortkeyAction // Shortkeys and callbacks.
+	events    cdtype.Events      // Applet events callbacks (if DefineEvents was used).
+	hooker    *Hooker            // Applet events callbacks (for applet self implemented methods).
+	action    cdtype.AppAction   // Actions handler. Where an applet can declare its list of actions.
+	poller    cdtype.AppPoller   // Poller counter. If you want more than one, use a common denominator.
+	command   cdtype.AppCommand  // Programs and locations configured by the user, including application monitor.
+	log       cdtype.Logger      // Applet logger.
+	shortkeys []*cdtype.Shortkey // Shortkeys and callbacks.
+	confPtr   interface{}        // Pointer to applet config.
 
 	cdtype.AppIcon // Dock applet connection, Can be Gldi or Dbus (will be Gldi with build tag dock).
 }
 
 // New creates a new applet manager.
 //
-func New() cdtype.AppBase {
+func New(confPtr interface{}, actions ...*cdtype.Action) cdtype.AppBase {
 	app := &CDApplet{
-		action: &action.Actions{},
-		hooker: NewHooker(dockCalls, dockTests),
-		log:    log.NewLog(log.Logs),
+		confPtr: confPtr,
+		action:  &action.Actions{},
+		hooker:  NewHooker(dockCalls, dockTests),
+		log:     log.NewLog(log.Logs),
 	}
 
 	app.command = &appCmd{
 		commands: make(cdtype.Commands),
 		app:      app,
 	}
+	app.Action().Add(actions...)
 
-	app.template = &appTemplate{
-		templates: make(map[string]*template.Template),
-		app:       app,
-	}
 	return app
 }
 
@@ -97,13 +92,23 @@ func (cda *CDApplet) SetBackend(base cdtype.AppBackend) {
 // It calls the DefineEvents method if the applet provides it, AND also registers
 // methods matching those of the API that are defined by the applet.
 //
-func (cda *CDApplet) SetEvents(app cdtype.AppInstance) {
-
+// Returns the first init call func.
+//
+func (cda *CDApplet) SetEvents(app cdtype.AppInstance) func() error {
 	if d, ok := app.(cdtype.DefineEventser); ok { // Old events callback method.
 		cda.events = cdtype.Events{
 			Reload: func(loadConf bool) {
 				cda.log.Debug("Reload module")
-				app.Init(loadConf)
+
+				// need pre init.
+
+				def, e := app.LoadConfig(loadConf) // Load config will crash if fail. Expected.
+				if e != nil {
+					// TODO : NEED STOP APPLET
+				}
+
+				app.Init(&def, loadConf)
+				app.SetDefaults(def)
 				cda.Poller().Restart() // send our restart event. (safe on nil pollers).
 			},
 		}
@@ -112,32 +117,45 @@ func (cda *CDApplet) SetEvents(app cdtype.AppInstance) {
 	}
 
 	cda.RegisterEvents(app) // New events callback method.
+
+	return func() error {
+		// Initialise applet: Load config and apply user settings.
+		def, e := app.LoadConfig(true) // Load config will crash if fail. Expected.
+		if e != nil {
+			return e
+		}
+
+		app.Init(&def, true)
+		app.SetDefaults(def)
+		return nil
+	}
 }
 
 //
 //----------------------------------------------------------------[ DEFAULTS ]--
 
-// SetDefaults set basic defaults icon settings in one call. Empty fields will
-// be reset, so this is better used in the Init() call.
+// SetDefaults set basic defaults icon settings in one call.
+// Empty fields will be reset, so this is better used in the Init() call.
 //
 func (cda *CDApplet) SetDefaults(def cdtype.Defaults) {
+	// Apply defaults.
 	cda.SetIcon(ternary.String(def.Icon != "", def.Icon, cda.FileLocation("icon")))
 	cda.SetLabel(ternary.String(def.Label != "", def.Label, cda.Name()))
 	cda.SetQuickInfo(def.QuickInfo)
 
-	cda.Shortkeys = def.ShortkeyActions
-	var sk []cdtype.Shortkey
-	for i, sa := range cda.Shortkeys {
-		// add to the need register list.
-		sk = append(sk, sa.Shortkey)
+	cda.shortkeys = def.Shortkeys
+	for _, sk := range cda.shortkeys {
+		switch {
+		case sk.ActionID <= 0:
 
-		// convert ActionID to its callback.
-		switch act := sa.Action.(type) {
-		case int:
-			cda.Shortkeys[i].Action = cda.Action().CallbackNoArg(act)
+		case sk.ActionID >= cda.Action().Len():
+			cda.Log().NewWarn("action not defined", "shortkey: ", sk.ConfGroup, sk.Shortkey) // sk.ActionID
+
+		default:
+			sk.Call = cda.Action().CallbackNoArg(sk.ActionID)
 		}
 	}
-	cda.BindShortkey(append(sk, def.Shortkeys...)...)
+	cda.BindShortkey(cda.shortkeys...)
 
 	cda.Command().Clear()
 	for key, cmd := range def.Commands {
@@ -149,76 +167,7 @@ func (cda *CDApplet) SetDefaults(def cdtype.Defaults) {
 		cda.Poller().SetInterval(def.PollerInterval)
 	}
 
-	cda.Template().Clear()
-	cda.Template().Load(def.Templates...)
-
 	cda.log.SetDebug(def.Debug)
-}
-
-//
-//---------------------------------------------------------------[ TEMPLATES ]--
-
-// Template returns a manager of go text templates for applets
-//
-func (cda *CDApplet) Template() cdtype.AppTemplate {
-	return cda.template
-}
-
-// appTemplate implements cdtype.AppTemplate.
-type appTemplate struct {
-	templates map[string]*template.Template // Templates for text formating.
-	app       interface {
-		Log() cdtype.Logger
-		FileLocation(...string) string
-	}
-}
-
-// Load loads the provided list of template files. If error, it will just be be logged, so you must check
-// that the template is valid. Map entry will still be created, just check if it
-// isn't nil. *CDApplet.ExecuteTemplate does it for you.
-//
-// Templates must be in a subdir called templates in applet dir. If you really
-// need a way to change this, ask for a new method.
-//
-func (o *appTemplate) Load(names ...string) {
-	for _, name := range names {
-		fileloc := o.app.FileLocation("templates", name+".tmpl")
-		if !files.IsExist(fileloc) {
-			o.app.Log().Info("not found", fileloc)
-			if !files.IsExist(name) { // trying using the name as full path.
-				o.app.Log().NewErr("file not found:"+name, "Template")
-				continue
-			}
-			fileloc = name
-		}
-		template, e := template.ParseFiles(fileloc)
-		o.app.Log().Err(e, "Template")
-		o.templates[name] = template
-	}
-}
-
-// Get gives access to a loaded template by its name.
-//
-func (o *appTemplate) Get(file string) *template.Template {
-	return o.templates[file]
-}
-
-// Execute runs a pre-loaded template with the given data.
-//
-func (o *appTemplate) Execute(file, name string, data interface{}) (string, error) {
-	if o.templates[file] == nil {
-		return "", fmt.Errorf("missing template %s", file)
-	}
-
-	buff := bytes.NewBuffer([]byte(""))
-	if e := o.templates[file].ExecuteTemplate(buff, name, data); o.app.Log().Err(e, "FormatDialog") {
-		return "", e
-	}
-	return buff.String(), nil
-}
-
-func (o *appTemplate) Clear() {
-	o.templates = make(map[string]*template.Template)
 }
 
 //
@@ -326,39 +275,40 @@ func (ac *appCmd) Clear() {
 //
 //------------------------------------------------------------------[ CONFIG ]--
 
-// ConfFile returns the config file location.
-//
-// func (cda *CDApplet) ConfFile() string {
-// 	return cda.confFile
-// }
-
 // LoadConfig will try to create and fill the given config struct with data from
 // the configuration file. Log error and crash if something went wrong.
 // Won't do anything if loadConf is false.
 //
-func (cda *CDApplet) LoadConfig(loadConf bool, v interface{}) {
+func (cda *CDApplet) LoadConfig(loadConf bool) (cdtype.Defaults, error) {
+	def := cdtype.Defaults{}
 	if !loadConf {
-		return
+		return def, nil
 	}
+	if cda.confPtr == nil {
+		return def, errors.New("conf pointer missing")
+	}
+
 	files.Access.Lock()
 	defer files.Access.Unlock()
 
-	// Try to load config. Exit if not found.
-	e, liste := config.Load(cda.confFile, cda.FileLocation(), v, config.GetBoth)
+	// Try to load config.
+	def, liste, e := config.Load(cda.confFile, cda.FileLocation(), cda.confPtr, config.GetBoth)
 	if cda.Log().Err(e, "LoadConfig") {
-		// TODO: try only to use in standalone mode.
-		// Find a way to unload the applet without the crash in dock and DBus service mode.
-		// But this is only a tricky safety net. The dock must have provided the file.
-		// File not found/readable should only happen on disk (full) error or bad source file.
-		os.Exit(1)
+		return def, e
 	}
 
 	// Display non fatal errors.
 	for _, e := range liste {
 		cda.Log().Err(e, "LoadConfig")
 	}
+	return def, nil
 }
 
+// UpdateConfig opens the applet config file for edition.
+//
+// You must ensure that Save or Cancel is called, and fast to prevent memory
+// leaks and deadlocks.
+//
 func (cda *CDApplet) UpdateConfig() (cdtype.ConfUpdater, error) {
 	return files.NewConfUpdater(cda.confFile)
 }

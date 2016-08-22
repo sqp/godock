@@ -27,7 +27,7 @@ const (
 var Settings = ConfigSettings{}
 
 // ConfigSettings defines the options the user can set about the GUI itself.
-// This GUI config page will often be refered as "own config".
+// This GUI config page will often be referred as "own config".
 //
 type ConfigSettings struct {
 
@@ -48,7 +48,7 @@ func (cs *ConfigSettings) Load() error {
 	}
 	conf.UnmarshalGroup(cs, GuiGroup, config.GetTag)
 	// TODO: need to forward conf.Errors
-	cs.File = file // Force value of file everytime, it's set to blank by unmarshal.
+	cs.File = file // Force value of file every time, it's set to blank by unmarshal.
 	return nil
 }
 

@@ -21,6 +21,7 @@ import (
 	"github.com/sqp/godock/libs/srvdbus/dockpath" // Path to main dock dbus service.
 
 	"errors"
+	"fmt"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -408,34 +409,33 @@ func InfoApplet(name string) *packages.AppletPackage {
 	// TODO: should log or return error.
 	vars, _ := DockProperties("type=Module & name=" + name)
 	for _, props := range vars {
-		return parseApplet(props)
+		pack, _ := parseApplet(props)
+		return pack
 	}
 	return nil
 }
 
 // ListKnownApplets asks the dock informations about all known applets.
 //
-func ListKnownApplets() map[string]*packages.AppletPackage {
+func ListKnownApplets() (map[string]*packages.AppletPackage, error) {
+	vars, e := DockProperties("type=Module")
+	if e != nil {
+		return nil, e
+	}
 	list := make(map[string]*packages.AppletPackage)
-
-	// TODO: should log or return error.
-	vars, _ := DockProperties("type=Module")
 	for _, props := range vars {
-		pack := parseApplet(props)
-
-		// println(pack.DisplayedName)
-
+		pack, e := parseApplet(props)
+		if e != nil {
+			return nil, e
+		}
 		if pack.DisplayedName != "" {
 			list[pack.DisplayedName] = pack
-			// list = append(list, pack)
-			// log.Info("----------------")
-			// log.DETAIL(pack)
 		}
 	}
-	return list
+	return list, nil
 }
 
-func parseApplet(props map[string]interface{}) *packages.AppletPackage {
+func parseApplet(props map[string]interface{}) (*packages.AppletPackage, error) {
 	pack := &packages.AppletPackage{}
 	for k, v := range props {
 		switch k {
@@ -476,10 +476,10 @@ func parseApplet(props map[string]interface{}) *packages.AppletPackage {
 			pack.ModuleType = int(v.(uint32))
 
 		default:
-			log.Info("parseApplet field unmatched", k, v)
+			return nil, fmt.Errorf("parseApplet field unmatched: %s => %#v", k, v)
 		}
 	}
-	return pack
+	return pack, nil
 }
 
 // type AppletPackage struct {

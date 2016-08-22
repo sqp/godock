@@ -25,7 +25,8 @@ type Applet struct {
 // NewApplet create a new applet instance.
 //
 func NewApplet() cdtype.AppInstance {
-	app := &Applet{AppBase: cdapplet.New()} // Icon controler and interface to cairo-dock.
+	app := &Applet{}
+	app.AppBase = cdapplet.New(&app.conf) // Icon controler and interface to cairo-dock.
 
 	app.service = sysinfo.NewIOActivity(app)
 	app.service.Log = app.Log()
@@ -40,21 +41,16 @@ func NewApplet() cdtype.AppInstance {
 
 // Init load user configuration if needed and initialise applet.
 //
-func (app *Applet) Init(loadConf bool) {
-	app.LoadConfig(loadConf, &app.conf) // Load config will crash if fail. Expected.
-
+func (app *Applet) Init(def *cdtype.Defaults, confLoaded bool) {
 	// Settings for poller and IOActivity (force renderer reset in case of reload).
-	app.conf.UpdateDelay = cdtype.PollerInterval(app.conf.UpdateDelay, defaultUpdateDelay)
-	app.service.Settings(uint64(app.conf.UpdateDelay), cdtype.InfoPosition(app.conf.DisplayText), app.conf.DisplayValues, app.conf.GraphType, app.conf.GaugeName, app.conf.Disks...)
+	app.service.Settings(uint64(app.conf.UpdateDelay.Value()), cdtype.InfoPosition(app.conf.DisplayText), app.conf.DisplayValues, app.conf.GraphType, app.conf.GaugeName, app.conf.Disks...)
 
-	// Set defaults to dock icon: display and controls.
-	app.SetDefaults(cdtype.Defaults{
-		Label:          app.conf.Name,
-		PollerInterval: app.conf.UpdateDelay,
-		Commands: cdtype.Commands{
-			cmdLeft:   cdtype.NewCommandStd(app.conf.LeftAction, app.conf.LeftCommand, app.conf.LeftClass),
-			cmdMiddle: cdtype.NewCommandStd(app.conf.MiddleAction, app.conf.MiddleCommand)},
-		Debug: app.conf.Debug})
+	// Defaults.
+	def.PollerInterval = app.conf.UpdateDelay.Value()
+	def.Commands = cdtype.Commands{
+		cmdLeft:   cdtype.NewCommandStd(app.conf.LeftAction, app.conf.LeftCommand, app.conf.LeftClass),
+		cmdMiddle: cdtype.NewCommandStd(app.conf.MiddleAction, app.conf.MiddleCommand),
+	}
 }
 
 //

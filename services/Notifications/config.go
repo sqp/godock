@@ -1,46 +1,24 @@
 package Notifications
 
+import "github.com/sqp/godock/libs/cdtype"
+
 const (
 	defaultNotifAltIcon = "img/active.png"
 )
-
-// Dialog types.
-// const (
-// 	dialogInternal = "Internal dialog"
-// 	dialogNotify   = "Desktop notifications"
-// )
 
 //
 //------------------------------------------------------------------[ CONFIG ]--
 
 type appletConf struct {
-	groupIcon   `group:"Icon"`
-	groupConfig `group:"Configuration"`
-	// groupActions `group:"Actions"`
-}
-
-type groupIcon struct {
-	Icon string `conf:"icon"`
-	Name string `conf:"name"`
+	cdtype.ConfGroupIconBoth `group:"Icon"`
+	NotifConfig              `group:"Configuration"`
+	groupConfig              `group:"Configuration"`
 }
 
 type groupConfig struct {
-	// UpdateDelay            int
-	// Renderer               string
-	// DialogType             string
-	// DialogTimer            int
-	// DialogNbMailActionShow int
-
-	// MonitorName    string
-	// MonitorEnabled bool
-
-	NotifSize int
-	// clear=true
-	NotifBlackList []string
-
-	NotifAltIcon string
-
-	Debug bool
+	NotifAltIcon   string
+	DialogDuration int
+	DialogTemplate cdtype.Template `default:"dialognotif"`
 }
 
 //

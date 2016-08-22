@@ -31,7 +31,6 @@ import (
 	"github.com/sqp/godock/widgets/gtk/newgtk"
 	"github.com/sqp/godock/widgets/gtk/togtk"
 
-	"strings"
 	"unsafe"
 )
 
@@ -215,7 +214,7 @@ func dialogWidgetText(data cdtype.DialogWidgetText) (*gtk.Widget, func() interfa
 				buffer.SetText(data.InitialValue)
 			}
 		}
-		if !data.Editable {
+		if data.Locked {
 			textview.SetEditable(false)
 		}
 
@@ -236,10 +235,10 @@ func dialogWidgetText(data cdtype.DialogWidgetText) (*gtk.Widget, func() interfa
 		if data.InitialValue != "" {
 			entry.SetText(data.InitialValue)
 		}
-		if !data.Editable {
+		if data.Locked {
 			entry.SetEditable(false)
 		}
-		if !data.Visible {
+		if data.Hidden {
 			entry.SetVisibility(false)
 		}
 
@@ -324,8 +323,7 @@ func dialogWidgetList(data cdtype.DialogWidgetList) (*gtk.Widget, func() interfa
 	widget := newgtk.ComboBoxText()
 
 	// Fill the list with user choices.
-	values := strings.Split(data.Values, ";")
-	for _, val := range values {
+	for _, val := range data.Values {
 		widget.AppendText(val)
 	}
 

@@ -3,8 +3,6 @@ package DiskActivity
 import "github.com/sqp/godock/libs/cdtype"
 
 const (
-	defaultUpdateDelay = 3
-
 	// BlockSize is the disk block size.
 	BlockSize = 512
 )
@@ -18,13 +16,9 @@ const (
 //------------------------------------------------------------------[ CONFIG ]--
 
 type appletConf struct {
-	groupIcon          `group:"Icon"`
-	groupConfiguration `group:"Configuration"`
-	groupActions       `group:"Actions"`
-}
-
-type groupIcon struct {
-	Name string `conf:"name"`
+	cdtype.ConfGroupIconBoth `group:"Icon"`
+	groupConfiguration       `group:"Configuration"`
+	groupActions             `group:"Actions"`
 }
 
 type groupConfiguration struct {
@@ -40,11 +34,8 @@ type groupConfiguration struct {
 	// GraphColorBg   []float64
 	// GraphMix bool
 
-	UpdateDelay int
+	UpdateDelay cdtype.Duration `default:"3"`
 	Disks       []string
-
-	// MonitorName    string
-	// MonitorEnabled bool
 }
 
 type groupActions struct {
@@ -53,9 +44,6 @@ type groupActions struct {
 	LeftClass     string
 	MiddleAction  int
 	MiddleCommand string
-
-	// Still hidden.
-	Debug bool
 }
 
 /*

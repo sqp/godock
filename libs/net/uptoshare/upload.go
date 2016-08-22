@@ -1,62 +1,26 @@
 // Package uptoshare uploads files to one-click hosting sites.
 package uptoshare
 
-/*
-// #include <stdlib.h>                 // free
-// #include <glib-2.0/glib/gstdio.h>   // g_filename_from_uri
-// #cgo pkg-config: glib-2.0
-import "C"
-*/
-
 import (
 	"github.com/robfig/config" // Config parser.
 
 	"github.com/sqp/godock/libs/cdtype"
-
-	"mime"
-	"path"
-	"strconv"
-	"strings"
+	"github.com/sqp/godock/libs/files"
+	"github.com/sqp/godock/libs/net/upload"
 
 	"errors"
-	"io/ioutil"
-	"net/http"
-	"net/url"
+	"io"
+	"mime"
 	"os"
-	"os/exec"
+	"path/filepath"
+	"strconv"
+	"strings"
 	"time"
-	// "unsafe"
-	// "path/filepath"
-	// "bytes"
-	// "fmt"
-	// "io"
-	// "mime/multipart"
 )
 
 // HistoryFile defines the name of the default history file.
 //
 const HistoryFile = "uptoshare_history.txt"
-
-/*
-// FileNameFromURI is a wrapper around g_filename_from_uri to convert a filepath to UTF-8.
-//
-func FileNameFromURI(str string) string {
-	cstr := C.CString(str)
-	defer C.free(unsafe.Pointer(cstr))
-	cFilePath := C.g_filename_from_uri((*C.gchar)(cstr), nil, nil)
-	defer C.free(unsafe.Pointer(cFilePath))
-	return C.GoString((*C.char)(cFilePath))
-}
-*/
-
-// FileNameFromURI strips file:// in front of a file path.
-//
-// TODO: check that we can safely use that really simplified version, removing
-// C and glib-2.0 dependency.
-//
-func FileNameFromURI(str string) string {
-	return strings.TrimPrefix(str, "file://")
-}
 
 // FileType defines the type of a backend.
 //
@@ -72,43 +36,66 @@ const (
 	FileTypeFile
 )
 
-// CallUpload defines the format to use for a backend uploader.
+// String returns a human readable file type.
 //
-type CallUpload func(filePath, localDir string, anonymous bool, limitRate int) Links
+func (f FileType) String() string {
+	str, ok := map[FileType]string{
+		FileTypeText:  "text",
+		FileTypeImage: "image",
+		FileTypeVideo: "video",
+		FileTypeFile:  "file",
+	}[f]
 
-var (
-	backendImage = map[string]CallUpload{
-		"Imagebin.ca":         ImageBinCa,
-		"ImageShack.us":       ImageShackUs,
-		"Imgur.com":           ImgurCom,
-		"pix.Toile-Libre.org": PixToileLibreOrg,
-		"Postimage.org":       PostimageOrg,
-		"Uppix.com":           UppixCom,
+	if ok {
+		return str
 	}
 
-	backendText = map[string]CallUpload{
-		"Codepad.org":          CodePadOrg,
-		"Pastebin.com":         PasteBinCom,
-		"Pastebin.mozilla.org": PasteBinMozillaOrg,
-		"Paste-ubuntu.com":     PasteUbuntuCom,
-	}
+	return "unknown"
+}
 
-	backendVideo = map[string]CallUpload{
-		"VideoBin.org": VideoBinOrg,
-	}
+//
+//-----------------------------------------------------------[ SERVICES HOST ]--
 
-	backendFile = map[string]CallUpload{
-		"dl.free.fr": DlFreeFr,
+// Sender defines the common backend upload interface.
+//
+type Sender interface {
+	SetName(string)
+	SetConfig(*upload.Config)
+	Send(r io.Reader, size int64, filename string) Links
+}
+
+// Host describes an upload service to implement a Sender.
+//
+type Host struct {
+	upload.Poster
+	Parse func(*Host, string) Links
+}
+
+// Send sends the file over the network to the hosting website.
+//
+func (h *Host) Send(r io.Reader, size int64, filename string) Links {
+	data, e := h.Post(r, size, filename)
+	if e != nil {
+		return linkErr(e, h.Name())
 	}
-)
+	return h.Parse(h, data)
+}
+
+//
+//-------------------------------------------------------------------[ LINKS ]--
 
 // Links contains the result data of an upload.
 //
 type Links map[string]string
 
-// NewLinks creates an empty links list.
+// NewLinks creates links list.
 //
-func NewLinks() Links {
+// An optional argument will be used as the main "link" url value.
+//
+func NewLinks(link ...string) Links {
+	if len(link) > 0 {
+		return Links{"link": link[0]}
+	}
 	return make(Links)
 }
 
@@ -120,6 +107,9 @@ func (li Links) Add(key, link string) Links {
 	}
 	return li
 }
+
+//
+//----------------------------------------------------------------[ UPLOADER ]--
 
 // Uploader manages an upload queue to send files to one-click hosting websites.
 //
@@ -133,10 +123,10 @@ type Uploader struct {
 
 	queue   chan string
 	active  bool
-	upFile  CallUpload
-	upImage CallUpload
-	upText  CallUpload
-	upVideo CallUpload
+	upFile  Sender
+	upImage Sender
+	upText  Sender
+	upVideo Sender
 
 	actionPre  func()
 	actionPost func()
@@ -179,33 +169,49 @@ func (up *Uploader) SetOnResult(call func(Links)) {
 // SiteImage sets the image upload backend.
 //
 func (up *Uploader) SiteImage(site string) error {
-	return setSite(&up.upImage, backendImage, site)
+	return up.setSite(&up.upImage, backendImage, site)
 }
 
 // SiteText sets the text upload backend.
 //
 func (up *Uploader) SiteText(site string) error {
-	return setSite(&up.upText, backendText, site)
+	return up.setSite(&up.upText, backendText, site)
 }
 
 // SiteVideo sets the text upload backend.
 //
 func (up *Uploader) SiteVideo(site string) error {
-	return setSite(&up.upVideo, backendVideo, site)
+	return up.setSite(&up.upVideo, backendVideo, site)
 }
 
 // SiteFile sets the text upload backend.
 //
 func (up *Uploader) SiteFile(site string) error {
-	return setSite(&up.upFile, backendFile, site)
+	e := up.setSite(&up.upFile, backendFile, site)
+	up.Log.Err(e, "set SiteFile")
+	return e
 }
 
-func setSite(call *CallUpload, backends map[string]CallUpload, site string) error {
+func (up *Uploader) setSite(call *Sender, backends map[string]Sender, site string) error {
+	switch {
+	case site == "" || site == "None":
+		return nil
+
+	case site == "-> file hosting":
+		*call = up.upFile
+		if up.upFile == nil {
+			up.Log.Info("-> file hosting", "no upFile")
+		}
+		return nil
+	}
+
 	backend, ok := backends[site]
 	if !ok {
 		return errors.New("backend not found:" + site)
 	}
 	*call = backend
+	backend.SetName(site)
+	backend.SetConfig(&upload.Config{})
 	return nil
 }
 
@@ -269,8 +275,8 @@ func (up *Uploader) loadHistory() error {
 
 //
 func (up *Uploader) saveHistory() {
-	if _, e := os.Stat(path.Dir(up.historyFile)); e != nil {
-		os.Mkdir(path.Dir(up.historyFile), os.ModePerm)
+	if _, e := os.Stat(filepath.Dir(up.historyFile)); e != nil {
+		os.Mkdir(filepath.Dir(up.historyFile), os.ModePerm)
 	}
 
 	conf := config.New(config.DEFAULT_COMMENT, config.ALTERNATIVE_SEPARATOR, false, false)
@@ -326,80 +332,86 @@ func (up *Uploader) uploadOne(data string) Links {
 	var filePath string
 	var isFile bool
 
+	// File reference from desktop drop. Some cleaning to do.
+	if strings.HasPrefix(data, "file://") {
+		data = FileNameFromURI(data)
+	}
+
+	// Get full file path if needed.
+	abs, e := filepath.Abs(data)
+	if e == nil && files.IsExist(abs) {
+		data = abs
+	}
+
+	// Test file and get type.
+	clean := filepath.Clean(data)
 	switch {
-	case strings.HasPrefix(data, "file://"): // input is a file reference.
+	case files.IsExist(clean): // use input as file location.
 		isFile = true
-		filePath = FileNameFromURI(data)
+		filePath = clean
 		fileType = getFileType(filePath)
+		if fileType == FileTypeUnknown {
+			up.Log.NewWarn(filePath, "file type unknown, uploaded as 'file'")
+			fileType = FileTypeFile
+		}
 
-	case data[0] == '/': // use input as file location.
-		isFile = true
-		filePath = data
-		fileType = getFileType(filePath)
-
-	default: // use input as text.
+	default: // use input as text as default/fallback.
 		fileType = FileTypeText
 	}
 
-	if fileType == FileTypeUnknown {
-		fileType = FileTypeFile
-		// 	cd_debug ("we'll consider this as an archive.");
-	}
-
 	up.Log.Debug("file upload", "type:", fileType, "path:", filePath)
-	var call func(string, string, bool, int) Links
 
-	if up.FileForAll { // Forced upload as file.
-		call = up.upFile
-		if fileType == FileTypeText && !isFile {
-			return linkWarn("text entry as FFA option missing\nYou have to uncheck the send all as file option to send raw text")
-		}
-		fileType = FileTypeFile
-
-	} else {
-		switch fileType {
-		case FileTypeFile:
-			call = up.upFile
-
-		case FileTypeImage:
-			call = up.upImage
-
-		case FileTypeText:
-			if isFile {
-				bytes, e := ioutil.ReadFile(filePath)
-				if e != nil {
-					return linkErr(e, "can't read file")
-				}
-				data = string(bytes)
-			}
-			filePath = data
-			call = up.upText
-			if filePath == "" {
-				return linkWarn("FileTypeText: can't upload an empty string")
-			}
-
-		case FileTypeVideo:
-			call = up.upVideo
-		}
-	}
-
-	if call == nil {
+	// Get the sender for the type.
+	sender := up.getSender(&fileType)
+	if sender == nil {
 		return linkWarn("nothing to do with " + filePath)
 	}
 
-	list := call(filePath, "", up.PostAnonymous, up.LimitRate)
+	// Get the data reader.
+	var rdr io.Reader
+	var size int64
+	if isFile {
+		var close func() error
+		rdr, size, close, e = files.Reader(data)
+		if e != nil {
+			return linkErr(e, "open file:"+data)
+		}
+		defer func() { up.Log.Err(close(), "file close") }()
+
+	} else {
+		rdr = strings.NewReader(data)
+		size = int64(len(data))
+	}
+
+	// And try to send.
+	list := sender.Send(rdr, size, filePath)
+
 	if len(list) == 0 {
 		return linkWarn("upload: nothing returned for " + filePath)
 	}
 
+	// Should be a valid link. Add common info.
 	list["file"] = filePath
 	list["type"] = strconv.Itoa(int(fileType))
 	list["date"] = time.Now().Format("20060102 15:04:05") // Time isn't used for now. Just display something readable. "YMD H:M:S"
 	return list
 }
 
+// Get the sender for the type.
+func (up *Uploader) getSender(typ *FileType) Sender {
+	if up.FileForAll { // Forced upload as file.
+		*typ = FileTypeFile
+	}
+	return map[FileType]Sender{
+		FileTypeFile:  up.upFile,
+		FileTypeImage: up.upImage,
+		FileTypeText:  up.upText,
+		FileTypeVideo: up.upVideo,
+	}[*typ]
+}
+
 func getFileType(filePath string) FileType {
-	mimetype := mime.TypeByExtension(path.Ext(filePath))
+	mimetype := mime.TypeByExtension(filepath.Ext(filePath))
 	switch {
 	case strings.HasPrefix(mimetype, "video") || strings.HasSuffix(filePath, ".ogv"):
 		return FileTypeVideo
@@ -447,12 +459,23 @@ func linkWarn(str string) Links {
 	return Links{"error": str}
 }
 
+// FileNameFromURI strips file:// in front of a file path.
+//
+// TODO: check nothing is missing from the original call : g_filename_from_uri
+//
+func FileNameFromURI(str string) string {
+	str = strings.Replace(str, "%20", " ", -1)
+	return strings.TrimPrefix(str, "file://")
+}
+
+/*
+
 //
 //----------------------------------------------------------[ UPLOAD METHODS ]--
 
 // Execute curl upload using curl command.
 //
-func curlExec(url string, limitRate int, fileref, filepath string, opts []string) (string, error) {
+func curlExec(url string, limitRate int, fileref, filepath string, opts ...string) (string, error) {
 	args := []string{
 		"-s", // silent mode.
 		"-L", url,
@@ -480,96 +503,4 @@ func curlExecArgs(args ...string) (string, error) {
 	return string(body), e
 }
 
-// Creates a new http POST request with optional extra params.
-//
-func postSimple(url string, values url.Values) (string, error) {
-	r, e := http.PostForm(url, values)
-	if e != nil {
-		// Log.Info("error posting %s", e)
-		return "", e
-	}
-	defer r.Body.Close()
-	body, er := ioutil.ReadAll(r.Body)
-	if er != nil {
-		// Log.Info("error reading %s", er)
-		return "", er
-	}
-
-	if len(body) == 0 {
-		return "", errors.New("POST output empty")
-	}
-
-	return string(body), nil
-}
-
-//
-//------------------------------------------------------------------[ UNUSED ]--
-
-// func postFile(filename, target_url, opt string) (*http.Response, error) {
-// 	body_buf := bytes.NewBufferString("")
-// 	body_writer := multipart.NewWriter(body_buf)
-
-// 	// use the body_writer to write the Part headers to the buffer
-// 	_, err := body_writer.CreateFormFile("upfile", filename)
-// 	if err != nil {
-// 		fmt.Println("error writing to buffer")
-// 		return nil, err
-// 	}
-
-// 	// the file data will be the second part of the body
-// 	fh, err := os.Open(filename)
-// 	if err != nil {
-// 		fmt.Println("error opening file")
-// 		return nil, err
-// 	}
-// 	// need to know the boundary to properly close the part myself.
-// 	boundary := body_writer.Boundary()
-// 	// close_string := fmt.Sprintf("\r\n--%s--\r\n", boundary)
-// 	close_buf := bytes.NewBufferString(fmt.Sprintf("\r\n--%s--\r\n", boundary))
-
-// 	// use multi-reader to defer the reading of the file data until writing to the socket buffer.
-// 	request_reader := io.MultiReader(body_buf, fh, close_buf)
-// 	fi, err := fh.Stat()
-// 	if err != nil {
-// 		fmt.Printf("Error Stating file: %s", filename)
-// 		return nil, err
-// 	}
-// 	req, err := http.NewRequest("POST", target_url, request_reader)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-
-// 	// Set headers for multipart, and Content Length
-// 	req.Header.Add("Content-Type", "multipart/form-data;boundary="+boundary+opt)
-// 	req.ContentLength = fi.Size() + int64(body_buf.Len()) + int64(close_buf.Len())
-
-// 	return http.DefaultClient.Do(req)
-// }
-
-// // Creates a new file upload http POST request with optional extra params.
-// //
-// func newfileUploadRequest(uri string, params map[string]string, paramName, path string) (*http.Request, error) {
-// 	file, err := os.Open(path)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	defer file.Close()
-
-// 	body := &bytes.Buffer{}
-// 	writer := multipart.NewWriter(body)
-// 	part, err := writer.CreateFormFile(paramName, filepath.Base(path))
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	_, err = io.Copy(part, file)
-
-// 	for key, val := range params {
-// 		_ = writer.WriteField(key, val)
-// 	}
-// 	err = writer.Close()
-// 	if err != nil {
-// 		return nil, err
-// 	}
-
-// 	return http.NewRequest("POST", uri, body)
-// }
+*/

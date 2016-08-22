@@ -14,8 +14,6 @@ import (
 	"time"
 )
 
-var log cdtype.Logger
-
 // Applet data and controlers.
 //
 type Applet struct {
@@ -33,17 +31,18 @@ type Applet struct {
 // NewApplet create a new applet instance.
 //
 func NewApplet() cdtype.AppInstance {
-	app := &Applet{AppBase: cdapplet.New()} // Icon controler and interface to cairo-dock.
-	log = app.Log()
-
-	app.defineActions()
+	app := &Applet{}
+	app.AppBase = cdapplet.New(&app.conf, app.defineActions()...)
 
 	// Prepare mailbox with the display callback that will receive update info.
 	app.data = NewFeed(app.updateDisplay)
 
 	// The poller will check for new mails on a timer, with a small emblem during the polling.
 	poller := app.Poller().Add(app.data.Check)
-	poller.SetPreCheck(func() { app.SetEmblem(app.FileLocation("img", "go-down.svg"), cdtype.EmblemTopLeft) })
+	poller.SetPreCheck(func() {
+		app.SetEmblem(app.FileLocation("img", "go-down.svg"), cdtype.EmblemTopLeft)
+		app.Log().Debug("Check mails")
+	})
 	poller.SetPostCheck(func() { app.SetEmblem("none", cdtype.EmblemTopLeft) })
 
 	return app
@@ -51,9 +50,7 @@ func NewApplet() cdtype.AppInstance {
 
 // Init load user configuration if needed and initialise applet.
 //
-func (app *Applet) Init(loadConf bool) {
-	app.LoadConfig(loadConf, &app.conf) // Load config will crash if fail. Expected.
-
+func (app *Applet) Init(def *cdtype.Defaults, confLoaded bool) {
 	// Reset data to be sure our display will be refreshed.
 	app.data.Clear()
 	app.data.LoadLogin(app.FileDataDir(loginLocation))
@@ -65,28 +62,18 @@ func (app *Applet) Init(loadConf bool) {
 		app.conf.MailClientName = app.conf.DefaultMonitorName
 	}
 
-	// Fill config empty settings.
-	if app.conf.AlertSoundFile == "" {
-		app.conf.AlertSoundFile = app.conf.DefaultAlertSoundFile
-	}
-	var icon string
-	if app.conf.Icon != "" && app.conf.Renderer != EmblemSmall && app.conf.Renderer != EmblemLarge { // User selected icon.
-		icon = app.conf.Icon
-	}
+	// Defaults.
+	def.Label = "Mail unchecked"
+	def.PollerInterval = app.conf.UpdateDelay.Value()
 
-	// Set defaults to dock icon: display and controls.
-	app.SetDefaults(cdtype.Defaults{
-		Label:          "Mail unchecked",
-		Icon:           icon,
-		PollerInterval: cdtype.PollerInterval(app.conf.UpdateDelay*60, defaultUpdateDelay),
-		Commands: cdtype.Commands{
-			cmdMailClient: cdtype.NewCommandStd(app.conf.MailClientAction+1, app.conf.MailClientName, app.conf.MailClientClass)}, // Add 1 to action as we don't provide the none option.
-		ShortkeyActions: []cdtype.ShortkeyAction{
-			{func() { app.testAction(ActionOpenClient) }, app.conf.ShortkeyOpen},
-			{func() { app.testAction(ActionCheckMail) }, app.conf.ShortkeyCheck},
-		},
-		Debug: app.conf.Debug,
-	})
+	// Add 1 to action as we don't provide the none option.
+	cmd := cdtype.NewCommandStd(app.conf.MailClientAction+1, app.conf.MailClientName, app.conf.MailClientClass)
+	def.Commands = cdtype.Commands{cmdMailClient: cmd}
+
+	// Shortkey callbacks.
+	app.conf.ShortkeyOpenClient.Call = func() { app.testAction(ActionOpenClient) }
+	app.conf.ShortkeyShowMails.Call = func() { app.testAction(ActionShowMails) }
+	app.conf.ShortkeyCheck.Call = func() { app.testAction(ActionCheckMail) }
 
 	// Create the renderer.
 	switch app.conf.Renderer {
@@ -96,7 +83,7 @@ func (app *Applet) Init(loadConf bool) {
 	case EmblemSmall, EmblemLarge:
 		var e error
 		app.render, e = NewRenderedSVG(app, app.conf.Renderer)
-		log.Err(e, "renderer svg")
+		app.Log().Err(e, "renderer svg")
 
 	default: // NoDisplay case, but using default to be sure we have a valid renderer.
 		app.render = NewRenderedNone()
@@ -143,40 +130,36 @@ func (app *Applet) DefineEvents(events *cdtype.Events) {
 
 // Define applet actions. Order must match actions const declaration order.
 //
-func (app *Applet) defineActions() {
-	app.Action().Add(
-		&cdtype.Action{
+func (app *Applet) defineActions() []*cdtype.Action {
+	return []*cdtype.Action{
+		{
 			ID:   ActionNone,
 			Menu: cdtype.MenuSeparator,
-		},
-		&cdtype.Action{
+		}, {
 			ID:   ActionOpenClient,
 			Name: "Open mail client",
 			Icon: "document-open",
 			Call: app.actionOpenClient,
-		},
-		&cdtype.Action{
-			ID:       ActionCheckMail,
-			Name:     "Check now",
-			Icon:     "view-refresh",
-			Call:     app.actionCheckMail,
-			Threaded: true,
-		},
-		&cdtype.Action{
+		}, {
 			ID:       ActionShowMails,
 			Name:     "Show mail dialog",
 			Icon:     "media-seek-forward",
 			Call:     app.actionShowMails,
 			Threaded: true,
-		},
-		&cdtype.Action{
+		}, {
+			ID:       ActionCheckMail,
+			Name:     "Check now",
+			Icon:     "view-refresh",
+			Call:     app.actionCheckMail,
+			Threaded: true,
+		}, {
 			ID:       ActionRegister,
 			Name:     "Set account",
 			Icon:     "media-seek-forward",
 			Call:     app.actionRegister,
 			Threaded: true,
 		},
-	)
+	}
 }
 
 // Test login infos before launching an action. Redirect to the the registration
@@ -219,17 +202,14 @@ func (app *Applet) actionRegister() {
 	e := app.PopupDialog(cdtype.DialogData{
 		Message: text + "Please enter your login in the format username:password",
 		Buttons: "ok;cancel",
-		Widget: cdtype.DialogWidgetText{
-			Editable: true,
-			Visible:  true,
-		},
+		Widget:  cdtype.DialogWidgetText{},
 		Callback: cdtype.DialogCallbackValidString(func(str string) {
 			app.data.SaveLogin(str)
 			app.Action().Launch(ActionCheckMail) // CheckMail will launch a check and reset the timer.
 		}),
 	})
 
-	log.Err(e, "popup")
+	app.Log().Err(e, "popup")
 }
 
 //
@@ -247,7 +227,7 @@ func (app *Applet) updateDisplay(delta int, first bool, e error) {
 	switch {
 	case e != nil:
 		label = "Update Error: " + eventTime + "\n" + e.Error() // Error time is refreshed.
-		log.Err(e, "Check mail")
+		app.Log().Err(e, "Check mail")
 		if app.err == nil || e.Error() != app.err.Error() { // Error buffer, dont warn twice the same information.
 			app.render.Error(e)
 			app.ShowDialog("Mail check error"+e.Error(), app.conf.DialogTimer)
@@ -256,14 +236,14 @@ func (app *Applet) updateDisplay(delta int, first bool, e error) {
 		}
 
 	case first:
-		log.Debug("  * First check", delta)
+		app.Log().Debug("  * First check", delta)
 
 	case delta > 0:
-		log.Debug("  * Count changed", delta)
+		app.Log().Debug("  * Count changed", delta)
 		app.sendAlert(delta)
 
 	case delta == 0:
-		log.Debug("  * ", "no change")
+		app.Log().Debug("  * ", "no change")
 	}
 
 	switch {
@@ -290,14 +270,14 @@ func (app *Applet) sendAlert(delta int) {
 	if app.conf.AlertSoundEnabled {
 		sound := app.conf.AlertSoundFile
 		if len(sound) == 0 {
-			log.Info("No sound file configured")
+			app.Log().Info("No sound file configured")
 			return
 		}
 		if !filepath.IsAbs(sound) && sound[0] != []byte("~")[0] { // Check for relative path.
 			sound = app.FileLocation(sound)
 		}
 
-		log.ExecAsync("paplay", sound)
+		app.Log().ExecAsync("paplay", sound)
 		// if e := exec.Command("paplay", sound).Start(); e != nil {
 		//~ exec.Command("aplay", sound).Start()
 		// }
@@ -322,7 +302,7 @@ func (app *Applet) mailPopup(nb, duration int, templateFunc string) {
 
 	// if app.conf.DialogType == dialogInternal {
 	text, e := app.conf.DialogTemplate.ToString(templateFunc, feed)
-	if log.Err(e, "Template ListMailsNew") {
+	if app.Log().Err(e, "Template ListMailsNew") {
 		return
 	}
 
@@ -333,17 +313,17 @@ func (app *Applet) mailPopup(nb, duration int, templateFunc string) {
 		Buttons:    "document-open;cancel",
 		Callback:   cdtype.DialogCallbackValidNoArg(app.Action().CallbackNoArg(ActionOpenClient)), // Open mail client if the user press the 1st button.
 	})
-	log.Err(e, "popup")
+	app.Log().Err(e, "popup")
 
 	// } else {
 	// 	if nb == 1 {
-	// 		log.Err(popUp(feed.Mail[0].AuthorName, feed.Mail[0].Title, app.FileLocation("icon"), app.conf.DialogTimer*1000), "libnotify")
+	// 		app.Log().Err(popUp(feed.Mail[0].AuthorName, feed.Mail[0].Title, app.FileLocation("icon"), app.conf.DialogTimer*1000), "libnotify")
 	// 	} else {
 	// 		title, eTit := app.ExecuteTemplate(DialogTemplate, "TitleCount", feed)
-	// 		log.Err(eTit, "Template TitleCount")
+	// 		app.Log().Err(eTit, "Template TitleCount")
 	// 		text, eTxt := app.ExecuteTemplate(DialogTemplate, "ListMails", feed)
-	// 		log.Err(eTxt, "Template ListMails")
-	// 		log.Err(popUp(title, text, app.FileLocation("icon"), app.conf.DialogTimer*1000), "Libnotify")
+	// 		app.Log().Err(eTxt, "Template ListMails")
+	// 		app.Log().Err(popUp(title, text, app.FileLocation("icon"), app.conf.DialogTimer*1000), "Libnotify")
 	// 	}
 	// }
 

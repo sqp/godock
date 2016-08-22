@@ -49,7 +49,7 @@ const (
 
 // New creates a new weather data source for the given backend.
 //
-func New(backend BackendID) Weather {
+func New() Weather { // backend BackendID
 	return &weatherCom{}
 }
 

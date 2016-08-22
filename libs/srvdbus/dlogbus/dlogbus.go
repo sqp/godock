@@ -40,7 +40,7 @@ func Action(action func(*Client) error) error {
 // Restart sends the Restart action to the dlogbus server.
 //
 func (client *Client) Restart() error {
-	return client.Call("Restart")
+	return client.Go("Restart")
 }
 
 //

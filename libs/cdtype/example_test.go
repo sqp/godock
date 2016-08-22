@@ -9,7 +9,7 @@ func (app *AppTest) ExampleAppIcon_popupDialogListFixed() {
 		Message:   "Please choose:",
 		UseMarkup: true,
 		Widget: cdtype.DialogWidgetList{
-			Values:       "entry 1;entry two;or more",
+			Values:       []string{"entry 1", "entry two", "or more"},
 			InitialValue: int32(2),
 		},
 		Buttons: "ok;cancel",
@@ -25,8 +25,7 @@ func (app *AppTest) ExampleAppIcon_popupDialogListEditable() {
 		Message:   "Please choose:",
 		UseMarkup: true,
 		Widget: cdtype.DialogWidgetList{
-			Editable:     true,
-			Values:       "one;two;three",
+			Values:       []string{"one", "two", "three"},
 			InitialValue: "four",
 		},
 		Buttons: "ok;cancel",

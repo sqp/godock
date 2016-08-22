@@ -21,13 +21,8 @@ import (
 // They can also be declared directly as methods of your applet.
 //   func (app *Applet) OnClick(btnState int) { }
 //
-// Reload event is optional. Here is the default call if you want to override it.
-//
-// 	app.Events.Reload = func(loadConf bool) {
-// 		app.Log().Debug("Reload module")
-// 		app.Init(loadConf)
-// 		app.Poller().Restart() // send our restart event. (safe on nil pollers).
-// 	}
+// Reload is optional.
+// See cdapplet.SetEvents for the default call if you want to override it.
 //
 type Events struct {
 	// Action when the user clicks on the icon.
@@ -88,7 +83,7 @@ type AppStarter func() AppInstance
 //
 type AppInstance interface {
 	// Need to be defined in user applet.
-	Init(loadConf bool)
+	Init(def *Defaults, confLoaded bool)
 
 	// Provided by extending
 	AppBase
@@ -108,8 +103,8 @@ type AppBase interface {
 	//
 	Name() string // Name returns the applet name as known by the dock. As an external app = dir name.
 
-	// SetDefaults set basic defaults icon settings in one call. Empty fields will
-	// be reset, so this is better used in the Init() call.
+	// SetDefaults set basic defaults icon settings in one call.
+	// Empty fields will be reset, so this is better used in the Init() call.
 	//
 	SetDefaults(def Defaults)
 
@@ -126,21 +121,20 @@ type AppBase interface {
 	// --- Config ---
 	//
 	// LoadConfig will try to create and fill the given config struct with data from
-	// the configuration file. Log error and crash if something went wrong.
-	// Won't do anything if loadConf is false.
+	// the configuration file.
 	//
-	LoadConfig(loadConf bool, v interface{})
+	// Won't do anything if loadConf is false.
+	// If an error is returned, the backend is expected to unload the applet
+	// (or crash in a standalone mode).
+	//
+	LoadConfig(loadConf bool) (Defaults, error)
 
 	// UpdateConfig opens the applet config file for edition.
-
+	//
 	// You must ensure that Save or Cancel is called, and fast to prevent memory
 	// leaks and deadlocks.
 	//
 	UpdateConfig() (ConfUpdater, error)
-
-	// ConfFile returns the config file location.
-	//
-	// ConfFile() string // ConfFile returns the config file location.
 
 	// --- Grouped Interfaces ---
 	//
@@ -155,10 +149,6 @@ type AppBase interface {
 	// Poller returns the applet poller if any.
 	//
 	Poller() AppPoller
-
-	// Template returns a manager of go text templates for applets
-	//
-	Template() AppTemplate
 
 	// Log gives access to the applet logger.
 	//
@@ -207,7 +197,7 @@ type AppIcon interface {
 
 	// BindShortkey binds any number of keyboard shortcuts to your applet.
 	//
-	BindShortkey(shortkeys ...Shortkey) error
+	BindShortkey(shortkeys ...*Shortkey) error
 
 	// IconProperties gets all applet icon properties at once.
 	//
@@ -473,6 +463,10 @@ type AppAction interface {
 	//
 	Add(acts ...*Action)
 
+	// Len returns the number of actions defined.
+	//
+	Len() int
+
 	// CallbackNoArg returns a callback to the given action ID.
 	//
 	CallbackNoArg(ID int) func()
@@ -677,7 +671,7 @@ type appManagement interface {
 	OnEvent(event string, data ...interface{}) bool
 	SetBase(name, conf, rootdir, sharedir string)
 	SetBackend(AppBackend)
-	SetEvents(AppInstance)
+	SetEvents(AppInstance) func() error
 }
 
 // AppBackend extends AppIcon with SetOnEvent used for internal connection.
@@ -818,27 +812,34 @@ type MenuWidgeter interface {
 //----------------------------------------------------------------[ DEFAULTS ]--
 
 // Defaults settings that can be set in one call with something like:
-//    app.SetDefaults(dock.Defaults{
-//        Label:      "No data",
-//        QuickInfo:  "?",
+//    app.SetDefaults(cdtype.Defaults{
+//        Label:      "This is my great applet",
+//        QuickInfo:  "+1",
 //    })
 //
 type Defaults struct {
-	Icon            string
-	Label           string
-	QuickInfo       string
-	Shortkeys       []Shortkey
-	ShortkeyActions []ShortkeyAction
+	// Those are provided by ConfGroupIconBoth.
+	Icon  string
+	Label string
+	Debug bool // Enable debug flood.
 
+	// Gathered by LoadConfig.
+	Shortkeys []*Shortkey
+
+	// Others to fill.
+	QuickInfo      string
 	PollerInterval int
 	Commands       Commands
-
-	Templates []string
-	Debug     bool // Enable debug flood.
 }
 
 //
 //-------------------------------------------------------------[ CONF STRUCT ]--
+
+// ToDefaultser represents a config group that can directly apply its defaults settings.
+//
+type ToDefaultser interface {
+	ToDefaults(*Defaults)
+}
 
 // ConfGroupIconBoth defines a common config struct for the Icon tab.
 //
@@ -846,6 +847,12 @@ type ConfGroupIconBoth struct {
 	Icon  string `conf:"icon"`
 	Name  string `conf:"name"`
 	Debug bool
+}
+
+func (g ConfGroupIconBoth) ToDefaults(def *Defaults) {
+	def.Icon = g.Icon
+	def.Label = g.Name
+	def.Debug = g.Debug
 }
 
 // ConfGroupIconName defines a special config struct for the Icon tab.
@@ -856,6 +863,11 @@ type ConfGroupIconBoth struct {
 type ConfGroupIconName struct {
 	Name  string `conf:"name"`
 	Debug bool
+}
+
+func (g ConfGroupIconName) ToDefaults(def *Defaults) {
+	def.Label = g.Name
+	def.Debug = g.Debug
 }
 
 // ConfUpdater updates a config file.
@@ -928,9 +940,9 @@ type DialogData struct {
 // DialogWidgetText defines options for the text widget of a dialog.
 //
 type DialogWidgetText struct {
-	MultiLines   bool   // True to have a multi-lines text-entry, ie a text-view.
-	Editable     bool   // Whether the user can modify the text or not.
-	Visible      bool   // Whether the text will be visible or not (useful to type passwords).
+	MultiLines   bool   // true to have a multi-lines text-entry, ie a text-view.
+	Locked       bool   // false if the user can modify the text.
+	Hidden       bool   // false if the input text is visible (set to true for passwords).
 	NbChars      int32  // Maximum number of chars (the current number of chars will be displayed next to the entry) (0=infinite).
 	InitialValue string // Text initially contained in the entry.
 }
@@ -950,15 +962,16 @@ type DialogWidgetScale struct {
 //
 type DialogWidgetList struct {
 	// Editable represents whether the user can enter a custom choice or not.
-	// If true, InitialValue and returned value are string.
-	// If false, InitialValue and returned value are int32.
+	//   false:  InitialValue and returned value are int32. // TODO: move to int
+	//   true:   InitialValue and returned value are string.
 	Editable bool
 
-	// Values represents the combo list values, separated by comma ";".
-	Values string
+	// Values represents the combo list values.
+	// Note that values separator will be a semicolon ";" on the DBus backend.
+	Values []string
 
 	// InitialValue defines the default value, presented to the user.
-	// Type:  string if editable=true, or int32 if editable=false.
+	// Type:  int32 if Editable=false or string if Editable=true.
 	InitialValue interface{}
 }
 

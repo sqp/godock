@@ -4,19 +4,27 @@ Package dist contains documentation and files to build distro packages.
 Linux package installation.
 
 
-Install Debian or Ubuntu package from repository
+Install for Debian - Ubuntu - LinuxMint and related from the repository
+
+(please confirm if they're working on Debian 8)
+
+Create a source.list entry by adding the file:
 
 /etc/apt/sources.list.d/cairo-dock-go.list
-  deb http://download.opensuse.org/repositories/home:/SQP:/cairo-dock-go/Debian_8.0/ ./
+  deb http://download.opensuse.org/repositories/home:/SQP:/cairo-dock-go/xUbuntu_16.04/ ./
 
+Install
+  apt update && apt install cairo-dock-goapplets # or cairo-dock-rework
 
-Install Archlinux package from repository
+Install for Archlinux from the repository (already build).
 
-/etc/pacman.conf
+Add to your /etc/pacman.conf
   [home_SQP_cairo-dock-go_Arch_Extra]
   SigLevel = Never
   Server = http://download.opensuse.org/repositories/home:/SQP:/cairo-dock-go/Arch_Extra/$arch
 
+Install
+  pacman -Sy cairo-dock-goapplets # or cairo-dock-rework
 
 Build Archlinux package
 
@@ -38,7 +46,7 @@ Install package
   makepkg -i
 
 Remove Package
-  pacman -R cairo-dock-control
+  pacman -R cairo-dock-goapplets
 
 
 Install from sources
@@ -55,9 +63,10 @@ Applets pack:
 
   make unstable
 
-  # It can then be installed in the system tree (optional)
+  # It can then be installed in the system tree.
+  # (optional if you add $GOPATH/bin to your PATH)
 
-  make install
+  sudo make install
 
 Dock rework with applets:
 
@@ -72,18 +81,27 @@ Dock rework with applets:
 
   # It can then be installed in the system tree
 
-  make install-dock
+  sudo make install-dock
 
 or you can also install manually the applets you need (you may have to restart your dock).
 
+  # Install (make link) for all applets in your home dir.
+  for f in $GOPATH/src/github.com/sqp/godock/applets/*; do ln -s $f ~/.config/cairo-dock/third-party/; done
+
+  # Or install just those you need.
   cd $GOPATH/src/github.com/sqp/godock/applets/GoGmail
   make link
 
   cd $GOPATH/src/github.com/sqp/godock/applets/NetActivity
   make link
 
-The list of buildable applets can be found in the applets repo:
+The list of applets buildable as standalone can be found in the applets repo:
     https://github.com/sqp/godock/tree/master/applets
+
+The list of applets buildable with the dock or the applets service can be found
+in the allapps package:
+    https://github.com/sqp/godock/tree/master/services/allapps
+
 
 Once the dock rework or the applet pack has been installed, the cdc command is
 available with a few options:

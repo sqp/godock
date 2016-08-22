@@ -386,9 +386,23 @@ func (widget *ConfCore) onSelect(item *Item, e error) {
 			widget.data.MainConfigFile(),
 			widget.data.MainConfigDefault(),
 			func() {
+				tokf, ok := interface{}(w).(saver)
+				if !ok {
+					widget.log.NewErr("bad config widget", "update confcore")
+					return
+				}
+				kf := tokf.KeyFile()
+				if kf == nil {
+					conf, e := cfbuild.LoadFile(widget.data.MainConfigFile(), "")
+					if widget.log.Err(e, "update confcore, reload conf file") {
+						return
+					}
+					kf = &conf.KeyFile
+					defer kf.Free()
+				}
+
 				for _, manager := range item.Managers {
-					tokf, _ := interface{}(w).(saver)
-					widget.data.ManagerReload(manager, true, tokf.KeyFile())
+					widget.data.ManagerReload(manager, true, kf)
 				}
 			})
 	}

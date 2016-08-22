@@ -23,6 +23,7 @@ type Sourcer interface {
 	ClickedQuit()
 	SetBox(*gtk.Box)
 	SetGrouper(cftype.Grouper)
+	Select(string, ...string) bool
 }
 
 // New creates a virtual data source for the config file builder.
@@ -45,11 +46,12 @@ type source struct {
 	// log cdtype.Logger
 }
 
-func (o *source) GetWindow() *gtk.Window      { return o.win }
-func (o *source) ClickedSave()                { o.saveCall(o.Grouper) }
-func (o *source) ClickedQuit()                { gtk.MainQuit() }
-func (o *source) SetBox(box *gtk.Box)         { o.box = box }
-func (o *source) SetGrouper(g cftype.Grouper) { o.Grouper = g }
+func (o *source) GetWindow() *gtk.Window        { return o.win }
+func (o *source) ClickedSave()                  { o.saveCall(o.Grouper) }
+func (o *source) ClickedQuit()                  { gtk.MainQuit() }
+func (o *source) SetBox(box *gtk.Box)           { o.box = box }
+func (o *source) SetGrouper(g cftype.Grouper)   { o.Grouper = g }
+func (o *source) Select(string, ...string) bool { return false }
 
 //
 //-------------------------------------------------------------[ DATA SOURCE ]--

@@ -29,39 +29,26 @@ type Applet struct {
 // NewApplet creates a new Notifications applet instance.
 //
 func NewApplet() cdtype.AppInstance {
-	app := &Applet{AppBase: cdapplet.New()} // Icon controler and interface to cairo-dock.
+	app := &Applet{notifs: &Notifs{}}
+	app.AppBase = cdapplet.New(&app.conf, app.defineActions()...)
 
-	app.notifs = &Notifs{}
 	app.notifs.SetOnCount(app.UpdateCount)
-	app.Log().Err(app.notifs.Start(), "notifications listener")
-
-	app.defineActions()
+	e := app.notifs.Start()
+	app.Log().Err(e, "notifications listener")
 
 	return app
 }
 
 // Init loads user configuration if needed and initialise applet.
 //
-func (app *Applet) Init(loadConf bool) {
-	app.LoadConfig(loadConf, &app.conf) // Load config will crash if fail. Expected.
+func (app *Applet) Init(def *cdtype.Defaults, confLoaded bool) {
+	// Set notification service config.
+	app.notifs.NotifConfig = app.conf.NotifConfig
 
-	app.notifs.MaxSize = app.conf.NotifSize
-	app.notifs.Blacklist = app.conf.NotifBlackList
-
-	// Fill config empty settings.
+	// New message icon.
 	if app.conf.NotifAltIcon == "" {
 		app.conf.NotifAltIcon = app.FileLocation(defaultNotifAltIcon)
 	}
-	if app.conf.Icon == "" {
-		app.conf.Icon = app.FileLocation("icon")
-	}
-
-	// Set defaults to dock icon: display and controls.
-	app.SetDefaults(cdtype.Defaults{
-		Icon:      app.conf.Icon,
-		Label:     app.conf.Name,
-		Templates: []string{"notif"},
-		Debug:     app.conf.Debug})
 }
 
 //------------------------------------------------------------------[ EVENTS ]--
@@ -69,52 +56,40 @@ func (app *Applet) Init(loadConf bool) {
 // DefineEvents sets applet events callbacks.
 //
 func (app *Applet) DefineEvents(events *cdtype.Events) {
-
 	events.OnClick = app.Action().CallbackInt(ActionShowAll)
 
 	events.OnMiddleClick = app.Action().CallbackNoArg(ActionClear)
 
 	events.OnBuildMenu = app.Action().CallbackMenu(menuUser)
 
-	events.OnShortkey = func(key string) {
-		// if key == app.conf.ShortkeyOpen {
-		// }
-		// if key == app.conf.ShortkeyCheck {
-		// }
-	}
-
 	events.OnDropData = func(data string) {
 		app.Log().Info("Grep " + data)
-		// stream(data)
 	}
-
 }
 
 //-----------------------------------------------------------------[ ACTIONS ]--
 
 // Define applet actions. Order must match actions const declaration order.
 //
-func (app *Applet) defineActions() {
-	app.Action().Add(
-		&cdtype.Action{
+func (app *Applet) defineActions() []*cdtype.Action {
+	return []*cdtype.Action{
+		{
 			ID:   ActionNone,
 			Menu: cdtype.MenuSeparator,
-		},
-		&cdtype.Action{
+		}, {
 			ID:       ActionShowAll,
 			Name:     "Show messages",
 			Icon:     "media-seek-forward",
 			Call:     app.displayAll,
 			Threaded: true,
-		},
-		&cdtype.Action{
+		}, {
 			ID:       ActionClear,
 			Name:     "Clear all",
 			Icon:     "edit-clear",
 			Call:     app.notifs.Clear,
 			Threaded: true,
 		},
-	)
+	}
 }
 
 // UpdateCount shows the number of messages on the icon, and displays the
@@ -140,17 +115,19 @@ func (app *Applet) displayAll() {
 	messages := app.notifs.List()
 	if len(messages) == 0 {
 		msg = "No recent notifications"
+
 	} else {
-		text, e := app.Template().Execute("notif", "ListNotif", messages)
+		text, e := app.conf.DialogTemplate.ToString("ListNotif", messages)
 		app.Log().Err(e, "template")
 		msg = strings.TrimRight(text, "\n")
 	}
 
 	app.PopupDialog(cdtype.DialogData{
-		Message:   msg,
-		UseMarkup: true,
-		Buttons:   "edit-clear;cancel",
-		Callback:  cdtype.DialogCallbackValidNoArg(app.Action().CallbackNoArg(ActionClear)), // Clear notifs if the user press the 1st button.
+		Message:    msg,
+		UseMarkup:  true,
+		Buttons:    "edit-clear;cancel",
+		TimeLength: app.conf.DialogDuration,
+		Callback:   cdtype.DialogCallbackValidNoArg(app.Action().CallbackNoArg(ActionClear)), // Clear notifs if the user press the 1st button.
 	})
 
 	// if self.config['clear'] else 4 + len(msg)/40 }  // if we're going to clear the history, show the dialog until the user closes it
@@ -169,12 +146,19 @@ type Notif struct {
 // Notifs handles Dbus notifications management.
 //
 type Notifs struct {
-	C         chan *dbus.Message
-	MaxSize   int
-	Blacklist []string
+	NotifConfig
+
+	C chan *dbus.Message
 
 	messages  []*Notif
 	callCount func(int)
+}
+
+// NotifConfig defines the notification service configuration.
+//
+type NotifConfig struct {
+	MaxSize   int
+	Blacklist []string
 }
 
 const match = "type='method_call',path='/org/freedesktop/Notifications',member='Notify',eavesdrop='true'"

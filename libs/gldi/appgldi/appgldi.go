@@ -82,7 +82,7 @@ func (o *AppGldi) PopupDialog(data cdtype.DialogData) error {
 
 // BindShortkey binds any number of keyboard shortcuts to your applet. See cdtype.Shortkey.
 //
-func (o *AppGldi) BindShortkey(shortkeys ...cdtype.Shortkey) error {
+func (o *AppGldi) BindShortkey(shortkeys ...*cdtype.Shortkey) error {
 	addIdle(func() {
 		for _, sk := range shortkeys {
 			if _, ok := o.shortkeys[sk.ConfGroup+sk.ConfKey]; ok { // shortkey defined, rebind.

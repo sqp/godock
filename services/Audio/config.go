@@ -32,7 +32,7 @@ type groupConfiguration struct {
 	// GaugeRotate bool
 
 	IconBroken  string
-	VolumeStep  int
+	VolumeStep  int64
 	StreamIcons bool
 }
 
@@ -43,5 +43,9 @@ type groupActions struct {
 
 	MixerCommand  string
 	MixerClass    string
-	MixerShortkey cdtype.Shortkey `desc:"Open volume mixer"`
+	MixerShortkey *cdtype.Shortkey `desc:"Open volume mixer"`
+
+	ShortkeyAllMute     *cdtype.Shortkey `desc:"Mute global sound"`
+	ShortkeyAllIncrease *cdtype.Shortkey `desc:"Increase global sound"`
+	ShortkeyAllDecrease *cdtype.Shortkey `desc:"Decrease global sound"`
 }

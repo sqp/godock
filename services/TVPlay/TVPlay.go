@@ -33,8 +33,8 @@ type Applet struct {
 // NewApplet creates a new TVPlay applet instance.
 //
 func NewApplet() cdtype.AppInstance {
-	app := &Applet{AppBase: cdapplet.New()} // Icon controler and interface to cairo-dock.
-	app.defineActions()
+	app := &Applet{}
+	app.AppBase = cdapplet.New(&app.conf, app.defineActions()...)
 
 	// Create the UPnP device manager.
 	var e error
@@ -73,23 +73,9 @@ func NewApplet() cdtype.AppInstance {
 
 // Init load user configuration if needed and initialise applet.
 //
-func (app *Applet) Init(loadConf bool) {
-	app.LoadConfig(loadConf, &app.conf) // Load config will crash if fail. Expected.
-
-	// Set defaults to dock icon: display and controls.
-	app.SetDefaults(cdtype.Defaults{
-		Icon: app.conf.Icon,
-		Commands: cdtype.Commands{
-			0: cdtype.NewCommand(true, "", app.Name())}, // Declare monitoring for our GUI.
-		Shortkeys: []cdtype.Shortkey{
-			{"Actions", "ShortkeyMute", "Mute volume", app.conf.ShortkeyMute},
-			{"Actions", "ShortkeyVolumeDown", "Lower volume", app.conf.ShortkeyVolumeDown},
-			{"Actions", "ShortkeyVolumeUp", "Increase volume", app.conf.ShortkeyVolumeUp},
-			{"Actions", "ShortkeyPlayPause", "Play / Pause", app.conf.ShortkeyPlayPause},
-			{"Actions", "ShortkeyStop", "Stop", app.conf.ShortkeyStop},
-			{"Actions", "ShortkeySeekBackward", "Seek backward", app.conf.ShortkeySeekBackward},
-			{"Actions", "ShortkeySeekForward", "Seek forward", app.conf.ShortkeySeekForward}},
-		Debug: app.conf.Debug})
+func (app *Applet) Init(def *cdtype.Defaults, confLoaded bool) {
+	// Defaults.
+	def.Commands[0] = cdtype.NewCommand(true, "", app.Name()) // Declare monitoring for our GUI.
 
 	// Create the control window if needed.
 	if app.conf.WindowVisibility == 0 {
@@ -194,31 +180,6 @@ func (app *Applet) DefineEvents(events *cdtype.Events) {
 		app.Action().BuildMenu(menu, dockMenu)
 	}
 
-	events.OnShortkey = func(key string) {
-		switch key {
-		case app.conf.ShortkeyMute:
-			app.Action().Launch(int(upnptype.ActionToggleMute))
-
-		case app.conf.ShortkeyVolumeDown:
-			app.Action().Launch(int(upnptype.ActionVolumeDown))
-
-		case app.conf.ShortkeyVolumeUp:
-			app.Action().Launch(int(upnptype.ActionVolumeUp))
-
-		case app.conf.ShortkeyPlayPause:
-			app.Action().Launch(int(upnptype.ActionPlayPause))
-
-		case app.conf.ShortkeyStop:
-			app.Action().Launch(int(upnptype.ActionStop))
-
-		case app.conf.ShortkeySeekBackward:
-			app.Action().Launch(int(upnptype.ActionSeekBackward))
-
-		case app.conf.ShortkeySeekForward:
-			app.Action().Launch(int(upnptype.ActionSeekForward))
-		}
-	}
-
 	events.End = func() {
 		if app.win != nil {
 			glib.IdleAdd(app.win.Destroy)
@@ -231,57 +192,50 @@ func (app *Applet) DefineEvents(events *cdtype.Events) {
 
 // Define applet actions.
 //
-func (app *Applet) defineActions() {
-	app.Action().Add(
-		&cdtype.Action{
+func (app *Applet) defineActions() []*cdtype.Action {
+	return []*cdtype.Action{
+		{
 			ID:   int(upnptype.ActionNone),
 			Menu: cdtype.MenuSeparator,
-		},
-		&cdtype.Action{
+		}, {
 			ID:   int(upnptype.ActionToggleMute),
 			Name: "Mute volume",
 			Icon: "dialog-information",
 			Call: func() { app.cp.Action(upnptype.ActionToggleMute) },
-		},
-		&cdtype.Action{
+		}, {
 			ID:   int(upnptype.ActionVolumeDown),
 			Name: "Volume down",
 			Icon: "go-down",
 			Call: func() { app.cp.Action(upnptype.ActionVolumeDown) },
-		},
-		&cdtype.Action{
+		}, {
 			ID:   int(upnptype.ActionVolumeUp),
 			Name: "Volume up",
 			Icon: "go-up",
 			Call: func() { app.cp.Action(upnptype.ActionVolumeUp) },
-		},
-		&cdtype.Action{
+		}, {
 			ID:   int(upnptype.ActionPlayPause),
 			Name: "Play / pause",
 			Icon: "media-playback-start",
 			Call: func() { app.cp.Action(upnptype.ActionPlayPause) },
-		},
-		&cdtype.Action{
+		}, {
 			ID:   int(upnptype.ActionStop),
 			Name: "Stop",
 			Icon: "media-playback-stop",
 			Call: func() { app.cp.Action(upnptype.ActionStop) },
-		},
-		&cdtype.Action{
+		}, {
 			ID:       int(upnptype.ActionSeekBackward),
 			Name:     "Seek backward",
 			Icon:     "go-previous",
 			Call:     func() { app.cp.Action(upnptype.ActionSeekBackward) },
 			Threaded: true,
-		},
-		&cdtype.Action{
+		}, {
 			ID:       int(upnptype.ActionSeekForward),
 			Name:     "Seek forward",
 			Icon:     "go-next",
 			Call:     func() { app.cp.Action(upnptype.ActionSeekForward) },
 			Threaded: true,
 		},
-	)
+	}
 }
 
 //

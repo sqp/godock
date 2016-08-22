@@ -1,6 +1,8 @@
 // Package strhelp provides helpers to work with strings.
 package strhelp
 
+import "strings"
+
 // First returns the first non empty string found.
 //
 func First(list ...string) string {
@@ -37,4 +39,11 @@ func Bracket(msg string) string {
 		return ""
 	}
 	return "[" + msg + "]"
+}
+
+func EscapeGtk(msg string) string {
+	msg = strings.Replace(msg, "&", "&amp;", -1) // Escape ampersand.
+	msg = strings.Replace(msg, "<", "&lt;", -1)  // Escape <.
+	msg = strings.Replace(msg, ">", "&gt;", -1)  // Escape >.
+	return msg
 }

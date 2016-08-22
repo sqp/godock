@@ -23,6 +23,10 @@ func (o *Actions) Add(acts ...*cdtype.Action) {
 	}
 }
 
+// Len returns the number of actions defined.
+//
+func (o *Actions) Len() int { return len(o.list) }
+
 // ID finds the ID matching given action name.
 //
 func (o *Actions) ID(name string) int {
@@ -31,7 +35,7 @@ func (o *Actions) ID(name string) int {
 			return act.ID
 		}
 	}
-	return 0
+	return -1
 }
 
 // Launch starts the desired action by ID.

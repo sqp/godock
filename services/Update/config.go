@@ -13,15 +13,16 @@ const (
 	EmblemTarget = cdtype.EmblemTopLeft
 )
 
-const defaultVersionPollingTimer = 60
-
 // Commands references.
 const (
 	cmdShowDiff = iota
 )
 
 var (
-	grepCmdArgs = []string{"-r", "-I"} // -r: recursive, -I: ignore binaries.
+	grepCmdArgs = []string{
+		"-r", // recursive
+		"-I", // ignore binaries.
+	}
 
 	// Grep text format.
 	grepTitlePattern   = "\n   ---[ grep %s  -  %s ]---\n"
@@ -36,34 +37,40 @@ var (
 // The full config data. One struct for each tab.
 //
 type updateConf struct {
-	groupIcon          `group:"Icon"`
-	groupConfiguration `group:"Configuration"`
-	groupActions       `group:"Actions"`
-}
-
-type groupIcon struct {
-	Icon string `conf:"icon"`
-	Name string `conf:"name"`
+	cdtype.ConfGroupIconBoth `group:"Icon"`
+	groupConfiguration       `group:"Configuration"`
+	groupActions             `group:"Actions"`
 }
 
 type groupConfiguration struct {
 	UserMode bool // false = tester / true = developer
 
 	VersionPollingEnabled bool
-	VersionPollingTimer   int
+	VersionPollingTimer   cdtype.Duration `unit:"minute" default:"60" min:"5"`
+	DialogDuration        int
 
-	SourceDir string // base cairo-dock sources directory. Must contain core and plug-ins folders, same as bzr script.
-
-	BuildAppletName string // single applet target. Must be the dir name of the applet.
-	BuildOneMode    bool   // false = core / true = applet(s)
-	BuildReload     bool   // true if the reload action should be triggered after build
+	SourceDir   string // base cairo-dock sources directory. Must contain core and plug-ins folders, same as bzr script.
+	BuildReload bool   // true if the reload action should be triggered after build
 
 	DiffCommand   string // Command to launch on Show diff action.
 	DiffMonitored bool   // true if the diff command application should be monitored (like a launcher).
-
-	DiffStash bool
+	DiffStash     bool
+	CmdOpenSource string
 
 	BuildTargets []string // list of buildable targets.
+
+	VersionDialogTemplate cdtype.Template `default:"dialogversion"`
+	VersionEmblemWork     string          `default:"EmblemWork.svg"`
+	VersionEmblemNew      string          `default:"EmblemNew.svg"`
+	IconMissing           string          `default:"IconMissing.svg"`
+
+	CommandSudo  string
+	FlagsApplets string // for the full applets pack, to help enable or disable them.
+
+	DirCore    string
+	DirApplets string
+
+	SourceExtra []string // additional repos to version check, separated by \n.
 }
 
 type groupActions struct {
@@ -73,35 +80,12 @@ type groupActions struct {
 	DevClickMiddle    string // dev action.
 	DevMouseWheel     string // dev action.
 
-	ShortkeyOneAction string // shortcut, all actions provided.
-	ShortkeyOneKey    string // key binded.
-
-	ShortkeyTwoAction string // shortcut, all actions provided.
-	ShortkeyTwoKey    string // key binded.
-
-	ShortkeyShowDiff       string
-	ShortkeyShowVersions   string
-	ShortkeyNextTarget     string
-	ShortkeyGrepTarget     string
-	ShortkeyOpenFileTarget string
-	ShortkeyBuildTarget    string
-
-	// still hidden
-	VersionDialogTimer    int
-	VersionDialogTemplate string // both file name and template name inside.
-	VersionEmblemWork     string
-	VersionEmblemNew      string
-	IconMissing           string
-
-	CommandSudo  string
-	FlagsApplets string // for the full applets pack, to help enable or disable them.
-
-	DirCore    string
-	DirApplets string
-
-	SourceExtra []string // additional repos to version check, separated by \n.
-
-	Debug bool
+	ShortkeyShowDiff       *cdtype.Shortkey `action:"1"  desc:"Show diff"`
+	ShortkeyShowVersions   *cdtype.Shortkey `action:"2"  desc:"Show versions"`
+	ShortkeyGrepTarget     *cdtype.Shortkey `action:"4"  desc:"Grep target"`
+	ShortkeyNextTarget     *cdtype.Shortkey `action:"5"  desc:"Next target"`
+	ShortkeyOpenFileTarget *cdtype.Shortkey `action:"6"  desc:"Open file target"`
+	ShortkeyBuildTarget    *cdtype.Shortkey `action:"10" desc:"Build target"`
 }
 
 //
@@ -109,6 +93,7 @@ type groupActions struct {
 
 // List of actions defined in this applet.
 // Actions order in this list must match the order in defineActions.
+// The reference in shortkey declaration must also match.
 //
 const (
 	ActionNone = iota

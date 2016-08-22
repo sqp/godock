@@ -133,9 +133,9 @@ func parseShit(src, dest interface{}) error {
 	return nil
 }
 
-// func (cl *Client) Go(method string, args ...interface{}) error {
-// 	return cl.BusObject.Go(SrvObj+"."+method, dbus.FlagNoReplyExpected, nil, args...).Err
-// }
+func (cl *Client) Go(method string, args ...interface{}) error {
+	return cl.BusObject.Go(cl.srvObj+"."+method, dbus.FlagNoReplyExpected, nil, args...).Err
+}
 
 //
 //------------------------------------------------------------------[ SERVER ]--

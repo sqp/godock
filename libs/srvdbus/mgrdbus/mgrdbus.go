@@ -124,7 +124,7 @@ func (load *Manager) StartApplet(a, b, c, d, e, f, g, h string) *dbus.Error {
 		return dbuscommon.NewError("failed to create applet" + name)
 	}
 
-	backend := appdbus.NewWithApp(app, args, h)
+	backend, callinit := appdbus.NewWithApp(app, args, h)
 
 	er := backend.ConnectEvents(load.Loader.Conn)
 	load.log.Err(er, "ConnectEvents") // TODO: Big problem, need to handle better?
@@ -136,7 +136,11 @@ func (load *Manager) StartApplet(a, b, c, d, e, f, g, h string) *dbus.Error {
 	}
 
 	// Initialise applet: Load config and apply user settings.
-	app.Init(true)
+	// Find a way to unload the applet without the crash in dock and DBus service mode.
+	er = callinit()
+	if load.log.Err(er, "init applet") {
+		return dbuscommon.NewError("failed to create applet" + name)
+	}
 
 	if load.log.GetDebug() { // If the service debug is active, force it also on applets.
 		app.Log().SetDebug(true)

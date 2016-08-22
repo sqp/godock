@@ -45,7 +45,7 @@ func StartApplet(app cdtype.AppInstance) {
 	// Define and connect events to the dock.
 	args := os.Args
 	appDir, _ := os.Getwd() // standalone applet, using current dir.
-	backend := NewWithApp(app, args, appDir)
+	backend, callinit := NewWithApp(app, args, appDir)
 
 	dbusEvent, e := backend.ConnectToBus()
 	log := app.Log()
@@ -54,7 +54,12 @@ func StartApplet(app cdtype.AppInstance) {
 	}
 
 	// Initialise applet: Load config and apply user settings.
-	app.Init(true)
+	e = callinit()
+	if log.Err(e, "init applet") { // Mandatory.
+		// But this is only a tricky safety net. The dock must have provided the file.
+		// File not found/readable should only happen on disk (full) error or bad source file.
+		os.Exit(1)
+	}
 
 	log.Debug("Applet started")
 	defer log.Debug("Applet stopped")
@@ -111,18 +116,17 @@ func New(path string) *CDDbus {
 
 // NewWithApp creates a CDDbus connection and binds it to an applet instance.
 //
-func NewWithApp(app cdtype.AppInstance, args []string, dir string) *CDDbus {
+func NewWithApp(app cdtype.AppInstance, args []string, dir string) (*CDDbus, func() error) {
 	name := args[0][2:] // Strip ./ in the beginning.
 
 	app.SetBase(name, args[3], args[4], dir)
 	// app.ParentAppName = args[5]
 
 	backend := New(args[2])
-	app.SetBackend(backend)
-	app.SetEvents(app)
-
 	backend.log = app.Log()
-	return backend
+	app.SetBackend(backend)
+	callinit := app.SetEvents(app)
+	return backend, callinit
 }
 
 // SetOnEvent sets the OnEvent callback to forwards events.
@@ -289,7 +293,7 @@ func (cda *CDDbus) DemandsAttention(start bool, animation string) error {
 // ShowDialog pops up a simple dialog bubble on the icon.
 //
 func (cda *CDDbus) ShowDialog(message string, duration int) error {
-	return cda.dbusIcon.Go(dockpath.DbusInterfaceApplet+".ShowDialog", 0, nil, message, int32(duration)).Err
+	return cda.dbusIcon.Go("ShowDialog", message, int32(duration))
 }
 
 // PopupDialog open a dialog box . See cdtype.AppIcon.
@@ -311,8 +315,8 @@ func (cda *CDDbus) PopupDialog(data cdtype.DialogData) error {
 		widget = map[string]interface{}{
 			"widget-type":   "text-entry",
 			"multi-lines":   dw.MultiLines,
-			"editable":      dw.Editable,
-			"visible":       dw.Visible,
+			"editable":      !dw.Locked,
+			"visible":       !dw.Hidden,
 			"nb-chars":      int32(dw.NbChars),
 			"initial-value": dw.InitialValue,
 		}
@@ -332,7 +336,7 @@ func (cda *CDDbus) PopupDialog(data cdtype.DialogData) error {
 		widget = map[string]interface{}{
 			"widget-type": "list",
 			"editable":    dw.Editable,
-			"values":      dw.Values,
+			"values":      strings.Join(dw.Values, ";"),
 		}
 
 		// Recast interface to real type so it won't crash in ToMapVariant.
@@ -364,7 +368,7 @@ func (cda *CDDbus) AddMenuItems(items ...map[string]interface{}) error {
 
 // BindShortkey binds one or more keyboard shortcuts to your applet.
 //
-func (cda *CDDbus) BindShortkey(shortkeys ...cdtype.Shortkey) error {
+func (cda *CDDbus) BindShortkey(shortkeys ...*cdtype.Shortkey) error {
 	var list []string
 	for _, sk := range shortkeys {
 		// if sk != "" {

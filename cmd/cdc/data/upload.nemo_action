@@ -1,0 +1,16 @@
+[Nemo Action]
+
+Name=Upload with cdc...
+
+Comment=Send the selected file to an online hosting service
+
+Exec=cdc upload "%F"
+
+Selection=s
+Extensions=nodirs
+Quote=double
+
+Icon-Name=cairo-dock
+
+Name[fr]=Partager avec cdc...
+Comment[fr]=Envoyer le fichier sélectionné vers un hébergeur en ligne

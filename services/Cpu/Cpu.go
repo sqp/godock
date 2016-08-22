@@ -24,10 +24,8 @@ type Applet struct {
 // NewApplet create a new applet instance.
 //
 func NewApplet() cdtype.AppInstance {
-	app := &Applet{
-		AppBase: cdapplet.New(), // Icon controler and interface to cairo-dock.
-		service: NewCPU(),
-	}
+	app := &Applet{service: NewCPU()}
+	app.AppBase = cdapplet.New(&app.conf) // Icon controler and interface to cairo-dock.
 
 	app.Poller().Add(app.service.Check)
 
@@ -43,22 +41,16 @@ func NewApplet() cdtype.AppInstance {
 
 // Init load user configuration if needed and initialise applet.
 //
-func (app *Applet) Init(loadConf bool) {
-	app.LoadConfig(loadConf, &app.conf) // Load config will crash if fail. Expected.
-
+func (app *Applet) Init(def *cdtype.Defaults, confLoaded bool) {
 	// Settings for poller and renderer.
 	app.service.Settings(app.conf.DisplayText, app.conf.DisplayValues, app.conf.GraphType, app.conf.GaugeName)
 	app.service.SetSize(1)
-	app.service.interval = cdtype.PollerInterval(app.conf.UpdateDelay, defaultUpdateDelay)
+	app.service.interval = app.conf.UpdateDelay.Value()
 
-	// Set defaults to dock icon: display and controls.
-	app.SetDefaults(cdtype.Defaults{
-		Label:          app.conf.Name,
-		PollerInterval: app.service.interval,
-		Commands: cdtype.Commands{
-			cmdLeft:   cdtype.NewCommandStd(app.conf.LeftAction, app.conf.LeftCommand, app.conf.LeftClass),
-			cmdMiddle: cdtype.NewCommandStd(app.conf.MiddleAction, app.conf.MiddleCommand)},
-		Debug: app.conf.Debug})
+	// Defaults.
+	def.PollerInterval = app.conf.UpdateDelay.Value()
+	def.Commands[cmdLeft] = cdtype.NewCommandStd(app.conf.LeftAction, app.conf.LeftCommand, app.conf.LeftClass)
+	def.Commands[cmdMiddle] = cdtype.NewCommandStd(app.conf.MiddleAction, app.conf.MiddleCommand)
 }
 
 //

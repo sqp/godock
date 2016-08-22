@@ -1,5 +1,5 @@
 /*
-Copyright : (C) 2012-2015 by SQP
+Copyright : (C) 2012-2016 by SQP
 E-mail    : sqp@glx-dock.org
 
 This program is free software; you can redistribute it and/or
@@ -25,11 +25,13 @@ package Update
 
 import (
 	"github.com/sqp/godock/libs/cdapplet"          // Applet base.
+	"github.com/sqp/godock/libs/cdglobal"          // CmdOpen.
 	"github.com/sqp/godock/libs/cdtype"            // Applet types.
 	"github.com/sqp/godock/libs/clipboard"         // Get clipboard content.
 	"github.com/sqp/godock/libs/packages/build"    // Sources builder.
 	"github.com/sqp/godock/libs/packages/versions" // Versions checker.
 	"github.com/sqp/godock/libs/text/linesplit"    // Parse command output.
+	"github.com/sqp/godock/libs/text/strhelp"      // string help.
 
 	"errors"
 	"fmt"
@@ -58,8 +60,9 @@ type Applet struct {
 // NewApplet create an new Update applet instance.
 //
 func NewApplet() cdtype.AppInstance {
-	app := &Applet{AppBase: cdapplet.New()}
-	app.defineActions()
+	app := &Applet{}
+	app.AppBase = cdapplet.New(&app.conf, app.defineActions()...)
+	app.Action().SetMax(1)
 
 	// Create a cairo-dock sources version checker.
 	app.version = versions.NewVersions(app.onGotVersions)
@@ -71,9 +74,7 @@ func NewApplet() cdtype.AppInstance {
 	poller.SetPreCheck(func() { app.SetEmblem(app.FileLocation("img", app.conf.VersionEmblemWork), EmblemVersion) })
 	poller.SetPostCheck(func() {
 		for _, v := range app.version.Sources() {
-			v.Log = strings.Replace(v.Log, "&", "&amp;", -1) // Escape ampersand.
-			v.Log = strings.Replace(v.Log, "<", "&lt;", -1)  // Escape <.
-			v.Log = strings.Replace(v.Log, ">", "&gt;", -1)  // Escape >.
+			v.Log = strhelp.EscapeGtk(v.Log) // Escape <>&
 		}
 	})
 
@@ -82,27 +83,12 @@ func NewApplet() cdtype.AppInstance {
 
 // Init load user configuration if needed and initialise applet.
 //
-func (app *Applet) Init(loadConf bool) {
-	app.LoadConfig(loadConf, &app.conf) // Load config will crash if fail. Expected.
+func (app *Applet) Init(def *cdtype.Defaults, confLoaded bool) {
+	// Defaults.
+	def.PollerInterval = app.conf.VersionPollingTimer.Value()
+	def.Commands[cmdShowDiff] = cdtype.NewCommand(app.conf.DiffMonitored, app.conf.DiffCommand)
 
-	// Icon default settings.
-	app.SetDefaults(cdtype.Defaults{
-		Icon:           app.conf.Icon,
-		Label:          app.conf.Name,
-		Templates:      []string{app.conf.VersionDialogTemplate},
-		PollerInterval: cdtype.PollerInterval(app.conf.VersionPollingTimer*60, defaultVersionPollingTimer*60),
-		Commands: cdtype.Commands{
-			cmdShowDiff: cdtype.NewCommand(app.conf.DiffMonitored, app.conf.DiffCommand)},
-		Shortkeys: []cdtype.Shortkey{
-			{"Actions", "ShortkeyShowDiff", "Show diff", app.conf.ShortkeyShowDiff},
-			{"Actions", "ShortkeyShowVersions", "Show versions", app.conf.ShortkeyShowVersions},
-			{"Actions", "ShortkeyNextTarget", "Next target", app.conf.ShortkeyNextTarget},
-			{"Actions", "ShortkeyGrepTarget", "Grep target", app.conf.ShortkeyGrepTarget},
-			{"Actions", "ShortkeyOpenFileTarget", "Open file target", app.conf.ShortkeyOpenFileTarget},
-			{"Actions", "ShortkeyBuildTarget", "Build target", app.conf.ShortkeyBuildTarget},
-		},
-		Debug: app.conf.Debug})
-
+	// Version polling state.
 	if app.conf.VersionPollingEnabled {
 		app.Poller().Start()
 	} else {
@@ -191,30 +177,6 @@ func (app *Applet) DefineEvents(events *cdtype.Events) {
 		}
 	}
 
-	// Shortkey event: launch configured action.
-	//
-	events.OnShortkey = func(key string) {
-		switch key {
-		case app.conf.ShortkeyShowDiff:
-			app.Action().Launch(ActionShowDiff)
-
-		case app.conf.ShortkeyShowVersions:
-			app.Action().Launch(ActionShowVersions)
-
-		case app.conf.ShortkeyNextTarget:
-			app.Action().Launch(ActionCycleTarget)
-
-		case app.conf.ShortkeyGrepTarget:
-			app.Action().Launch(ActionGrepTarget)
-
-		case app.conf.ShortkeyOpenFileTarget:
-			app.Action().Launch(ActionOpenFileTarget)
-
-		case app.conf.ShortkeyBuildTarget:
-			app.Action().Launch(ActionBuildTarget)
-		}
-	}
-
 	// Grep of the dropped string on the source dir.
 	//
 	events.OnDropData = app.GrepTarget
@@ -244,8 +206,8 @@ func (app *Applet) GrepTarget(search string) {
 	}
 
 	// Escape ." chars (dot and quotes).
-	query := strings.Replace(search, "\"", "\\\"", -1)
-	query = strings.Replace(query, ".", "\\.", -1)
+	query := strings.Replace(search, `"`, `\"`, -1)
+	query = strings.Replace(query, ".", `\.`, -1)
 
 	// Prepare command.
 	out := ""
@@ -287,7 +249,8 @@ func (app *Applet) OpenFile(file string) {
 	if !filepath.IsAbs(file) {
 		file = filepath.Join(app.target.SourceDir(), file)
 	}
-	app.Log().ExecAsync("subl3", file)
+	cmd := strhelp.First(app.conf.CmdOpenSource, cdglobal.CmdOpen)
+	app.Log().ExecAsync(cmd, file)
 }
 
 //
@@ -314,125 +277,113 @@ func (app *Applet) onGotVersions(countNew int, e error) {
 // Define applet actions.
 // Actions order in this list must match the order of defined actions numbers.
 //
-func (app *Applet) defineActions() {
-	app.Action().SetMax(1)
-	app.Action().Add(
-		&cdtype.Action{
+func (app *Applet) defineActions() []*cdtype.Action {
+	return []*cdtype.Action{
+		{
 			ID:   ActionNone,
 			Menu: cdtype.MenuSeparator,
-		},
-		&cdtype.Action{
+		}, {
 			ID:   ActionShowDiff,
 			Name: "Show diff",
 			Icon: "format-justify-fill",
 			Call: app.actionShowDiff,
-		},
-		&cdtype.Action{
+		}, {
 			ID:       ActionShowVersions,
 			Name:     "Show versions",
 			Icon:     "network-workgroup", // to change
 			Call:     func() { app.actionShowVersions(true) },
 			Threaded: true,
-		},
-		&cdtype.Action{
+		}, {
 			ID:       ActionCheckVersions,
 			Name:     "Check versions",
 			Icon:     "network-workgroup",
 			Call:     app.actionCheckVersions,
 			Threaded: true,
-		},
-		&cdtype.Action{
+		}, {
 			ID:       ActionGrepTarget,
 			Name:     "Grep target",
 			Icon:     "view-refresh",
 			Call:     app.actionGrepTargetClip,
 			Threaded: false,
-		},
-		&cdtype.Action{
+		}, {
 			ID:       ActionCycleTarget,
 			Name:     "Cycle target",
 			Icon:     "view-refresh",
 			Call:     func() { app.actionCycleTarget(1) },
 			Threaded: true,
-		},
-		&cdtype.Action{
+		}, {
 			ID:       ActionOpenFileTarget,
 			Name:     "Open File target",
 			Icon:     "view-refresh",
 			Call:     app.actionOpenFile,
 			Threaded: false,
-		},
-		&cdtype.Action{
+		}, {
 			ID:   ActionToggleUserMode,
 			Name: "Dev mode",
 			Menu: cdtype.MenuCheckBox,
 			Call: app.actionToggleUserMode,
-		},
-
-		&cdtype.Action{
+		}, {
 			ID:   ActionToggleReload,
 			Name: "Reload target",
 			Menu: cdtype.MenuCheckBox,
 			Call: app.actionToggleReload,
-		},
-		&cdtype.Action{
+		}, {
 			ID:   ActionToggleDiffStash,
 			Name: "Diff vs stash",
 			Menu: cdtype.MenuCheckBox,
 			// Call: app.actionToggleReload,
-		},
-		&cdtype.Action{
+		}, {
 			ID:       ActionBuildTarget,
 			Name:     "Build target",
 			Icon:     "media-playback-start",
 			Call:     app.actionBuildTarget,
 			Threaded: true,
-		},
-		//~ action_add(CDCairoBzrAction.GENERATE_REPORT, action_none, "", "view-refresh");
+		}, {
 
-		// &cdtype.Action{
-		// 	ID:       ActionBuildAll,
-		// 	Name:     "Build All",
-		// 	Icon:     "media-skip-forward",
-		// 	Call:     func() { app.actionBuildAll() },
-		// 	Threaded: true,
-		// },
-		// &cdtype.Action{
-		// 	ID:       ActionDownloadCore,
-		// 	Name:     "Download Core",
-		// 	Icon:     "network-workgroup",
-		// 	Call:     func() { app.actionDownloadCore() },
-		// 	Threaded: true,
-		// },
-		// &cdtype.Action{
-		// 	ID:       ActionDownloadApplets,
-		// 	Name:     "Download Plug-Ins",
-		// 	Icon:     "network-workgroup",
-		// 	Call:     func() { app.actionDownloadApplets() },
-		// 	Threaded: true,
-		// },
-		// &cdtype.Action{
-		// 	ID:       ActionDownloadAll,
-		// 	Name:     "Download All",
-		// 	Icon:     "network-workgroup",
-		// 	Call:     func() { app.actionDownloadAll() },
-		// 	Threaded: true,
-		// },
-		&cdtype.Action{
+			//~ action_add(CDCairoBzrAction.GENERATE_REPORT, action_none, "", "view-refresh");
+
+			// &cdtype.Action{
+			// 	ID:       ActionBuildAll,
+			// 	Name:     "Build All",
+			// 	Icon:     "media-skip-forward",
+			// 	Call:     func() { app.actionBuildAll() },
+			// 	Threaded: true,
+			// },
+			// &cdtype.Action{
+			// 	ID:       ActionDownloadCore,
+			// 	Name:     "Download Core",
+			// 	Icon:     "network-workgroup",
+			// 	Call:     func() { app.actionDownloadCore() },
+			// 	Threaded: true,
+			// },
+			// &cdtype.Action{
+			// 	ID:       ActionDownloadApplets,
+			// 	Name:     "Download Plug-Ins",
+			// 	Icon:     "network-workgroup",
+			// 	Call:     func() { app.actionDownloadApplets() },
+			// 	Threaded: true,
+			// },
+			// &cdtype.Action{
+			// 	ID:       ActionDownloadAll,
+			// 	Name:     "Download All",
+			// 	Icon:     "network-workgroup",
+			// 	Call:     func() { app.actionDownloadAll() },
+			// 	Threaded: true,
+			// },
+
 			ID:       ActionUpdateAll,
 			Name:     "Update All",
 			Icon:     "network-workgroup",
 			Call:     func() { go app.actionUpdateAll() }, // Threaded as it blocks everything in dock mode.
 			Threaded: true,
-		},
-		&cdtype.Action{
+		}, {
 			ID:       ActionDownloadOthers,
 			Name:     "Download others",
 			Icon:     "network-workgroup",
 			Call:     app.actionUpdateOthers,
 			Threaded: true,
 		},
-	)
+	}
 }
 
 //-----------------------------------------------------------[ BASIC ACTIONS ]--
@@ -521,14 +472,14 @@ func (app *Applet) actionShowVersions(force bool) {
 		}
 	}
 	if force {
-		text, e := app.Template().Execute(app.conf.VersionDialogTemplate, app.conf.VersionDialogTemplate, app.version.Sources())
-		if app.Log().Err(e, "template "+app.conf.VersionDialogTemplate) {
+		text, e := app.conf.VersionDialogTemplate.ToString("ShowVersionsDialog", app.version.Sources())
+		if app.Log().Err(e, "template ShowVersionsDialog") {
 			return
 		}
 		text = strings.Trim(text, "\n")
 		app.PopupDialog(cdtype.DialogData{
 			Message:    text,
-			TimeLength: app.conf.VersionDialogTimer,
+			TimeLength: app.conf.DialogDuration,
 			UseMarkup:  true,
 			Buttons:    "cancel",
 		})

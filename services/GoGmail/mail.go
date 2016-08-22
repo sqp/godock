@@ -1,11 +1,11 @@
 package GoGmail
 
 import (
+	"github.com/sqp/godock/libs/net/download"
+
 	"encoding/base64"
-	"encoding/xml"
 	"errors"
 	"io/ioutil"
-	"net/http"
 	"strings"
 )
 
@@ -80,7 +80,6 @@ func NewFeed(onResult func(int, bool, error)) *Feed {
 // Count return the number of unread mails.
 //
 func (feed *Feed) Count() int {
-	//~ return len(feed.Mail)
 	return feed.Total
 }
 
@@ -103,7 +102,6 @@ func (feed *Feed) IsValid() bool {
 // (change since last check).
 //
 func (feed *Feed) Check() {
-	log.Debug("Check mails")
 	if !feed.IsValid() {
 		feed.callResult(0, false, errors.New("no account informations provided"))
 		return
@@ -111,40 +109,12 @@ func (feed *Feed) Check() {
 
 	count := feed.Count() // save current count.
 	feed.Clear()          // reset list.
-	e := feed.get()       // Get new data.
+
+	// Get new data.
+	source := download.Header{"Authorization": "Basic " + feed.login}
+	e := source.XML(feedGmail, feed)
 
 	feed.callResult(feed.Count()-count, count == 0, e)
-}
-
-// Get mails from server.
-//
-func (feed *Feed) get() error {
-	log.Debug("Get mails from server")
-
-	// Prepare request with header
-	request, e := http.NewRequest("GET", feedGmail, nil)
-	if e != nil {
-		return e
-	}
-	request.Header.Add("Authorization", "Basic "+feed.login)
-
-	// Try to get data from source.
-	response, e2 := new(http.Client).Do(request)
-	if e2 != nil {
-		return e2
-	}
-	defer response.Body.Close()
-
-	body, e3 := ioutil.ReadAll(response.Body)
-	if e3 != nil {
-		return e3
-	}
-
-	// Parse data.
-	if e := xml.Unmarshal(body, feed); e != nil {
-		return e
-	}
-	return nil
 }
 
 // LoadLogin get user login information from file.

@@ -3,8 +3,6 @@ package NetActivity
 import "github.com/sqp/godock/libs/cdtype"
 import "github.com/sqp/godock/libs/net/videodl"
 
-const defaultUpdateDelay = 3
-
 const (
 	// EmblemAction is the position of the "upload in progress" emblem.
 	EmblemAction = cdtype.EmblemTopRight
@@ -22,16 +20,17 @@ const (
 //------------------------------------------------------------------[ CONFIG ]--
 
 type appletConf struct {
-	cdtype.ConfGroupIconName `group:"Icon"`
-	groupConfiguration       `group:"Network"`
+	cdtype.ConfGroupIconBoth `group:"Icon"`
+	groupConfig              `group:"Network"`
 	groupUpload              `group:"Upload"`
 	groupVideo               `group:"VideoDL"`
 	videodl.Config           `group:"VideoDL"`
+	videodl.Commands         `group:"Actions"`
 	groupActions             `group:"Actions"`
 }
 
-type groupConfiguration struct {
-	DisplayText   int
+type groupConfig struct {
+	DisplayText   cdtype.InfoPosition
 	DisplayValues int
 
 	GaugeName string
@@ -44,7 +43,7 @@ type groupConfiguration struct {
 	// GraphMix bool
 
 	MonitoringEnabled bool
-	UpdateDelay       int
+	UpdateDelay       cdtype.Duration `default:"3"`
 	Devices           []string
 }
 
@@ -65,7 +64,7 @@ type groupUpload struct {
 type groupVideo struct {
 	VideoDLEnabled bool
 	EnabledDL      bool
-	EnabledWeb     int
+	EnabledWeb     videodl.WebState
 }
 
 type groupActions struct {

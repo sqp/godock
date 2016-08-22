@@ -5,8 +5,75 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"text/template"
 )
+
+// Duration converts a time duration to seconds.
+//
+// Really basic, so you have to recreate one every time.
+// Used by the auto config parser with tags "unit", "default" and "min".
+//
+type Duration struct {
+	value      int
+	multiplier int
+}
+
+// NewDuration creates an time duration helper.
+//
+func NewDuration(value int) *Duration {
+	if value < 1 {
+		value = 1
+	}
+	return &Duration{value: value, multiplier: 1}
+}
+
+// Value gets the time duration in seconds.
+//
+func (i *Duration) Value() int {
+	return i.value * i.multiplier
+}
+
+// SetDefault sets a default duration value.
+//
+func (i *Duration) SetDefault(def int) {
+	if i.value == 0 {
+		i.value = def
+	}
+}
+
+// SetMin sets a min duration value.
+//
+func (i *Duration) SetMin(min int) {
+	if min < 1 {
+		min = 1
+	}
+	if i.value < min {
+		i.value = min
+	}
+}
+
+// SetUnit sets the time unit multiplier.
+//
+func (i *Duration) SetUnit(unitTime string) error {
+	switch strings.ToLower(unitTime) {
+	case "":
+		return nil
+
+	case "s", "second":
+		i.multiplier = 1
+		return nil
+
+	case "m", "minute":
+		i.multiplier = 60
+		return nil
+
+	case "h", "hour":
+		i.multiplier = 3600
+		return nil
+	}
+	return errors.New("Duration.SetUnit: unknown unit=" + unitTime)
+}
 
 //
 //----------------------------------------------------------------[ TEMPLATE ]--
@@ -68,38 +135,30 @@ func (t *Template) ToString(funcName string, data interface{}) (string, error) {
 type Shortkey struct {
 	ConfGroup string
 	ConfKey   string
-	Desc      string
-	Shortkey  string
-}
-
-// ShortkeyAction groups a shortkey with its ActionID or callback.
-//
-// Action type can either be:
-//   int             an ActionID.
-//   func()          a simple callback.
-//   func() error    a callback with possible error to log.
-//
-type ShortkeyAction struct {
-	Action   interface{}
-	Shortkey Shortkey
+	Shortkey  string       // value
+	Desc      string       // tag "desc"
+	ActionID  int          // tag "action". Will be converted to Call at SetDefaults.
+	Call      func()       // Simple callback when triggered.
+	CallE     func() error // Error returned callback. If set, used first.
 }
 
 // TestKey tests if a shortkey registered the given key name.
-// Launch the registered action and returns true if found.
-// (Whether an error is (triggerred and logged) or not, the key was matched and called.)
+// Launch the registered CallE or Call and returns true if found.
 //
-func (sa *ShortkeyAction) TestKey(key string) (bool, error) {
-	if sa.Shortkey.Shortkey != key {
-		return false, nil
-	}
-	switch act := sa.Action.(type) {
-	case func():
-		act()
-		return true, nil
+// Error returned are callbacks errors.
+// It can only happen when the key was matched and CallE returned something.
+//
+func (sa *Shortkey) TestKey(key string) (matched bool, cberr error) {
+	switch {
+	case sa.Shortkey != key: // Wrong key.
 
-	case func() error:
-		e := act()
-		return true, e
+	case sa.CallE != nil:
+		cberr = sa.CallE()
+		matched = true
+
+	case sa.Call != nil:
+		sa.Call()
+		matched = true
 	}
-	return false, nil
+	return matched, cberr
 }

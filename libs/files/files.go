@@ -5,6 +5,8 @@ import (
 	"github.com/sqp/godock/libs/cdtype"         // ConfUpdater
 	"github.com/sqp/godock/widgets/gtk/keyfile" // Write config file.
 
+	"bufio"
+	"errors"
 	"io"
 	"io/ioutil"
 	"os"
@@ -129,4 +131,24 @@ func CopyFile(source string, dest string, mode os.FileMode) (err error) {
 func IsExist(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil || os.IsExist(err)
+}
+
+// Reader returns a Reader to the given file, with its size and close call.
+//
+func Reader(filePath string) (r io.Reader, size int64, close func() error, e error) {
+	f, e := os.Open(filePath)
+	if e != nil {
+		return nil, 0, nil, e
+	}
+
+	rdr := bufio.NewReader(f)
+
+	stat, e := f.Stat()
+	if e != nil {
+		return nil, 0, nil, e
+	}
+	if stat.Size() == 0 {
+		return nil, 0, nil, errors.New("empty file")
+	}
+	return rdr, stat.Size(), f.Close, nil
 }
