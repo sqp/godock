@@ -52,6 +52,8 @@ type Config struct {
 	Blacklist []string
 }
 
+// Commands defines custom user commands to open programs.
+//
 type Commands struct {
 	CmdOpenDir   string
 	CmdOpenWeb   string

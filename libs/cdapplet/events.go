@@ -51,14 +51,12 @@ func (cda *CDApplet) OnEvent(event string, data ...interface{}) (exit bool) {
 		}
 	case "on_shortkey":
 		key := data[0].(string)
-		found := false
 		for _, sk := range cda.shortkeys {
 			test, e := sk.TestKey(key)
 			cda.log.Err(e, "shortkey="+key)
-			found = found || test
-		}
-		if !found && cda.events.OnShortkey != nil {
-			go cda.events.OnShortkey(key)
+			if test {
+				return false
+			}
 		}
 	case "on_change_focus":
 		if cda.events.OnChangeFocus != nil {
@@ -141,11 +139,6 @@ type DefineOnDropData interface {
 	OnDropData(string)
 }
 
-// DefineOnShortkey is an interface to the OnShortkey method.
-type DefineOnShortkey interface {
-	OnShortkey(string)
-}
-
 // DefineOnChangeFocus is an interface to the OnChangeFocus method.
 type DefineOnChangeFocus interface {
 	OnChangeFocus(bool)
@@ -197,7 +190,6 @@ var dockCalls = Calls{
 	"on_build_menu":    func(m Msg) { m.O.(DefineOnBuildMenu).OnBuildMenu(m.D[0].(cdtype.Menuer)) },
 	"on_scroll":        func(m Msg) { m.O.(DefineOnScroll).OnScroll(m.D[0].(bool)) },
 	"on_drop_data":     func(m Msg) { m.O.(DefineOnDropData).OnDropData(m.D[0].(string)) },
-	"on_shortkey":      func(m Msg) { m.O.(DefineOnShortkey).OnShortkey(m.D[0].(string)) },
 	"on_change_focus":  func(m Msg) { m.O.(DefineOnChangeFocus).OnChangeFocus(m.D[0].(bool)) },
 	"on_reload_module": func(m Msg) { m.O.(DefineOnReload).OnReload(m.D[0].(bool)) },
 	"on_stop_module":   func(m Msg) { m.O.(DefineOnStopModule).OnStopModule() },
@@ -217,7 +209,6 @@ var dockTests = Types{
 	"on_build_menu":    reflect.TypeOf((*DefineOnBuildMenu)(nil)).Elem(),
 	"on_scroll":        reflect.TypeOf((*DefineOnScroll)(nil)).Elem(),
 	"on_drop_data":     reflect.TypeOf((*DefineOnDropData)(nil)).Elem(),
-	"on_shortkey":      reflect.TypeOf((*DefineOnShortkey)(nil)).Elem(),
 	"on_change_focus":  reflect.TypeOf((*DefineOnChangeFocus)(nil)).Elem(),
 	"on_reload_module": reflect.TypeOf((*DefineOnReload)(nil)).Elem(),
 	"on_stop_module":   reflect.TypeOf((*DefineOnStopModule)(nil)).Elem(),

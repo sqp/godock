@@ -3,28 +3,17 @@
 
 Improvements since original DropToShare version:
   Not using temp files.
-  New image upload sites:
-    - http://pix.toile-libre.org
-    - http://postimage.org
-  Code simple and maintainable (350 lines for 12 backends).
+  Many new upload sites.
+  Code simple and maintainable (400 lines for 18 backends).
 
 Dependencies:
   xsel or xclip command for clipboard interaction when build without gtk.
 
-  curl command is needed for those backends:
-    Text:  none
-    Image: all
-    Video: all
-    File:  all
-
 Not implemented (yet):
   Icon for the applet.
-  Upload raw text with FileForAll option. I'm trying to find a way to do it
-    without the temp file option before falling back to this method.
   More menu options.
   Save image copy (and display).
   Custom upload scripts.
-  Url shortener (as I'm not fan of those, you better do it yourself if you want it).
 
 */
 package NetActivity
@@ -195,7 +184,7 @@ func (app *Applet) DefineEvents(events *cdtype.Events) {
 // UpToShareUpload uploads data to a one-click site: file location or text.
 //
 func (app *Applet) UpToShareUpload(data string) {
-	app.up.Upload(data)
+	go app.up.Upload(data)
 }
 
 // UpToShareLastLink uploads data to a one-click site: file location or text.

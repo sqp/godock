@@ -404,10 +404,11 @@ func (o *AppGldi) RemoveSubIcon(id string) error {
 
 // RemoveSubIcons removes all subicons from the subdock.
 //
-func (o *AppGldi) RemoveSubIcons() {
+func (o *AppGldi) RemoveSubIcons() error {
 	for icon := range o.icons { // Remove old subicons.
 		o.RemoveSubIcon(icon)
 	}
+	return nil
 }
 
 //
@@ -456,7 +457,7 @@ func (o *IconBase) SetEmblem(iconPath string, position cdtype.EmblemPosition) er
 	addIdle(func() {
 		switch {
 		case iconPath == "" || iconPath == "none":
-			//iPosition < CAIRO_OVERLAY_NB_POSITIONS ? iPosition : iPosition - CAIRO_OVERLAY_NB_POSITIONS // for ease of use, handle both case similarily.
+			//iPosition < CAIRO_OVERLAY_NB_POSITIONS ? iPosition : iPosition - CAIRO_OVERLAY_NB_POSITIONS // for ease of use, handle both case similarly.
 			o.Icon.RemoveOverlayAtPosition(position)
 
 		case position >= cdtype.EmblemCount: // [N; 2N-1] => print the overlay

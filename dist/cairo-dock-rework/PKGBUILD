@@ -1,9 +1,9 @@
 # Maintainer: SQP <sqp@glx-dock.org>
 
 pkgname=cairo-dock-rework
-pkgver=0.0.3.4
-pkgrel=3
-pkgdesc="Cairo-Dock reworked version with a new GUI and more applets (WIP)."
+pkgver=0.0.3.5
+pkgrel=1
+pkgdesc="Cairo-Dock reworked version with a new GUI and 11 more applets (WIP)."
 arch=('x86_64' 'i686')
 url="http://github.com/sqp/godock"
 license=('GPL3')
@@ -11,7 +11,6 @@ depends=('gtk3' 'gupnp-av' 'gobject-introspection') # also depends on the dock b
 makedepends=('git' 'go')
 optdepends=(
   'cairo-dock: the dock is mandatory but as optional it allow to use custom installs'
-  'curl: upload files with uptoshare (NetActivity: all but text services)'
   'git: dock version check (Update)'
   'cmake: build dock sources (Update)'
   'gksudo: install dock files needs root access (Update)'
@@ -19,31 +18,31 @@ optdepends=(
 conflicts=('cairo-dock-goapplets')
 options=('!strip' '!emptydirs')
 
-srcpath=github.com/sqp/godock
-applets="Audio Clouds Cpu DiskActivity DiskFree GoGmail Mem NetActivity Notifications TVPlay Update"
-cdctags="dock"
+_srcpath=github.com/sqp/godock
+_applets="Audio Clouds Cpu DiskActivity DiskFree GoGmail Mem NetActivity Notifications TVPlay Update"
+_cdctags="dock"
 
 build() {
 
   if [ ! -e "$srcdir/src" ]; then
     # Download
-    GOPATH="$srcdir" go get -d -u -tags "$applets $cdctags" $srcpath/cmd/cdc
+    GOPATH="$srcdir" go get -d -u -tags "$_applets $_cdctags" $_srcpath/cmd/cdc
 
     # Patch
-    cd "$srcdir/src/$srcpath" && GOPATH="$srcdir" make patch-dock
+    cd "$srcdir/src/$_srcpath" && GOPATH="$srcdir" make patch-dock
   fi
 
 
   # Build
-  cd "$srcdir/src/$srcpath" && GOPATH="$srcdir" make DOCK="$cdctags $applets" dock
+  cd "$srcdir/src/$_srcpath" && GOPATH="$srcdir" make DOCK="$_cdctags $_applets" dock
 }
 
 #check() {
-#  GOPATH="$GOPATH:$srcdir" go test -v -x $srcpath/...
+#  GOPATH="$GOPATH:$srcdir" go test -v -x $_srcpath/...
 #}
 
 package() {
-  cd "$srcdir/src/$srcpath" && GOPATH="$srcdir" make PKGDIR="$pkgdir" APPLETS="$applets" install-dock
+  cd "$srcdir/src/$_srcpath" && GOPATH="$srcdir" make PKGDIR="$pkgdir" APPLETS="$_applets" install-dock
 }
 
 # vim:set ts=2 sw=2 et:

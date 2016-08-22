@@ -14,22 +14,6 @@ import (
 	"strings"
 )
 
-// Introspect defines other Dbus actions to provide with introspect.
-var IntrospectApplets = `
-	<method name="ListServices">
-		<arg direction="out" type="s"/>
-	</method>
-	<method name="StartApplet">
-		<arg direction="in" type="s"/>
-		<arg direction="in" type="s"/>
-		<arg direction="in" type="s"/>
-		<arg direction="in" type="s"/>
-		<arg direction="in" type="s"/>
-		<arg direction="in" type="s"/>
-		<arg direction="in" type="s"/>
-		<arg direction="in" type="s"/>
-	</method>`
-
 // activeApp holds a reference to an active applet instance.
 //
 type activeApp struct {

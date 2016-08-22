@@ -12,6 +12,8 @@ import (
 	"github.com/sqp/godock/widgets/gtk/newgtk"
 )
 
+// IconSize defines the default icon size.
+//
 var IconSize = gtk.ICON_SIZE_SMALL_TOOLBAR
 
 // Controller defines methods used on the main widget / data source by this widget and its sons.

@@ -29,9 +29,17 @@ var Docks DocksParamType
 //
 type DocksParamType struct{}
 
+// FrameMargin defines a margin. TODO complete doc.
+//
 func (DocksParamType) FrameMargin() int { return int(C.myDocksParam.iFrameMargin) }
-func (DocksParamType) LineWidth() int   { return int(C.myDocksParam.iDockLineWidth) }
-func (DocksParamType) Radius() int      { return int(C.myDocksParam.iDockRadius) }
+
+// LineWidth defines the dock border line width.
+//
+func (DocksParamType) LineWidth() int { return int(C.myDocksParam.iDockLineWidth) }
+
+// Radius defines the radius of dock corners.
+//
+func (DocksParamType) Radius() int { return int(C.myDocksParam.iDockRadius) }
 
 // LockAll gets and sets the lock all state.
 //
@@ -62,14 +70,35 @@ var Icons IconsParamType
 //
 type IconsParamType struct{}
 
-func (IconsParamType) Amplitude() float64     { return float64(C.myIconsParam.fAmplitude) }
-func (IconsParamType) Gap() int               { return int(C.myIconsParam.iIconGap) }
-func (IconsParamType) Width() int             { return int(C.myIconsParam.iIconWidth) }
-func (IconsParamType) Height() int            { return int(C.myIconsParam.iIconHeight) }
-func (IconsParamType) LabelSize() int         { return int(C.myIconsParam.iLabelSize) }
+// Amplitude defines the default icon pmplitude.
+//
+func (IconsParamType) Amplitude() float64 { return float64(C.myIconsParam.fAmplitude) }
+
+// Gap defines the default icon gap.
+//
+func (IconsParamType) Gap() int { return int(C.myIconsParam.iIconGap) }
+
+// Width defines the default icon width.
+//
+func (IconsParamType) Width() int { return int(C.myIconsParam.iIconWidth) }
+
+// Height defines the default icon height.
+//
+func (IconsParamType) Height() int { return int(C.myIconsParam.iIconHeight) }
+
+// LabelSize defines the default icon label size.
+//
+func (IconsParamType) LabelSize() int { return int(C.myIconsParam.iLabelSize) }
+
 func (IconsParamType) RevolveSeparator() bool { return gobool(C.myIconsParam.bRevolveSeparator) }
-func (IconsParamType) SeparatorWidth() int    { return int(C.myIconsParam.iSeparatorWidth) }
-func (IconsParamType) SeparatorHeight() int   { return int(C.myIconsParam.iSeparatorHeight) }
+
+// SeparatorWidth defines the default separator width.
+//
+func (IconsParamType) SeparatorWidth() int { return int(C.myIconsParam.iSeparatorWidth) }
+
+// SeparatorHeight defines the default separator height.
+//
+func (IconsParamType) SeparatorHeight() int { return int(C.myIconsParam.iSeparatorHeight) }
 
 //
 //-----------------------------------------------------------[ TASKBAR PARAM ]--
@@ -82,8 +111,13 @@ var Taskbar = TaskbarParamType{}
 //
 type TaskbarParamType struct{}
 
+// ActionOnMiddleClick returns the defined middle click action.
+//
 func (TaskbarParamType) ActionOnMiddleClick() int { return int(C.myTaskbarParam.iActionOnMiddleClick) }
-func (TaskbarParamType) OverWriteXIcons() bool    { return gobool(C.myTaskbarParam.bOverWriteXIcons) }
+
+// OverWriteXIcons returns whether default X (desktop) icons are overwritten.
+//
+func (TaskbarParamType) OverWriteXIcons() bool { return gobool(C.myTaskbarParam.bOverWriteXIcons) }
 
 // struct _CairoTaskbarParam {
 // 	gboolean bShowAppli;

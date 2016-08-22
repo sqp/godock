@@ -129,7 +129,7 @@ func NewBase(columns []ColInfo) *Base {
 // WalkSprint runs the given call on each cell of the line and returns the line
 // printable content.
 //
-//   sep[0] is added at the begining of the line.
+//   sep[0] is added at the beginning of the line.
 //   sep[1] is added between each cell.
 //   sep[2] is added at the end of the line.
 // The result if like this:

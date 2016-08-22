@@ -2,7 +2,7 @@
 /*
 It does not start a loop, just handles the ticker and restart channels. You
 will have to get those with Start and GetRestart and use them in a loop. This
-job is generaly done by the dock.StartApplet action, so you better use it or
+job is generally done by the dock.StartApplet action, so you better use it or
 copy and extend it to your needs.
 
 Display and user information related to the result of the check must be made

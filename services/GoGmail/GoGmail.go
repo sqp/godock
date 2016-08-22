@@ -247,7 +247,7 @@ func (app *Applet) updateDisplay(delta int, first bool, e error) {
 	}
 
 	switch {
-	case e == nil && app.err != nil: // Error disapeared. Cleaning buffer and refresh display.
+	case e == nil && app.err != nil: // Error disappeared. Cleaning buffer and refresh display.
 		app.render.Set(app.data.Count())
 		app.err = nil
 

@@ -116,7 +116,7 @@ func (l *Log) GetDebug() bool {
 	return l.debug
 }
 
-// Debug is to be used every time a usefull step is reached in your module
+// Debug is to be used every time a useful step is reached in your module
 // activity. It will display the flood to the user only when the debug flag is
 // enabled.
 //
@@ -418,7 +418,7 @@ func Info(msg string, more ...interface{}) {
 	Render(color.FgGreen, msg, more...)
 }
 
-// Debug is to be used every time a usefull step is reached in your module
+// Debug is to be used every time a useful step is reached in your module
 // activity. It will display the flood to the user only when the debug flag is
 // enabled.
 //
@@ -461,7 +461,7 @@ func DEV(msg string, more ...interface{}) {
 	Render(color.Bright, msg, more...)
 }
 
-// DETAIL prints the detailled content of a variable.
+// DETAIL prints the detailed content of a variable.
 // This is a convenience function for the developper, but not meant for
 // production code. Its name is in full caps so it can be better seen and found.
 //

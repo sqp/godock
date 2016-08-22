@@ -143,10 +143,13 @@ func (cda *CDDbus) SubIcon(key string) cdtype.IconBase {
 
 // RemoveSubIcons removes all subicons from the applet. (To be called in init).
 //
-func (cda *CDDbus) RemoveSubIcons() {
-	for icon := range cda.icons { // Remove old subicons.
-		cda.RemoveSubIcon(icon)
+func (cda *CDDbus) RemoveSubIcons() error {
+	e := cda.dbusSub.Call("RemoveSubIcon", "any")
+	cda.log.Err(e, "RemoveSubIcons")
+	if e == nil {
+		cda.icons = make(map[string]*SubIcon)
 	}
+	return e
 }
 
 //
@@ -185,7 +188,9 @@ func (cda *CDDbus) ConnectEvents(conn *dbus.Conn) (e error) {
 	matchSubs := "type='signal',path='" + string(cda.busPath) + "/sub_icons',interface='" + dockpath.DbusInterfaceSubapplet + "',sender='" + dockpath.DbusObject + "'"
 
 	e = conn.BusObject().Call("org.freedesktop.DBus.AddMatch", 0, matchIcon).Err
-	cda.log.Err(e, "connect to icon DBus events")
+	if cda.log.Err(e, "connect to icon DBus events") {
+		return e
+	}
 	e = conn.BusObject().Call("org.freedesktop.DBus.AddMatch", 0, matchSubs).Err
 	cda.log.Err(e, "connect to subicons DBus events")
 
@@ -589,6 +594,7 @@ func (cda *CDDbus) RemoveSubIcon(id string) error {
 	}
 
 	e := cda.dbusSub.Call("RemoveSubIcon", id)
+	cda.log.Err(e, "RemoveSubIcon")
 	if e == nil {
 		delete(cda.icons, id)
 	}

@@ -31,6 +31,8 @@ var (
 
 var css *gtk.CssProvider
 
+// MainCSS provides a common css for widgets.
+//
 func MainCSS() *gtk.CssProvider {
 	if css == nil {
 		css, _ = gtk.CssProviderNew()

@@ -40,9 +40,6 @@ type Events struct {
 	// Action when the user drop data on the icon.
 	OnDropData func(data string)
 
-	// Action when the user triggers a registered shortkey.
-	OnShortkey func(key string)
-
 	// Action when the focus of the managed window change.
 	OnChangeFocus func(active bool)
 
@@ -218,7 +215,7 @@ type AppIcon interface {
 
 	// RemoveSubIcons removes all subicons from the subdock.
 	//
-	RemoveSubIcons()
+	RemoveSubIcons() error
 
 	// SubIcon returns the subicon object you can act on for the given key.
 	//
@@ -322,7 +319,7 @@ type IconWindow interface {
 	//
 	//  *Use the xprop command find the class of the window you want to control.
 	//  *Use "none" if you want to reset application control.
-	//  *Controling an application enables the OnChangeFocus callback.
+	//  *Controlling an application enables the OnChangeFocus callback.
 	//
 	SetAppliClass(applicationClass string) error // Sets the monitored class name.
 
@@ -705,7 +702,7 @@ type Logger interface {
 	//
 	SetLogOut(LogOut)
 
-	// Debug is to be used every time a usefull step is reached in your module
+	// Debug is to be used every time a useful step is reached in your module
 	// activity. It will display the flood to the user only when the debug flag is
 	// enabled.
 	//
@@ -849,23 +846,10 @@ type ConfGroupIconBoth struct {
 	Debug bool
 }
 
+// ToDefaults fills defaults fields from the Icon group: Name, Icon, Debug.
+//
 func (g ConfGroupIconBoth) ToDefaults(def *Defaults) {
 	def.Icon = g.Icon
-	def.Label = g.Name
-	def.Debug = g.Debug
-}
-
-// ConfGroupIconName defines a special config struct for the Icon tab.
-//
-// This if the version without Icon, which shouldn't be the first choice, unless
-// you know what you're doing (like a poller locked in gauge/graph).
-//
-type ConfGroupIconName struct {
-	Name  string `conf:"name"`
-	Debug bool
-}
-
-func (g ConfGroupIconName) ToDefaults(def *Defaults) {
 	def.Label = g.Name
 	def.Debug = g.Debug
 }
@@ -1116,14 +1100,3 @@ const (
 // )
 
 // DialogKey
-
-// PollerInterval returns a valid poller check interval.
-//
-func PollerInterval(val ...int) int {
-	for _, d := range val {
-		if d > 0 {
-			return d
-		}
-	}
-	return 3600 * 24 // Failed to provide a valid value. Set check interval to one day.
-}

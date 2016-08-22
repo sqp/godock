@@ -261,6 +261,7 @@ func (c *Config) getField(elem reflect.Value, group, key string, tag reflect.Str
 
 		dur := cdtype.NewDuration(val)
 		e = dur.SetUnit(tag.Get("unit"))
+		c.testerr(e, group, key, "Duration unit")
 
 		tagInt(tag.Get("default"), dur.SetDefault)
 		tagInt(tag.Get("min"), dur.SetMin)

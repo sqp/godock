@@ -123,7 +123,7 @@ func (w *weatherCom) dlCurrent() error {
 
 func (w *weatherCom) dlForecast() error {
 	w.forecast = &Forecast{}
-	url := fmt.Sprintf(WeatherComURLBase+WeatherComSuffixForecast+unitTemp(w.UseCelcius), w.LocationCode, w.NbDays)
+	url := fmt.Sprintf(WeatherComURLBase+WeatherComSuffixForecast+unitTemp(w.UseCelcius), w.LocationCode, w.NbDays+1)
 	e := download.XML(url, w.forecast)
 	if e != nil {
 		return e

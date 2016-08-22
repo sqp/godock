@@ -16,6 +16,8 @@ import (
 //
 //------------------------------------------------------------------[ CLIENT ]--
 
+// NewError creates a dbus error.
+//
 func NewError(msg string) *dbus.Error {
 	return dbus.NewError("org.freedesktop.DBus.Error.Failed", []interface{}{msg})
 }
@@ -133,6 +135,8 @@ func parseShit(src, dest interface{}) error {
 	return nil
 }
 
+// Go calls a method on a Dbus object without waiting for an answer.
+//
 func (cl *Client) Go(method string, args ...interface{}) error {
 	return cl.BusObject.Go(cl.srvObj+"."+method, dbus.FlagNoReplyExpected, nil, args...).Err
 }

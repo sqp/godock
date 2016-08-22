@@ -63,7 +63,7 @@ func DockRemove(arg string) func(*Client) error {
 // 	// return cda.launch(base, "ActivateModule", interface{}(module), interface{}(state))
 // }
 
-// DockReboot reload the current theme of the Dock, as if you had quitted and restarted the dock.
+// DockReboot reload the current theme of the Dock, as if you had quit and restarted the dock.
 //
 func DockReboot(client *Client) error {
 	return client.Call("Reboot")

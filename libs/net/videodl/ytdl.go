@@ -318,59 +318,10 @@ func (f *YTDLFile) Formats() ([]*Format, error) {
 // }
 
 func handler(identifier string, options options, log cdtype.Logger) error {
-	// var err error
-	// defer func() {
-	// 	if err != nil {
-	// 		log.SetOutput(os.Stderr)
-	// 		log.Fatal(err.Error())
-	// 	}
-	// }()
-
-	// var out io.Writer
-	// var logOut io.Writer = os.Stdout
-	// // if downloading to stdout, set log output to stderr, not sure if this is correct
-	// if options.outputFile == "-" {
-	// 	out = os.Stdout
-	// 	logOut = os.Stderr
-	// }
-	// log.SetOutput(logOut)
-
-	// ouput only errors or not
-	// silent := options.outputFile == "" ||
-	// 	options.silent || options.infoOnly || options.downloadURL || options.json
-	// if silent {
-	// 	log.SetLevel(log.FatalLevel)
-	// } else if options.debug {
-	// 	log.SetLevel(log.DebugLevel)
-	// } else {
-	// 	log.SetLevel(log.InfoLevel)
-	// }
-
-	// TODO: Show activity indicator
-	// log.Info("Fetching video info...")
-	//fmt.Print("\u001b[0G")
-	//fmt.Print("\u001b[2K")
 	info, err := ytdl.GetVideoInfo(identifier)
 	if err != nil {
 		return fmt.Errorf("Unable to fetch video info: %s", err.Error())
 	}
-
-	// if options.infoOnly {
-	// 	fmt.Println("Title:", info.Title)
-	// 	fmt.Println("Author:", info.Author)
-	// 	fmt.Println("Date Published:", info.DatePublished.Format("Jan 2 2006"))
-	// 	fmt.Println("Duration:", info.Duration)
-	// 	return
-	// } else if options.json {
-	// 	var data []byte
-	// 	data, err = json.MarshalIndent(info, "", "\t")
-	// 	if err != nil {
-	// 		err = fmt.Errorf("Unable to marshal json: %s", err.Error())
-	// 		return
-	// 	}
-	// 	fmt.Println(string(data))
-	// 	return
-	// }
 
 	formats := info.Formats
 	// parse filter arguments, and filter through formats

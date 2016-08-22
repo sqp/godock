@@ -2,7 +2,7 @@
 Update and build your dock from sources with this applet for Cairo-Dock.
 
 Play with cairo-dock sources:
-download/update, compile, restart dock... Usefull for developers, testers and
+download/update, compile, restart dock... Useful for developers, testers and
 users who want to stay up to date, or maybe on a distro without packages.
 
 This file will build the applet as standalone.

@@ -24,15 +24,15 @@ var Types = map[cftype.KeyType]func(key *cftype.Key){
 	cftype.KeyExpander:  Frame,
 
 	cftype.KeyBoolButton:        CheckButton,   // bool
-	cftype.KeyBoolCtrl:          CheckButton,   // bool controling the next widget.
+	cftype.KeyBoolCtrl:          CheckButton,   // bool controlling the next widget.
 	cftype.KeyIntSpin:           IntegerSpin,   // int in a spin button.
 	cftype.KeyIntScale:          IntegerScale,  // int in a HScale.
 	cftype.KeyIntSize:           IntegerSize,   // int pair spin buttons WxH.
 	cftype.KeyFloatSpin:         Float,         // float.
 	cftype.KeyFloatScale:        Float,         // float in a HScale.
-	cftype.KeyColorSelectorRGB:  ColorSelector, // float x3 avec un bouton de choix de couleur.
-	cftype.KeyColorSelectorRGBA: ColorSelector, // float x4 avec un bouton de choix de couleur.
-	cftype.KeyFontSelector:      FontSelector,  // string avec un selecteur de font a cote du GtkEntry.
+	cftype.KeyColorSelectorRGB:  ColorSelector, // float x3 with color selector button.
+	cftype.KeyColorSelectorRGBA: ColorSelector, // float x4 with color selector button.
+	cftype.KeyFontSelector:      FontSelector,  // string with font selector button.
 
 	cftype.KeyStringEntry:      Strings,
 	cftype.KeyPasswordEntry:    Strings,
@@ -62,15 +62,15 @@ var Types = map[cftype.KeyType]func(key *cftype.Key){
 	// Dock only.
 
 	cftype.KeyListThemeApplet: ListThemeApplet, // List themes in a combo, with preview and readme.
-	cftype.KeyListDocks:       ListDock,        // liste des docks existant.
+	cftype.KeyListDocks:       ListDock,        // list of docks.
 	cftype.KeyListViews:       ListView,        // List of dock views.
 
 	cftype.KeyListThemeDesktopIcon: ListThemeDesktopIcon,
 
 	cftype.KeyListAnimation:          ListAnimation,         // List of animations.
-	cftype.KeyListDialogDecorator:    ListDialogDecorator,   // liste des decorateurs de dialogue.
-	cftype.KeyListDeskletDecoSimple:  ListDeskletDecoration, // liste des decorations de desklet.
-	cftype.KeyListDeskletDecoDefault: ListDeskletDecoration, // idem mais avec le choix "defaut" en plus.
+	cftype.KeyListDialogDecorator:    ListDialogDecorator,   // List of dialog decorators.
+	cftype.KeyListDeskletDecoSimple:  ListDeskletDecoration, // List of desklet decorators.
+	cftype.KeyListDeskletDecoDefault: ListDeskletDecoration, // Same with an added "default" choice.
 	cftype.KeyListIconsMainDock:      ListIconsMainDock,
 	cftype.KeyListScreens:            ListScreens,
 

@@ -26,8 +26,12 @@ func JSON(uri string, data interface{}) error {
 	return Default.JSON(uri, data)
 }
 
+// Default defines default settings for the package.
+//
 var Default = Header{}
 
+// Header represents a HTTP downloader with custom header settings.
+//
 type Header map[string]string
 
 // Get gets data from url.

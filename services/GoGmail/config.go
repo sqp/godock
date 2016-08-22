@@ -73,7 +73,7 @@ type groupActions struct {
 	PollingEnabled bool
 
 	// Defaults are currently added to the last tab of config. This could evolve,
-	// but atm, this sound like a sane choice to have something consistant. All
+	// but atm, this sound like a sane choice to have something consistent. All
 	// values that would be hardcoded are grouped here so we have a good overview
 	// of what is used (const & var). And in the conf file, we have all possibly
 	// tweakable or fixable values.

@@ -14,7 +14,8 @@ import (
 	"fmt"
 )
 
-// Preview widget size (image).
+// PreviewSizeMax defines the preview widget size (image).
+//
 const PreviewSizeMax = 200
 
 //

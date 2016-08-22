@@ -25,6 +25,8 @@ const (
 	URLdockFlattr = "http://flattr.com/thing/370779/Support-Cairo-Dock-development"
 )
 
+// Img defines the location of the about image.
+//
 var Img string
 
 //

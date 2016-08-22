@@ -23,7 +23,8 @@ const (
 	TmpFile = "/tmp/cairo-dock-test.conf"
 )
 
-// User own config live settings (what is currently active).
+// Settings is the user own config live settings (what is currently active).
+//
 var Settings = ConfigSettings{}
 
 // ConfigSettings defines the options the user can set about the GUI itself.

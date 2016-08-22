@@ -454,6 +454,6 @@ func NewWindow(data datatype.Source, log cdtype.Logger) (*GuiConfigure, error) {
 
 // 	gtk.Main()
 
-// 	// log.Info("GUI QUITTED OK !!")
+// 	// log.Info("GUI QUIT OK !!")
 // 	win.Destroy()
 // }

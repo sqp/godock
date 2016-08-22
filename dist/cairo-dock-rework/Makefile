@@ -11,11 +11,11 @@ TAGS=dock gtk_3_10 # limit gtk version for trusty.
 APPLETS=Audio Clouds Cpu DiskActivity DiskFree GoGmail Mem NetActivity Notifications TVPlay Update
 
 
-export GOPATH=$(CURDIR)
+# export GOPATH=$(CURDIR)
 
 APPNAME=cairo-dock-rework
 
-APPVERSION=0.0.3.4
+APPVERSION=0.0.3.5
 
 SUBDIR=$(APPNAME)-$(APPVERSION)
 SRCFILE=$(APPNAME)_$(APPVERSION).orig.tar.gz
@@ -33,16 +33,17 @@ install:
 	GOPATH=$(CURDIR) make --directory=src/$(SOURCE) PKGDIR="$(DESTDIR)" APPLETS="$(APPLETS)" install-dock
 
 clean:
-	rm -rf bin pkg
+	# This should be enabled, but seem too dangerous.
+	# rm -rf bin pkg
 
 
 # Get sources and apply patches.
 # Result: subdir src with go sources. Current dir usable as GOPATH.
 getsrc:
 	# Download and patch.
-	go get -u -d -tags 'dock $(APPLETS)' $(SOURCE)/cmd/cdc
+	GOPATH=$(CURDIR) go get -u -d -tags 'dock $(APPLETS)' $(SOURCE)/cmd/cdc
 	
-	make --directory="$(CURDIR)/src/$(SOURCE)" patch-dock
+	GOPATH=$(CURDIR) make --directory="$(CURDIR)/src/$(SOURCE)" patch-dock
 
 
 # Create a sources package to use as Debian or OpenSuse Build Service source.
@@ -55,7 +56,7 @@ packsrc:
 	mv src/$(SOURCE)/dist/$(APPNAME)/* src $(SUBDIR)
 
 	# Compress.
-	tar -zcf $(SRCFILE) $(SUBDIR) --exclude-vcs
+	tar --exclude-vcs -zcf $(SRCFILE) $(SUBDIR)
 
 	# Clean sources.
 	rm -rf $(SUBDIR)
