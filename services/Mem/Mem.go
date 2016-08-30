@@ -4,12 +4,13 @@ package Mem
 import (
 	"github.com/cloudfoundry/gosigar" // System informations.
 
-	"github.com/sqp/godock/libs/cdapplet" // Applet base.
-	"github.com/sqp/godock/libs/cdtype"   // Applet types.
+	"github.com/sqp/godock/libs/cdtype" // Applet types.
 	"github.com/sqp/godock/libs/sysinfo"
 )
 
-// Applet data and controlers.
+func init() { cdtype.Applets.Register("Mem", NewApplet) }
+
+// Applet defines a dock applet.
 //
 type Applet struct {
 	cdtype.AppBase // Applet base and dock connection.
@@ -18,12 +19,25 @@ type Applet struct {
 	service sysinfo.RenderPercent
 }
 
-// NewApplet create a new Mem applet instance.
+// NewApplet creates a new applet instance.
 //
-func NewApplet() cdtype.AppInstance {
-	app := &Applet{}
-	app.AppBase = cdapplet.New(&app.conf) // Icon controler and interface to cairo-dock.
+func NewApplet(base cdtype.AppBase, events *cdtype.Events) cdtype.AppInstance {
+	app := &Applet{AppBase: base}
+	app.SetConfig(&app.conf)
 
+	// Events.
+	events.OnClick = app.Command().Callback(cmdLeft) // Left and middle click: launch the configured action.
+	events.OnMiddleClick = app.Command().Callback(cmdMiddle)
+	events.OnBuildMenu = func(menu cdtype.Menuer) {
+		if app.conf.LeftAction > 0 && app.conf.LeftCommand != "" {
+			menu.AddEntry("Action left click", "system-run", app.Command().Callback(cmdLeft))
+		}
+		if app.conf.MiddleAction > 0 && app.conf.MiddleCommand != "" {
+			menu.AddEntry("Action middle click", "system-run", app.Command().Callback(cmdMiddle))
+		}
+	}
+
+	// Memory service.
 	app.Poller().Add(app.GetMemActivity)
 
 	app.service.App = app
@@ -47,32 +61,6 @@ func (app *Applet) Init(def *cdtype.Defaults, confLoaded bool) {
 	def.Commands = cdtype.Commands{
 		cmdLeft:   cdtype.NewCommandStd(app.conf.LeftAction, app.conf.LeftCommand, app.conf.LeftClass),
 		cmdMiddle: cdtype.NewCommandStd(app.conf.MiddleAction, app.conf.MiddleCommand),
-	}
-}
-
-//
-//------------------------------------------------------------------[ EVENTS ]--
-
-// OnClick launch the configured action on user click.
-//
-func (app *Applet) OnClick(int) {
-	app.Command().Launch(cmdLeft)
-}
-
-// OnMiddleClick launch the configured action on user middle click.
-//
-func (app *Applet) OnMiddleClick() {
-	app.Command().Launch(cmdMiddle)
-}
-
-// OnBuildMenu fills the menu with left and middle click actions if they're set.
-//
-func (app *Applet) OnBuildMenu(menu cdtype.Menuer) {
-	if app.conf.LeftAction > 0 && app.conf.LeftCommand != "" {
-		menu.AddEntry("Action left click", "system-run", app.OnClick)
-	}
-	if app.conf.MiddleAction > 0 && app.conf.MiddleCommand != "" {
-		menu.AddEntry("Action middle click", "system-run", app.OnMiddleClick)
 	}
 }
 

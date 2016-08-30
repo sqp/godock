@@ -9,7 +9,6 @@ package Notifications
 import (
 	"github.com/godbus/dbus"
 
-	"github.com/sqp/godock/libs/cdapplet"           // Applet base.
 	"github.com/sqp/godock/libs/cdtype"             // Applet types.
 	"github.com/sqp/godock/libs/srvdbus/dbuscommon" // EavesDrop
 
@@ -17,7 +16,12 @@ import (
 	"strings"
 )
 
-// Applet data.
+//
+//------------------------------------------------------------------[ APPLET ]--
+
+func init() { cdtype.Applets.Register("Notifications", NewApplet) }
+
+// Applet defines a dock applet.
 //
 type Applet struct {
 	cdtype.AppBase // Applet base and dock connection.
@@ -26,12 +30,18 @@ type Applet struct {
 	notifs *Notifs
 }
 
-// NewApplet creates a new Notifications applet instance.
+// NewApplet creates a new applet instance.
 //
-func NewApplet() cdtype.AppInstance {
-	app := &Applet{notifs: &Notifs{}}
-	app.AppBase = cdapplet.New(&app.conf, app.defineActions()...)
+func NewApplet(base cdtype.AppBase, events *cdtype.Events) cdtype.AppInstance {
+	app := &Applet{AppBase: base, notifs: &Notifs{}}
+	app.SetConfig(&app.conf, app.actions()...)
 
+	// Events.
+	events.OnClick = app.Action().Callback(ActionShowAll)
+	events.OnMiddleClick = app.Action().Callback(ActionClear)
+	events.OnBuildMenu = app.Action().CallbackMenu(menuUser)
+
+	// Notifs.
 	app.notifs.SetOnCount(app.UpdateCount)
 	e := app.notifs.Start()
 	app.Log().Err(e, "notifications listener")
@@ -51,27 +61,12 @@ func (app *Applet) Init(def *cdtype.Defaults, confLoaded bool) {
 	}
 }
 
-//------------------------------------------------------------------[ EVENTS ]--
-
-// DefineEvents sets applet events callbacks.
 //
-func (app *Applet) DefineEvents(events *cdtype.Events) {
-	events.OnClick = app.Action().CallbackInt(ActionShowAll)
-
-	events.OnMiddleClick = app.Action().CallbackNoArg(ActionClear)
-
-	events.OnBuildMenu = app.Action().CallbackMenu(menuUser)
-
-	events.OnDropData = func(data string) {
-		app.Log().Info("Grep " + data)
-	}
-}
-
 //-----------------------------------------------------------------[ ACTIONS ]--
 
 // Define applet actions. Order must match actions const declaration order.
 //
-func (app *Applet) defineActions() []*cdtype.Action {
+func (app *Applet) actions() []*cdtype.Action {
 	return []*cdtype.Action{
 		{
 			ID:   ActionNone,
@@ -91,6 +86,9 @@ func (app *Applet) defineActions() []*cdtype.Action {
 		},
 	}
 }
+
+//
+//-----------------------------------------------------------------[ DISPLAY ]--
 
 // UpdateCount shows the number of messages on the icon, and displays the
 // alternate icon if count > 0.
@@ -127,7 +125,7 @@ func (app *Applet) displayAll() {
 		UseMarkup:  true,
 		Buttons:    "edit-clear;cancel",
 		TimeLength: app.conf.DialogDuration,
-		Callback:   cdtype.DialogCallbackValidNoArg(app.Action().CallbackNoArg(ActionClear)), // Clear notifs if the user press the 1st button.
+		Callback:   cdtype.DialogCallbackValidNoArg(app.Action().Callback(ActionClear)), // Clear notifs if the user press the 1st button.
 	})
 
 	// if self.config['clear'] else 4 + len(msg)/40 }  // if we're going to clear the history, show the dialog until the user closes it

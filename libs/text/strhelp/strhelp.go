@@ -41,6 +41,8 @@ func Bracket(msg string) string {
 	return "[" + msg + "]"
 }
 
+// EscapeGtk escapes a string to use as gtk text: &<>.
+//
 func EscapeGtk(msg string) string {
 	msg = strings.Replace(msg, "&", "&amp;", -1) // Escape ampersand.
 	msg = strings.Replace(msg, "<", "&lt;", -1)  // Escape <.

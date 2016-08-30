@@ -1,38 +1,62 @@
 package cdtype_test
 
 import (
-	"github.com/sqp/godock/libs/cdapplet" // Applet base.
-	"github.com/sqp/godock/libs/cdtype"   // Applet types.
-
-	"fmt"
+	"github.com/sqp/godock/libs/cdtype" // Applet types.
 )
 
 //
 //-------------------------------------------------------------[ src/demo.go ]--
 
-// Applet data and controlers.
+// Applet defines a dock applet.
 //
 // We start with the applet declaration with at least two mandatory items:
 //   -Extend an AppBase.
-//   -Provide the config struct (see later for the config).
+//   -Provide the config struct (see the config example).
 //
 type Applet struct {
 	cdtype.AppBase             // Extends applet base and dock connection.
 	conf           *appletConf // Applet configuration data.
 }
 
-// Applet creation.
+// NewApplet create a new applet instance.
 //
-// As this will only be called once for each running instance, this is the place
-// to declare all your permanent data that will be required during all the
-// applet lifetime.
+// It will be trigered remotely by the dock when the applet icon is created.
+// Only called once for each running instance.
 //
-// This will be called remotely by the dock when the applet icon is created.
+// The goal is to:
+//   -Create and fill the applet struct.
+//   -Set the config pointer, and maybe some actions.
+//   -Register (dock to) applet events (See cdtype.Events for the full list).
+//   -Declare and load permanent items required during all the applet lifetime.
+//    (those who do not require a config setting, unless it's in a callback).
 //
-func NewApplet() cdtype.AppInstance {
-	app := &Applet{AppBase: cdapplet.New()} // Icon controler and interface to cairo-dock.
+func NewApplet(base cdtype.AppBase, events *cdtype.Events) cdtype.AppInstance {
+	app := &Applet{AppBase: base}
+	app.SetConfig(&app.conf)
 
-	// Create and set your permanent items here...
+	// Events.
+
+	// Forward click events to the defined command launcher.
+	events.OnClick = app.Command().Callback(cmdClickLeft)
+	events.OnMiddleClick = app.Command().Callback(cmdClickMiddle)
+
+	// For simple callbacks event, use a closure.
+	events.OnDropData = func(data string) {
+		app.Log().Info("dropped", data)
+	}
+
+	events.OnBuildMenu = func(menu cdtype.Menuer) { // Another closure.
+		menu.AddEntry("disabled entry", "icon-name", nil)
+		menu.AddSeparator()
+		menu.AddEntry("my action", "system-run", func() {
+			app.Log().Info("clicked")
+		})
+	}
+
+	events.OnScroll = app.myonScroll // Or use another function with the same args.
+
+	//
+	// Create and set your other permanent items here...
 
 	return app
 }
@@ -41,58 +65,38 @@ func NewApplet() cdtype.AppInstance {
 //
 // Then we will have to declare the mandatory Init(loadConf bool) method:
 //
-// Init is called at startup and every time the applet is asked to reload by the dock.
-// First, it reload the config file if asked to, and then it should (re)initialise
-// everything needed. Don't forget that you may have to clean some things up.
-// SetDefaults will help you as it reset everything it handles, even if not set
-// (default blank value is used).
+// Init is called at startup and every time the applet is moved or asked to
+// reload by the dock.
+// When called, the config struct has already been filled from the config file,
+// and some Defaults fields may already be set.
+// You may still have to set the poller interval, some commands or declare
+// shortkeys callbacks.
 //
-// Load user configuration if needed and initialise applet.
+// Defaults fields not set will be reset to icon defaults (apply even if blank).
 //
-func (app *Applet) Init(loadConf bool) {
-	app.LoadConfig(loadConf, &app.conf) // Load config will crash if fail. Expected.
-
+//   -The config data isn't available before the first Init.
+//   -Use PreInit event if you need to act on the previous config before deletion.
+//   -cdtype.ConfGroupIconBoth sets those def fields: Label, Icon and Debug.
+//   -Don't forget that you may have to clean up some old display or data.
+//
+func (app *Applet) Init(def *cdtype.Defaults, confLoaded bool) {
 	// Set defaults to dock icon: display and controls.
-	app.SetDefaults(cdtype.Defaults{
-		Label: app.conf.Name,
-		Icon:  app.conf.Icon,
-		Commands: cdtype.Commands{
-			0: cdtype.NewCommandStd(app.conf.LeftAction, app.conf.LeftCommand, app.conf.LeftClass),
-			1: cdtype.NewCommandStd(app.conf.MiddleAction, app.conf.MiddleCommand)},
-		Debug: app.conf.Debug,
-	})
+	def.Commands = cdtype.Commands{
+		cmdClickLeft: cdtype.NewCommandStd(
+			app.conf.LeftAction,
+			app.conf.LeftCommand,
+			app.conf.LeftClass),
+
+		cmdClickMiddle: cdtype.NewCommandStd(
+			app.conf.MiddleAction,
+			app.conf.MiddleCommand),
+	}
 
 	// Set your other variable settings here...
 }
 
-// Applet events
 //
-// DefineEvents is called by the backend only once at startup.
-// Its goal is to get a common place for events callback configuration.
-// See cdtype.Events for the full list with arguments.
-//
-// Define events is now optional as you can also provide your events callbacks
-// as methods of your applet, with the same name and arguments.
-//
-func (app *Applet) DefineEvents(events cdtype.Events) {
-	// To forward click events to the defined command launcher.
-	// It would be better to use consts instead of 0 and 1 like in this example.
-
-	events.OnClick = app.Command().CallbackInt(0)
-	events.OnMiddleClick = app.Command().CallbackNoArg(1)
-
-	events.OnDropData = func(data string) { // For simple callbacks event, use a closure.
-		app.Log().Info("dropped", data)
-	}
-
-	events.OnBuildMenu = func(menu cdtype.Menuer) { // Another closure.
-		menu.AddEntry("disabled entry", "", nil)
-		menu.AddSeparator()
-		menu.AddEntry("my action", "system-run", func() { app.Log().Info("clicked") })
-	}
-
-	events.OnScroll = app.myonScroll // Or use another function with the same args.
-}
+//------------------------------------------------------------[ doc and test ]--
 
 // This is an event callback function to be filled with your on scroll actions.
 //
@@ -100,25 +104,11 @@ func (app *Applet) myonScroll(scrollUp bool) {
 	// ...
 }
 
-// Here, the same events is declared directly as methods of the applet.
-//
-// There is no way to document it directly, and no safety check at compilation,
-// as the hook service just use matching methods.
-//
-// Note that both methods are available and enabled at the same time, and you may
-// be able to use them both in the same applet, but this isn't really tested.
-// (and its not sure this will remain. we'll see what are the needs).
-//
-func (app *Applet) OnBuildMenu(menu cdtype.Menuer) {
-	// ...
-}
-
 //
 //------------------------------------------------------------[ doc and test ]--
 
 func Example_applet() {
-	app := NewApplet()
-	fmt.Println(app != nil)
+	testApplet(NewApplet)
 
 	// Output:
 	// true

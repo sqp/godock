@@ -48,7 +48,7 @@ func (app *AppTest) ExampleAppIcon_howTo() {
 	app.DemandsAttention(true, "default")
 	app.ShowDialog("dialog string\n with time in second", 8)
 
-	app.BindShortkey(cdtype.Shortkey{
+	app.BindShortkey(&cdtype.Shortkey{
 		ConfGroup: "Actions",
 		ConfKey:   "ShortkeyOneKey",
 		Desc:      "Action one",

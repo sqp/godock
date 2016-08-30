@@ -121,21 +121,17 @@ func parseArgsDefault(startArgs []string, cmd *Command) (*Command, []string) {
 }
 
 func findCommandShortcut(name string) string {
-	if len(name) != 1 { // Not a command shortcut.
-		return name
+	cmdShortcuts := map[string]string{
+		"e":  "external",
+		"h":  "help",
+		"r":  "remote",
+		"up": "upload",
 	}
-
-	cmdShortcuts := map[byte]string{
-		'e': "external",
-		'h': "help",
-		'r': "remote",
-		'u': "upload",
+	newname, ok := cmdShortcuts[name]
+	if ok {
+		return newname
 	}
-	newname, ok := cmdShortcuts[name[0]]
-	if !ok {
-		return name
-	}
-	return newname
+	return name
 }
 
 //

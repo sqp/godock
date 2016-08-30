@@ -24,7 +24,6 @@ users who want to stay up to date, or maybe on a distro without packages.
 package Update
 
 import (
-	"github.com/sqp/godock/libs/cdapplet"          // Applet base.
 	"github.com/sqp/godock/libs/cdglobal"          // CmdOpen.
 	"github.com/sqp/godock/libs/cdtype"            // Applet types.
 	"github.com/sqp/godock/libs/clipboard"         // Get clipboard content.
@@ -44,7 +43,9 @@ import (
 
 //------------------------------------------------------------------[ APPLET ]--
 
-// Applet data and controlers.
+func init() { cdtype.Applets.Register("Update", NewApplet) }
+
+// Applet defines a dock applet.
 //
 type Applet struct {
 	cdtype.AppBase // Applet base and dock connection.
@@ -57,12 +58,19 @@ type Applet struct {
 	err      error
 }
 
-// NewApplet create an new Update applet instance.
+// NewApplet creates a new applet instance.
 //
-func NewApplet() cdtype.AppInstance {
-	app := &Applet{}
-	app.AppBase = cdapplet.New(&app.conf, app.defineActions()...)
+func NewApplet(base cdtype.AppBase, events *cdtype.Events) cdtype.AppInstance {
+	app := &Applet{AppBase: base}
+	app.SetConfig(&app.conf, app.actions()...)
 	app.Action().SetMax(1)
+
+	// Events
+	events.OnClick = app.onClick
+	events.OnMiddleClick = app.onMiddleClick
+	events.OnScroll = app.onScroll
+	events.OnBuildMenu = app.onBuildMenu
+	events.OnDropData = app.GrepTarget
 
 	// Create a cairo-dock sources version checker.
 	app.version = versions.NewVersions(app.onGotVersions)
@@ -120,66 +128,49 @@ func (app *Applet) Init(def *cdtype.Defaults, confLoaded bool) {
 
 //------------------------------------------------------------------[ EVENTS ]--
 
-// DefineEvents set applet events callbacks.
-//
-func (app *Applet) DefineEvents(events *cdtype.Events) {
+func (app *Applet) onClick() {
+	if app.conf.UserMode {
+		app.Action().Launch(app.Action().ID(app.conf.DevClickLeft))
+	} else {
+		app.Action().Launch(app.Action().ID(app.conf.TesterClickLeft))
+	}
+}
 
-	// Left click: launch configured action for current user mode.
-	//
-	events.OnClick = func(int) {
-		if app.conf.UserMode {
-			app.Action().Launch(app.Action().ID(app.conf.DevClickLeft))
+func (app *Applet) onMiddleClick() {
+	if app.conf.UserMode {
+		app.Action().Launch(app.Action().ID(app.conf.DevClickMiddle))
+	} else {
+		app.Action().Launch(app.Action().ID(app.conf.TesterClickMiddle))
+	}
+}
+
+func (app *Applet) onBuildMenu(menu cdtype.Menuer) {
+	if app.conf.UserMode {
+		dev := menuDev
+		if len(app.version.Sources()) > 2 {
+			dev = append(dev, ActionDownloadOthers)
+		}
+		app.Action().BuildMenu(menu, dev)
+	} else {
+		app.Action().BuildMenu(menu, menuTester)
+	}
+}
+
+func (app *Applet) onScroll(scrollUp bool) {
+	// app.Log().Info("scroll", app.conf.UserMode, app.ActionCount(), app.ActionID(app.conf.DevMouseWheel))
+	if !app.conf.UserMode || app.Action().Count() > 0 { // Wheel action only for dev and if no threaded tasks running.
+		return
+	}
+	id := app.Action().ID(app.conf.DevMouseWheel)
+	if id == ActionCycleTarget { // Cycle depends on wheel direction.
+		if scrollUp {
+			app.actionCycleTarget(1)
 		} else {
-			app.Action().Launch(app.Action().ID(app.conf.TesterClickLeft))
+			app.actionCycleTarget(-1)
 		}
+	} else { // Other actions are simple toggle.
+		app.Action().Launch(id)
 	}
-
-	// Middle click: launch configured action for current user mode.
-	//
-	events.OnMiddleClick = func() {
-		if app.conf.UserMode {
-			app.Action().Launch(app.Action().ID(app.conf.DevClickMiddle))
-		} else {
-			app.Action().Launch(app.Action().ID(app.conf.TesterClickMiddle))
-		}
-	}
-
-	// Right click menu: show menu for current user mode.
-	//
-	events.OnBuildMenu = func(menu cdtype.Menuer) {
-		if app.conf.UserMode {
-			dev := menuDev
-			if len(app.version.Sources()) > 2 {
-				dev = append(dev, ActionDownloadOthers)
-			}
-			app.Action().BuildMenu(menu, dev)
-		} else {
-			app.Action().BuildMenu(menu, menuTester)
-		}
-	}
-
-	// Scroll event: launch configured action if in dev mode.
-	//
-	events.OnScroll = func(scrollUp bool) {
-		// app.Log().Info("scroll", app.conf.UserMode, app.ActionCount(), app.ActionID(app.conf.DevMouseWheel))
-		if !app.conf.UserMode || app.Action().Count() > 0 { // Wheel action only for dev and if no threaded tasks running.
-			return
-		}
-		id := app.Action().ID(app.conf.DevMouseWheel)
-		if id == ActionCycleTarget { // Cycle depends on wheel direction.
-			if scrollUp {
-				app.actionCycleTarget(1)
-			} else {
-				app.actionCycleTarget(-1)
-			}
-		} else { // Other actions are simple toggle.
-			app.Action().Launch(id)
-		}
-	}
-
-	// Grep of the dropped string on the source dir.
-	//
-	events.OnDropData = app.GrepTarget
 }
 
 //
@@ -277,7 +268,7 @@ func (app *Applet) onGotVersions(countNew int, e error) {
 // Define applet actions.
 // Actions order in this list must match the order of defined actions numbers.
 //
-func (app *Applet) defineActions() []*cdtype.Action {
+func (app *Applet) actions() []*cdtype.Action {
 	return []*cdtype.Action{
 		{
 			ID:   ActionNone,

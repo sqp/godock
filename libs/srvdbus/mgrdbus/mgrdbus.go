@@ -27,19 +27,17 @@ type activeApp struct {
 type Manager struct {
 	*srvdbus.Loader // Extends the applet service loader to provide its methods on the bus.
 
-	actives  map[string]*activeApp // Active applets.    Key = applet dbus path (/org/cairodock/CairoDock/appletName).
-	services cdtype.ListStarter    // Available applets. Key = applet name.
-	log      cdtype.Logger
+	actives map[string]*activeApp // Active applets.    Key = applet dbus path (/org/cairodock/CairoDock/appletName).
+	log     cdtype.Logger
 }
 
 // NewManager creates a loader with the given list of applets services.
 //
-func NewManager(loader *srvdbus.Loader, log cdtype.Logger, services cdtype.ListStarter) *Manager {
+func NewManager(loader *srvdbus.Loader, log cdtype.Logger) *Manager {
 	return &Manager{
-		Loader:   loader,
-		services: services,
-		actives:  make(map[string]*activeApp),
-		log:      log}
+		Loader:  loader,
+		actives: make(map[string]*activeApp),
+		log:     log}
 }
 
 // CountActive returns the number of managed applets.
@@ -93,31 +91,35 @@ func (load *Manager) StartApplet(a, b, c, d, e, f, g, h string) *dbus.Error {
 		return dbuscommon.NewError("StartApplet: applet already started " + name)
 	}
 
-	fn, ok := load.services[name]
-	if !ok {
+	if cdtype.Applets.GetNewFunc(name) == nil {
 		load.log.NewErr(strings.Join(args, " "), "StartApplet: applet unknown (maybe not enabled at compile)")
 		return dbuscommon.NewError("StartApplet: applet unknown (maybe not enabled at compile) " + strings.Join(args, " "))
 	}
 
 	// Create applet instance.
-	load.log.Debug("StartApplet", name)
-	app := fn()
-
+	// name := args[0][2:] // Strip ./ in the beginning.
+	callnew := cdtype.Applets.GetNewFunc(name)
+	app, backend, callinit := appdbus.New(callnew, args, h)
 	if app == nil {
 		load.log.NewErr(name, "failed to create applet")
 		return dbuscommon.NewError("failed to create applet" + name)
 	}
 
-	backend, callinit := appdbus.NewWithApp(app, args, h)
-
 	er := backend.ConnectEvents(load.Loader.Conn)
-	load.log.Err(er, "ConnectEvents") // TODO: Big problem, need to handle better?
+	if app.Log().Err(er, "ConnectEvents") {
+		return dbuscommon.NewError("ConnectEvents: " + er.Error())
+	}
 
 	load.actives[c] = &activeApp{
 		app:     app,
 		name:    name,
 		backend: backend,
 	}
+
+	if load.log.GetDebug() { // If the service debug is active, force it also on applets.
+		app.Log().SetDebug(true)
+	}
+	load.log.Debug("StartApplet", name)
 
 	// Initialise applet: Load config and apply user settings.
 	// Find a way to unload the applet without the crash in dock and DBus service mode.
@@ -126,10 +128,6 @@ func (load *Manager) StartApplet(a, b, c, d, e, f, g, h string) *dbus.Error {
 		return dbuscommon.NewError("failed to create applet" + name)
 	}
 
-	if load.log.GetDebug() { // If the service debug is active, force it also on applets.
-		app.Log().SetDebug(true)
-	}
-	app.Poller().Restart() // check poller now if it exists. Safe to use on nil poller.
 	return nil
 }
 
@@ -167,8 +165,8 @@ func (load *Manager) ListServices() (string, *dbus.Error) {
 		list[ref.name]++
 	}
 
-	str := "Cairo-Dock applets services: active " + strconv.Itoa(len(list)) + "/" + strconv.Itoa(len(load.services))
-	for name := range load.services {
+	str := "Cairo-Dock applets services: active " + strconv.Itoa(len(list)) + "/" + strconv.Itoa(len(cdtype.Applets))
+	for name := range cdtype.Applets {
 		count := list[name]
 		switch {
 		case count > 1:

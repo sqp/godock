@@ -28,7 +28,37 @@ package cdtype_test
 //
 //-----------------------------------------------------------[ src/config.go ]--
 
-import "github.com/sqp/godock/libs/cdtype"
+import (
+	"github.com/sqp/godock/libs/cdapplet"
+	"github.com/sqp/godock/libs/cdtype"
+
+	"fmt"
+)
+
+//
+//---------------------------------------------------------------[ constants ]--
+
+// Emblem position for polling activity.
+const emblemAction = cdtype.EmblemTopRight
+
+// Define a list of commands references.
+const (
+	cmdClickLeft = iota
+	cmdClickMiddle
+)
+
+// Define a list of actions references.
+const (
+	ActionNone = iota
+	ActionOpenThing
+	ActionEditThing
+)
+
+// LocalId defines an int like used as constant reference, parsed by the conf.
+type LocalId int
+
+//
+//------------------------------------------------------------------[ config ]--
 
 //
 type appletConf struct {
@@ -37,9 +67,8 @@ type appletConf struct {
 }
 
 type groupConfiguration struct {
-	GaugeName      string
-	UpdateInterval int
-	Devices        []string
+	GaugeName string
+	Devices   []string
 
 	LeftAction    int
 	LeftCommand   string
@@ -48,19 +77,33 @@ type groupConfiguration struct {
 	MiddleCommand string
 
 	// We can parse an int like type, used with iota definitions lists.
-	LocalID LocalID
+	LocalId LocalId
+
+	// With a Duration, we can provide a default, set the unit and a min value.
+	UpdateInterval cdtype.Duration `default:"60"`
 
 	// The template is loaded from appletDir/cdtype.TemplateDir or absolute.
 	DialogTemplate cdtype.Template `default:"myfile"`
 
-	// The shortkey definition is filled, but the desc tag is still needed for global shortcut config.
-	// (desc is not possible as external. Known dock TODO).
-	ShortkeyOpenThing cdtype.Shortkey `desc:"Open that thing"`
+	// The shortkey definition is filled, but the desc tag is still needed for
+	//global shortcut config.
+	//   (also when in external applet mode, desc is not forwarded to the "all
+	//   shortkeys page". Known dock TODO).
+	//
+	//
+	ShortkeyOpenThing cdtype.Shortkey `action:"1" desc:"Open that thing"`
+	ShortkeyEditThing cdtype.Shortkey `action:"2" desc:"Edit that thing"`
 }
-
-type LocalID int
 
 //
 //---------------------------------------------------------------------[ doc ]--
 
 func Example_config() {}
+
+func testApplet(callnew cdtype.NewAppletFunc) {
+	// This is not a valid way to start an applet.
+	// Only used here to trigger the loading and output check.
+	base := cdapplet.New()
+	app := cdapplet.Start(callnew, base)
+	fmt.Println(app != nil, app.Name())
+}

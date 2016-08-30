@@ -58,9 +58,9 @@ func (o *Actions) Launch(ID int) {
 	o.Current--
 }
 
-// CallbackNoArg returns a callback to the given action ID.
+// Callback returns a callback to the given action ID.
 //
-func (o *Actions) CallbackNoArg(ID int) func() {
+func (o *Actions) Callback(ID int) func() {
 	return func() { o.Launch(ID) }
 }
 
@@ -106,13 +106,13 @@ func (o *Actions) BuildMenu(menu cdtype.Menuer, actionIds []int) {
 		var entry cdtype.MenuWidgeter
 		switch act.Menu {
 		case cdtype.MenuEntry:
-			entry = menu.AddEntry(act.Name, act.Icon, o.CallbackNoArg(act.ID))
+			entry = menu.AddEntry(act.Name, act.Icon, o.Callback(act.ID))
 
 		case cdtype.MenuSeparator:
 			menu.AddSeparator()
 
 		case cdtype.MenuCheckBox:
-			entry = menu.AddCheckEntry(act.Name, *act.Bool, o.CallbackNoArg(act.ID))
+			entry = menu.AddCheckEntry(act.Name, *act.Bool, o.Callback(act.ID))
 			if act.Call == nil {
 				act.Call = func() {
 					*act.Bool = !*act.Bool
@@ -120,7 +120,7 @@ func (o *Actions) BuildMenu(menu cdtype.Menuer, actionIds []int) {
 			}
 
 		case cdtype.MenuRadioButton:
-			entry = menu.AddRadioEntry(act.Name, *act.Bool, act.Group, o.CallbackNoArg(act.ID))
+			entry = menu.AddRadioEntry(act.Name, *act.Bool, act.Group, o.Callback(act.ID))
 
 			// case cdtype.MenuSubMenu:
 		}

@@ -2,8 +2,4 @@
 
 package allapps
 
-import "github.com/sqp/godock/services/Audio"
-
-func init() {
-	AddService("Audio", Audio.NewApplet)
-}
+import _ "github.com/sqp/godock/services/Audio"

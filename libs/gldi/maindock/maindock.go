@@ -75,7 +75,7 @@ type DockSettings struct {
 	ThemeServer        string
 
 	Delay              int
-	Exclude            string
+	Exclude            []string
 	SafeMode           bool
 	MetacityWorkaround bool
 	Verbosity          string
@@ -88,9 +88,9 @@ type DockSettings struct {
 
 	// --- New Dock settings ---
 	//
-	HTTPPprof      bool
-	AppletsDisable bool
-	Debug          bool
+	HTTPPprof   bool
+	DisableDBus bool
+	Debug       bool
 
 	// auto loaded from original dock hidden file.
 	isFirstLaunch  bool

@@ -24,7 +24,6 @@ static GldiModule* newModule (gpointer vc) {
 	pInterface->initModule = onAppletInit;
 	pInterface->stopModule = onAppletStop;
 	pInterface->reloadModule = onAppletReload;
-	// GldiModule* mod = gldi_module_new ((GldiVisitCard*)(vc), pInterface);
 	return gldi_module_new ((GldiVisitCard*)(vc), pInterface);
 }
 
@@ -33,6 +32,7 @@ static GldiModule* newModule (gpointer vc) {
 import "C"
 
 import (
+	"github.com/sqp/godock/libs/cdapplet" // Start applet.
 	"github.com/sqp/godock/libs/cdglobal" // Global consts.
 	"github.com/sqp/godock/libs/cdtype"   // Applets types.
 
@@ -49,23 +49,20 @@ import (
 	"unsafe"
 )
 
-// Apps is the active applet manager.
+// apps is the active applet manager.
 //
-var Apps *AppManager
-
-// LogWindow provides an optional call to open the log window.
-// var LogWindow func()
+var apps *AppManager
 
 // Register starts the applets manager service to use go internal applets in the dock.
 //
-func Register(services cdtype.ListStarter, log cdtype.Logger) *AppManager {
-	Apps = NewAppManager(services, log)
-	backendevents.Register(Apps)
+func Register(log cdtype.Logger) *AppManager {
+	apps = NewAppManager(log)
+	backendevents.Register(apps)
 
-	Apps.registerApplets()
+	apps.registerApplets()
 
-	backendmenu.Register("applets", nil, Apps.BuildMenu)
-	return Apps
+	backendmenu.Register("applets", nil, apps.BuildMenu)
+	return apps
 }
 
 //
@@ -74,15 +71,14 @@ func Register(services cdtype.ListStarter, log cdtype.Logger) *AppManager {
 // AppManager is a multi applet manager.
 //
 type AppManager struct {
-	services cdtype.ListStarter                    // Available applets. Key = applet name.
-	actives  map[unsafe.Pointer]cdtype.AppInstance // Active services. Key = pointer to dock C Icon.
+	actives map[unsafe.Pointer]cdtype.AppInstance // Active services. Key = pointer to dock C Icon.
 
 	visitCards []*gldi.VisitCard // Keep reference to registered modules visit cards. Must not free.
 
 	// menu *backendmenu.DockMenu
+	// activeWin  *gldi.WindowActor
 
-	activeWin  *gldi.WindowActor
-	activeIcon *gldi.Icon
+	activeIcon *gldi.Icon // Applet whose window has the focus.
 
 	stop chan struct{} // Manual exit chan.
 	log  cdtype.Logger
@@ -90,11 +86,10 @@ type AppManager struct {
 
 // NewAppManager creates an applets manager with the given list of applets services.
 //
-func NewAppManager(services cdtype.ListStarter, log cdtype.Logger) *AppManager {
+func NewAppManager(log cdtype.Logger) *AppManager {
 	load := &AppManager{
-		services: services,
-		actives:  make(map[unsafe.Pointer]cdtype.AppInstance), //*AppGldi),
-		log:      log}
+		actives: make(map[unsafe.Pointer]cdtype.AppInstance), //*AppGldi),
+		log:     log}
 
 	return load
 }
@@ -127,8 +122,8 @@ func (o *AppManager) Tick() {
 // StartLoop starts the polling loop for applets.
 //
 func (o *AppManager) StartLoop() {
-	// o.Log.Debug("Applets service started")
-	// defer o.Log.Debug("Applets service stopped")
+	o.log.Debug("Applets service started")
+	defer o.log.Debug("Applets service stopped")
 
 	o.stop = make(chan struct{})
 	waiter := time.NewTicker(time.Second)
@@ -165,13 +160,13 @@ func (o *AppManager) registerApplets() {
 		return
 	}
 	for _, pack := range packs {
-		if call, ok := o.services[pack.DisplayedName]; ok {
-			o.registerOneApplet(pack, call)
+		if cdtype.Applets.GetNewFunc(pack.DisplayedName) != nil {
+			o.registerOneApplet(pack)
 		}
 	}
 }
 
-func (o *AppManager) registerOneApplet(pack *packages.AppletPackage, call cdtype.AppStarter) {
+func (o *AppManager) registerOneApplet(pack *packages.AppletPackage) {
 	if gldi.ModuleGet(pack.DisplayedName) != nil {
 		o.log.Debug("register applet, already known = dropped", pack.DisplayedName)
 		return
@@ -194,8 +189,9 @@ func (o *AppManager) startApplet(mi *gldi.ModuleInstance, kf *keyfile.KeyFile) {
 	vc := mi.Module().VisitCard()
 	name := vc.GetName()
 
-	call, ok := o.services[name]
-	if !ok {
+	// Get the mandatory create applet func.
+	newfunc := cdtype.Applets.GetNewFunc(name)
+	if newfunc == nil {
 		o.log.NewErr(name, "StartApplet: applet unknown (maybe not enabled at compile)")
 		return
 	}
@@ -213,6 +209,7 @@ func (o *AppManager) startApplet(mi *gldi.ModuleInstance, kf *keyfile.KeyFile) {
 	}
 
 	// Upgrade configuration file if needed.
+	// It seem it's already done by the dock, but we'll display a readable info.
 	if kf != nil && gldi.ConfFileNeedUpdate(kf, vc.GetModuleVersion()) {
 		original := filepath.Join(vc.GetShareDataDir(), vc.GetConfFileName())
 
@@ -225,32 +222,30 @@ func (o *AppManager) startApplet(mi *gldi.ModuleInstance, kf *keyfile.KeyFile) {
 	}
 
 	// Create applet instance and set its core data.
-	app := call()
+	callnew := cdtype.Applets.GetNewFunc(name)
+	appbase := cdapplet.New()
+	appbase.SetBase(name, mi.GetConfFilePath(), globals.DirDockData(), vc.GetShareDataDir()) // TODO: need rootdir
+	app := cdapplet.Start(callnew, appbase)
 
 	if app == nil {
 		o.log.NewErr(name, "failed to start applet")
 		return
 	}
 
-	o.actives[unsafe.Pointer(icon.Ptr)] = app
+	if o.log.GetDebug() { // If the service debug is active, force it also on applets.
+		app.Log().SetDebug(true)
+	}
+	o.log.Debug("applet started", name)
 
-	app.SetBase(name, mi.GetConfFilePath(), globals.DirDockData(), vc.GetShareDataDir()) // TODO: need rootdir
 	app.SetBackend(appgldi.New(mi))
 	callinit := app.SetEvents(app)
 	e := callinit()
 	if app.Log().Err(e, "failed to init") {
-
-		// TODO DISABLE CRAP APPLET
-
 		return
 	}
 
-	o.log.Debug("Applet started", name)
-
-	if o.log.GetDebug() { // If the service debug is active, force it also on applets.
-		app.Log().SetDebug(true)
-	}
-	app.Poller().Restart() // check poller now if it exists. Safe to use on nil poller.
+	// Everything was fine. We can add the applet in the managed list.
+	o.actives[unsafe.Pointer(icon.Ptr)] = app
 }
 
 // StopApplet close the applet instance.
@@ -515,13 +510,13 @@ func (o *AppManager) sendApp(icon *gldi.Icon, event string, data ...interface{})
 func onAppletInit(cInstance *C.GldiModuleInstance, cKeyfile *C.GKeyFile) {
 	mi := gldi.NewModuleInstanceFromNative(unsafe.Pointer(cInstance))
 	kf := keyfile.NewFromNative(unsafe.Pointer(cKeyfile))
-	Apps.startApplet(mi, kf)
+	apps.startApplet(mi, kf)
 }
 
 //export onAppletStop
 func onAppletStop(cInstance *C.GldiModuleInstance) {
 	mi := gldi.NewModuleInstanceFromNative(unsafe.Pointer(cInstance))
-	Apps.stopApplet(mi)
+	apps.stopApplet(mi)
 }
 
 //export onAppletReload
@@ -529,7 +524,7 @@ func onAppletReload(cInstance *C.GldiModuleInstance, oldContainer *C.GldiContain
 	mi := gldi.NewModuleInstanceFromNative(unsafe.Pointer(cInstance))
 	cont := gldi.NewContainerFromNative(unsafe.Pointer(oldContainer))
 	kf := keyfile.NewFromNative(unsafe.Pointer(cKeyfile))
-	if Apps.reloadApplet(mi, cont, kf) { // if applet matched, which should always be true.
+	if apps.reloadApplet(mi, cont, kf) { // if applet matched, which should always be true.
 		return 1
 	}
 	return 0

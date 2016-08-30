@@ -19,7 +19,6 @@ Not implemented (yet):
 package NetActivity
 
 import (
-	"github.com/sqp/godock/libs/cdapplet"      // Applet base.
 	"github.com/sqp/godock/libs/cdglobal"      // Global consts.
 	"github.com/sqp/godock/libs/cdtype"        // Applet types.
 	"github.com/sqp/godock/libs/clipboard"     // Set clipboard content.
@@ -35,7 +34,9 @@ import (
 //
 //------------------------------------------------------------------[ APPLET ]--
 
-// Applet data and controlers.
+func init() { cdtype.Applets.Register("NetActivity", NewApplet) }
+
+// Applet defines a dock applet.
 //
 type Applet struct {
 	cdtype.AppBase // Applet base and dock connection.
@@ -46,11 +47,27 @@ type Applet struct {
 	video   videodl.Downloader
 }
 
-// NewApplet create a new applet instance.
+// NewApplet creates a new applet instance.
 //
-func NewApplet() cdtype.AppInstance {
-	app := &Applet{}
-	app.AppBase = cdapplet.New(&app.conf) // Icon controler and interface to cairo-dock.
+func NewApplet(base cdtype.AppBase, events *cdtype.Events) cdtype.AppInstance {
+	app := &Applet{AppBase: base}
+	app.SetConfig(&app.conf)
+
+	// Events.
+	events.OnClick = app.Command().Callback(cmdLeft)
+	events.OnMiddleClick = app.Command().Callback(cmdMiddle)
+	events.OnBuildMenu = app.buildMenu
+	events.End = func() { app.video.WebUnregister() }
+
+	events.OnDropData = func(data string) {
+		if strings.HasPrefix(data, "http://") || strings.HasPrefix(data, "https://") {
+			if app.conf.VideoDLEnabled {
+				app.DownloadVideo(data)
+			}
+		} else {
+			app.UpToShareUpload(data)
+		}
+	}
 
 	// Uptoshare actions
 	app.up = uptoshare.New()
@@ -68,10 +85,6 @@ func NewApplet() cdtype.AppInstance {
 
 	app.Poller().Add(app.service.Check)
 
-	return app
-}
-
-func (app *Applet) initVideo() {
 	// Video download actions.
 	ActionsVideoDL := 0
 
@@ -85,15 +98,13 @@ func (app *Applet) initVideo() {
 	app.video.WebRegister()
 
 	hist.Load()
+
+	return app
 }
 
 // Init load user configuration if needed and initialise applet.
 //
 func (app *Applet) Init(def *cdtype.Defaults, confLoaded bool) {
-	if app.video == nil { // Delayed because we need FileLocation, not available at creation.
-		app.initVideo()
-	}
-
 	// Uptoshare settings.
 	app.up.SetHistoryFile(app.FileDataDir(cdglobal.DirUserAppData, uptoshare.HistoryFile))
 	app.up.SetHistorySize(app.conf.UploadHistory)
@@ -122,18 +133,18 @@ func (app *Applet) Init(def *cdtype.Defaults, confLoaded bool) {
 }
 
 //
-//------------------------------------------------------------------[ EVENTS ]--
+//--------------------------------------------------------------------[ MENU ]--
 
-// OnBuildMenu fills the menu with left and middle click actions if they're set.
+// buildMenu fills the menu with left and middle click actions if they're set.
 //
-func (app *Applet) OnBuildMenu(menu cdtype.Menuer) {
+func (app *Applet) buildMenu(menu cdtype.Menuer) {
 	needSep := false
 	if app.conf.LeftAction > 0 && app.conf.LeftCommand != "" {
-		menu.AddEntry("Action left click", "system-run", app.Command().CallbackNoArg(cmdLeft))
+		menu.AddEntry("Action left click", "system-run", app.Command().Callback(cmdLeft))
 		needSep = true
 	}
 	if app.conf.MiddleAction > 0 && app.conf.MiddleCommand != "" {
-		menu.AddEntry("Action middle click", "system-run", app.Command().CallbackNoArg(cmdMiddle))
+		menu.AddEntry("Action middle click", "system-run", app.Command().Callback(cmdMiddle))
 		needSep = true
 	}
 	if needSep {
@@ -151,31 +162,6 @@ func (app *Applet) OnBuildMenu(menu cdtype.Menuer) {
 
 	menu.AddSeparator()
 	app.video.Menu(menu)
-}
-
-// OnDropData uploads file(s) or text dropped on the icon.
-//
-func (app *Applet) OnDropData(data string) {
-	if strings.HasPrefix(data, "http://") || strings.HasPrefix(data, "https://") {
-		if app.conf.VideoDLEnabled {
-			app.DownloadVideo(data)
-		}
-	} else {
-		app.UpToShareUpload(data)
-	}
-}
-
-// End unregisters the web service.
-//
-func (app *Applet) End() {
-	app.video.WebUnregister()
-}
-
-// DefineEvents set applet events callbacks.
-//
-func (app *Applet) DefineEvents(events *cdtype.Events) {
-	events.OnClick = app.Command().CallbackInt(cmdLeft)
-	events.OnMiddleClick = app.Command().CallbackNoArg(cmdMiddle)
 }
 
 //

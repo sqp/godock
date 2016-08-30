@@ -2,8 +2,4 @@
 
 package allapps
 
-import "github.com/sqp/godock/services/DiskFree"
-
-func init() {
-	AddService("DiskFree", DiskFree.NewApplet)
-}
+import _ "github.com/sqp/godock/services/DiskFree"

@@ -2,8 +2,4 @@
 
 package allapps
 
-import "github.com/sqp/godock/services/NetActivity"
-
-func init() {
-	AddService("NetActivity", NetActivity.NewApplet)
-}
+import _ "github.com/sqp/godock/services/NetActivity"

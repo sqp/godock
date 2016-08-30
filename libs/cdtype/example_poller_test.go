@@ -1,17 +1,8 @@
 package cdtype_test
 
 import (
-	"github.com/sqp/godock/libs/cdapplet" // Applet base.
-	"github.com/sqp/godock/libs/cdtype"   // Applet types.
-
-	"fmt"
+	"github.com/sqp/godock/libs/cdtype" // Applet types.
 )
-
-//
-//-----------------------------------------------------------[ src/config.go ]--
-
-const defaultInterval = 60                 // Interval in seconds. This set a default to one minute.
-const emblemAction = cdtype.EmblemTopRight // Emblem position for polling activity.
 
 //
 //-------------------------------------------------------------[ src/demo.go ]--
@@ -31,13 +22,18 @@ type PollerApplet struct {
 
 // Create your poller with the applet.
 //
-func NewPollerApplet() cdtype.AppInstance {
-	app := &PollerApplet{AppBase: cdapplet.New()} // Icon controler and interface to cairo-dock.
+func NewPollerApplet(base cdtype.AppBase, events *cdtype.Events) cdtype.AppInstance {
+	app := &PollerApplet{AppBase: base}
+	app.SetConfig(&app.conf)
 
+	// Events.
+	// ...
+
+	// Polling service.
 	app.service = newService(app)                 // This will depend on your applet polling service.
 	poller := app.Poller().Add(app.service.Check) // Create poller and set action callback.
 
-	// The poller can trigger other actions before and after its call.
+	// The poller can trigger other actions before and after the real call.
 	//
 	// This can be used for example to display an activity emblem on the icon.
 	//
@@ -50,32 +46,24 @@ func NewPollerApplet() cdtype.AppInstance {
 
 	// Or you can define custom calls.
 
-	// app.Poller().SetPreCheck(onStarted)
-	// app.Poller().SetPostCheck(onFinished)
+	// app.Poller().SetPreCheck(app.service.onStarted)
+	// app.Poller().SetPostCheck(app.service.onFinished)
 
-	// Create and set your permanent items here...
+	// Create and set your other permanent items here...
 
 	return app
 }
 
-// Set interval in Init when you have config values.
+// Init is called after load config. We'll set the poller interval.
 //
-func (app *PollerApplet) Init(loadConf bool) {
-	app.LoadConfig(loadConf, &app.conf) // Load config will crash if fail. Expected.
+func (app *PollerApplet) Init(def *cdtype.Defaults, confLoaded bool) {
+	// In Init, we'll use the Defaults as it's already provided.
+	def.PollerInterval = app.conf.UpdateInterval.Value()
 
-	// Ensure we have a valid time for the poller with a default constant.
-	delay := cdtype.PollerInterval(app.conf.UpdateInterval, defaultInterval)
+	// But you can also set a poller interval directly anytime.
+	app.Poller().SetInterval(app.conf.UpdateInterval.Value())
 
-	// Set the poller interval directly.
-	app.Poller().SetInterval(delay)
-
-	// or use the defaults (it's better as SetDefaults is a must).
-
-	app.SetDefaults(cdtype.Defaults{
-		PollerInterval: delay,
-
-		// Set your other defaults here...
-	})
+	// Set your other defaults here...
 
 	// Set your other variable settings here...
 }
@@ -89,6 +77,7 @@ func (app *PollerApplet) Init(loadConf bool) {
 //
 type appletControl interface {
 	SetIcon(string) error
+	Log() cdtype.Logger
 }
 
 // pollingService defines a polling service skelton.
@@ -110,14 +99,14 @@ func newService(app appletControl) *pollingService {
 func (p *pollingService) Check() {
 
 	// This is where the polling service action takes place.
+	p.app.Log().Info("checked")
 }
 
 //
 //------------------------------------------------------------[ doc and test ]--
 
 func Example_poller() {
-	app := NewApplet()
-	fmt.Println(app != nil)
+	testApplet(NewPollerApplet)
 
 	// Output:
 	// true

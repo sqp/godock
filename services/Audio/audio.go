@@ -6,9 +6,8 @@ import (
 
 	"github.com/sqp/pulseaudio"
 
-	"github.com/sqp/godock/libs/cdapplet" // Applet base.
-	"github.com/sqp/godock/libs/cdtype"   // Applet types.
-	"github.com/sqp/godock/libs/ternary"  // Ternary operators.
+	"github.com/sqp/godock/libs/cdtype"  // Applet types.
+	"github.com/sqp/godock/libs/ternary" // Ternary operators.
 
 	"errors"
 	"os/exec"
@@ -20,7 +19,9 @@ var log cdtype.Logger
 //
 //------------------------------------------------------------------[ APPLET ]--
 
-// Applet data and controlers.
+func init() { cdtype.Applets.Register("Audio", NewApplet) }
+
+// Applet defines a dock applet.
 //
 type Applet struct {
 	cdtype.AppBase // Applet base and dock connection.
@@ -29,11 +30,22 @@ type Applet struct {
 	pulse *AppPulse
 }
 
-// NewApplet create a new applet instance.
+// NewApplet creates a new applet instance.
 //
-func NewApplet() cdtype.AppInstance {
-	app := &Applet{}
-	app.AppBase = cdapplet.New(&app.conf) // Icon controler and interface to cairo-dock.
+func NewApplet(base cdtype.AppBase, events *cdtype.Events) cdtype.AppInstance {
+	app := &Applet{AppBase: base}
+	app.SetConfig(&app.conf)
+
+	// Events.
+	events.OnClick = app.onClick
+	events.OnMiddleClick = app.onMiddleClick
+	events.OnScroll = app.onScroll
+	events.OnBuildMenu = app.onBuildMenu
+	events.OnSubMiddleClick = app.onSubMiddleClick
+	events.OnSubScroll = app.onSubScroll
+	events.OnSubBuildMenu = app.onSubBuildMenu
+
+	// Pulseaudio service.
 	log = app.Log()
 	var e error
 	app.pulse, e = NewAppPulse(app)
@@ -92,9 +104,7 @@ func (app *Applet) Init(def *cdtype.Defaults, confLoaded bool) {
 //
 //-------------------------------------------------------------[ DOCK EVENTS ]--
 
-// OnClick tries to launch the configured action (left click).
-//
-func (app *Applet) OnClick(int) {
+func (app *Applet) onClick() {
 	switch app.conf.LeftAction {
 	case 1:
 		if app.conf.MixerCommand != "" {
@@ -103,18 +113,14 @@ func (app *Applet) OnClick(int) {
 	}
 }
 
-// OnMiddleClick tries to launch the configured action.
-//
-func (app *Applet) OnMiddleClick() {
+func (app *Applet) onMiddleClick() {
 	switch app.conf.MiddleAction {
 	case 3: // TODO: need more actions and constants to define them.
 		log.Err(app.pulse.ToggleMute())
 	}
 }
 
-// OnScroll tries to launch the configured action (mouse wheel).
-//
-func (app *Applet) OnScroll(up bool) {
+func (app *Applet) onScroll(up bool) {
 	if up {
 		app.globalVolumeIncrease()
 	} else {
@@ -122,20 +128,18 @@ func (app *Applet) OnScroll(up bool) {
 	}
 }
 
-// OnBuildMenu fills the menu with device actions: mute, mixer, select device (right click).
+// onBuildMenu fills the menu with device actions: mute, mixer, select device.
 //
-func (app *Applet) OnBuildMenu(menu cdtype.Menuer) {
+func (app *Applet) onBuildMenu(menu cdtype.Menuer) { // device actions menu: mute, mixer, select device.
 	mute, _ := app.pulse.Device(app.pulse.sink).Bool("Mute")
 	menu.AddCheckEntry("Mute volume", mute, app.pulse.ToggleMute)
 	if app.conf.MixerCommand != "" {
-		menu.AddEntry("Open mixer", "multimedia-volume-control", app.Command().CallbackNoArg(cmdMixer))
+		menu.AddEntry("Open mixer", "multimedia-volume-control", app.Command().Callback(cmdMixer))
 	}
 	app.menuAddDevices(menu, app.pulse.sink, "Managed device", app.pulse.SetSink)
 }
 
-// OnSubMiddleClick tries to launch the configured action.
-//
-func (app *Applet) OnSubMiddleClick(icon string) {
+func (app *Applet) onSubMiddleClick(icon string) {
 	switch app.conf.MiddleAction {
 	case 3: // TODO: need more actions and constants to define them.
 		log.Debug("mute")
@@ -143,9 +147,7 @@ func (app *Applet) OnSubMiddleClick(icon string) {
 	}
 }
 
-// OnSubScroll tries to launch the configured action (mouse wheel).
-//
-func (app *Applet) OnSubScroll(icon string, up bool) {
+func (app *Applet) onSubScroll(icon string, up bool) {
 	dev := app.pulse.Stream(dbus.ObjectPath(icon))
 	values, e := dev.ListUint32("Volume")
 	if log.Err(e) {
@@ -158,9 +160,9 @@ func (app *Applet) OnSubScroll(icon string, up bool) {
 	log.Err(dev.Set("Volume", VolumeDelta(values, delta)))
 }
 
-// OnSubBuildMenu fills the menu with stream actions: select device (right click).
+// onSubBuildMenu fills the menu with stream actions: select device.
 //
-func (app *Applet) OnSubBuildMenu(icon string, menu cdtype.Menuer) {
+func (app *Applet) onSubBuildMenu(icon string, menu cdtype.Menuer) { // stream actions menu: select device.
 	dev := app.pulse.Stream(dbus.ObjectPath(icon))
 
 	mute, _ := dev.Bool("Mute")

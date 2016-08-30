@@ -13,6 +13,9 @@
 //     For me, even when the subdock is removed, clicks actions aren't restored.
 //     This can be tested by disabling the subdock (set forecast days to 0).
 //
+// Dock issue:
+//   On some systems the right click menu is called twice.
+//
 // Dropped, because it's impossible to do for an external app:
 //     (but it could be possible to try in dock mode.
 //      The problem would be the config file differences between both)
@@ -27,7 +30,6 @@ import (
 	"github.com/sqp/godock/libs/get/weather"
 	"github.com/sqp/godock/libs/net/iplocation"
 
-	"github.com/sqp/godock/libs/cdapplet" // Applet base.
 	"github.com/sqp/godock/libs/cdglobal"
 	"github.com/sqp/godock/libs/cdtype" // Applet types.
 	"github.com/sqp/godock/libs/ternary"
@@ -95,7 +97,9 @@ type groupActions struct {
 //
 //------------------------------------------------------------------[ APPLET ]--
 
-// Applet data and controlers.
+func init() { cdtype.Applets.Register("Clouds", NewApplet) }
+
+// Applet defines a dock applet.
 //
 type Applet struct {
 	cdtype.AppBase // Applet base and dock connection.
@@ -104,12 +108,29 @@ type Applet struct {
 	weather weather.Weather
 }
 
-// NewApplet create a new applet instance.
+// NewApplet creates a new applet instance.
 //
-func NewApplet() cdtype.AppInstance {
-	app := &Applet{weather: weather.New()}
-	app.AppBase = cdapplet.New(&app.conf, app.defineActions()...)
+func NewApplet(base cdtype.AppBase, events *cdtype.Events) cdtype.AppInstance {
+	app := &Applet{AppBase: base, weather: weather.New()}
+	app.SetConfig(&app.conf, app.actions()...)
 
+	// Events.
+	events.OnClick = app.DialogWeatherCurrent
+	events.OnMiddleClick = app.DialogWeatherCurrent
+	events.OnSubClick = app.DialogWeatherForecast
+	events.OnBuildMenu = func(menu cdtype.Menuer) {
+		var items []int
+		if app.weather.Current() != nil || app.weather.Forecast() != nil {
+			if app.weather.Current() != nil {
+				items = append(items, ActionShowCurrent)
+			}
+			items = append(items, ActionOpenWebpage, ActionRecheckNow)
+		}
+		items = append(items, ActionSetLocation)
+		app.Action().BuildMenu(menu, items)
+	}
+
+	// Weather polling.
 	app.Poller().Add(app.Check)
 	app.Poller().SetPreCheck(func() { app.SetEmblem(app.FileLocation("img", IconWork), EmblemWork) })
 	app.Poller().SetPostCheck(func() { app.SetEmblem("none", EmblemWork) })
@@ -140,38 +161,6 @@ func (app *Applet) Init(def *cdtype.Defaults, confLoaded bool) {
 }
 
 //
-//------------------------------------------------------------------[ EVENTS ]--
-
-// DefineEvents set applet events callbacks.
-//
-func (app *Applet) DefineEvents(events *cdtype.Events) {
-
-	// Left and middle click: show current weather dialog.
-	// The left click is unavailable when the subdock is opened.
-	//
-	events.OnClick = func(int) { app.DialogWeatherCurrent() }
-	events.OnMiddleClick = app.DialogWeatherCurrent
-
-	// Subicon click: show weather forecast dialog for that day.
-	//
-	events.OnSubClick = func(dayNum string, _ int) { app.DialogWeatherForecast(dayNum) }
-
-	// Right click menu. Provide actions list or registration request.
-	//
-	events.OnBuildMenu = func(menu cdtype.Menuer) {
-		var items []int
-		if app.weather.Current() != nil || app.weather.Forecast() != nil {
-			if app.weather.Current() != nil {
-				items = append(items, ActionShowCurrent)
-			}
-			items = append(items, ActionOpenWebpage, ActionRecheckNow)
-		}
-		items = append(items, ActionSetLocation)
-		app.Action().BuildMenu(menu, items)
-	}
-}
-
-//
 //-----------------------------------------------------------------[ ACTIONS ]--
 
 // List of actions defined in this applet.
@@ -189,7 +178,7 @@ const (
 // Define applet actions.
 // Actions order in this list must match the order of defined actions numbers.
 //
-func (app *Applet) defineActions() []*cdtype.Action {
+func (app *Applet) actions() []*cdtype.Action {
 	return []*cdtype.Action{
 		{
 			ID:   ActionNone,

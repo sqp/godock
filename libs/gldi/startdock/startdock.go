@@ -16,7 +16,9 @@ import (
 	"github.com/sqp/godock/libs/ternary"
 	"github.com/sqp/godock/libs/text/color"
 	"github.com/sqp/godock/libs/text/strhelp"
-	"github.com/sqp/godock/services/allapps"
+
+	// Register applets services.
+	_ "github.com/sqp/godock/services/allapps"
 
 	// loader
 	"github.com/sqp/godock/libs/srvdbus"
@@ -56,16 +58,24 @@ func Run(log cdtype.Logger, getSettings func() maindock.DockSettings) bool {
 	// Dock init.
 	settings.Init()
 
-	// dbus service is mandatory if enabled.
-	if !settings.AppletsDisable {
+	// Remove excluded applets.
+	for _, name := range settings.Exclude {
+		cdtype.Applets.Unregister(name)
+	}
+
+	appmgr := mgrgldi.Register(log)
+
+	if settings.DisableDBus {
+		go appmgr.StartLoop()
+
+	} else {
+		// dbus service is mandatory if enabled.
 		dbus, e := serviceDbus(log)
-		if log.Err(e, "applets service") {
+		if log.Err(e, "start dbus service") {
+			fmt.Println("restart the program with the -N flag if you really need a second instance")
 			return false
 		}
-		// TODO: run a ticking loop for applets when Dbus is disabled.
-		appmgr := mgrgldi.Register(allapps.List(settings.Exclude), log)
 		dbus.SetManager(appmgr)
-		// go appmgr.StartLoop()
 		go dbus.StartLoop()
 	}
 

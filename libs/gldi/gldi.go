@@ -144,18 +144,27 @@ import (
 	"unsafe"
 )
 
+// IconLastOrder defines the last icon position ??
+//
 const IconLastOrder = -1e9 // CAIRO_DOCK_LAST_ORDER
 
+// RenderingMethod represents a screen display backend.
+//
 type RenderingMethod int
 
+// Screen display backends.
 const (
 	RenderingOpenGL  RenderingMethod = C.GLDI_OPENGL
 	RenderingCairo   RenderingMethod = C.GLDI_CAIRO
 	RenderingDefault RenderingMethod = C.GLDI_DEFAULT
 )
 
+// DesktopEnvironment represents a desktop environment.
+//
 type DesktopEnvironment C.CairoDockDesktopEnv
 
+// Desktop environment backends.
+//
 const (
 	DesktopEnvGnome   DesktopEnvironment = C.CAIRO_DOCK_GNOME
 	DesktopEnvKDE     DesktopEnvironment = C.CAIRO_DOCK_KDE
@@ -163,8 +172,12 @@ const (
 	DesktopEnvUnknown DesktopEnvironment = C.CAIRO_DOCK_UNKNOWN_ENV
 )
 
+// ModuleCategory represents a module category.
+//
 type ModuleCategory C.GldiModuleCategory
 
+// Module categories.
+//
 const (
 	CategoryBehavior        ModuleCategory = C.CAIRO_DOCK_CATEGORY_BEHAVIOR
 	CategoryTheme           ModuleCategory = C.CAIRO_DOCK_CATEGORY_THEME
@@ -292,6 +305,8 @@ func ForceDocksAbove() {
 	C.cairo_dock_force_docks_above()
 }
 
+// SetContainersNonSticky sets the non sticky mode for containers.
+//
 func SetContainersNonSticky() {
 	C.cairo_dock_set_containers_non_sticky()
 }
@@ -314,7 +329,7 @@ func GLBackendDeactivate() {
 	C.gldi_gl_backend_deactivate()
 }
 
-// GLBackendIsUsed returns whether the OpenGL backend is safely usable or not.
+// GLBackendIsSafe returns whether the OpenGL backend is safely usable or not.
 //
 func GLBackendIsSafe() bool {
 	return GLBackendIsUsed() &&
@@ -329,32 +344,44 @@ func GLBackendIsUsed() bool {
 	return gobool(C.g_bUseOpenGL)
 }
 
+// CanSetOnWidgetLayer returns whether desklets can be set on the widget layer.
+//
 func CanSetOnWidgetLayer() bool {
 	return gobool(C.gldi_desktop_can_set_on_widget_layer())
 }
 
+// LogSetLevelFromName sets the C dock debug level.
+//
 func LogSetLevelFromName(verbosity string) {
 	cstr := (*C.gchar)(C.CString(verbosity))
 	defer C.free(unsafe.Pointer((*C.char)(cstr)))
 	C.cd_log_set_level_from_name(cstr)
 }
 
+// LogForceUseColor sets the colored output for the C dock debug.
 func LogForceUseColor() {
 	C.cd_log_force_use_color()
 }
 
+// StyleColorsFreeze TODO FIND USAGE.
+//
 func StyleColorsFreeze() {
 	C.gldi_style_colors_freeze()
 }
 
+// DbusGThreadInit inits C threads.
+//
 func DbusGThreadInit() {
 	C.dbus_g_thread_init() // it's a wrapper: it will use dbus_threads_init_default ();
 }
 
+// FreeAll frees all C dock memory.
 func FreeAll() {
 	C.gldi_free_all()
 }
 
+// XMLCleanupParser TODO FIND USAGE.
+//
 func XMLCleanupParser() {
 	C.xmlCleanupParser()
 }
@@ -362,13 +389,17 @@ func XMLCleanupParser() {
 //
 //-------------------------------------------------------------[ GLDI COMMON ]--
 
+// DockIsLoading returns whether the dock is still loading or not.
+//
 func DockIsLoading() bool {
 	return gobool(C.cairo_dock_is_loading())
 }
 
-// need params
-// pParentDock	excluding this dock if not NULL
-// pSubDock	excluding this dock and its children if not NUL
+// GetAllAvailableDocks returns a filtered list of docks.
+//
+//   pParentDock    if not nil: exclude this dock.
+//   pSubDock       if not nil: exclude this dock and its children.
+//
 func GetAllAvailableDocks(parent, subdock *CairoDock) []*CairoDock {
 	var cp, cs *C.CairoDock
 	if parent != nil {
@@ -384,12 +415,16 @@ func GetAllAvailableDocks(parent, subdock *CairoDock) []*CairoDock {
 	return goListDocks(clist)
 }
 
+// DockGet returns the dock with the given name.
+//
 func DockGet(containerName string) *CairoDock {
 	cstr := (*C.gchar)(C.CString(containerName))
 	defer C.free(unsafe.Pointer((*C.char)(cstr)))
 	return NewDockFromNative(unsafe.Pointer(C.gldi_dock_get(cstr)))
 }
 
+// DockNew creates a new dock with the given name.
+//
 func DockNew(name string) *CairoDock {
 	cstr := (*C.gchar)(C.CString(name))
 	defer C.free(unsafe.Pointer((*C.char)(cstr)))
@@ -406,6 +441,8 @@ func DockAddConfFile() string {
 	return C.GoString((*C.char)(c))
 }
 
+// ConfFileNeedUpdate returns whether the config file needs update or not.
+//
 func ConfFileNeedUpdate(kf *keyfile.KeyFile, version string) bool {
 	cKeyfile := (*C.GKeyFile)(unsafe.Pointer(kf.ToNative()))
 	cstr := (*C.gchar)(C.CString(version))
@@ -423,34 +460,8 @@ func ConfFileNeedUpdate(kf *keyfile.KeyFile, version string) bool {
 // 	C.cairo_dock_upgrade_conf_file_full(cCurrent, cKeyfile, cOriginal, cbool(updateKeys))
 // }
 
-type IObject interface {
-	ToNative() unsafe.Pointer
-}
-
-func ObjectReload(obj IObject) {
-	C.gldi_object_reload((*C.GldiObject)(obj.ToNative()), C.gboolean(1))
-}
-
-func ObjectUnref(obj IObject) {
-	C.gldi_object_unref((*C.GldiObject)(obj.ToNative()))
-}
-
-func ObjectDelete(obj IObject) {
-	C.gldi_object_delete((*C.GldiObject)(obj.ToNative()))
-}
-
-func ObjectIsManagerChild(obj IObject, ptr *C.GldiObjectManager) bool {
-	return gobool(C.gldi_object_is_manager_child((*C.GldiObject)(obj.ToNative()), ptr))
-}
-
-func ObjectIsDock(obj IObject) bool {
-	return ObjectIsManagerChild(obj, &C.myDockObjectMgr)
-}
-
-func ObjectNotify(container *Container, notif int, icon *Icon, dock *CairoDock, key gdk.ModifierType) {
-	C.objectNotify(container.Ptr, C.int(notif), icon.Ptr, dock.Ptr, C.GdkModifierType(key))
-}
-
+// EmitSignalDropData emits the signal on the container.
+//
 func EmitSignalDropData(container *Container, data string, icon *Icon, order float64) {
 	cstr := (*C.gchar)(C.CString(data))
 	defer C.free(unsafe.Pointer((*C.char)(cstr)))
@@ -461,10 +472,14 @@ func EmitSignalDropData(container *Container, data string, icon *Icon, order flo
 	C.emitSignalDropData(container.Ptr, cstr, iconPtr, C.double(order))
 }
 
+// QuickHideAllDocks hides all dock at once.
+//
 func QuickHideAllDocks() {
 	C.cairo_dock_quick_hide_all_docks()
 }
 
+// LauncherAddNew adds a new launcher to the dock.
+//
 func LauncherAddNew(uri string, dock *CairoDock, order float64) *Icon {
 	var cstr *C.gchar
 	if uri != "" {
@@ -475,21 +490,22 @@ func LauncherAddNew(uri string, dock *CairoDock, order float64) *Icon {
 	return NewIconFromNative(unsafe.Pointer(c))
 }
 
+// SeparatorIconAddNew adds a separator to the dock.
+//
 func SeparatorIconAddNew(dock *CairoDock, order float64) *Icon {
 	c := C.gldi_separator_icon_add_new(dock.Ptr, C.double(order))
 	return NewIconFromNative(unsafe.Pointer(c))
 }
 
+// StackIconAddNew adds a stack icon to the dock (subdock).
+//
 func StackIconAddNew(dock *CairoDock, order float64) *Icon {
 	c := C.gldi_stack_icon_add_new(dock.Ptr, C.double(order))
 	return NewIconFromNative(unsafe.Pointer(c))
 }
 
-/** A convenient function to add a sub-menu to a given menu.
- *  pMenu         the menu
- *  cLabel        the label, or NULL
- *  cImage        the image path or name, or NULL
- */
+// MenuAddSubMenu adds a sub-menu to a given menu.
+//
 func MenuAddSubMenu(menu *gtk.Menu, label, iconPath string) (*gtk.Menu, *gtk.MenuItem) {
 	cstr := (*C.gchar)(C.CString(label))
 	defer C.free(unsafe.Pointer((*C.char)(cstr)))
@@ -521,6 +537,9 @@ func MenuAddSubMenu(menu *gtk.Menu, label, iconPath string) (*gtk.Menu, *gtk.Men
 // a function with a signaure matching the callback signature for
 // detailedSignal.  userData must either 0 or 1 elements which can
 // be optionally passed to f.
+
+// MenuAddItem adds an item to the menu.
+//
 func MenuAddItem(menu *gtk.Menu, label, iconPath string) *gtk.MenuItem {
 	cstr := (*C.gchar)(C.CString(label))
 	defer C.free(unsafe.Pointer((*C.char)(cstr)))
@@ -544,13 +563,62 @@ func MenuAddItem(menu *gtk.Menu, label, iconPath string) *gtk.MenuItem {
 // }
 
 //
+//-----------------------------------------------------------------[ IOBJECT ]--
+
+// IObject represents a basic dock object.
+//
+type IObject interface {
+	ToNative() unsafe.Pointer
+}
+
+// ObjectReload reloads the given object.
+//
+func ObjectReload(obj IObject) {
+	C.gldi_object_reload((*C.GldiObject)(obj.ToNative()), C.gboolean(1))
+}
+
+// ObjectUnref unrefs the given object.
+//
+func ObjectUnref(obj IObject) {
+	C.gldi_object_unref((*C.GldiObject)(obj.ToNative()))
+}
+
+// ObjectDelete deletes the given object.
+//
+func ObjectDelete(obj IObject) {
+	C.gldi_object_delete((*C.GldiObject)(obj.ToNative()))
+}
+
+// ObjectIsManagerChild returns whether the given object is a manager child.
+//
+func ObjectIsManagerChild(obj IObject, ptr *C.GldiObjectManager) bool {
+	return gobool(C.gldi_object_is_manager_child((*C.GldiObject)(obj.ToNative()), ptr))
+}
+
+// ObjectIsDock returns whether the given object is a dock or not.
+//
+func ObjectIsDock(obj IObject) bool {
+	return ObjectIsManagerChild(obj, &C.myDockObjectMgr)
+}
+
+// ObjectNotify notifies the given object.
+//
+func ObjectNotify(container *Container, notif int, icon *Icon, dock *CairoDock, key gdk.ModifierType) {
+	C.objectNotify(container.Ptr, C.int(notif), icon.Ptr, dock.Ptr, C.GdkModifierType(key))
+}
+
+//
 //---------------------------------------------------------------[ CAIRODOCK ]--
 
+// CairoDock defines a gldi dock.
+//
 type CairoDock struct {
 	Ptr          *C.CairoDock
 	RendererData interface{} // View rendering data.
 }
 
+// NewDockFromNative wraps a gldi dock from C pointer.
+//
 func NewDockFromNative(p unsafe.Pointer) *CairoDock {
 	if p == nil {
 		return nil
@@ -561,184 +629,259 @@ func NewDockFromNative(p unsafe.Pointer) *CairoDock {
 	}
 }
 
+// ToNative returns the pointer to the native object.
+//
 func (o *CairoDock) ToNative() unsafe.Pointer {
 	return unsafe.Pointer(o.Ptr)
 }
 
+// ToContainer returns the dock as a Container object.
+//
 func (o *CairoDock) ToContainer() *Container {
 	return NewContainerFromNative(unsafe.Pointer(o.Ptr))
 }
 
-func (dock *CairoDock) Icons() (list []*Icon) {
-	clist := glib.WrapList(uintptr(unsafe.Pointer(dock.Ptr.icons)))
+// Icons returns the list of icons in the dock.
+//
+func (o *CairoDock) Icons() (list []*Icon) {
+	clist := glib.WrapList(uintptr(unsafe.Pointer(o.Ptr.icons)))
 	return goListIcons(clist)
 }
 
+// FirstDrawnElementLinear TODO FIND USAGE.
+//
 func (o *CairoDock) FirstDrawnElementLinear() []*Icon {
 	c := C.cairo_dock_get_first_drawn_element_linear(o.Ptr.icons)
 	clist := glib.WrapList(uintptr(unsafe.Pointer(c)))
 	return goListIcons(clist)
 }
 
-func (dock *CairoDock) GetDockName() string {
-	return C.GoString((*C.char)(dock.Ptr.cDockName))
+// GetDockName returns the key name of the dock.
+//
+func (o *CairoDock) GetDockName() string {
+	return C.GoString((*C.char)(o.Ptr.cDockName))
 }
 
-func (dock *CairoDock) GetReadableName() string {
-	return C.GoString((*C.char)(C.gldi_dock_get_readable_name(dock.Ptr)))
+// GetReadableName returns the readable name of the dock.
+//
+func (o *CairoDock) GetReadableName() string {
+	return C.GoString((*C.char)(C.gldi_dock_get_readable_name(o.Ptr)))
 }
 
 // GetRefCount gives the number of icons pointing on the dock.
 // 0 means it is a root dock, >0 a sub-dock.
 //
-func (dock *CairoDock) GetRefCount() int {
-	return int(dock.Ptr.iRefCount)
+func (o *CairoDock) GetRefCount() int {
+	return int(o.Ptr.iRefCount)
 }
 
-func (dock *CairoDock) IsMainDock() bool {
-	return gobool(dock.Ptr.bIsMainDock)
+// IsMainDock returns whether the dock is a main dock or not.
+//
+func (o *CairoDock) IsMainDock() bool {
+	return gobool(o.Ptr.bIsMainDock)
 }
 
-func (dock *CairoDock) IsAutoHide() bool {
-	return gobool(dock.Ptr.bAutoHide)
+// IsAutoHide returns whether the dock was auto hidden (TODO ensure).
+//
+func (o *CairoDock) IsAutoHide() bool {
+	return gobool(o.Ptr.bAutoHide)
 }
 
-func (dock *CairoDock) SearchIconPointingOnDock(unknown interface{}) *Icon { // TODO: add param CairoDock **pParentDock
-	c := C.cairo_dock_search_icon_pointing_on_dock(dock.Ptr, nil)
+// SearchIconPointingOnDock TODO FIND USAGE AND COMPLETE.
+//
+func (o *CairoDock) SearchIconPointingOnDock(unknown interface{}) *Icon { // TODO: add param CairoDock **pParentDock
+	c := C.cairo_dock_search_icon_pointing_on_dock(o.Ptr, nil)
 	return NewIconFromNative(unsafe.Pointer(c))
 }
 
-func (dock *CairoDock) GetPointedIcon() *Icon {
-	c := C.cairo_dock_get_pointed_icon(dock.Ptr.icons)
+// GetPointedIcon returns the pointed icon (mouse on the icon).
+//
+func (o *CairoDock) GetPointedIcon() *Icon {
+	c := C.cairo_dock_get_pointed_icon(o.Ptr.icons)
 	return NewIconFromNative(unsafe.Pointer(c))
 }
 
-func (dock *CairoDock) Container() *Container {
-	return NewContainerFromNative(unsafe.Pointer(&dock.Ptr.container))
+// Container returns the inside container ?? TODO ENSURE.
+//
+func (o *CairoDock) Container() *Container {
+	return NewContainerFromNative(unsafe.Pointer(&o.Ptr.container))
 }
 
+// GetNextIcon returns the icon after the given one in the dock.
+//
 func (o *CairoDock) GetNextIcon(icon *Icon) *Icon {
 	c := C.cairo_dock_get_next_icon(o.Ptr.icons, icon.Ptr)
 	return NewIconFromNative(unsafe.Pointer(c))
 }
 
+// GetPreviousIcon returns the icon before the given one in the dock.
+//
 func (o *CairoDock) GetPreviousIcon(icon *Icon) *Icon {
 	c := C.cairo_dock_get_previous_icon(o.Ptr.icons, icon.Ptr)
 	return NewIconFromNative(unsafe.Pointer(c))
 }
 
+// ScreenNumber TODO FIND USAGE.
+//
 func (o *CairoDock) ScreenNumber() int {
 	return int(o.Ptr.iNumScreen)
 }
 
+// ScreenWidth returns the dock allocated screen width.
+//
 // cairo_dock_get_max_authorized_dock_width
 func (o *CairoDock) ScreenWidth() int {
 	geo := GetDesktopGeometry()
 	i := o.ScreenNumber()
+	isHoriz := o.Container().IsHorizontal()
 
-	if o.Container().IsHorizontal() {
-		if 0 <= i && i < geo.NbScreens() {
-			return geo.WidthScreen(i)
-		} else {
-			return geo.WidthAll()
-		}
-	} else {
-		if 0 <= i && i < geo.NbScreens() {
-			return geo.HeightScreen(i)
-		} else {
-			return geo.HeightAll()
-		}
+	switch {
+	case isHoriz && 0 <= i && i < geo.NbScreens():
+		return geo.WidthScreen(i)
+
+	case isHoriz:
+		return geo.WidthAll()
+
+	case 0 <= i && i < geo.NbScreens():
+		return geo.HeightScreen(i)
 	}
+
+	return geo.HeightAll()
 }
 
+// MaxIconHeight returns the max icon height.
+//
 func (o *CairoDock) MaxIconHeight() int {
 	return int(o.Ptr.iMaxIconHeight)
 }
 
+// Align returns the dock alignment (left/right or top/bottom).
+//
 func (o *CairoDock) Align() float64 {
 	return float64(o.Ptr.fAlign)
 }
 
+// SetDecorationsHeight sets decorations height.
+//
 func (o *CairoDock) SetDecorationsHeight(i int) {
 	o.Ptr.iDecorationsHeight = C.gint(i)
 }
 
+// MinDockWidth returns the min dock width.
+//
 func (o *CairoDock) MinDockWidth() int {
 	return int(o.Ptr.iMinDockWidth)
 }
 
+// MaxDockWidth returns the max dock width.
+//
 func (o *CairoDock) MaxDockWidth() int {
 	return int(o.Ptr.iMaxDockWidth)
 }
 
+// DecorationsHeight returns the dock decorations height.
+//
 func (o *CairoDock) DecorationsHeight() int {
 	return int(o.Ptr.iDecorationsHeight)
 }
 
+// SetMinDockWidth sets the min dock width.
+//
 func (o *CairoDock) SetMinDockWidth(val int) {
 	o.Ptr.iMinDockWidth = C.gint(val)
 }
 
+// SetMaxDockWidth sets the max dock width.
+//
 func (o *CairoDock) SetMaxDockWidth(val int) {
 	o.Ptr.iMaxDockWidth = C.gint(val)
 }
 
+// SetActiveWidth sets the dock active width.
+//
 func (o *CairoDock) SetActiveWidth(val int) {
 	o.Ptr.iActiveWidth = C.gint(val)
 }
 
+// SetDecorationsWidth sets decorations width.
+//
 func (o *CairoDock) SetDecorationsWidth(val int) {
 	o.Ptr.iDecorationsWidth = C.gint(val)
 }
 
+// MinDockHeight returns the min dock height.
+//
 func (o *CairoDock) MinDockHeight() int {
 	return int(o.Ptr.iMinDockHeight)
 }
 
+// MaxDockHeight returns the max dock height.
+//
 func (o *CairoDock) MaxDockHeight() int {
 	return int(o.Ptr.iMaxDockHeight)
 }
 
+// SetMinDockHeight sets the dock min height.
+//
 func (o *CairoDock) SetMinDockHeight(val int) {
 	o.Ptr.iMinDockHeight = C.gint(val)
 }
 
+// SetActiveHeight sets the dock active height.
+//
 func (o *CairoDock) SetActiveHeight(val int) {
 	o.Ptr.iActiveHeight = C.gint(val)
 }
 
+// SetMaxDockHeight sets the dock max height.
+//
 func (o *CairoDock) SetMaxDockHeight(val int) {
 	o.Ptr.iMaxDockHeight = C.gint(val)
 }
 
+// SetFlatDockWidth sets the dock flat width.
+//
 func (o *CairoDock) SetFlatDockWidth(val float64) {
 	o.Ptr.fFlatDockWidth = C.gdouble(val)
 }
 
+// SetMagnitudeMax sets the max dock magnitude.
+//
 func (o *CairoDock) SetMagnitudeMax(val float64) {
 	o.Ptr.fMagnitudeMax = C.gdouble(val)
 }
 
+// GlobalIconSize returns the global icon size.
+//
 func (o *CairoDock) GlobalIconSize() bool {
 	return gobool(o.Ptr.bGlobalIconSize)
 }
 
+// IconSize returns the dock icon size.
+//
 func (o *CairoDock) IconSize() int {
 	return int(o.Ptr.iIconSize)
 }
 
+// IsExtendedDock returns whether the dock is extended.
+//
 func (o *CairoDock) IsExtendedDock() bool {
 	return gobool(o.Ptr.bExtendedMode) && o.GetRefCount() == 0
 }
 
+// HasShapeBitmap returns whether the dock has shape bitmap.
+//
 func (o *CairoDock) HasShapeBitmap() bool {
 	return o.Ptr.pShapeBitmap != nil
 }
 
+// GetCurrentWidthLinear returns the dock current width linear.
+//
 func (o *CairoDock) GetCurrentWidthLinear() float64 {
 	return float64(C.cairo_dock_get_current_dock_width_linear(o.Ptr))
 }
 
+// ShapeBitmapSubstractRectangleInt TODO FIND USAGE
 func (o *CairoDock) ShapeBitmapSubstractRectangleInt(x, y, w, h int) {
 	var rect C.cairo_rectangle_int_t
 	rect.x = C.int(x)
@@ -748,18 +891,25 @@ func (o *CairoDock) ShapeBitmapSubstractRectangleInt(x, y, w, h int) {
 	C.cairo_region_subtract_rectangle(o.Ptr.pShapeBitmap, &rect)
 }
 
+// CheckIfMouseInsideLinear checks if the mouse is inside the linear area.
+//
 func (o *CairoDock) CheckIfMouseInsideLinear() {
 	C.cairo_dock_check_if_mouse_inside_linear(o.Ptr)
 }
 
+// CheckCanDropLinear checks if we can drop linear. TODO CHECK USAGE.
 func (o *CairoDock) CheckCanDropLinear() {
 	C.cairo_dock_check_can_drop_linear(o.Ptr)
 }
 
+// CalculateMagnitude calculates the dock magnitude.
+//
 func (o *CairoDock) CalculateMagnitude() float64 {
 	return float64(C.cairo_dock_calculate_magnitude(o.Ptr.iMagnitudeIndex))
 }
 
+// BackgroundBufferTexture TODO FIND USAGE.
+//
 func (o *CairoDock) BackgroundBufferTexture() uint32 {
 	return uint32(o.Ptr.backgroundBuffer.iTexture)
 }
@@ -767,14 +917,20 @@ func (o *CairoDock) BackgroundBufferTexture() uint32 {
 //
 //-------------------------------------------------------[ CONTAINER ]--
 
+// Container defines a gldi container.
+//
 type Container struct {
 	Ptr *C.GldiContainer
 }
 
+// NewContainerFromNative wraps a gldi container from C pointer.
+//
 func NewContainerFromNative(p unsafe.Pointer) *Container {
 	return &Container{(*C.GldiContainer)(p)}
 }
 
+// ToNative returns the pointer to the native object.
+//
 func (o *Container) ToNative() unsafe.Pointer {
 	return unsafe.Pointer(o.Ptr)
 }
@@ -871,10 +1027,14 @@ func (o *Container) ScreenBorder() cdtype.ContainerPosition {
 //
 //-----------------------------------------------------------------[ DESKLET ]--
 
+// Desklet defines a gldi desklet.
+//
 type Desklet struct {
 	Ptr *C.CairoDesklet
 }
 
+// NewDeskletFromNative wraps a gldi desklet from C pointer.
+//
 func NewDeskletFromNative(p unsafe.Pointer) *Desklet {
 	if p == nil {
 		return nil
@@ -882,10 +1042,14 @@ func NewDeskletFromNative(p unsafe.Pointer) *Desklet {
 	return &Desklet{(*C.CairoDesklet)(p)}
 }
 
+// ToNative returns the pointer to the native object.
+//
 func (o *Desklet) ToNative() unsafe.Pointer {
 	return unsafe.Pointer(o.Ptr)
 }
 
+// IsSticky returns whether the desklet is sticky.
+//
 func (o *Desklet) IsSticky() bool {
 	return gobool(C.gldi_desklet_is_sticky(o.Ptr))
 }
@@ -950,12 +1114,16 @@ func (o *Desklet) SetRendererByNameData(name string, unk1, unk2 bool) {
 //
 //--------------------------------------------------------------------[ ICON ]--
 
+// Icon defines a gldi icon.
+//
 type Icon struct {
 	Ptr *C.Icon
 
 	dataRendererText DataRendererText // optional data renderer (when set, this will replace the C data rendering)
 }
 
+// NewIconFromNative wraps a gldi icon from C pointer.
+//
 func NewIconFromNative(p unsafe.Pointer) *Icon {
 	if p == nil {
 		return nil
@@ -980,6 +1148,8 @@ func IconsGetAnyWithoutDialog() *Icon {
 	return NewIconFromNative(unsafe.Pointer(C._icons_get_any_without_dialog()))
 }
 
+// ToNative returns the pointer to the native object.
+//
 func (o *Icon) ToNative() unsafe.Pointer {
 	return unsafe.Pointer(o.Ptr)
 }
@@ -1833,14 +2003,20 @@ func (mi *ModuleInstance) removeShortkeyMap() {
 //
 //---------------------------------------------------------------[ VISITCARD ]--
 
+// VisitCard defines a dock visit card.
+//
 type VisitCard struct {
 	Ptr *C.GldiVisitCard
 }
 
+// NewVisitCardFromNative wraps a dock visit card from C pointer.
+//
 func NewVisitCardFromNative(p unsafe.Pointer) *VisitCard {
 	return &VisitCard{(*C.GldiVisitCard)(p)}
 }
 
+// NewVisitCardFromPackage wraps a dock visit card from an applet package.
+//
 func NewVisitCardFromPackage(pack *packages.AppletPackage) *VisitCard {
 	vc := new(C.GldiVisitCard)
 
@@ -1884,27 +2060,31 @@ func NewVisitCardFromPackage(pack *packages.AppletPackage) *VisitCard {
 	return NewVisitCardFromNative(unsafe.Pointer(vc))
 }
 
-// Module name (real one)
+// GetModuleName returns the module name (real one)
 func (vc *VisitCard) GetModuleName() string {
 	return C.GoString((*C.char)(vc.Ptr.cModuleName))
 }
 
-// Module name used as identifier.
+// GetName returns the module name used as identifier.
 //
 func (vc *VisitCard) GetName() string {
 	return C.GoString((*C.char)(vc.Ptr.cModuleName))
 }
 
-// Module name translated (as seen by the user).
+// GetTitle returns the module name translated (as seen by the user).
 //
 func (vc *VisitCard) GetTitle() string {
 	return C.GoString((*C.char)(vc.Ptr.cTitle))
 }
 
+// GetIconFilePath returns the module icon file path.
+//
 func (vc *VisitCard) GetIconFilePath() string {
 	return C.GoString((*C.char)(vc.Ptr.cIconFilePath))
 }
 
+// GetAuthor returns the module author name.
+//
 func (vc *VisitCard) GetAuthor() string {
 	return C.GoString((*C.char)(vc.Ptr.cAuthor))
 }
@@ -1916,26 +2096,38 @@ func (vc *VisitCard) GetDescription() string {
 	return tran.Sloc(vc.GetGettextDomain(), desc)
 }
 
+// GetPreviewFilePath returns the module preview file path.
+//
 func (vc *VisitCard) GetPreviewFilePath() string {
 	return C.GoString((*C.char)(vc.Ptr.cPreviewFilePath))
 }
 
+// GetShareDataDir returns the module share data dir.
+//
 func (vc *VisitCard) GetShareDataDir() string {
 	return C.GoString((*C.char)(vc.Ptr.cShareDataDir))
 }
 
+// GetGettextDomain returns the module gettext domain.
+//
 func (vc *VisitCard) GetGettextDomain() string {
 	return C.GoString((*C.char)(vc.Ptr.cGettextDomain))
 }
 
+// GetModuleVersion returns the module version.
+//
 func (vc *VisitCard) GetModuleVersion() string {
 	return C.GoString((*C.char)(vc.Ptr.cModuleVersion))
 }
 
+// GetCategory returns the module category.
+//
 func (vc *VisitCard) GetCategory() ModuleCategory {
 	return ModuleCategory(vc.Ptr.iCategory)
 }
 
+// GetConfFileName returns the module container file name.
+//
 func (vc *VisitCard) GetConfFileName() string {
 	return C.GoString((*C.char)(vc.Ptr.cConfFileName))
 }
@@ -1946,6 +2138,8 @@ func (vc *VisitCard) IsMultiInstance() bool {
 	return gobool(vc.Ptr.bMultiInstance)
 }
 
+// GetContainerType returns the module icon file path.
+//
 func (vc *VisitCard) GetContainerType() int {
 	return int(vc.Ptr.iContainerType)
 }
@@ -1953,10 +2147,14 @@ func (vc *VisitCard) GetContainerType() int {
 //
 //---------------------------------------------------------------[ WINDOWACTOR ]--
 
+// WindowActor defines a dock window actor.
+//
 type WindowActor struct {
 	Ptr *C.GldiWindowActor
 }
 
+// NewWindowActorFromNative wraps a dock window actor from C pointer.
+//
 func NewWindowActorFromNative(p unsafe.Pointer) *WindowActor {
 	if p == nil {
 		return nil
@@ -1964,94 +2162,138 @@ func NewWindowActorFromNative(p unsafe.Pointer) *WindowActor {
 	return &WindowActor{(*C.GldiWindowActor)(p)}
 }
 
+// ToNative returns the pointer to the native object.
+//
 func (o *WindowActor) ToNative() unsafe.Pointer {
 	return unsafe.Pointer(o.Ptr)
 }
 
+// CanMinMaxClose returns whether the window can do those actions.
+//
 func (o *WindowActor) CanMinMaxClose() (bool, bool, bool) {
 	var bCanMinimize, bCanMaximize, bCanClose C.gboolean
 	C.gldi_window_can_minimize_maximize_close(o.Ptr, &bCanMinimize, &bCanMaximize, &bCanClose)
 	return gobool(bCanMinimize), gobool(bCanMaximize), gobool(bCanClose)
 }
 
+// IsActive returns whether the window is active.
+//
 func (o *WindowActor) IsActive() bool {
 	return o.Ptr == C.gldi_windows_get_active()
 }
 
+// IsAbove returns whether the window is above.
+//
 func (o *WindowActor) IsAbove() bool { // could split OrBelow but seem unused.
 	var isAbove, isBelow C.gboolean
 	C.gldi_window_is_above_or_below(o.Ptr, &isAbove, &isBelow)
 	return gobool(isAbove)
 }
 
+// IsFullScreen returns whether the window is full screen.
+//
 func (o *WindowActor) IsFullScreen() bool {
 	return gobool(o.Ptr.bIsFullScreen)
 }
 
+// IsHidden returns whether the window is hidden.
+//
 func (o *WindowActor) IsHidden() bool {
 	return gobool(o.Ptr.bIsHidden)
 }
 
+// IsMaximized returns whether the window is maximized.
+//
 func (o *WindowActor) IsMaximized() bool {
 	return gobool(o.Ptr.bIsMaximized)
 }
 
+// IsOnCurrentDesktop returns whether the window is on current desktop.
+//
 func (o *WindowActor) IsOnCurrentDesktop() bool {
 	return gobool(C.gldi_window_is_on_current_desktop(o.Ptr))
 }
 
+// IsOnDesktop returns whether the window is the given desktop and viewport number.
+//
 func (o *WindowActor) IsOnDesktop(desktopNumber, viewPortX, viewPortY int) bool {
 	return gobool(C.gldi_window_is_on_desktop(o.Ptr, C.int(desktopNumber), C.int(viewPortX), C.int(viewPortY)))
 }
 
+// IsSticky returns whether the window is sticky.
+//
 func (o *WindowActor) IsSticky() bool {
 	return gobool(C.gldi_window_is_sticky(o.Ptr))
 }
 
+// Close closes window.
+//
 func (o *WindowActor) Close() {
 	C.gldi_window_close(o.Ptr)
 }
 
+// Kill kills the window.
+//
 func (o *WindowActor) Kill() {
 	C.gldi_window_kill(o.Ptr)
 }
 
+// Lower lowers the window.
+//
 func (o *WindowActor) Lower() {
 	C.gldi_window_lower(o.Ptr)
 }
 
+// Minimize minimizes the window.
+//
 func (o *WindowActor) Minimize() {
 	C.gldi_window_minimize(o.Ptr)
 }
 
+// Maximize maximizes the window.
+//
 func (o *WindowActor) Maximize(full bool) {
 	C.gldi_window_maximize(o.Ptr, cbool(full))
 }
 
+// MoveToCurrentDesktop moves the window to the current desktop.
+//
 func (o *WindowActor) MoveToCurrentDesktop() {
 	C.gldi_window_move_to_current_desktop(o.Ptr)
 }
 
+// MoveToDesktop move the window to the given desktop and viewport number.
+//
 func (o *WindowActor) MoveToDesktop(desktopNumber, viewPortX, viewPortY int) {
 	C.gldi_window_move_to_desktop(o.Ptr, C.int(desktopNumber), C.int(viewPortX), C.int(viewPortY))
 }
 
+// SetAbove sets the window above.
+//
 func (o *WindowActor) SetAbove(above bool) {
 	C.gldi_window_set_above(o.Ptr, cbool(above))
 }
 
+// SetFullScreen sets the window full screen state.
+//
 func (o *WindowActor) SetFullScreen(full bool) {
 	C.gldi_window_set_fullscreen(o.Ptr, cbool(full))
 }
 
+// SetSticky sets the window sticky state.
+//
 func (o *WindowActor) SetSticky(sticky bool) {
 	C.gldi_window_set_sticky(o.Ptr, cbool(sticky))
 }
 
+// Show shows the window.
+//
 func (o *WindowActor) Show() {
 	C.gldi_window_show(o.Ptr)
 }
 
+// SetVisibility sets the window visibility.
+//
 func (o *WindowActor) SetVisibility(show bool) {
 	if show {
 		o.Show()
@@ -2059,6 +2301,8 @@ func (o *WindowActor) SetVisibility(show bool) {
 	o.Minimize()
 }
 
+// ToggleVisibility toggles the window visibility.
+//
 func (o *WindowActor) ToggleVisibility() {
 	if o.IsActive() {
 		o.Minimize()
@@ -2067,6 +2311,8 @@ func (o *WindowActor) ToggleVisibility() {
 	}
 }
 
+// GetAppliIcon returns the icon managing the window.
+//
 func (o *WindowActor) GetAppliIcon() *Icon {
 	c := C.cairo_dock_get_appli_icon(o.Ptr)
 	return NewIconFromNative(unsafe.Pointer(c))
@@ -2075,14 +2321,20 @@ func (o *WindowActor) GetAppliIcon() *Icon {
 //
 //---------------------------------------------------------------[ ANIMATION ]--
 
+// Animation defines a dock animation.
+//
 type Animation struct {
 	Ptr *C.CairoDockAnimationRecord
 }
 
+// NewAnimationFromNative wraps a dock animation from C pointer.
+//
 func NewAnimationFromNative(p unsafe.Pointer) *Animation {
 	return &Animation{(*C.CairoDockAnimationRecord)(p)}
 }
 
+// GetDisplayedName returns the animation displayed name.
+//
 func (dr *Animation) GetDisplayedName() string {
 	return C.GoString((*C.char)(dr.Ptr.cDisplayedName))
 }
@@ -2090,14 +2342,20 @@ func (dr *Animation) GetDisplayedName() string {
 //
 //--------------------------------------------------[ CAIRODESKLETDECORATION ]--
 
+// CairoDeskletDecoration defines a dock desklet decoration.
+//
 type CairoDeskletDecoration struct {
 	Ptr *C.CairoDeskletDecoration
 }
 
+// NewCairoDeskletDecorationFromNative wraps a dock desklet decoration from C pointer.
+//
 func NewCairoDeskletDecorationFromNative(p unsafe.Pointer) *CairoDeskletDecoration {
 	return &CairoDeskletDecoration{(*C.CairoDeskletDecoration)(p)}
 }
 
+// GetDisplayedName returns the desklet decoration displayed name.
+//
 func (dr *CairoDeskletDecoration) GetDisplayedName() string {
 	return C.GoString((*C.char)(dr.Ptr.cDisplayedName))
 }
@@ -2105,14 +2363,20 @@ func (dr *CairoDeskletDecoration) GetDisplayedName() string {
 //
 //---------------------------------------------------------[ DIALOGDECORATOR ]--
 
+// DialogDecorator defines a dock dialog decorator.
+//
 type DialogDecorator struct {
 	Ptr *C.CairoDialogDecorator
 }
 
+// NewDialogDecoratorFromNative wraps a dock dialog decorator from C pointer.
+//
 func NewDialogDecoratorFromNative(p unsafe.Pointer) *DialogDecorator {
 	return &DialogDecorator{(*C.CairoDialogDecorator)(p)}
 }
 
+// GetDisplayedName returns the dialog decorator displayed name.
+//
 func (dr *DialogDecorator) GetDisplayedName() string {
 	return C.GoString((*C.char)(dr.Ptr.cDisplayedName))
 }
@@ -2120,11 +2384,14 @@ func (dr *DialogDecorator) GetDisplayedName() string {
 //
 //-------------------------------------------------------[ CAIRODOCKRENDERER ]--
 
-// AKA views.
+// CairoDockRenderer defines a dock renderer, AKA views.
+//
 type CairoDockRenderer struct {
 	Ptr *C.CairoDockRenderer
 }
 
+// NewCairoDockRenderer creates a new dock renderer.
+//
 func NewCairoDockRenderer(title, readmePath, previewPath string) *CairoDockRenderer {
 	c := C.newDockRenderer()
 
@@ -2141,26 +2408,38 @@ func NewCairoDockRenderer(title, readmePath, previewPath string) *CairoDockRende
 	return NewCairoDockRendererFromNative(unsafe.Pointer(c))
 }
 
+// ToNative returns the pointer to the native object.
+//
 func (dr *CairoDockRenderer) ToNative() unsafe.Pointer {
 	return unsafe.Pointer(dr.Ptr)
 }
 
+// NewCairoDockRendererFromNative wraps a dock renderer from C pointer.
+//
 func NewCairoDockRendererFromNative(p unsafe.Pointer) *CairoDockRenderer {
 	return &CairoDockRenderer{(*C.CairoDockRenderer)(p)}
 }
 
+// GetDisplayedName returns the dock renderer displayed name.
+//
 func (dr *CairoDockRenderer) GetDisplayedName() string {
 	return C.GoString((*C.char)(dr.Ptr.cDisplayedName))
 }
 
+// GetReadmeFilePath returns the dock renderer readme file path.
+//
 func (dr *CairoDockRenderer) GetReadmeFilePath() string {
 	return C.GoString((*C.char)(dr.Ptr.cReadmeFilePath))
 }
 
+// GetPreviewFilePath returns the dock renderer preview file path.
+//
 func (dr *CairoDockRenderer) GetPreviewFilePath() string {
 	return C.GoString((*C.char)(dr.Ptr.cPreviewFilePath))
 }
 
+// Register registers the dock renderer in the dock.
+//
 func (dr *CairoDockRenderer) Register(name string) {
 	cname := (*C.gchar)(C.CString(name))
 	C.cairo_dock_register_renderer(cname, dr.Ptr)
@@ -2169,14 +2448,20 @@ func (dr *CairoDockRenderer) Register(name string) {
 //
 //-----------------------------------------------------------------[ MANAGER ]--
 
+// Manager defines a dock manager.
+//
 type Manager struct {
 	Ptr *C.GldiManager
 }
 
+// NewManagerFromNative wraps a dock manager from C pointer.
+//
 func NewManagerFromNative(p unsafe.Pointer) *Manager {
 	return &Manager{(*C.GldiManager)(p)}
 }
 
+// ManagerGet gets the manager with the given name.
+//
 func ManagerGet(name string) *Manager {
 	cstr := (*C.gchar)(C.CString(name))
 	defer C.free(unsafe.Pointer((*C.char)(cstr)))
@@ -2201,48 +2486,70 @@ func ManagerReload(name string, b bool, keyf *keyfile.KeyFile) {
 //
 //---------------------------------------------------------[ DESKTOPGEOMETRY ]--
 
+// DesktopGeometry defines the dock desktop geometry.
+//
 type DesktopGeometry struct {
 	Ptr C.GldiDesktopGeometry
 }
 
+// GetDesktopGeometry gets desktop geometry settings.
+//
 func GetDesktopGeometry() *DesktopGeometry {
 	return &DesktopGeometry{C.g_desktopGeometry}
 }
 
+// NbDesktops returns the number of desktops.
+//
 func (dg *DesktopGeometry) NbDesktops() int {
 	return int(dg.Ptr.iNbDesktops)
 }
 
+// NbScreens returns the number of desktop screens.
+//
 func (dg *DesktopGeometry) NbScreens() int {
 	return int(dg.Ptr.iNbScreens)
 }
 
+// NbViewportX returns the number of horizontal viewports.
+//
 func (dg *DesktopGeometry) NbViewportX() int {
 	return int(dg.Ptr.iNbViewportX)
 }
 
+// NbViewportY returns the number of vertical viewports.
+//
 func (dg *DesktopGeometry) NbViewportY() int {
 	return int(dg.Ptr.iNbViewportY)
 }
 
+// WidthAll returns the desktop total width.
+//
 func (dg *DesktopGeometry) WidthAll() int {
 	return int(dg.Ptr.Xscreen.width)
 }
 
+// WidthScreen returns the width of a desktop screen.
+//
 func (dg *DesktopGeometry) WidthScreen(screenNb int) int {
 	return int(C.screen_width_i(C.int(screenNb)))
 }
 
+// HeightAll returns the desktop total height.
+//
 func (dg *DesktopGeometry) HeightAll() int {
 	return int(dg.Ptr.Xscreen.height)
 }
 
+// HeightScreen returns the height of a desktop screen.
+//
 func (dg *DesktopGeometry) HeightScreen(screenNb int) int {
 	return int(C.screen_height_i(C.int(screenNb)))
 }
 
 // int iCurrentDesktop, iCurrentViewportX, iCurrentViewportY;
 
+// ScreenPosition returns the desktop screen position.
+//
 func (dg *DesktopGeometry) ScreenPosition(i int) (int, int) {
 	if 0 > i || i >= dg.NbScreens() {
 		return 0, 0
@@ -2255,18 +2562,26 @@ func (dg *DesktopGeometry) ScreenPosition(i int) (int, int) {
 //
 //----------------------------------------------------------------[ SHORTKEY ]--
 
+// Shortkey defines a dock shortkey.
+//
 type Shortkey struct {
 	Ptr *C.GldiShortkey
 }
 
+// NewShortkeyFromNative wraps a dock shortkey from C pointer.
+//
 func NewShortkeyFromNative(p unsafe.Pointer) *Shortkey {
 	return &Shortkey{(*C.GldiShortkey)(p)}
 }
 
+// GetDemander returns the shortkey Demander.
+//
 func (dr *Shortkey) GetDemander() string {
 	return C.GoString((*C.char)(dr.Ptr.cDemander))
 }
 
+// GetDescription returns the shortkey description.
+//
 func (dr *Shortkey) GetDescription() string {
 	return C.GoString((*C.char)(dr.Ptr.cDescription))
 }
@@ -2277,14 +2592,20 @@ func (dr *Shortkey) GetKeyString() string {
 	return C.GoString((*C.char)(dr.Ptr.keystring))
 }
 
+// GetIconFilePath returns the shortkey icon file path.
+//
 func (dr *Shortkey) GetIconFilePath() string {
 	return C.GoString((*C.char)(dr.Ptr.cIconFilePath))
 }
 
+// GetConfFilePath returns the shortkey conf file path.
+//
 func (dr *Shortkey) GetConfFilePath() string {
 	return C.GoString((*C.char)(dr.Ptr.cConfFilePath))
 }
 
+// GetGroupName returns the shortkey group name.
+//
 func (dr *Shortkey) GetGroupName() string {
 	return C.GoString((*C.char)(dr.Ptr.cGroupName))
 }
@@ -2295,10 +2616,14 @@ func (dr *Shortkey) GetKeyName() string {
 	return C.GoString((*C.char)(dr.Ptr.cKeyName))
 }
 
+// GetSuccess returns the shortkey success.
+//
 func (dr *Shortkey) GetSuccess() bool {
 	return gobool(dr.Ptr.bSuccess)
 }
 
+// Rebind rebinds the shortkey.
+//
 func (dr *Shortkey) Rebind(keystring, description string) bool {
 	ckey := (*C.gchar)(C.CString(keystring))
 	defer C.free(unsafe.Pointer((*C.char)(ckey)))
@@ -2336,6 +2661,8 @@ func gchar(str string) *C.gchar {
 	return (*C.gchar)(C.CString(str))
 }
 
+// CIntPointer returns a C gpointer to an int value.
+//
 func CIntPointer(i int) C.gpointer {
 	return C.intToPointer(C.int(i))
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/sqp/godock/libs/gldi/startdock"
 
 	"fmt"
+	"strings"
 )
 
 func init() {
@@ -43,12 +44,12 @@ Paths override:
 Debug:
   -w time     Wait for N seconds before starting; this is useful if you notice
               some problems when the dock starts with the session.
-  -x appname  Exclude a given plug-in from activating (it is still loaded).
+  -x appname  Exclude applets from activating (still loaded). Separator=;
   -f          Safe mode: don't load any plug-ins.
   -l level    Log verbosity: debug,message,warning,critical,error (def=warning).
   -F          Force to display some output messages with colors.
   -D          Debug mode for the go part of the code (including applets).
-  -N          Don't start Dbus and go applets services.
+  -N          Don't start the internal Dbus service (used by remote command).
   -pf         pprof file output:   go tool pprof $(which cdc) /pathToFile
   -pw         pprof web service:   http://localhost:port/debug/pprof
 
@@ -88,7 +89,7 @@ everybody at the moment. But it also needs to be tested now.
 
 	// New dock settings.
 
-	newAppletsDisable := cmdDefault.Flag.Bool("N", false, "")
+	newDisableDBus := cmdDefault.Flag.Bool("N", false, "")
 	newDebug := cmdDefault.Flag.Bool("D", false, "")
 
 	// pprof.
@@ -120,7 +121,7 @@ everybody at the moment. But it also needs to be tested now.
 			ThemeServer:        *userThemeServer,
 
 			Delay:              *userDelay,
-			Exclude:            *userExclude,
+			Exclude:            strings.Split(*userExclude, ";"),
 			SafeMode:           *userSafeMode,
 			MetacityWorkaround: *userMetacityWorkaround,
 			Verbosity:          *userVerbosity,
@@ -130,9 +131,9 @@ everybody at the moment. But it also needs to be tested now.
 			NoSticky:           *userNoSticky,
 			ModulesDir:         *userModulesDir,
 
-			HTTPPprof:      *pprofWeb,
-			AppletsDisable: *newAppletsDisable,
-			Debug:          *newDebug,
+			HTTPPprof:   *pprofWeb,
+			DisableDBus: *newDisableDBus,
+			Debug:       *newDebug,
 		}
 	}
 }

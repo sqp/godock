@@ -4,7 +4,7 @@ Package dist contains documentation and files to build distro packages.
 Linux package installation.
 
 
-Install for Debian - Ubuntu - LinuxMint and related from the repository
+Debian - Ubuntu - LinuxMint and related from the repository
 
 (please confirm if they're working on Debian 8)
 
@@ -13,20 +13,20 @@ Create a source.list entry by adding the file:
 /etc/apt/sources.list.d/cairo-dock-go.list
   deb http://download.opensuse.org/repositories/home:/SQP:/cairo-dock-go/xUbuntu_16.04/ ./
 
-Install
+Install command:
   apt update && apt install cairo-dock-goapplets # or cairo-dock-rework
 
-Install for Archlinux from the repository (already build).
+Archlinux builded packages repository
 
 Add to your /etc/pacman.conf
   [home_SQP_cairo-dock-go_Arch_Extra]
   SigLevel = Never
   Server = http://download.opensuse.org/repositories/home:/SQP:/cairo-dock-go/Arch_Extra/$arch
 
-Install
+Install command:
   pacman -Sy cairo-dock-goapplets # or cairo-dock-rework
 
-Build Archlinux package
+Create Archlinux package
 
 Install golang applets using the package manager directly from sources.
 
@@ -42,14 +42,14 @@ Or create a package with only applets.
   wget https://raw.githubusercontent.com/sqp/godock/master/dist/cairo-dock-goapplets/PKGBUILD
   makepkg
 
-Install package
+Install command:
   makepkg -i
 
-Remove Package
+Remove Package:
   pacman -R cairo-dock-goapplets
 
 
-Install from sources
+Build from sources
 
 Single applet:
 

@@ -2,8 +2,7 @@
 package GoGmail
 
 import (
-	"github.com/sqp/godock/libs/cdapplet" // Applet base.
-	"github.com/sqp/godock/libs/cdtype"   // Applet types.
+	"github.com/sqp/godock/libs/cdtype" // Applet types.
 	"github.com/sqp/godock/libs/ternary"
 
 	"io/ioutil"
@@ -14,7 +13,9 @@ import (
 	"time"
 )
 
-// Applet data and controlers.
+func init() { cdtype.Applets.Register("GoGmail", NewApplet) }
+
+// Applet defines a dock applet.
 //
 type Applet struct {
 	cdtype.AppBase // Applet base and dock connection.
@@ -28,11 +29,27 @@ type Applet struct {
 	err error // Buffer for last error to prevent displaying it twice.
 }
 
-// NewApplet create a new applet instance.
+// NewApplet creates a new applet instance.
 //
-func NewApplet() cdtype.AppInstance {
-	app := &Applet{}
-	app.AppBase = cdapplet.New(&app.conf, app.defineActions()...)
+func NewApplet(base cdtype.AppBase, events *cdtype.Events) cdtype.AppInstance {
+	app := &Applet{AppBase: base}
+	app.SetConfig(&app.conf, app.actions()...)
+
+	// Events.
+	events.OnClick = func() { app.Action().Launch(app.Action().ID(app.conf.ActionClickLeft)) }
+	events.OnMiddleClick = func() { app.Action().Launch(app.Action().ID(app.conf.ActionClickMiddle)) }
+	events.OnBuildMenu = func(menu cdtype.Menuer) {
+		switch {
+		case !app.data.IsValid(): // No running loop =  no registration. User will do as expected !
+			app.Action().BuildMenu(menu, menuRegister)
+
+		case app.Window().IsOpened(): // Monitored application opened.
+			app.Action().BuildMenu(menu, menuFull[1:]) // Drop "Open client" option, already provided as window action by the dock.
+
+		default:
+			app.Action().BuildMenu(menu, menuFull)
+		}
+	}
 
 	// Prepare mailbox with the display callback that will receive update info.
 	app.data = NewFeed(app.updateDisplay)
@@ -70,11 +87,6 @@ func (app *Applet) Init(def *cdtype.Defaults, confLoaded bool) {
 	cmd := cdtype.NewCommandStd(app.conf.MailClientAction+1, app.conf.MailClientName, app.conf.MailClientClass)
 	def.Commands = cdtype.Commands{cmdMailClient: cmd}
 
-	// Shortkey callbacks.
-	app.conf.ShortkeyOpenClient.Call = func() { app.testAction(ActionOpenClient) }
-	app.conf.ShortkeyShowMails.Call = func() { app.testAction(ActionShowMails) }
-	app.conf.ShortkeyCheck.Call = func() { app.testAction(ActionCheckMail) }
-
 	// Create the renderer.
 	switch app.conf.Renderer {
 	case QuickInfo:
@@ -91,46 +103,11 @@ func (app *Applet) Init(def *cdtype.Defaults, confLoaded bool) {
 }
 
 //
-//------------------------------------------------------------------[ EVENTS ]--
-
-// DefineEvents set applet events callbacks.
-//
-func (app *Applet) DefineEvents(events *cdtype.Events) {
-
-	// Left click: try to launch configured action.
-	//
-	events.OnClick = func(int) {
-		app.testAction(app.Action().ID(app.conf.ActionClickLeft))
-	}
-
-	// Middle click: try to launch configured action.
-	//
-	events.OnMiddleClick = func() {
-		app.testAction(app.Action().ID(app.conf.ActionClickMiddle))
-	}
-
-	// Right click menu. Provide actions list or registration request.
-	//
-	events.OnBuildMenu = func(menu cdtype.Menuer) {
-		switch {
-		case !app.data.IsValid(): // No running loop =  no registration. User will do as expected !
-			app.Action().BuildMenu(menu, menuRegister)
-
-		case app.Window().IsOpened(): // Monitored application opened.
-			app.Action().BuildMenu(menu, menuFull[1:]) // Drop "Open client" option, already provided as window action by the dock.
-
-		default:
-			app.Action().BuildMenu(menu, menuFull)
-		}
-	}
-}
-
-//
 //-----------------------------------------------------------------[ ACTIONS ]--
 
 // Define applet actions. Order must match actions const declaration order.
 //
-func (app *Applet) defineActions() []*cdtype.Action {
+func (app *Applet) actions() []*cdtype.Action {
 	return []*cdtype.Action{
 		{
 			ID:   ActionNone,
@@ -162,21 +139,23 @@ func (app *Applet) defineActions() []*cdtype.Action {
 	}
 }
 
-// Test login infos before launching an action. Redirect to the the registration
-// if failed.
+// testNeedRegister return true if registration was called.
 //
-func (app *Applet) testAction(id int) {
+func (app *Applet) testNeedRegister() bool {
 	if app.data.IsValid() {
-		app.Action().Launch(id)
-	} else {
-		app.Action().Launch(ActionRegister) // No running loop = no registration. User must comply !
+		return false
 	}
+	app.Action().Launch(ActionRegister) // No registration? User must comply !
+	return true
 }
 
 // Open defined mail application or webpage. Manage application visibility if
 // the user activated the application monitoring option.
 //
 func (app *Applet) actionOpenClient() {
+	if app.testNeedRegister() {
+		return
+	}
 	app.Command().Launch(cmdMailClient)
 }
 
@@ -184,6 +163,9 @@ func (app *Applet) actionOpenClient() {
 // restart the loop.  that will launch a check.
 //
 func (app *Applet) actionCheckMail() {
+	if app.testNeedRegister() {
+		return
+	}
 	app.Poller().Restart() // Should trigger a app.data.Check()
 }
 
@@ -191,6 +173,9 @@ func (app *Applet) actionCheckMail() {
 // Infinite duration as it's from a user request.
 //
 func (app *Applet) actionShowMails() {
+	if app.testNeedRegister() {
+		return
+	}
 	app.mailPopup(app.conf.DialogNbMail, 0, "ListMailsManual")
 }
 
@@ -311,7 +296,7 @@ func (app *Applet) mailPopup(nb, duration int, templateFunc string) {
 		TimeLength: duration,
 		UseMarkup:  true,
 		Buttons:    "document-open;cancel",
-		Callback:   cdtype.DialogCallbackValidNoArg(app.Action().CallbackNoArg(ActionOpenClient)), // Open mail client if the user press the 1st button.
+		Callback:   cdtype.DialogCallbackValidNoArg(app.Action().Callback(ActionOpenClient)), // Open mail client if the user press the 1st button.
 	})
 	app.Log().Err(e, "popup")
 

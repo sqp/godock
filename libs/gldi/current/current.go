@@ -90,6 +90,8 @@ func (IconsParamType) Height() int { return int(C.myIconsParam.iIconHeight) }
 //
 func (IconsParamType) LabelSize() int { return int(C.myIconsParam.iLabelSize) }
 
+// RevolveSeparator TODO FIND USAGE.
+//
 func (IconsParamType) RevolveSeparator() bool { return gobool(C.myIconsParam.bRevolveSeparator) }
 
 // SeparatorWidth defines the default separator width.

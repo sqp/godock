@@ -54,10 +54,7 @@ import (
 	"github.com/sqp/godock/libs/appdbus" // Connection to cairo-dock.
 )
 
-func main() {
-	appdbus.StartApplet(demo.NewApplet())
-}
-
+func main() { appdbus.StandAlone(demo.NewApplet) }
 
 `
 

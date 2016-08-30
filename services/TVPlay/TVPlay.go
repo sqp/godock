@@ -12,14 +12,18 @@ import (
 	"github.com/sqp/gupnp/guigtk"   // UPnP gui.
 	"github.com/sqp/gupnp/upnptype" // UPnP common types.
 
-	"github.com/sqp/godock/libs/cdapplet" // Applet base.
-	"github.com/sqp/godock/libs/cdtype"   // Applet types.
+	"github.com/sqp/godock/libs/cdtype" // Applet types.
 	"github.com/sqp/godock/libs/ternary"
 
 	"fmt"
 )
 
-// Applet data and controlers.
+//
+//------------------------------------------------------------------[ APPLET ]--
+
+func init() { cdtype.Applets.Register("TVPlay", NewApplet) }
+
+// Applet defines a dock applet.
 //
 type Applet struct {
 	cdtype.AppBase // Applet base and dock connection.
@@ -30,11 +34,43 @@ type Applet struct {
 	win  *gtk.Window
 }
 
-// NewApplet creates a new TVPlay applet instance.
+// NewApplet creates a new applet instance.
 //
-func NewApplet() cdtype.AppInstance {
-	app := &Applet{}
-	app.AppBase = cdapplet.New(&app.conf, app.defineActions()...)
+func NewApplet(base cdtype.AppBase, events *cdtype.Events) cdtype.AppInstance {
+	app := &Applet{AppBase: base}
+	app.SetConfig(&app.conf, app.actions()...)
+
+	// Events.
+	events.OnClick = func() { // Left click: open and manage the gui window.
+		if app.Window().IsOpened() { // Window opened.
+			app.Window().ToggleVisibility()
+		} else {
+			app.createGui(true, true)
+		}
+	}
+
+	events.OnMiddleClick = func() { app.Action().Launch(app.Action().ID(app.conf.ActionClickMiddle)) }
+
+	events.OnScroll = func(scrollUp bool) {
+		var key int
+		switch app.conf.ActionMouseWheel {
+		case "Change volume":
+			key = ternary.Int(scrollUp, int(upnptype.ActionVolumeUp), int(upnptype.ActionVolumeDown))
+
+		case "Seek in track":
+			key = ternary.Int(scrollUp, int(upnptype.ActionSeekForward), int(upnptype.ActionSeekBackward))
+		}
+
+		app.Action().Launch(key)
+	}
+
+	events.OnBuildMenu = app.Action().CallbackMenu(dockMenu)
+
+	events.End = func() {
+		if app.win != nil {
+			glib.IdleAdd(app.win.Destroy)
+		}
+	}
 
 	// Create the UPnP device manager.
 	var e error
@@ -141,58 +177,11 @@ func (app *Applet) onMediaServerLost(srv upnptype.Server) {
 }
 
 //
-//------------------------------------------------------------------[ EVENTS ]--
-
-// DefineEvents set applet events callbacks.
-//
-func (app *Applet) DefineEvents(events *cdtype.Events) {
-
-	// Left click: open and manage the gui window.
-	//
-	events.OnClick = func(int) {
-		if app.Window().IsOpened() { // Window opened.
-			app.Window().ToggleVisibility()
-		} else {
-			app.createGui(true, true)
-		}
-	}
-
-	// Middle click: launch configured action.
-	//
-	events.OnMiddleClick = func() {
-		app.Action().Launch(app.Action().ID(app.conf.ActionClickMiddle))
-	}
-
-	events.OnScroll = func(scrollUp bool) {
-		var key int
-		switch app.conf.ActionMouseWheel {
-		case "Change volume":
-			key = ternary.Int(scrollUp, int(upnptype.ActionVolumeUp), int(upnptype.ActionVolumeDown))
-
-		case "Seek in track":
-			key = ternary.Int(scrollUp, int(upnptype.ActionSeekForward), int(upnptype.ActionSeekBackward))
-		}
-
-		app.Action().Launch(key)
-	}
-
-	events.OnBuildMenu = func(menu cdtype.Menuer) {
-		app.Action().BuildMenu(menu, dockMenu)
-	}
-
-	events.End = func() {
-		if app.win != nil {
-			glib.IdleAdd(app.win.Destroy)
-		}
-	}
-}
-
-//
 //-----------------------------------------------------------------[ ACTIONS ]--
 
 // Define applet actions.
 //
-func (app *Applet) defineActions() []*cdtype.Action {
+func (app *Applet) actions() []*cdtype.Action {
 	return []*cdtype.Action{
 		{
 			ID:   int(upnptype.ActionNone),

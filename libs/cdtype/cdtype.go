@@ -2,14 +2,12 @@ package cdtype
 
 import (
 	"os/exec"
-	"text/template"
 	"time"
 )
 
 // Events represents the list of events you can receive as a cairo-dock applet.
 //
-// They can be set in the optional DefineEvents call of your applet (see
-// DefineEventser).
+// They must be set in the pointer received at applet creation.
 //
 // All those events are optional but it's better to find something meaningful to
 // assign to them to improve your applet utility.
@@ -18,15 +16,13 @@ import (
 //    app.Events.OnClick = func app.myActionLeftClick
 //    app.Events.OnDropData = func (data string) {app.openWebpage(data, ...)}
 //
-// They can also be declared directly as methods of your applet.
-//   func (app *Applet) OnClick(btnState int) { }
-//
-// Reload is optional.
-// See cdapplet.SetEvents for the default call if you want to override it.
-//
 type Events struct {
 	// Action when the user clicks on the icon.
-	OnClick func(btnState int)
+	OnClick func()
+
+	// Action when the user clicks on the icon.
+	// Same as OnClick with the key modifier state (ctrl, shift...).
+	OnClickMod func(btnState int)
 
 	// Action when the user use the middle-click on the icon.
 	OnMiddleClick func()
@@ -43,7 +39,12 @@ type Events struct {
 	// Action when the focus of the managed window change.
 	OnChangeFocus func(active bool)
 
+	// Action on default reload, called before Init.
+	// Can be used when you need to act on the previous config before its reset.
+	PreInit func(loadConf bool)
+
 	// Action when a reload applet event is triggered from the dock.
+	// A default callback is provided that calls Init. (See cdapplet.SetEvents)
 	Reload func(bool)
 
 	// Action when the quit applet event is triggered from the dock.
@@ -53,7 +54,11 @@ type Events struct {
 	// for the id of the clicked icon.
 	//
 	// Action when the user clicks on the subicon.
-	OnSubClick func(icon string, btnState int)
+	OnSubClick func(icon string)
+
+	// Action when the user clicks on the subicon.
+	// Same as OnSubClick with the key modifier state (ctrl, shift...).
+	OnSubClickMod func(icon string, btnState int)
 
 	// Action when the user use the middle-click on the subicon.
 	OnSubMiddleClick func(icon string)
@@ -67,14 +72,6 @@ type Events struct {
 	// Action when the user drop data on the subicon.
 	OnSubDropData func(icon string, data string)
 }
-
-// ListStarter defines a list of applet creation func, indexed by applet name.
-//
-type ListStarter map[string]AppStarter
-
-// AppStarter represents an applet creation func.
-//
-type AppStarter func() AppInstance
 
 // AppInstance defines methods an applet must implement to use StartApplet.
 //
@@ -104,6 +101,10 @@ type AppBase interface {
 	// Empty fields will be reset, so this is better used in the Init() call.
 	//
 	SetDefaults(def Defaults)
+
+	// SetConfig sets the applet config pointer and can add actions.
+	//
+	SetConfig(confPtr interface{}, actions ...*Action)
 
 	// --- Files ---
 	//
@@ -422,35 +423,6 @@ type IconProperties interface {
 }
 
 //
-//----------------------------------------------------------------[ COMMANDS ]--
-
-// AppTemplate defines interactions with common templates actions.
-//
-type AppTemplate interface {
-
-	// Load loads the provided list of template files. If error, it will just be be logged, so you must check
-	// that the template is valid. Map entry will still be created, just check if it
-	// isn't nil. *CDApplet.ExecuteTemplate does it for you.
-	//
-	// Templates must be in a subdir called templates in applet dir. If you really
-	// need a way to change this, ask for a new method.
-	//
-	Load(names ...string)
-
-	// Get gives access to a loaded template by its name.
-	//
-	Get(file string) *template.Template
-
-	// Execute runs a pre-loaded template with the given data.
-	//
-	Execute(file, name string, data interface{}) (string, error)
-
-	// Clear clears the templates list.
-	//
-	Clear()
-}
-
-//
 //-----------------------------------------------------------------[ ACTIONS ]--
 
 // AppAction defines a launcher of manageable actions for applets.
@@ -464,9 +436,9 @@ type AppAction interface {
 	//
 	Len() int
 
-	// CallbackNoArg returns a callback to the given action ID.
+	// Callback returns a callback to the given action ID.
 	//
-	CallbackNoArg(ID int) func()
+	Callback(ID int) func()
 
 	// CallbackInt returns a callback to the given action ID with an int input,
 	// for left click events.
@@ -537,13 +509,13 @@ type AppCommand interface {
 	//
 	Add(key int, cmd *Command)
 
-	// CallbackNoArg returns a callback to the given command ID.
-	// To bind with event OnMiddleClick.
+	// Callback returns a callback to the given command ID.
+	// To bind with event OnClick or OnMiddleClick.
 	//
-	CallbackNoArg(ID int) func()
+	Callback(ID int) func()
 
 	// CallbackInt returns a callback to the given command ID with an int input,
-	// To bind with event OnClick.
+	// To bind with event OnClickMod.
 	//
 	CallbackInt(ID int) func(int)
 
@@ -652,13 +624,6 @@ type AppPoller interface {
 
 //
 //----------------------------------------------------------[ APP MANAGEMENT ]--
-
-// DefineEventser defines the optional DefineEvents call to group applets events
-// definition.
-//
-type DefineEventser interface {
-	DefineEvents(*Events)
-}
 
 // appManagement defines methods needed to start the applet and connect the
 // different layers of callbacks.

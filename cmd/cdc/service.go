@@ -66,7 +66,7 @@ func service(args []string) {
 		return
 	}
 
-	mgr := mgrdbus.NewManager(loader, logger, allapps.List())
+	mgr := mgrdbus.NewManager(loader, logger)
 	loader.SetManager(mgr)
 
 	active, e := loader.Start(mgr, nil)

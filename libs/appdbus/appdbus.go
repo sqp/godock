@@ -9,6 +9,7 @@ package appdbus
 import (
 	"github.com/godbus/dbus"
 
+	"github.com/sqp/godock/libs/cdapplet"           // Applets services.
 	"github.com/sqp/godock/libs/cdtype"             // Applets types.
 	"github.com/sqp/godock/libs/srvdbus/dbuscommon" // Dbus session.
 	"github.com/sqp/godock/libs/srvdbus/dockpath"   // Path to main dock dbus service.
@@ -23,46 +24,49 @@ import (
 //
 //------------------------------------------------------------[ START APPLET ]--
 
-// StartApplet will prepare and launch a standalone cairo-dock applet.
-// If you have provided events, they will respond when needed, and you have
-// nothing more to worry about your applet management.
+// StandAlone will create, prepare and launch a standalone cairo-dock applet.
+//
+// If you set your events at creation, they will respond when needed, and you
+// have nothing more to worry about your applet management.
+//
 // It can handle only one poller for now.
 //
-// List of the steps, and their effect:
-//   * Load applet events definition = DefineEvents().
-//   * Connect the applet to cairo-dock with DBus. This also activate events callbacks.
-//   * Initialise applet with option load config activated = Init(true).
-//   * Start and run the polling loop if needed. This start a instant check, and
-//     manage regular and manual timer refresh.
-//   * Wait for the dock End signal to close the applet.
+// If a fatal error is received during one of those steps, the applet will not
+// be started and errors should be logged. Can't do much about it.
 //
-func StartApplet(app cdtype.AppInstance) {
-	if app == nil {
-		println("dock applet failed to create")
+func StandAlone(callnew cdtype.NewAppletFunc) {
+	args := os.Args
+	appDir, _ := os.Getwd() // standalone applet, using current dir.
+
+	if callnew == nil {
+		println("missing new applet func", args[0])
 		os.Exit(1)
 	}
 
-	// Define and connect events to the dock.
-	args := os.Args
-	appDir, _ := os.Getwd() // standalone applet, using current dir.
-	backend, callinit := NewWithApp(app, args, appDir)
+	// Create the applet instance.
+	app, backend, callinit := New(callnew, args, appDir)
 
+	if app == nil {
+		println("failed to create applet", args[0])
+		os.Exit(1)
+	}
+
+	// Connect to the dock.
 	dbusEvent, e := backend.ConnectToBus()
-	log := app.Log()
-	if log.Err(e, "ConnectToBus") { // Mandatory.
+	if app.Log().Err(e, "ConnectToBus") { // Mandatory.
 		os.Exit(1)
 	}
 
 	// Initialise applet: Load config and apply user settings.
 	e = callinit()
-	if log.Err(e, "init applet") { // Mandatory.
-		// But this is only a tricky safety net. The dock must have provided the file.
+	if app.Log().Err(e, "init applet") { // Mandatory.
+		// Quit here is only a tricky safety net. The dock must have provided the file.
 		// File not found/readable should only happen on disk (full) error or bad source file.
 		os.Exit(1)
 	}
 
-	log.Debug("Applet started")
-	defer log.Debug("Applet stopped")
+	app.Log().Debug("Applet started")
+	defer app.Log().Debug("Applet stopped")
 
 	var waiter <-chan time.Time
 	poller := app.Poller()
@@ -104,29 +108,30 @@ type CDDbus struct {
 	menu       *Menu                             // Opened menu titles and callbacks.
 }
 
-// New creates a CDDbus connection.
+// New creates a new applet instance with args from command line.
 //
-func New(path string) *CDDbus {
-	return &CDDbus{
-		icons:   make(map[string]*SubIcon),
-		busPath: dbus.ObjectPath(path),
-		menu:    &Menu{},
-	}
-}
-
-// NewWithApp creates a CDDbus connection and binds it to an applet instance.
-//
-func NewWithApp(app cdtype.AppInstance, args []string, dir string) (*CDDbus, func() error) {
+func New(callnew cdtype.NewAppletFunc, args []string, dir string) (cdtype.AppInstance, *CDDbus, func() error) {
 	name := args[0][2:] // Strip ./ in the beginning.
 
-	app.SetBase(name, args[3], args[4], dir)
+	base := cdapplet.New()
+	base.SetBase(name, args[3], args[4], dir)
+
+	app := cdapplet.Start(callnew, base)
+	if app == nil {
+		return nil, nil, nil
+	}
+
 	// app.ParentAppName = args[5]
 
-	backend := New(args[2])
-	backend.log = app.Log()
+	backend := &CDDbus{
+		icons:   make(map[string]*SubIcon),
+		busPath: dbus.ObjectPath(args[2]),
+		menu:    &Menu{},
+		log:     app.Log(),
+	}
 	app.SetBackend(backend)
 	callinit := app.SetEvents(app)
-	return backend, callinit
+	return app, backend, callinit
 }
 
 // SetOnEvent sets the OnEvent callback to forwards events.

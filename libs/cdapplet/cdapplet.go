@@ -30,8 +30,7 @@ type CDApplet struct {
 	shareDataDir string // Location of applet data files. As an external applet, it is the same as binary dir.
 	rootDataDir  string // Path to the config root dir (~/.config/cairo-dock).
 
-	events    cdtype.Events      // Applet events callbacks (if DefineEvents was used).
-	hooker    *Hooker            // Applet events callbacks (for applet self implemented methods).
+	events    cdtype.Events      // Applet events callbacks.
 	action    cdtype.AppAction   // Actions handler. Where an applet can declare its list of actions.
 	poller    cdtype.AppPoller   // Poller counter. If you want more than one, use a common denominator.
 	command   cdtype.AppCommand  // Programs and locations configured by the user, including application monitor.
@@ -44,21 +43,34 @@ type CDApplet struct {
 
 // New creates a new applet manager.
 //
-func New(confPtr interface{}, actions ...*cdtype.Action) cdtype.AppBase {
+func New() *CDApplet {
 	app := &CDApplet{
-		confPtr: confPtr,
-		action:  &action.Actions{},
-		hooker:  NewHooker(dockCalls, dockTests),
-		log:     log.NewLog(log.Logs),
+		action: &action.Actions{},
+		log:    log.NewLog(log.Logs),
 	}
 
 	app.command = &appCmd{
 		commands: make(cdtype.Commands),
 		app:      app,
 	}
-	app.Action().Add(actions...)
 
 	return app
+}
+
+// Start starts an instance of the given applet name.
+//
+func Start(callnew cdtype.NewAppletFunc, base *CDApplet) cdtype.AppInstance {
+	if callnew == nil {
+		return nil
+	}
+	return callnew(base, &base.events)
+}
+
+// SetConfig sets the applet config pointer and can add actions.
+//
+func (cda *CDApplet) SetConfig(confPtr interface{}, actions ...*cdtype.Action) {
+	cda.confPtr = confPtr
+	cda.Action().Add(actions...)
 }
 
 // SetBase sets the name, conf and dirs for the applet.
@@ -89,46 +101,38 @@ func (cda *CDApplet) SetBackend(base cdtype.AppBackend) {
 }
 
 // SetEvents connects events defined by the applet to the dock.
-// It calls the DefineEvents method if the applet provides it, AND also registers
-// methods matching those of the API that are defined by the applet.
 //
 // Returns the first init call func.
 //
 func (cda *CDApplet) SetEvents(app cdtype.AppInstance) func() error {
-	if d, ok := app.(cdtype.DefineEventser); ok { // Old events callback method.
-		cda.events = cdtype.Events{
-			Reload: func(loadConf bool) {
-				cda.log.Debug("Reload module")
-
-				// need pre init.
-
-				def, e := app.LoadConfig(loadConf) // Load config will crash if fail. Expected.
-				if e != nil {
-					// TODO : NEED STOP APPLET
-				}
-
-				app.Init(&def, loadConf)
-				app.SetDefaults(def)
-				cda.Poller().Restart() // send our restart event. (safe on nil pollers).
-			},
-		}
-
-		d.DefineEvents(&cda.events)
-	}
-
-	cda.RegisterEvents(app) // New events callback method.
-
-	return func() error {
+	appinit := func(loadConf bool) error {
 		// Initialise applet: Load config and apply user settings.
-		def, e := app.LoadConfig(true) // Load config will crash if fail. Expected.
+		def, e := app.LoadConfig(loadConf)
 		if e != nil {
 			return e
 		}
 
-		app.Init(&def, true)
+		app.Init(&def, loadConf)
 		app.SetDefaults(def)
+		cda.Poller().Restart() // send our restart event. (safe on nil pollers).
 		return nil
 	}
+
+	if cda.events.Reload == nil {
+		cda.events.Reload = func(loadConf bool) {
+			cda.log.Debug("Reload module")
+
+			if cda.events.PreInit != nil {
+				cda.events.PreInit(loadConf)
+			}
+
+			// TODO : NEED STOP APPLET IF FAIL
+			e := appinit(loadConf)
+			app.Log().Err(e, "LoadConfig")
+		}
+	}
+
+	return func() error { return appinit(true) }
 }
 
 //
@@ -152,7 +156,7 @@ func (cda *CDApplet) SetDefaults(def cdtype.Defaults) {
 			cda.Log().NewWarn("action not defined", "shortkey: ", sk.ConfGroup, sk.Shortkey) // sk.ActionID
 
 		default:
-			sk.Call = cda.Action().CallbackNoArg(sk.ActionID)
+			sk.Call = cda.Action().Callback(sk.ActionID)
 		}
 	}
 	cda.BindShortkey(cda.shortkeys...)
@@ -243,10 +247,10 @@ func (ac *appCmd) Launch(ID int) {
 	}
 }
 
-// CallbackNoArg returns a callback to a configured command to bind with event
+// Callback returns a callback to a configured command to bind with event
 // OnMiddleClick.
 //
-func (ac *appCmd) CallbackNoArg(ID int) func() {
+func (ac *appCmd) Callback(ID int) func() {
 	return func() { ac.Launch(ID) }
 }
 

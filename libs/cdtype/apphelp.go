@@ -9,6 +9,42 @@ import (
 	"text/template"
 )
 
+//
+//--------------------------------------------------------------[ NEW APPLET ]--
+
+// Applets stores registered applets creation calls.
+//
+var Applets = make(ListApps)
+
+// ListApps defines a list of applet creation func, indexed by applet name.
+//
+type ListApps map[string]NewAppletFunc
+
+// NewAppletFunc defines an applet creation function.
+//
+type NewAppletFunc func(base AppBase, events *Events) AppInstance
+
+// Register registers an applet name with its new func.
+//
+func (l ListApps) Register(name string, callnew NewAppletFunc) {
+	l[name] = callnew
+}
+
+// Unregister unregisters an applet name.
+//
+func (l ListApps) Unregister(name string) {
+	delete(l, name)
+}
+
+// GetNewFunc gets the applet creation func for the name.
+//
+func (l ListApps) GetNewFunc(name string) NewAppletFunc {
+	return l[name]
+}
+
+//
+//----------------------------------------------------------------[ DURATION ]--
+
 // Duration converts a time duration to seconds.
 //
 // Really basic, so you have to recreate one every time.

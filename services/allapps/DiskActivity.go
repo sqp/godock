@@ -2,8 +2,4 @@
 
 package allapps
 
-import "github.com/sqp/godock/services/DiskActivity"
-
-func init() {
-	AddService("DiskActivity", DiskActivity.NewApplet)
-}
+import _ "github.com/sqp/godock/services/DiskActivity"
