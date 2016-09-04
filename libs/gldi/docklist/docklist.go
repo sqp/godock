@@ -37,7 +37,9 @@ import (
 	"sync"
 	"unsafe"
 
+	"github.com/sqp/godock/libs/cdglobal" // Dock types.
 	"github.com/sqp/godock/libs/gldi"
+	"github.com/sqp/godock/libs/gldi/shortkeys" // Keyboard shortkeys.
 )
 
 //
@@ -51,8 +53,8 @@ func Desklet() []*gldi.Desklet {
 
 // Shortkey returns the list of dock shortkeys.
 //
-func Shortkey() []*gldi.Shortkey {
-	return newItemList(itemListTypeShortkey).Value().([]*gldi.Shortkey)
+func Shortkey() []cdglobal.Shortkeyer {
+	return newItemList(itemListTypeShortkey).Value().([]cdglobal.Shortkeyer)
 }
 
 // Animation returns the list of dock animations.
@@ -301,7 +303,7 @@ func (il *itemList) Add(cdr C.gpointer) {
 		il.list = append(il.list, item)
 
 	case itemListTypeShortkey:
-		item := gldi.NewShortkeyFromNative(unsafe.Pointer(cdr))
+		item := shortkeys.NewFromNative(unsafe.Pointer(cdr))
 		il.list = append(il.list, item)
 	}
 }
@@ -325,9 +327,9 @@ func (il *itemList) Value() interface{} {
 	case itemListTypeShortkey:
 		C.list_shortkey(gldi.CIntPointer(il.ID))
 
-		var ret []*gldi.Shortkey
+		var ret []cdglobal.Shortkeyer
 		for _, mod := range il.list {
-			ret = append(ret, mod.(*gldi.Shortkey))
+			ret = append(ret, mod.(cdglobal.Shortkeyer))
 		}
 		return ret
 	}

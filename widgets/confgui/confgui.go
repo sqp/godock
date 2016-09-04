@@ -17,8 +17,8 @@ import (
 	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
 
-	"github.com/sqp/godock/libs/cdtype" // Logger type.
-	"github.com/sqp/godock/libs/text/tran"
+	"github.com/sqp/godock/libs/cdtype"    // Logger type.
+	"github.com/sqp/godock/libs/text/tran" // Translate.
 
 	"github.com/sqp/godock/widgets/cfbuild/datatype"
 	"github.com/sqp/godock/widgets/confapplets"
@@ -26,7 +26,6 @@ import (
 	"github.com/sqp/godock/widgets/confgui/btnaction"
 	"github.com/sqp/godock/widgets/conficons"
 	"github.com/sqp/godock/widgets/confmenu"
-	"github.com/sqp/godock/widgets/confsettings"
 	"github.com/sqp/godock/widgets/gtk/newgtk"
 	"github.com/sqp/godock/widgets/pageswitch"
 )
@@ -134,10 +133,6 @@ func NewWidget(source datatype.Source, log cdtype.Logger) *GuiConfigure {
 		pages:     make(map[string]*Page),
 		log:       log,
 	}
-
-	// Load GUI own config page settings.
-	e := confsettings.Init(source.DirUserAppData(confsettings.GuiFilename))
-	log.Err(e, "Load ConfigSettings")
 
 	// Create widgets.
 

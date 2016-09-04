@@ -5,26 +5,27 @@ import (
 	"github.com/sqp/godock/libs/gldi/backendmenu" // Menu types.
 	"github.com/sqp/godock/libs/gldi/current"     // Current theme settings.
 	"github.com/sqp/godock/libs/gldi/globals"     // Global variables.
+	"github.com/sqp/godock/libs/gldi/notif"       // Dock notifs.
 	"github.com/sqp/godock/libs/text/tran"        // Translate.
 )
 
 // BuildMenuContainer builds the dock container menu (1st line).
 //
-func BuildMenuContainer(m *backendmenu.DockMenu) int {
+func BuildMenuContainer(m *backendmenu.DockMenu) bool {
 
 	if m.Container.IsDesklet() && m.Icon != nil && !m.Icon.IsApplet() { // not on the icons of a desklet, except the applet icon (on a desklet, it's easy to click out of any icon).
-		return backendmenu.LetPass
+		return notif.AnswerLetPass
 	}
 
 	if m.Dock != nil && m.Dock.GetRefCount() > 0 { // not on the sub-docks, except user sub-docks.
 		pointingIcon := m.Dock.SearchIconPointingOnDock(nil)
 		if pointingIcon != nil && !pointingIcon.IsStackIcon() {
-			return backendmenu.LetPass
+			return notif.AnswerLetPass
 		}
 	}
 
 	if m.Dock != nil && (m.Icon == nil || m.Icon.IsSeparatorAuto()) {
-		return backendmenu.LetPass
+		return notif.AnswerLetPass
 	}
 
 	//\_________________________ First item is the Cairo-Dock sub-menu.
@@ -159,16 +160,16 @@ func BuildMenuContainer(m *backendmenu.DockMenu) int {
 		}
 	}
 
-	return backendmenu.LetPass
+	return notif.AnswerLetPass
 }
 
 // BuildMenuIcon builds the dock icon menu (2nd line).
 //
-func BuildMenuIcon(m *backendmenu.DockMenu) int {
+func BuildMenuIcon(m *backendmenu.DockMenu) bool {
 
 	//\_________________________ Clic en-dehors d'une icone utile => on s'arrete la.
 	if m.Dock != nil && (m.Icon == nil || m.Icon.IsSeparatorAuto()) {
-		return backendmenu.LetPass
+		return notif.AnswerLetPass
 	}
 
 	needSeparator := true
@@ -267,7 +268,7 @@ func BuildMenuIcon(m *backendmenu.DockMenu) int {
 		m.Entry(backendmenu.MenuDeskletLock)
 	}
 
-	return backendmenu.LetPass
+	return notif.AnswerLetPass
 }
 
 //

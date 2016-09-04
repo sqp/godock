@@ -5,9 +5,6 @@ package backendmenu
 /*
 #include "backendmenu.h"       // to remake/remove.
 
-extern gboolean buildMenuIcon(gpointer, Icon*, GldiContainer*, GtkWidget*);
-extern gboolean buildMenuContainer(gpointer, Icon*, GldiContainer*, GtkWidget*, gboolean);
-
 */
 import "C"
 import (
@@ -19,14 +16,16 @@ import (
 	"github.com/sqp/godock/libs/gldi"            // Gldi access.
 	"github.com/sqp/godock/libs/gldi/backendgui" // GUI callbacks.
 	"github.com/sqp/godock/libs/gldi/current"    // Current theme settings.
+	"github.com/sqp/godock/libs/gldi/desktops"   // Desktop and screens info.
 	"github.com/sqp/godock/libs/gldi/dialog"     // Popup dialog.
 	"github.com/sqp/godock/libs/gldi/globals"    // Global variables.
+	"github.com/sqp/godock/libs/gldi/notif"      // Dock notifs.
+	"github.com/sqp/godock/libs/gldi/window"     // Desktop windows control.
 	"github.com/sqp/godock/libs/ternary"         // Helpers.
 	"github.com/sqp/godock/libs/text/tran"       // Translate.
 
 	"github.com/sqp/godock/widgets/about"
 	"github.com/sqp/godock/widgets/gtk/menus"
-	"github.com/sqp/godock/widgets/gtk/togtk"
 
 	"fmt"
 	"os"
@@ -35,83 +34,15 @@ import (
 	"unsafe"
 )
 
-const (
-	LetPass   = C.GLDI_NOTIFICATION_LET_PASS
-	Intercept = C.GLDI_NOTIFICATION_INTERCEPT
-)
+var log cdtype.Logger
 
+// Register registers menu callbacks, to receive menu events.
 //
-//------------------------------------------------------------[ MENU BACKEND ]--
+func Register(l cdtype.Logger, menucontainer, menuicon func(*DockMenu) bool) {
+	log = l
 
-var (
-	menuContainer = make(map[string]func(*DockMenu) int)
-	menuIcon      = make(map[string]func(*DockMenu) int)
-	logger        cdtype.Logger
-)
-
-// SetLogger sets the menu logger.
-//
-func SetLogger(log cdtype.Logger) {
-	logger = log
-}
-
-// Register registers a menu to the backend, allowing it to receive menu events.
-//
-func Register(name string, menucontainer, menuicon func(*DockMenu) int) {
-	if menucontainer != nil {
-		if len(menuContainer) == 0 {
-			globals.ContainerObjectMgr.RegisterNotification(
-				globals.NotifBuildContainerMenu,
-				unsafe.Pointer(C.buildMenuContainer),
-				globals.RunFirst)
-		}
-
-		menuContainer[name] = menucontainer
-	}
-
-	if menuicon != nil {
-		if len(menuIcon) == 0 {
-			globals.ContainerObjectMgr.RegisterNotification(
-				globals.NotifBuildIconMenu,
-				unsafe.Pointer(C.buildMenuIcon),
-				globals.RunAfter)
-		}
-
-		menuIcon[name] = menuicon
-	}
-}
-
-//export buildMenuIcon
-func buildMenuIcon(_ C.gpointer, ic *C.Icon, cont *C.GldiContainer, cmenu *C.GtkWidget) C.gboolean {
-	for _, call := range menuIcon {
-		if call(convert(ic, cont, cmenu)) == Intercept {
-			return C.gboolean(Intercept)
-		}
-	}
-	return C.gboolean(LetPass)
-}
-
-//export buildMenuContainer
-func buildMenuContainer(_ C.gpointer, ic *C.Icon, cont *C.GldiContainer, cmenu *C.GtkWidget, _ C.gboolean) C.gboolean {
-	for _, call := range menuContainer {
-		if call(convert(ic, cont, cmenu)) == Intercept {
-			return C.gboolean(Intercept)
-		}
-	}
-	return C.gboolean(LetPass)
-}
-
-func convert(ic *C.Icon, cont *C.GldiContainer, cmenu *C.GtkWidget) *DockMenu {
-	icon := gldi.NewIconFromNative(unsafe.Pointer(ic))
-	container := gldi.NewContainerFromNative(unsafe.Pointer(cont))
-
-	var dock *gldi.CairoDock
-	if gldi.ObjectIsDock(container) {
-		dock = container.ToCairoDock()
-	}
-
-	menu := togtk.Menu(unsafe.Pointer(cmenu))
-	return WrapDockMenu(icon, container, dock, menu)
+	notif.RegisterContainerMenuContainer(WrapDockMenuCallback(menucontainer))
+	notif.RegisterContainerMenuIcon(WrapDockMenuCallback(menuicon))
 }
 
 //
@@ -184,14 +115,14 @@ const (
 //
 type DockMenu struct {
 	menus.Menu
-	Icon      *gldi.Icon
+	Icon      gldi.Icon
 	Container *gldi.Container
 	Dock      *gldi.CairoDock // just a pointer to container with type dock.
 }
 
 // WrapDockMenu wraps a menu as DockMenu.
 //
-func WrapDockMenu(icon *gldi.Icon, container *gldi.Container, dock *gldi.CairoDock, menu *gtk.Menu) *DockMenu {
+func WrapDockMenu(icon gldi.Icon, container *gldi.Container, dock *gldi.CairoDock, menu *gtk.Menu) *DockMenu {
 	usermenu := menus.WrapMenu(menu)
 	usermenu.SetCallNewItem(gldi.MenuAddItem)
 	usermenu.SetCallNewSubMenu(gldi.MenuAddSubMenu)
@@ -201,6 +132,14 @@ func WrapDockMenu(icon *gldi.Icon, container *gldi.Container, dock *gldi.CairoDo
 		Icon:      icon,
 		Container: container,
 		Dock:      dock}
+}
+
+// WrapDockMenuCallback returns a DockMenu wrapper function.
+//
+func WrapDockMenuCallback(call func(dm *DockMenu) bool) func(icon gldi.Icon, container *gldi.Container, dock *gldi.CairoDock, menu *gtk.Menu) bool {
+	return func(icon gldi.Icon, container *gldi.Container, dock *gldi.CairoDock, menu *gtk.Menu) bool {
+		return call(WrapDockMenu(icon, container, dock, menu))
+	}
 }
 
 // AddSubMenu adds a submenu to the menu.
@@ -288,7 +227,7 @@ func (m *DockMenu) Entry(entry MenuEntry) bool {
 			m.AddEntry(
 				it[0], // name
 				it[2], // icon
-				func() { logger.ExecAsync(cmd[0], cmd[1:]...) }) // was gldi.LaunchCommand(cmd)
+				func() { log.ExecAsync(cmd[0], cmd[1:]...) }) // was gldi.LaunchCommand(cmd)
 		}
 		return len(items) > 0
 
@@ -320,7 +259,7 @@ func (m *DockMenu) Entry(entry MenuEntry) bool {
 				tran.Slate("Remove custom icon"),
 				globals.IconNameRemove,
 				func() {
-					C._cairo_dock_remove_custom_appli_icon((*C.Icon)(unsafe.Pointer(m.Icon.Ptr)), (*C.CairoDock)(unsafe.Pointer(m.Dock.Ptr)))
+					C._cairo_dock_remove_custom_appli_icon((*C.Icon)(unsafe.Pointer(m.Icon.ToNative())), (*C.CairoDock)(unsafe.Pointer(m.Dock.Ptr)))
 				})
 		}
 
@@ -329,7 +268,7 @@ func (m *DockMenu) Entry(entry MenuEntry) bool {
 			tran.Slate("Set a custom icon"),
 			globals.IconNameSelectColor,
 			func() {
-				C._cairo_dock_set_custom_appli_icon((*C.Icon)(unsafe.Pointer(m.Icon.Ptr)), (*C.CairoDock)(unsafe.Pointer(m.Dock.Ptr)))
+				C._cairo_dock_set_custom_appli_icon((*C.Icon)(unsafe.Pointer(m.Icon.ToNative())), (*C.CairoDock)(unsafe.Pointer(m.Dock.Ptr)))
 			})
 
 	case MenuDeleteDock:
@@ -492,9 +431,7 @@ func (m *DockMenu) Entry(entry MenuEntry) bool {
 		m.AddEntry(
 			tran.Slate("Launch a new (Shift+clic)"),
 			globals.IconNameAdd,
-			func() {
-				gldi.ObjectNotify(m.Container, globals.NotifClickIcon, m.Icon, m.Dock, gdk.GDK_SHIFT_MASK) // emit a shift click on the icon.
-			})
+			func() { m.Icon.LaunchCommand(log) })
 
 	case MenuLockIcons:
 		m.AddCheckEntry(
@@ -511,7 +448,7 @@ func (m *DockMenu) Entry(entry MenuEntry) bool {
 			tran.Slate("Make it a launcher"),
 			globals.IconNameNew,
 			func() {
-				C._cairo_dock_make_launcher_from_appli((*C.Icon)(unsafe.Pointer(m.Icon.Ptr)), (*C.CairoDock)(unsafe.Pointer(m.Dock.Ptr)))
+				C._cairo_dock_make_launcher_from_appli((*C.Icon)(unsafe.Pointer(m.Icon.ToNative())), (*C.CairoDock)(unsafe.Pointer(m.Dock.Ptr)))
 			})
 
 	case MenuMoveToDesktopClass:
@@ -736,14 +673,14 @@ func (m *DockMenu) Entry(entry MenuEntry) bool {
 		m.AddEntry(
 			ternary.String(flag, tran.Slate("Don't keep above"), tran.Slate("Keep above")),
 			ternary.String(flag, globals.IconNameGotoBottom, globals.IconNameGotoTop),
-			m.Icon.CallbackActionWindowToggle((*gldi.WindowActor).SetAbove, (*gldi.WindowActor).IsAbove))
+			m.Icon.CallbackActionWindowToggle((window.Type).SetAbove, (window.Type).IsAbove))
 
 	case MenuWindowBelow:
 		if !m.Icon.Window().IsHidden() { // this could be a button in the menu, if we find an icon that doesn't look too much like the "minimise" one
 			m.AddEntry(
 				tran.Slate("Below other windows")+actionMiddleClick(m.Icon, 4),
 				globals.DirShareData("icons", "icon-lower.svg"),
-				m.Icon.CallbackActionWindow((*gldi.WindowActor).Lower))
+				m.Icon.CallbackActionWindow((window.Type).Lower))
 		}
 
 	case MenuWindowFullScreen:
@@ -751,24 +688,24 @@ func (m *DockMenu) Entry(entry MenuEntry) bool {
 		m.AddEntry(
 			ternary.String(flag, tran.Slate("Not Fullscreen"), tran.Slate("Fullscreen")),
 			ternary.String(flag, globals.IconNameLeaveFullScreen, globals.IconNameFullScreen),
-			m.Icon.CallbackActionWindowToggle((*gldi.WindowActor).SetFullScreen, (*gldi.WindowActor).IsFullScreen))
+			m.Icon.CallbackActionWindowToggle((window.Type).SetFullScreen, (window.Type).IsFullScreen))
 
 	case MenuWindowKill:
 		m.AddEntry(
 			tran.Slate("Kill"),
 			globals.IconNameClose,
-			m.Icon.CallbackActionWindow((*gldi.WindowActor).Kill))
+			m.Icon.CallbackActionWindow((window.Type).Kill))
 
 	case MenuWindowMoveAllHere:
 		m.AddEntry(
 			tran.Slate("Move all to this desktop"),
 			globals.IconNameJumpTo,
-			m.Icon.CallbackActionSubWindows((*gldi.WindowActor).MoveToCurrentDesktop))
+			m.Icon.CallbackActionSubWindows((window.Type).MoveToCurrentDesktop))
 
 	case MenuWindowMoveHere:
 		var callback func()
 		if !m.Icon.Window().IsOnCurrentDesktop() {
-			callback = m.Icon.CallbackActionWindow(func(win *gldi.WindowActor) {
+			callback = m.Icon.CallbackActionWindow(func(win window.Type) {
 				win.MoveToCurrentDesktop()
 				if !win.IsHidden() {
 					win.Show()
@@ -781,10 +718,10 @@ func (m *DockMenu) Entry(entry MenuEntry) bool {
 		m.AddEntry(
 			ternary.String(m.Icon.Window().IsSticky(), tran.Slate("Visible only on this desktop"), tran.Slate("Visible on all desktops")),
 			globals.IconNameJumpTo,
-			m.Icon.CallbackActionWindowToggle((*gldi.WindowActor).SetSticky, (*gldi.WindowActor).IsSticky))
+			m.Icon.CallbackActionWindowToggle((window.Type).SetSticky, (window.Type).IsSticky))
 
 	}
-	return false
+	return notif.AnswerLetPass
 }
 
 //
@@ -801,47 +738,47 @@ func (m *DockMenu) AddButtonsEntry(label string, btns ...MenuBtn) *menus.Buttons
 			entry.AddButton(
 				tran.Slate("Close")+actionMiddleClick(m.Icon, 1),
 				globals.DirShareData("icons", "icon-close.svg"),
-				m.Icon.CallbackActionWindow((*gldi.WindowActor).Close))
+				m.Icon.CallbackActionWindow((window.Type).Close))
 
 		case MenuWindowCloseAll:
 			entry.AddButton(
 				tran.Slate("Close all")+actionMiddleClick(m.Icon, 1),
 				globals.DirShareData("icons", "icon-close.svg"),
-				m.Icon.CallbackActionSubWindows((*gldi.WindowActor).Close))
+				m.Icon.CallbackActionSubWindows((window.Type).Close))
 
 		case MenuWindowMax:
 			max := m.Icon.Window().IsMaximized()
 			entry.AddButton(
 				ternary.String(max, tran.Slate("Unmaximise"), tran.Slate("Maximise")),
 				globals.DirShareData("icons", ternary.String(max, "icon-restore.svg", "icon-maximize.svg")),
-				m.Icon.CallbackActionWindowToggle((*gldi.WindowActor).Maximize, (*gldi.WindowActor).IsMaximized))
+				m.Icon.CallbackActionWindowToggle((window.Type).Maximize, (window.Type).IsMaximized))
 
 		case MenuWindowMin:
 			entry.AddButton(
 				tran.Slate("Minimise")+actionMiddleClick(m.Icon, 2),
 				globals.DirShareData("icons", "icon-minimize.svg"),
-				m.Icon.CallbackActionWindow((*gldi.WindowActor).Minimize))
+				m.Icon.CallbackActionWindow((window.Type).Minimize))
 
 		case MenuWindowMinAll:
 			entry.AddButton(
 				tran.Slate("Minimise all")+actionMiddleClick(m.Icon, 2),
 				globals.DirShareData("icons", "icon-minimize.svg"),
-				m.Icon.CallbackActionSubWindows((*gldi.WindowActor).Minimize))
+				m.Icon.CallbackActionSubWindows((window.Type).Minimize))
 
 		case MenuWindowShow:
 			entry.AddButton(
 				tran.Slate("Show"),
 				globals.IconNameFind,
-				m.Icon.CallbackActionWindow((*gldi.WindowActor).Show))
+				m.Icon.CallbackActionWindow((window.Type).Show))
 
 		case MenuWindowShowAll:
 			entry.AddButton(
 				tran.Slate("Show all"),
 				globals.IconNameFind,
-				m.Icon.CallbackActionSubWindows((*gldi.WindowActor).Show))
+				m.Icon.CallbackActionSubWindows((window.Type).Show))
 
 		default:
-			logger.NewWarn(fmt.Sprintf("invalid id: %d", btnID), "AddButtonsEntry")
+			log.NewWarn(fmt.Sprintf("invalid id: %d", btnID), "AddButtonsEntry")
 		}
 	}
 	return entry
@@ -852,7 +789,7 @@ func (m *DockMenu) AddButtonsEntry(label string, btns ...MenuBtn) *menus.Buttons
 
 // GetIconForDesklet will return the correct icon if clicked on a desklet.
 //
-func GetIconForDesklet(icon *gldi.Icon, container *gldi.Container) *gldi.Icon {
+func GetIconForDesklet(icon gldi.Icon, container *gldi.Container) gldi.Icon {
 	if container.IsDesklet() {
 		return container.ToDesklet().GetIcon()
 	}
@@ -862,7 +799,7 @@ func GetIconForDesklet(icon *gldi.Icon, container *gldi.Container) *gldi.Icon {
 // actionMiddleClick returns the middle-click string to add to the action button
 // if it's matching the action ID provided.
 //
-func actionMiddleClick(icon *gldi.Icon, id int) string {
+func actionMiddleClick(icon gldi.Icon, id int) string {
 	if current.Taskbar.ActionOnMiddleClick() != id || icon.IsApplet() {
 		return ""
 	}
@@ -872,7 +809,7 @@ func actionMiddleClick(icon *gldi.Icon, id int) string {
 // nextOrder calculates an order position for a new icon, based on the mouse
 // position on current icon, and the order of the current icon and the next one.
 //
-func nextOrder(icon *gldi.Icon, dock *gldi.CairoDock) float64 {
+func nextOrder(icon gldi.Icon, dock *gldi.CairoDock) float64 {
 	if icon == nil {
 		return gldi.IconLastOrder
 	}
@@ -909,8 +846,7 @@ func cbDialogIsOK(call func()) func(int, *gtk.Widget) {
 //----------------------------------------------------------[ DESKTOP ENTRIES]--
 
 func (m *DockMenu) moveToDesktop(useAll bool) {
-	geo := gldi.GetDesktopGeometry()
-	if geo.NbDesktops() < 2 && geo.NbViewportX() < 2 && geo.NbViewportY() < 2 {
+	if desktops.NbDesktops() < 2 && desktops.NbViewportX() < 2 && desktops.NbViewportY() < 2 {
 		return
 	}
 
@@ -919,11 +855,11 @@ func (m *DockMenu) moveToDesktop(useAll bool) {
 
 	moveto := newMenuMoveToDesktop(m.Icon, useAll)
 
-	for i := 0; i < geo.NbDesktops(); i++ { // sort by desktop
+	for i := 0; i < desktops.NbDesktops(); i++ { // sort by desktop
 
-		for j := 0; j < geo.NbViewportY(); j++ { // and by columns.
+		for j := 0; j < desktops.NbViewportY(); j++ { // and by columns.
 
-			for k := 0; k < geo.NbViewportX(); k++ { // then rows.
+			for k := 0; k < desktops.NbViewportX(); k++ { // then rows.
 
 				entry := m.AddEntry(moveto.Label(i, j, k), "", moveto.Callback(i, j, k))
 
@@ -939,19 +875,17 @@ type menuMoveToDesktop struct {
 	format   string
 	mode     int
 	nbx      int
-	cbAction func(call func(*gldi.WindowActor)) func()
+	cbAction func(call func(window.Type)) func()
 }
 
-func newMenuMoveToDesktop(icon *gldi.Icon, useAll bool) *menuMoveToDesktop {
-	geo := gldi.GetDesktopGeometry()
-
+func newMenuMoveToDesktop(icon gldi.Icon, useAll bool) *menuMoveToDesktop {
 	// Create object and set work mode.
-	desk := &menuMoveToDesktop{nbx: geo.NbViewportX()}
+	desk := &menuMoveToDesktop{nbx: desktops.NbViewportX()}
 	switch {
-	case geo.NbDesktops() > 1 && (geo.NbViewportX() > 1 || geo.NbViewportY() > 1):
+	case desktops.NbDesktops() > 1 && (desktops.NbViewportX() > 1 || desktops.NbViewportY() > 1):
 		desk.mode = 2
 
-	case geo.NbDesktops() > 1:
+	case desktops.NbDesktops() > 1:
 		desk.mode = 1
 	}
 
@@ -1007,5 +941,5 @@ func (g *menuMoveToDesktop) Label(i, j, k int) string {
 // Callback returns a move to action callback.
 //
 func (g *menuMoveToDesktop) Callback(i, j, k int) func() {
-	return g.cbAction(func(win *gldi.WindowActor) { win.MoveToDesktop(i, j, k) })
+	return g.cbAction(func(win window.Type) { win.MoveToDesktop(i, j, k) })
 }

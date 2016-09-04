@@ -1,28 +1,35 @@
-// Package startdock wraps all backends and clients to start a dock.
-package startdock
+// Package dock wraps all backends and clients to start a dock.
+package dock
 
 import (
-	"github.com/sqp/godock/libs/cdglobal"
+	// Dock frontend.
+	"github.com/sqp/godock/libs/dock/confown"    // New dock own settings.
+	"github.com/sqp/godock/libs/dock/eventmouse" // Mouse events callbacks.
+	"github.com/sqp/godock/libs/dock/maindock"   // Dock settings.
+	"github.com/sqp/godock/libs/gldi/guibridge"  // GUI interface.
+	"github.com/sqp/godock/libs/gldi/menu"       // Build menu callbacks.
+
+	// Dock backend.
+	"github.com/sqp/godock/libs/cdglobal" // Dock types.
 	"github.com/sqp/godock/libs/cdtype"
 	"github.com/sqp/godock/libs/gldi"
 	"github.com/sqp/godock/libs/gldi/backendgui"
-	"github.com/sqp/godock/libs/gldi/backendmenu"
-	"github.com/sqp/godock/libs/gldi/globals"
-	"github.com/sqp/godock/libs/gldi/guibridge"
-	"github.com/sqp/godock/libs/gldi/maindock"
-	"github.com/sqp/godock/libs/gldi/menu"
-	"github.com/sqp/godock/libs/gldi/mgrgldi"
-	"github.com/sqp/godock/libs/net/websrv"
-	"github.com/sqp/godock/libs/ternary"
-	"github.com/sqp/godock/libs/text/color"
-	"github.com/sqp/godock/libs/text/strhelp"
+	"github.com/sqp/godock/libs/gldi/backendmenu" // Menu items.
+	"github.com/sqp/godock/libs/gldi/globals"     // Dock globals.
+	"github.com/sqp/godock/libs/gldi/mgrgldi"     // Internal go applets service.
 
 	// Register applets services.
 	_ "github.com/sqp/godock/services/allapps"
 
-	// loader
-	"github.com/sqp/godock/libs/srvdbus"
+	// Other services.
+	"github.com/sqp/godock/libs/net/websrv"       // Web service for pprof.
+	"github.com/sqp/godock/libs/srvdbus"          // DBus own service.
 	"github.com/sqp/godock/libs/srvdbus/dockpath" // hack dock dbus path
+
+	// Help.
+	"github.com/sqp/godock/libs/ternary"      // Ternary operators.
+	"github.com/sqp/godock/libs/text/color"   // Colored text.
+	"github.com/sqp/godock/libs/text/strhelp" // String helpers.
 
 	"errors"
 	"fmt"
@@ -45,7 +52,7 @@ var (
 // You can add custom changes, launched before the start, with CustomHacks.
 //
 // Run returns true if the dock is able to start. This can be done with:
-//   maindock.Lock()  // alias for gtk_main.
+//   gldi.Lock()      // alias for gtk_main.
 //   maindock.Clean() // may be better with defer, but cause confused panic messages.
 //
 func Run(log cdtype.Logger, getSettings func() maindock.DockSettings) bool {
@@ -58,18 +65,20 @@ func Run(log cdtype.Logger, getSettings func() maindock.DockSettings) bool {
 	// Dock init.
 	settings.Init()
 
-	// Remove excluded applets.
-	for _, name := range settings.Exclude {
-		cdtype.Applets.Unregister(name)
-	}
+	// Load new config settings. New options are in an other file to keep the
+	// original config file as compatible with the real dock as possible.
+	e := confown.Init(globals.DirUserAppData(confown.GuiFilename))
+	log.Err(e, "Load ConfigSettings")
 
+	// Register go internal applets events.
 	appmgr := mgrgldi.Register(log)
 
+	// Start the polling loop for go internal applets (can be in DBus with other events).
 	if settings.DisableDBus {
 		go appmgr.StartLoop()
 
 	} else {
-		// dbus service is mandatory if enabled.
+		// DBus service is mandatory if enabled. This prevent double launch.
 		dbus, e := serviceDbus(log)
 		if log.Err(e, "start dbus service") {
 			fmt.Println("restart the program with the -N flag if you really need a second instance")
@@ -87,13 +96,19 @@ func Run(log cdtype.Logger, getSettings func() maindock.DockSettings) bool {
 
 	PrintVersions()
 
+	// Custom calls added by devs for their own uses and tests.
 	CustomHacks()
 
+	// Register GUI events.
 	backendgui.Register(guibridge.New(log))
-	backendmenu.Register("dock", menu.BuildMenuContainer, menu.BuildMenuIcon)
-	backendmenu.SetLogger(log)
 
-	settings.Prepare()
+	// Register mouse events.
+	eventmouse.Register(log)
+
+	// Register menus events.
+	backendmenu.Register(log, menu.BuildMenuContainer, menu.BuildMenuIcon)
+
+	// Finish startup.
 	settings.Start()
 
 	return true

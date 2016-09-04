@@ -7,15 +7,15 @@ package appgldi
 import (
 	"github.com/gotk3/gotk3/glib"
 
-	"github.com/sqp/godock/libs/cdtype" // Applets types.
+	"github.com/sqp/godock/libs/cdglobal" // Dock types.
+	"github.com/sqp/godock/libs/cdtype"   // Applets types.
 	"github.com/sqp/godock/libs/gldi"
 	"github.com/sqp/godock/libs/gldi/dialog"
+	"github.com/sqp/godock/libs/gldi/window" // Desktop windows control.
 	"github.com/sqp/godock/libs/ternary"
 
 	"errors"
 	"strings"
-	"unsafe"
-
 	"sync"
 )
 
@@ -30,7 +30,7 @@ type AppGldi struct {
 	mi        *gldi.ModuleInstance              // dock ModuleInstance object.
 	icons     map[string]*IconBase              // SubIcons index (by ID).
 	onEvent   func(string, ...interface{}) bool // Callback to dock.OnEvent to forward.
-	shortkeys map[string]*gldi.Shortkey         // Shortkeys list. Index is group+key (no separator).
+	shortkeys map[string]cdglobal.Shortkeyer    // Shortkeys list. Index is group+key (no separator).
 }
 
 // New creates a AppGldi connection.
@@ -40,7 +40,7 @@ func New(mi *gldi.ModuleInstance) *AppGldi {
 		IconBase:  &IconBase{Icon: mi.Icon()},
 		mi:        mi,
 		icons:     make(map[string]*IconBase),
-		shortkeys: make(map[string]*gldi.Shortkey),
+		shortkeys: make(map[string]cdglobal.Shortkeyer),
 	}
 }
 
@@ -210,7 +210,7 @@ func (o *AppGldi) Window() cdtype.IconWindow { return &winAction{icon: o.Icon} }
 // winAction implements cdtype.IconWindow
 //
 type winAction struct {
-	icon *gldi.Icon
+	icon gldi.Icon
 }
 
 func (o *winAction) SetAppliClass(applicationClass string) error {
@@ -236,7 +236,7 @@ func (o *winAction) SetAppliClass(applicationClass string) error {
 
 // act sends an action to the application controlled by the icon.
 //
-func (o *winAction) act(call func(*gldi.WindowActor)) error {
+func (o *winAction) act(call func(window.Type)) error {
 	if !o.icon.IsAppli() {
 		return errors.New("no application")
 	}
@@ -247,22 +247,22 @@ func (o *winAction) act(call func(*gldi.WindowActor)) error {
 }
 
 func (o *winAction) IsOpened() bool             { return o.icon.Window() != nil }
-func (o *winAction) Minimize() error            { return o.act((*gldi.WindowActor).Minimize) }
-func (o *winAction) Show() error                { return o.act((*gldi.WindowActor).Show) }
+func (o *winAction) Minimize() error            { return o.act((window.Type).Minimize) }
+func (o *winAction) Show() error                { return o.act((window.Type).Show) }
 func (o *winAction) SetVisibility(b bool) error { return o.act(callVisibility(b)) }
-func (o *winAction) ToggleVisibility() error    { return o.act((*gldi.WindowActor).ToggleVisibility) }
+func (o *winAction) ToggleVisibility() error    { return o.act((window.Type).ToggleVisibility) }
 func (o *winAction) Maximize() error            { return o.act(winMaximize) }
 func (o *winAction) Restore() error             { return o.act(winRestore) }
 func (o *winAction) ToggleSize() error          { return o.act(winToggleSize) }
-func (o *winAction) Close() error               { return o.act((*gldi.WindowActor).Close) }
-func (o *winAction) Kill() error                { return o.act((*gldi.WindowActor).Kill) }
+func (o *winAction) Close() error               { return o.act((window.Type).Close) }
+func (o *winAction) Kill() error                { return o.act((window.Type).Kill) }
 
-func winMaximize(win *gldi.WindowActor)   { win.Maximize(true) }
-func winRestore(win *gldi.WindowActor)    { win.Maximize(false) }
-func winToggleSize(win *gldi.WindowActor) { win.Maximize(!win.IsMaximized()) }
+func winMaximize(win window.Type)   { win.Maximize(true) }
+func winRestore(win window.Type)    { win.Maximize(false) }
+func winToggleSize(win window.Type) { win.Maximize(!win.IsMaximized()) }
 
-func callVisibility(show bool) func(*gldi.WindowActor) {
-	return func(win *gldi.WindowActor) { win.SetVisibility(show) }
+func callVisibility(show bool) func(window.Type) {
+	return func(win window.Type) { win.SetVisibility(show) }
 }
 
 //
@@ -304,7 +304,7 @@ func (o *AppGldi) IconProperties() (cdtype.IconProperties, error) {
 // iconProps returns all icon properties at once, implements cdtype.IconProperties
 //
 type iconProps struct {
-	icon *gldi.Icon
+	icon gldi.Icon
 }
 
 func (o *iconProps) X() int {
@@ -346,7 +346,7 @@ func (o *iconProps) Xid() uint64 {
 	if win == nil {
 		return 0
 	}
-	return uint64(uintptr(unsafe.Pointer(win))) // TODO: maybe fix
+	return uint64(win.XID())
 }
 
 func (o *iconProps) HasFocus() bool {
@@ -417,7 +417,7 @@ func (o *AppGldi) RemoveSubIcons() error {
 // IconBase defines common actions for icons and subdock icons.
 //
 type IconBase struct {
-	*gldi.Icon
+	gldi.Icon
 	id string
 }
 

@@ -2,6 +2,7 @@
 package datatype
 
 import (
+	"github.com/sqp/godock/libs/cdglobal" // Dock types.
 	"github.com/sqp/godock/libs/cdtype"
 	"github.com/sqp/godock/libs/packages"
 	"github.com/sqp/godock/widgets/gtk/keyfile"
@@ -75,6 +76,8 @@ const (
 // Source defines external data needed by the config builder.
 //
 type Source interface {
+	cdglobal.Crypto // Encrypt and Decrypt string.
+
 	//MainConfigFile returns the full path to the dock config file.
 	//
 	MainConfigFile() string
@@ -121,7 +124,7 @@ type Source interface {
 
 	// ListShortkeys returns the list of dock shortkeys.
 	//
-	ListShortkeys() []Shortkeyer
+	ListShortkeys() []cdglobal.Shortkeyer
 
 	// ListScreens returns the list of screens (active monitors on the session).
 	//
@@ -621,21 +624,7 @@ func (dv *HandbookDescSplit) GetDescription() string {
 }
 
 //
-//------------------------------------------------------[ SHORTKEY INTERFACE ]--
-
-// Shortkeyer defines the interface needed by shortkey data provided as config source.
-//
-type Shortkeyer interface {
-	GetDemander() string
-	GetDescription() string
-	GetKeyString() string
-	GetIconFilePath() string
-	GetConfFilePath() string
-	GetGroupName() string
-	GetKeyName() string
-	GetSuccess() bool
-	Rebind(keystring, description string) bool
-}
+//-----------------------------------------------------[ UPDATE MODULE STATE ]--
 
 // UpdateModuleStater defines the UpdateModuleState single interface.
 //

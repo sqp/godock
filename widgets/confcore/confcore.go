@@ -4,8 +4,9 @@ package confcore
 import (
 	"github.com/gotk3/gotk3/gtk"
 
-	"github.com/sqp/godock/libs/cdtype"
-	"github.com/sqp/godock/libs/text/tran"
+	"github.com/sqp/godock/libs/cdtype"       // Logger type.
+	"github.com/sqp/godock/libs/dock/confown" // New dock own settings.
+	"github.com/sqp/godock/libs/text/tran"    // Translate.
 
 	"github.com/sqp/godock/widgets/cfbuild"
 	"github.com/sqp/godock/widgets/cfbuild/cftype"
@@ -13,7 +14,6 @@ import (
 	"github.com/sqp/godock/widgets/common"
 	"github.com/sqp/godock/widgets/confapplets"
 	"github.com/sqp/godock/widgets/confgui/btnaction"
-	"github.com/sqp/godock/widgets/confsettings"
 	"github.com/sqp/godock/widgets/confshortkeys"
 	"github.com/sqp/godock/widgets/devpage"
 	"github.com/sqp/godock/widgets/docktheme"
@@ -152,8 +152,8 @@ var coreItems = []*Item{
 		Tooltip: "Download additional applets."},
 
 	{
-		Key:   confsettings.GuiGroup, // custom page for the config own settings.
-		Title: confsettings.GuiGroup,
+		Key:   confown.GuiGroup, // custom page for the config own settings.
+		Title: confown.GuiGroup,
 		Icon:  "cairo-dock.svg"},
 
 	{
@@ -372,11 +372,11 @@ func (widget *ConfCore) onSelect(item *Item, e error) {
 
 		// Custom file path.
 
-	case confsettings.GuiGroup: // own config has a special path.
+	case confown.GuiGroup: // own config has a special path.
 		w = widget.fromFile(item,
-			confsettings.PathFile(),
+			confown.PathFile(),
 			"", // no default.
-			func() { confsettings.Settings.Load() }, // reload own conf if saved.
+			func() { confown.Settings.Load() }, // reload own conf if saved.
 		)
 
 		// Default file path.

@@ -1,30 +1,18 @@
 /*
-Package maindock is a cairo-dock C wrapper to build a dock interface.
+Package maindock is a wrapper to build a dock interface.
 
-C files in the dir are the same as in the cairo-dock-core tree, or should be a
-stripped version of them. They are supposed to be rewritten.
+Missing
+
+	_cairo_dock_successful_launch - Happy New Year message.
+	extern gboolean g_bEasterEggs;
+	crash tests and recovery. Not sure what to do about it.
+	  static gint s_iNbCrashes = 0;
+	  static gboolean s_bSucessfulLaunch = FALSE;
+	  static GString *s_pLaunchCommand = NULL;
 
 */
 package maindock
 
-// Missing:
-// _cairo_dock_successful_launch - Happy New Year message.
-// extern gboolean g_bEasterEggs;
-// crash tests and recovery. Not sure what to do about it.
-//   static gint s_iNbCrashes = 0;
-//   static gboolean s_bSucessfulLaunch = FALSE;
-//   static GString *s_pLaunchCommand = NULL;
-
-//
-
-// #cgo pkg-config: gldi
-// #include "cairo-dock-user-interaction.h"
-/*
-
-gboolean g_bLocked;   // TODO: To remove (1 more use in interaction)
-
-*/
-import "C"
 import (
 	"github.com/gotk3/gotk3/gtk"
 
@@ -46,12 +34,11 @@ import (
 	"os"
 	"path/filepath"
 	"time"
-	"unsafe"
 )
 
 var log cdtype.Logger
 
-// SetLogger provides a common logger for the Dbus service. It must be set to start a dock.
+// SetLogger provides a common logger for the dock. It must be set to start a dock.
 //
 func SetLogger(l cdtype.Logger) {
 	log = l
@@ -102,8 +89,7 @@ type DockSettings struct {
 //
 func (settings *DockSettings) Init() {
 	confdir := cdglobal.ConfigDirDock(settings.UserDefinedDataDir)
-	_, e := os.Stat(confdir)
-	settings.isFirstLaunch = e != nil // TODO: need test is dir.
+	settings.isFirstLaunch = !files.IsExist(confdir) // TODO: need test is dir.
 
 	hidden := loadHidden(confdir)
 
@@ -167,8 +153,8 @@ func (settings *DockSettings) Init() {
 	}
 
 	env := DesktopEnvironment(settings.Env)
-	if env != gldi.DesktopEnvUnknown {
-		gldi.FMForceDesktopEnv(env)
+	if env != gldi.DeskEnvUnknown {
+		gldi.FMForceDeskEnv(env)
 	}
 
 	if settings.IndirectOpenGL {
@@ -199,6 +185,11 @@ func (settings *DockSettings) Init() {
 		}
 	}
 
+	// Remove excluded applets.
+	for _, name := range settings.Exclude {
+		cdtype.Applets.Unregister(name)
+	}
+
 	//\___________________ load plug-ins (must be done after everything is initialized).
 	if !settings.SafeMode {
 		err := gldi.ModulesNewFromDirectory("")
@@ -211,31 +202,9 @@ func (settings *DockSettings) Init() {
 	}
 }
 
-// Prepare is the last step before starting the dock, creating the config files.
+// Start starts the dock theme and apply last settings.
 //
-func (settings DockSettings) Prepare() {
-
-	// Register events.
-	globals.ContainerObjectMgr.RegisterNotification(
-		globals.NotifClickIcon,
-		unsafe.Pointer(C.cairo_dock_notification_click_icon),
-		globals.RunAfter)
-
-	globals.ContainerObjectMgr.RegisterNotification(
-		globals.NotifDropData,
-		unsafe.Pointer(C.cairo_dock_notification_drop_data),
-		globals.RunAfter)
-
-	globals.ContainerObjectMgr.RegisterNotification(
-		globals.NotifMiddleClickIcon,
-		unsafe.Pointer(C.cairo_dock_notification_middle_click_icon),
-		globals.RunAfter)
-
-	globals.ContainerObjectMgr.RegisterNotification(
-		globals.NotifScrollIcon,
-		unsafe.Pointer(C.cairo_dock_notification_scroll_icon),
-		globals.RunAfter)
-
+func (settings *DockSettings) Start() {
 	//\___________________ handle crashes.
 	// if (! bTesting)
 	// 	_cairo_dock_set_signal_interception ();
@@ -249,41 +218,24 @@ func (settings DockSettings) Prepare() {
 	//\___________________ maintenance mode -> show the main config panel.
 
 	// Copy the default theme if needed.
-	_, e := os.Stat(globals.ConfigFile())
-	// if e == os.ErrNotExist {
-	if e != nil {
-		log.Info("creating configuration directory", globals.DirDockData())
-
-		themeName := "Default-Single"
-
-		if os.Getenv("DESKTOP_SESSION") == "cairo-dock" { // We're using the CD session for the first time
-			themeName = "Default-Panel"
-			settings.sessionWasUsed = true
-			files.UpdateConfFile(globals.DirDockData(cdglobal.FileHiddenConfig), "Launch", "cd session", true)
-		}
-
-		files.CopyDir(globals.DirShareData(cdglobal.ConfigDirDockThemes, themeName), globals.CurrentThemePath())
+	if !files.IsExist(globals.ConfigFile()) {
+		createConfigDir(settings)
 	}
 
 	// MISSING
 	// The first time the Cairo-Dock session is used but not the first time the dock is launched: propose to use the Default-Panel theme
 	// s_bCDSessionLaunched => settings.sessionWasUsed
-}
 
-// Start starts the dock theme.
-//
-func (settings *DockSettings) Start() {
 	gldi.CurrentThemeLoad() // was moved before registration when I had some problems with refresh on start. Removed here for now.
 
 	//\___________________ lock mode.
 
-	// comme on ne pourra pas ouvrir le panneau de conf, ces 2 variables resteront tel quel.
 	if settings.Locked {
 		println("Cairo-Dock will be locked.") // was cd_warning (so it was set just before Verbosity). TODO: improve
+		// As the config window shouldn't be opened, those settings won't change.
 		current.Docks.LockIcons(true)
 		current.Docks.LockAll(true)
 		globals.FullLock = true
-		C.g_bLocked = C.gboolean(1) // forward for interaction
 	}
 
 	if !settings.SafeMode && gldi.ModulesGetNb() <= 1 { // 1 including Help.
@@ -326,12 +278,6 @@ func (settings *DockSettings) Start() {
 	// 	g_timeout_add_seconds (5, _cairo_dock_successful_launch, GINT_TO_POINTER (bFirstLaunch));
 }
 
-// Lock runs the gtk main loop to lock the main thread.
-//
-func Lock() {
-	C.gtk_main()
-}
-
 // Clean cleans the dock variables on stop.
 //
 func Clean() {
@@ -356,15 +302,15 @@ func Clean() {
 
 // DesktopEnvironment converts the desktop environment backend type from the string.
 //
-func DesktopEnvironment(envstr string) gldi.DesktopEnvironment {
-	env := gldi.DesktopEnvUnknown
+func DesktopEnvironment(envstr string) gldi.DeskEnvironment {
+	env := gldi.DeskEnvUnknown
 	switch envstr {
 	case "gnome":
-		env = gldi.DesktopEnvGnome
+		env = gldi.DeskEnvGnome
 	case "kde":
-		env = gldi.DesktopEnvKDE
+		env = gldi.DeskEnvKDE
 	case "xfce":
-		env = gldi.DesktopEnvXFCE
+		env = gldi.DeskEnvXFCE
 	default:
 		if envstr != "" {
 			log.NewWarn(envstr, "Unknown desktop environment (valid options: gnome, kde, xfce)")
@@ -376,6 +322,20 @@ func DesktopEnvironment(envstr string) gldi.DesktopEnvironment {
 func firstLaunchSetup() {
 	log.Info("firstLaunchScript", globals.DirShareData("scripts", "initial-setup.sh"))
 	log.ExecShow(globals.DirShareData("scripts", "initial-setup.sh"))
+}
+
+func createConfigDir(settings *DockSettings) {
+	log.Info("creating configuration directory", globals.DirDockData())
+
+	themeName := "Default-Single"
+
+	if os.Getenv("DESKTOP_SESSION") == "cairo-dock" { // We're using the CD session for the first time
+		themeName = "Default-Panel"
+		settings.sessionWasUsed = true
+		files.UpdateConfFile(globals.DirDockData(cdglobal.FileHiddenConfig), "Launch", "cd session", true)
+	}
+
+	files.CopyDir(globals.DirShareData(cdglobal.ConfigDirDockThemes, themeName), globals.CurrentThemePath())
 }
 
 //

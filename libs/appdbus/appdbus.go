@@ -206,7 +206,7 @@ func (cda *CDDbus) ConnectEvents(conn *dbus.Conn) (e error) {
 // Return true if the signal was quit applet.
 //
 func (cda *CDDbus) OnSignal(s *dbus.Signal) (exit bool) {
-	if s == nil {
+	if s == nil || s.Name == "org.freedesktop.DBus.NameAcquired" {
 		return false
 	}
 

@@ -5,19 +5,6 @@ package backendgui
 // #include "cairo-dock-gui-manager.h"              // CairoDockGuiBackend
 /*
 
-//----------------------------------------------[ GUI CALLBACK NOTIFICATIONS ]--
-
-// Go exported func redeclarations for notifications.
-
-extern gboolean notifIconMoved        (gpointer pUserData, Icon *pIcon, CairoDock *pDock);
-extern gboolean notifIconAddRemove    (gpointer pUserData, Icon *pIcon, CairoDock *pDock);
-extern gboolean notifReloadItems      (gpointer pUserData, gpointer unused);
-extern gboolean notifConfigureDesklet (G_GNUC_UNUSED gpointer pUserData, CairoDesklet *pDesklet);
-extern gboolean notifModuleActivated  (G_GNUC_UNUSED gpointer pUserData, gchar *cModuleName, gboolean bActivated);
-extern gboolean notifModuleRegistered (G_GNUC_UNUSED gpointer pUserData, gchar *cModuleName, gboolean bActivated);
-extern gboolean notifModuleInstanceDetached (G_GNUC_UNUSED gpointer pUserData, GldiModuleInstance *pInstance, gboolean bIsDetached);
-extern gboolean notifShortkeyUpdate   (G_GNUC_UNUSED gpointer pUserData, G_GNUC_UNUSED gpointer shortkey);
-
 //-----------------------------------------------[ GUI CALLBACK CORE BACKEND ]--
 
 // Go exported func redeclarations for GUI backend.
@@ -52,7 +39,7 @@ import (
 	"github.com/gotk3/gotk3/gtk"
 
 	"github.com/sqp/godock/libs/gldi"
-	"github.com/sqp/godock/libs/gldi/globals"
+	"github.com/sqp/godock/libs/gldi/notif" // Dock notifs.
 
 	"unsafe"
 )
@@ -63,9 +50,9 @@ import (
 // GuiInterface defines the interface to the gldi GUI backend.
 //
 type GuiInterface interface {
-	ShowMainGui()                                                     //
-	ShowModuleGui(appletName string)                                  //
-	ShowItems(*gldi.Icon, *gldi.Container, *gldi.ModuleInstance, int) //
+	ShowMainGui()                                                    //
+	ShowModuleGui(appletName string)                                 //
+	ShowItems(gldi.Icon, *gldi.Container, *gldi.ModuleInstance, int) //
 
 	ShowAddons()
 	ReloadItems()
@@ -97,7 +84,27 @@ func Register(gui GuiInterface) {
 	C.register_gui()
 	dockGui = gui
 
-	registerEvents()
+	notif.RegisterDockIconMoved(onIconMoved)
+	notif.RegisterDockInsertIcon(onIconAddRemove)
+	notif.RegisterDockRemoveIcon(onIconAddRemove)
+	notif.RegisterDockDestroy(func(*gldi.CairoDock) { ReloadItems() })
+
+	notif.RegisterDeskletNew(func(*gldi.Desklet) { ReloadItems() })
+	notif.RegisterDeskletDestroy(func(*gldi.Desklet) { ReloadItems() })
+	notif.RegisterDeskletConfigure(UpdateDeskletParams)
+
+	notif.RegisterModuleRegistered(func(string, bool) { UpdateModulesList() })
+	notif.RegisterModuleActivated(func(name string, active bool) {
+		UpdateModuleState(name, active)
+		ReloadItems() // for plug-ins that don't have an applet, like Cairo-Pinguin.
+	})
+
+	notif.RegisterModuleInstanceDetached(func(mi *gldi.ModuleInstance, isDetached bool) {
+		UpdateModuleInstanceContainer(mi, isDetached)
+		ReloadItems()
+	})
+
+	notif.RegisterShortkeyChanged(UpdateShortkeys)
 }
 
 // CanManageThemes returns if the backend can configure themes.
@@ -111,139 +118,19 @@ func CanManageThemes() bool {
 //
 //-----------------------------------------------------------[ NOTIFICATIONS ]--
 
-func registerEvents() {
-	// Dock manager
-	globals.DockObjectMgr.RegisterNotification(
-		globals.NotifIconMoved,
-		unsafe.Pointer(C.notifIconMoved),
-		globals.RunAfter)
-
-	globals.DockObjectMgr.RegisterNotification(
-		globals.NotifInsertIcon,
-		unsafe.Pointer(C.notifIconAddRemove),
-		globals.RunAfter)
-
-	globals.DockObjectMgr.RegisterNotification(
-		globals.NotifRemoveIcon,
-		unsafe.Pointer(C.notifIconAddRemove),
-		globals.RunAfter)
-
-	globals.DockObjectMgr.RegisterNotification(
-		globals.NotifDestroy,
-		unsafe.Pointer(C.notifReloadItems),
-		globals.RunAfter)
-
-	// Desklet manager.
-	globals.DeskletObjectMgr.RegisterNotification(
-		globals.NotifDestroy,
-		unsafe.Pointer(C.notifReloadItems),
-		globals.RunAfter)
-
-	globals.DeskletObjectMgr.RegisterNotification(
-		globals.NotifNew,
-		unsafe.Pointer(C.notifReloadItems),
-		globals.RunAfter)
-
-	globals.DeskletObjectMgr.RegisterNotification(
-		globals.NotifConfigureDesklet,
-		unsafe.Pointer(C.notifConfigureDesklet),
-		globals.RunAfter)
-
-	// Module manager.
-	globals.ModuleObjectMgr.RegisterNotification(
-		globals.NotifModuleActivated,
-		unsafe.Pointer(C.notifModuleActivated),
-		globals.RunAfter)
-
-	globals.ModuleObjectMgr.RegisterNotification(
-		globals.NotifModuleRegistered,
-		unsafe.Pointer(C.notifModuleRegistered),
-		globals.RunAfter)
-
-	// Module instance manager.
-	globals.ModuleInstanceObjectMgr.RegisterNotification(
-		globals.NotifModuleInstanceDetached,
-		unsafe.Pointer(C.notifModuleInstanceDetached),
-		globals.RunAfter)
-
-	// Shortkey manager.
-	globals.ShortkeyObjectMgr.RegisterNotification(
-		globals.NotifNew,
-		unsafe.Pointer(C.notifShortkeyUpdate),
-		globals.RunAfter)
-
-	globals.ShortkeyObjectMgr.RegisterNotification(
-		globals.NotifDestroy,
-		unsafe.Pointer(C.notifShortkeyUpdate),
-		globals.RunAfter)
-
-	globals.ShortkeyObjectMgr.RegisterNotification(
-		globals.NotifShortkeyChanged,
-		unsafe.Pointer(C.notifShortkeyUpdate),
-		globals.RunAfter)
-
-}
-
 // TODO: maybe need to use the next func, I copied the exact behavior but need to report to confirm this func.
-//export notifIconMoved
-func notifIconMoved(_ C.gpointer, cicon *C.Icon, _ *C.CairoDock) C.gboolean {
-	icon := gldi.NewIconFromNative(unsafe.Pointer(cicon))
-	if (icon.IsLauncher() || icon.IsStackIcon() || icon.IsSeparator() && icon.GetDesktopFileName() != "") || icon.IsApplet() {
+func onIconMoved(icon gldi.Icon, _ *gldi.CairoDock) {
+	if icon.IsApplet() ||
+		((icon.IsLauncher() || icon.IsStackIcon() || icon.IsSeparator()) && icon.GetDesktopFileName() != "") {
 		ReloadItems()
 	}
-	return C.GLDI_NOTIFICATION_LET_PASS
 }
 
-//export notifIconAddRemove
-func notifIconAddRemove(_ C.gpointer, cicon *C.Icon, _ *C.CairoDock) C.gboolean {
-	icon := gldi.NewIconFromNative(unsafe.Pointer(cicon))
-	if ((icon.IsLauncher() || icon.IsStackIcon() || icon.IsSeparator()) && icon.GetDesktopFileName() != "") || icon.IsApplet() {
+func onIconAddRemove(icon gldi.Icon, _ *gldi.CairoDock) {
+	if icon.IsApplet() ||
+		((icon.IsLauncher() || icon.IsStackIcon() || icon.IsSeparator()) && icon.GetDesktopFileName() != "") {
 		ReloadItems()
 	}
-	return C.GLDI_NOTIFICATION_LET_PASS
-}
-
-//export notifReloadItems
-func notifReloadItems(_ C.gpointer, _ C.gpointer) C.gboolean {
-	ReloadItems()
-	return C.GLDI_NOTIFICATION_LET_PASS
-}
-
-//export notifConfigureDesklet
-func notifConfigureDesklet(_ C.gpointer, cdesklet *C.CairoDesklet) C.gboolean {
-	desklet := gldi.NewDeskletFromNative(unsafe.Pointer(cdesklet))
-	UpdateDeskletParams(desklet)
-	return C.GLDI_NOTIFICATION_LET_PASS
-}
-
-//export notifModuleActivated
-func notifModuleActivated(_ C.gpointer, cModuleName *C.gchar, active C.gboolean) C.gboolean {
-	name := C.GoString((*C.char)(cModuleName))
-	UpdateModuleState(name, gobool(active))
-
-	ReloadItems() // for plug-ins that don't have an applet, like Cairo-Pinguin.
-	return C.GLDI_NOTIFICATION_LET_PASS
-}
-
-//export notifModuleRegistered
-func notifModuleRegistered(_ C.gpointer, _ *C.gchar, _ C.gboolean) C.gboolean {
-	UpdateModulesList()
-	return C.GLDI_NOTIFICATION_LET_PASS
-}
-
-//export notifModuleInstanceDetached
-func notifModuleInstanceDetached(_ C.gpointer, instance *C.GldiModuleInstance, isDetached C.gboolean) C.gboolean {
-	mi := gldi.NewModuleInstanceFromNative(unsafe.Pointer(instance))
-
-	UpdateModuleInstanceContainer(mi, gobool(isDetached))
-	ReloadItems()
-	return C.GLDI_NOTIFICATION_LET_PASS
-}
-
-//export notifShortkeyUpdate
-func notifShortkeyUpdate(_ C.gpointer, _ C.gpointer) C.gboolean {
-	UpdateShortkeys()
-	return C.GLDI_NOTIFICATION_LET_PASS
 }
 
 //
@@ -271,7 +158,7 @@ func ShowModuleGui(appletName string) *gtk.Window {
 
 // ShowItems opens the icons page of the GUI to configure the given item.
 //
-func ShowItems(icon *gldi.Icon, container *gldi.Container, moduleInstance *gldi.ModuleInstance, showPage int) *gtk.Window {
+func ShowItems(icon gldi.Icon, container *gldi.Container, moduleInstance *gldi.ModuleInstance, showPage int) *gtk.Window {
 	if dockGui == nil {
 		return nil
 	}

@@ -1,12 +1,12 @@
 package vdata
 
 import (
-	"github.com/sqp/godock/libs/cdglobal" // Global consts.
-	"github.com/sqp/godock/libs/log"      // Display info in terminal.
+	"github.com/sqp/godock/libs/cdglobal"     // Global consts.
+	"github.com/sqp/godock/libs/dock/confown" // New dock own settings to set save as virtual.
+	"github.com/sqp/godock/libs/log"          // Display info in terminal.
 
 	"github.com/sqp/godock/widgets/cfbuild"        // The config file builder.
 	"github.com/sqp/godock/widgets/cfbuild/cftype" // Types for config file builder usage.
-	"github.com/sqp/godock/widgets/confsettings"   // New dock own settings to set save as virtual.
 
 	"os"
 	"path/filepath"
@@ -26,8 +26,8 @@ var (
 // TestInit inits the test builder.
 //
 func TestInit(source Sourcer, file string) cftype.Grouper {
-	confsettings.Settings.SaveEditor = ""
-	confsettings.Settings.SaveEnabled = false
+	confown.Settings.SaveEditor = ""
+	confown.Settings.SaveEnabled = false
 
 	var e error
 	file, e = filepath.EvalSymlinks(file)

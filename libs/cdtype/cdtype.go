@@ -723,6 +723,10 @@ type Logger interface {
 	//
 	ExecCmd(command string, args ...string) *exec.Cmd
 
+	// ExecShlex parse the command with shlex before returning an ExecCmd.
+	//
+	ExecShlex(command string, args ...string) (*exec.Cmd, error)
+
 	// DEV is like Info, but to be used by the dev for his temporary tests (easier to grep).
 	//
 	DEV(msg string, more ...interface{})

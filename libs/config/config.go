@@ -232,6 +232,10 @@ func (c *Config) unmarshalGroup(conf reflect.Value, group string, fieldKey GetFi
 // Fill a single reflected field if it has the conf tag.
 //
 func (c *Config) getField(elem reflect.Value, group, key string, tag reflect.StructTag) {
+	if key == "-" { // Disabled config key.
+		return
+	}
+
 	// tagInt makes the call only if there is a valid value.
 	tagInt := func(str string, call func(int)) {
 		if str == "" {

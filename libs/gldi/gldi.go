@@ -10,44 +10,34 @@ package gldi
 
 
 #include "cairo-dock-core.h"
-#include "cairo-dock-animations.h"               // cairo_dock_trigger_icon_removal_from_dock
-#include "cairo-dock-applications-manager.h"     // cairo_dock_get_appli_icon
+#include "cairo-dock-animations.h"               // cairo_dock_calculate_magnitude
 #include "cairo-dock-applet-facility.h"          // cairo_dock_insert_icons_in_applet
-#include "cairo-dock-backends-manager.h"         // cairo_dock_foreach_dock_renderer
+#include "cairo-dock-backends-manager.h"         // cairo_dock_register_renderer
 #include "cairo-dock-config.h"                   // cairo_dock_load_current_theme
-#include "cairo-dock-class-manager.h"            // cairo_dock_get_class_command
-#include "cairo-dock-class-icon-manager.h"       // myClassIconObjectMgr
 #include "cairo-dock-desklet-manager.h"          // myDeskletObjectMgr
-#include "cairo-dock-desktop-manager.h"          // g_desktopGeometry
-#include "cairo-dock-data-renderer.h"            // cairo_dock_render_new_data_on_icon
-#include "cairo-dock-dock-factory.h"             // CairoDock
+#include "cairo-dock-desktop-manager.h"          // gldi_desktop_can_set_on_widget_layer
 #include "cairo-dock-dock-facility.h"            // cairo_dock_get_available_docks
 #include "cairo-dock-dock-manager.h"             // gldi_dock_get_readable_name
-#include "cairo-dock-draw-opengl.h"              // cairo_dock_set_container_orientation_opengl
 #include "cairo-dock-file-manager.h"             // CAIRO_DOCK_GNOME...
 #include "cairo-dock-flying-container.h"         // myFlyingObjectMgr
 #include "cairo-dock-gauge.h"                    // CairoGaugeAttribute
 #include "cairo-dock-graph.h"                    // CairoGraphAttribute
-#include "cairo-dock-icon-factory.h"             // Icon
-#include "cairo-dock-icon-facility.h"        // Icon
+
+#include "cairo-dock-icon-facility.h"            // cairo_dock_get_next_icon
 #include "cairo-dock-keybinder.h"                // gldi_shortkey_new
 #include "cairo-dock-keyfile-utilities.h"        // cairo_dock_conf_file_needs_update
 #include "cairo-dock-launcher-manager.h"         // CAIRO_DOCK_ICON_TYPE_IS_LAUNCHER
 #include "cairo-dock-log.h"                      // cd_log_set_level_from_name
-#include "cairo-dock-overlay.h"                  // cairo_dock_add_overlay_from_image
-#include "cairo-dock-menu.h"  // ModuleInstance
-#include "cairo-dock-module-instance-manager.h"  // ModuleInstance
+#include "cairo-dock-menu.h"                     // gldi_menu_add_item
+#include "cairo-dock-module-instance-manager.h"  // gldi_module_instance_detach
 #include "cairo-dock-module-manager.h"           // gldi_modules_new_from_directory
-#include "cairo-dock-object.h"                   // Icon
 #include "cairo-dock-opengl.h"                   // gldi_gl_backend_force_indirect_rendering
-#include "cairo-dock-progressbar.h"                    // CairoGraphAttribute
+#include "cairo-dock-progressbar.h"              // CairoProgressBarAttribute
 #include "cairo-dock-separator-manager.h"        // CAIRO_DOCK_ICON_TYPE_IS_SEPARATOR
 #include "cairo-dock-struct.h"                   // CAIRO_DOCK_LAST_ORDER
 #include "cairo-dock-stack-icon-manager.h"       // CAIRO_DOCK_ICON_TYPE_IS_CONTAINER
 #include "cairo-dock-style-manager.h"            // gldi_style_colors_freeze
 #include "cairo-dock-themes-manager.h"           // cairo_dock_set_paths
-// #include "cairo-dock-utils.h"                    // cairo_dock_launch_command               TODO try remove;
-#include "cairo-dock-windows-manager.h"          // gldi_window_can_minimize_maximize_close
 
 
 extern CairoDock *g_pMainDock;
@@ -57,12 +47,6 @@ extern gboolean          g_bUseOpenGL;
 
 extern gchar *g_cCurrentLaunchersPath;
 
-extern GldiDesktopGeometry g_desktopGeometry;
-
-static int screen_position_x(int i)	{ return g_desktopGeometry.pScreens[i].x; }
-static int screen_position_y(int i)	{ return g_desktopGeometry.pScreens[i].y; }
-static int screen_width_i(int i) 	{ return g_desktopGeometry.pScreens[i].width; }
-static int screen_height_i(int i) 	{ return g_desktopGeometry.pScreens[i].height; }
 
 static gboolean IconIsSeparator    (Icon *icon) { return CAIRO_DOCK_ICON_TYPE_IS_SEPARATOR(icon); }
 static gboolean IconIsSeparatorAuto(Icon *icon) { return CAIRO_DOCK_IS_AUTOMATIC_SEPARATOR(icon); }
@@ -86,12 +70,6 @@ static void manager_reload(GldiManager* manager, gboolean flag, GKeyFile* keyfil
  }
 
 
-
-// from cairo-dock-icon-facility.h
-static Icon* _icons_get_any_without_dialog() {
-	return gldi_icons_get_without_dialog (g_pMainDock?g_pMainDock->icons:NULL);
-}
-
 // from cairo-dock-module-manager.h
 static gboolean _module_is_auto_loaded(GldiModule *module) {
 	return (module->pInterface->initModule == NULL || module->pInterface->stopModule == NULL || module->pVisitCard->cInternalModule != NULL);
@@ -102,16 +80,6 @@ static gpointer  intToPointer(int i)  { return GINT_TO_POINTER(i); }
 
 
 static CairoDockRenderer*  newDockRenderer()  { return g_new0 (CairoDockRenderer, 1); }
-
-
-static void render_new_data_on_icon (Icon *pIcon, double *pNewValues) {
-	GldiContainer *pContainer = pIcon->pModuleInstance->pContainer;
-
-	cairo_t *pDrawContext = cairo_create (pIcon->image.pSurface);
-	cairo_dock_render_new_data_on_icon (pIcon, pContainer, pDrawContext, pNewValues);
-	cairo_destroy (pDrawContext);
-}
-
 
 
 //-----------------------------------------------------------------[ C TO GO ]--
@@ -128,17 +96,17 @@ import (
 	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
 
-	"github.com/sqp/godock/libs/cdtype" // Dock types.
-	"github.com/sqp/godock/libs/gldi/desktopclass"
+	"github.com/sqp/godock/libs/cdglobal"       // Dock types.
+	"github.com/sqp/godock/libs/cdtype"         // Dock types.
+	"github.com/sqp/godock/libs/gldi/desktops"  // Desktop and screens info.
+	"github.com/sqp/godock/libs/gldi/shortkeys" // Keyboard shortkeys.
 	"github.com/sqp/godock/libs/packages"
-	"github.com/sqp/godock/libs/ternary"
 	"github.com/sqp/godock/libs/text/tran"
 
 	"github.com/sqp/godock/widgets/gtk/keyfile"
 	"github.com/sqp/godock/widgets/gtk/togtk"
 
 	"errors"
-	"fmt"
 	"path/filepath"
 	"sync"
 	"unsafe"
@@ -159,17 +127,17 @@ const (
 	RenderingDefault RenderingMethod = C.GLDI_DEFAULT
 )
 
-// DesktopEnvironment represents a desktop environment.
+// DeskEnvironment represents a desktop environment.
 //
-type DesktopEnvironment C.CairoDockDesktopEnv
+type DeskEnvironment C.CairoDockDesktopEnv
 
 // Desktop environment backends.
 //
 const (
-	DesktopEnvGnome   DesktopEnvironment = C.CAIRO_DOCK_GNOME
-	DesktopEnvKDE     DesktopEnvironment = C.CAIRO_DOCK_KDE
-	DesktopEnvXFCE    DesktopEnvironment = C.CAIRO_DOCK_XFCE
-	DesktopEnvUnknown DesktopEnvironment = C.CAIRO_DOCK_UNKNOWN_ENV
+	DeskEnvGnome   DeskEnvironment = C.CAIRO_DOCK_GNOME
+	DeskEnvKDE     DeskEnvironment = C.CAIRO_DOCK_KDE
+	DeskEnvXFCE    DeskEnvironment = C.CAIRO_DOCK_XFCE
+	DeskEnvUnknown DeskEnvironment = C.CAIRO_DOCK_UNKNOWN_ENV
 )
 
 // ModuleCategory represents a module category.
@@ -293,9 +261,9 @@ func CurrentThemePackage(themeName, dirPath string) error {
 	return nil
 }
 
-// FMForceDesktopEnv forces the dock to use the given desktop environment backend.
+// FMForceDeskEnv forces the dock to use the given desktop environment backend.
 //
-func FMForceDesktopEnv(env DesktopEnvironment) {
+func FMForceDeskEnv(env DeskEnvironment) {
 	C.cairo_dock_fm_force_desktop_env(C.CairoDockDesktopEnv(env))
 }
 
@@ -373,6 +341,12 @@ func StyleColorsFreeze() {
 //
 func DbusGThreadInit() {
 	C.dbus_g_thread_init() // it's a wrapper: it will use dbus_threads_init_default ();
+}
+
+// LockGTK runs the gtk main loop. Use to lock the dock main thread.
+//
+func LockGTK() {
+	C.gtk_main()
 }
 
 // FreeAll frees all C dock memory.
@@ -462,12 +436,12 @@ func ConfFileNeedUpdate(kf *keyfile.KeyFile, version string) bool {
 
 // EmitSignalDropData emits the signal on the container.
 //
-func EmitSignalDropData(container *Container, data string, icon *Icon, order float64) {
+func EmitSignalDropData(container *Container, data string, icon Icon, order float64) {
 	cstr := (*C.gchar)(C.CString(data))
 	defer C.free(unsafe.Pointer((*C.char)(cstr)))
 	var iconPtr *C.Icon
 	if icon != nil {
-		iconPtr = icon.Ptr
+		iconPtr = icon.(*dockIcon).Ptr
 	}
 	C.emitSignalDropData(container.Ptr, cstr, iconPtr, C.double(order))
 }
@@ -480,7 +454,7 @@ func QuickHideAllDocks() {
 
 // LauncherAddNew adds a new launcher to the dock.
 //
-func LauncherAddNew(uri string, dock *CairoDock, order float64) *Icon {
+func LauncherAddNew(uri string, dock *CairoDock, order float64) Icon {
 	var cstr *C.gchar
 	if uri != "" {
 		cstr = (*C.gchar)(C.CString(uri))
@@ -492,14 +466,14 @@ func LauncherAddNew(uri string, dock *CairoDock, order float64) *Icon {
 
 // SeparatorIconAddNew adds a separator to the dock.
 //
-func SeparatorIconAddNew(dock *CairoDock, order float64) *Icon {
+func SeparatorIconAddNew(dock *CairoDock, order float64) Icon {
 	c := C.gldi_separator_icon_add_new(dock.Ptr, C.double(order))
 	return NewIconFromNative(unsafe.Pointer(c))
 }
 
 // StackIconAddNew adds a stack icon to the dock (subdock).
 //
-func StackIconAddNew(dock *CairoDock, order float64) *Icon {
+func StackIconAddNew(dock *CairoDock, order float64) Icon {
 	c := C.gldi_stack_icon_add_new(dock.Ptr, C.double(order))
 	return NewIconFromNative(unsafe.Pointer(c))
 }
@@ -603,8 +577,8 @@ func ObjectIsDock(obj IObject) bool {
 
 // ObjectNotify notifies the given object.
 //
-func ObjectNotify(container *Container, notif int, icon *Icon, dock *CairoDock, key gdk.ModifierType) {
-	C.objectNotify(container.Ptr, C.int(notif), icon.Ptr, dock.Ptr, C.GdkModifierType(key))
+func ObjectNotify(container *Container, notif int, icon Icon, dock *CairoDock, key gdk.ModifierType) {
+	C.objectNotify(container.Ptr, C.int(notif), icon.ToNative(), dock.Ptr, C.GdkModifierType(key))
 }
 
 //
@@ -643,14 +617,14 @@ func (o *CairoDock) ToContainer() *Container {
 
 // Icons returns the list of icons in the dock.
 //
-func (o *CairoDock) Icons() (list []*Icon) {
+func (o *CairoDock) Icons() (list []Icon) {
 	clist := glib.WrapList(uintptr(unsafe.Pointer(o.Ptr.icons)))
 	return goListIcons(clist)
 }
 
 // FirstDrawnElementLinear TODO FIND USAGE.
 //
-func (o *CairoDock) FirstDrawnElementLinear() []*Icon {
+func (o *CairoDock) FirstDrawnElementLinear() []Icon {
 	c := C.cairo_dock_get_first_drawn_element_linear(o.Ptr.icons)
 	clist := glib.WrapList(uintptr(unsafe.Pointer(c)))
 	return goListIcons(clist)
@@ -689,14 +663,14 @@ func (o *CairoDock) IsAutoHide() bool {
 
 // SearchIconPointingOnDock TODO FIND USAGE AND COMPLETE.
 //
-func (o *CairoDock) SearchIconPointingOnDock(unknown interface{}) *Icon { // TODO: add param CairoDock **pParentDock
+func (o *CairoDock) SearchIconPointingOnDock(unknown interface{}) Icon { // TODO: add param CairoDock **pParentDock
 	c := C.cairo_dock_search_icon_pointing_on_dock(o.Ptr, nil)
 	return NewIconFromNative(unsafe.Pointer(c))
 }
 
 // GetPointedIcon returns the pointed icon (mouse on the icon).
 //
-func (o *CairoDock) GetPointedIcon() *Icon {
+func (o *CairoDock) GetPointedIcon() Icon {
 	c := C.cairo_dock_get_pointed_icon(o.Ptr.icons)
 	return NewIconFromNative(unsafe.Pointer(c))
 }
@@ -709,15 +683,15 @@ func (o *CairoDock) Container() *Container {
 
 // GetNextIcon returns the icon after the given one in the dock.
 //
-func (o *CairoDock) GetNextIcon(icon *Icon) *Icon {
-	c := C.cairo_dock_get_next_icon(o.Ptr.icons, icon.Ptr)
+func (o *CairoDock) GetNextIcon(icon Icon) Icon {
+	c := C.cairo_dock_get_next_icon(o.Ptr.icons, icon.ToNative())
 	return NewIconFromNative(unsafe.Pointer(c))
 }
 
 // GetPreviousIcon returns the icon before the given one in the dock.
 //
-func (o *CairoDock) GetPreviousIcon(icon *Icon) *Icon {
-	c := C.cairo_dock_get_previous_icon(o.Ptr.icons, icon.Ptr)
+func (o *CairoDock) GetPreviousIcon(icon Icon) Icon {
+	c := C.cairo_dock_get_previous_icon(o.Ptr.icons, icon.ToNative())
 	return NewIconFromNative(unsafe.Pointer(c))
 }
 
@@ -731,22 +705,21 @@ func (o *CairoDock) ScreenNumber() int {
 //
 // cairo_dock_get_max_authorized_dock_width
 func (o *CairoDock) ScreenWidth() int {
-	geo := GetDesktopGeometry()
 	i := o.ScreenNumber()
 	isHoriz := o.Container().IsHorizontal()
 
 	switch {
-	case isHoriz && 0 <= i && i < geo.NbScreens():
-		return geo.WidthScreen(i)
+	case isHoriz && 0 <= i && i < desktops.NbScreens():
+		return desktops.WidthScreen(i)
 
 	case isHoriz:
-		return geo.WidthAll()
+		return desktops.WidthAll()
 
-	case 0 <= i && i < geo.NbScreens():
-		return geo.HeightScreen(i)
+	case 0 <= i && i < desktops.NbScreens():
+		return desktops.HeightScreen(i)
 	}
 
-	return geo.HeightAll()
+	return desktops.HeightAll()
 }
 
 // MaxIconHeight returns the max icon height.
@@ -1058,7 +1031,7 @@ func (o *Desklet) PositionLocked() bool {
 	return gobool(o.Ptr.bPositionLocked)
 }
 
-func (o *Desklet) GetIcon() *Icon {
+func (o *Desklet) GetIcon() Icon {
 	return NewIconFromNative(unsafe.Pointer(o.Ptr.pIcon))
 }
 
@@ -1066,7 +1039,7 @@ func (o *Desklet) HasIcons() bool {
 	return o.Ptr.icons != nil
 }
 
-func (o *Desklet) Icons() []*Icon {
+func (o *Desklet) Icons() []Icon {
 	clist := glib.WrapList(uintptr(unsafe.Pointer(o.Ptr.icons)))
 	return goListIcons(clist)
 }
@@ -1109,549 +1082,6 @@ func (o *Desklet) SetRendererByNameData(name string, unk1, unk2 bool) {
 
 	data := [2]C.gpointer{CIntPointer(int(cbool(unk1))), CIntPointer(int(cbool(unk2)))}
 	C.cairo_dock_set_desklet_renderer_by_name(o.Ptr, cstr, C.CairoDeskletRendererConfigPtr(unsafe.Pointer(&data)))
-}
-
-//
-//--------------------------------------------------------------------[ ICON ]--
-
-// Icon defines a gldi icon.
-//
-type Icon struct {
-	Ptr *C.Icon
-
-	dataRendererText DataRendererText // optional data renderer (when set, this will replace the C data rendering)
-}
-
-// NewIconFromNative wraps a gldi icon from C pointer.
-//
-func NewIconFromNative(p unsafe.Pointer) *Icon {
-	if p == nil {
-		return nil
-	}
-	return &Icon{
-		Ptr:              (*C.Icon)(p),
-		dataRendererText: nil,
-	}
-}
-
-func CreateDummyLauncher(name, iconPath, command, quickinfo string, order float64) *Icon {
-	var qi *C.gchar
-	if quickinfo != "" {
-		qi = gchar(quickinfo)
-	}
-
-	c := C.cairo_dock_create_dummy_launcher(gchar(name), gchar(iconPath), gchar(command), qi, C.double(order))
-	return NewIconFromNative(unsafe.Pointer(c))
-}
-
-func IconsGetAnyWithoutDialog() *Icon {
-	return NewIconFromNative(unsafe.Pointer(C._icons_get_any_without_dialog()))
-}
-
-// ToNative returns the pointer to the native object.
-//
-func (o *Icon) ToNative() unsafe.Pointer {
-	return unsafe.Pointer(o.Ptr)
-}
-
-// DefaultNameIcon returns improved name and image for the icon if possible.
-//
-func (icon *Icon) DefaultNameIcon() (name, img string) {
-	switch {
-	case icon.IsApplet():
-		vc := icon.ModuleInstance().Module().VisitCard()
-		return vc.GetTitle(), vc.GetIconFilePath()
-
-	case icon.IsSeparator():
-		return "--------", ""
-
-	case icon.IsLauncher(), icon.IsStackIcon(), icon.IsAppli(), icon.IsClassIcon():
-		name := icon.GetClass().Name()
-		if name != "" {
-			return name, icon.GetFileName() // icon.GetClassInfo(ClassIcon)
-		}
-		return ternary.String(icon.GetInitialName() != "", icon.GetInitialName(), icon.GetName()), icon.GetFileName()
-
-	}
-	return icon.GetName(), icon.GetFileName()
-}
-
-func (icon *Icon) GetClass() desktopclass.Info {
-	return desktopclass.Info(C.GoString((*C.char)(icon.Ptr.cClass)))
-}
-
-func (icon *Icon) GetName() string {
-	return C.GoString((*C.char)(icon.Ptr.cName))
-}
-
-func (icon *Icon) GetInitialName() string {
-	return C.GoString((*C.char)(icon.Ptr.cInitialName))
-}
-
-func (icon *Icon) GetFileName() string {
-	return C.GoString((*C.char)(icon.Ptr.cFileName))
-}
-
-func (icon *Icon) GetDesktopFileName() string {
-	return C.GoString((*C.char)(icon.Ptr.cDesktopFileName))
-}
-
-func (icon *Icon) GetParentDockName() string {
-	return C.GoString((*C.char)(icon.Ptr.cParentDockName))
-}
-
-func (icon *Icon) GetCommand() string {
-	return C.GoString((*C.char)(icon.Ptr.cCommand))
-}
-
-func (icon *Icon) GetContainer() *Container {
-	if icon.Ptr == nil || icon.Ptr.pContainer == nil {
-		return nil
-	}
-	return NewContainerFromNative(unsafe.Pointer(icon.Ptr.pContainer))
-}
-
-// ConfigPath gives the full path to the icon config file.
-//
-func (icon *Icon) ConfigPath() string {
-	switch {
-	case icon.IsApplet():
-		return icon.ModuleInstance().GetConfFilePath()
-
-	case icon.IsStackIcon(), icon.IsLauncher() || icon.IsSeparator():
-		dir := C.GoString((*C.char)(C.g_cCurrentLaunchersPath))
-		// dir := globals.CurrentLaunchersPath()
-		return filepath.Join(dir, icon.GetDesktopFileName())
-	}
-	return ""
-}
-
-func (icon *Icon) GetIgnoreQuickList() bool {
-	return gobool(icon.Ptr.bIgnoreQuicklist)
-}
-
-func (o *Icon) X() float64 {
-	return float64(o.Ptr.fX)
-}
-
-func (o *Icon) Y() float64 {
-	return float64(o.Ptr.fY)
-}
-
-func (o *Icon) DrawX() float64 {
-	return float64(o.Ptr.fDrawX)
-}
-
-func (o *Icon) DrawY() float64 {
-	return float64(o.Ptr.fDrawY)
-}
-
-func (o *Icon) Width() float64 {
-	return float64(o.Ptr.fWidth)
-}
-
-func (o *Icon) Height() float64 {
-	return float64(o.Ptr.fHeight)
-}
-
-func (o *Icon) RequestedWidth() int {
-	return int(o.Ptr.iRequestedWidth)
-}
-
-func (o *Icon) RequestedHeight() int {
-	return int(o.Ptr.iRequestedHeight)
-}
-
-func (o *Icon) RequestedDisplayWidth() int {
-	return int(o.Ptr.iRequestedDisplayWidth)
-}
-
-func (o *Icon) RequestedDisplayHeight() int {
-	return int(o.Ptr.iRequestedDisplayHeight)
-}
-
-func (o *Icon) IsPointed() bool {
-	return gobool(o.Ptr.bPointed)
-}
-
-func (o *Icon) SetPointed(val bool) {
-	o.Ptr.bPointed = cbool(val)
-}
-
-func (o *Icon) SetWidth(val float64) {
-	o.Ptr.fWidth = C.gdouble(val)
-}
-
-func (o *Icon) SetHeight(val float64) {
-	o.Ptr.fHeight = C.gdouble(val)
-}
-
-func (o *Icon) SetScale(val float64) {
-	o.Ptr.fScale = C.gdouble(val)
-}
-
-func (o *Icon) InsertRemoveFactor() float64 {
-	return float64(o.Ptr.fInsertRemoveFactor)
-}
-
-func (o *Icon) Scale() float64 {
-	return float64(o.Ptr.fScale)
-}
-
-func (o *Icon) XAtRest() float64 {
-	return float64(o.Ptr.fXAtRest)
-}
-
-func (o *Icon) SetX(f float64) {
-	o.Ptr.fX = C.gdouble(f)
-}
-
-func (o *Icon) SetY(f float64) {
-	o.Ptr.fY = C.gdouble(f)
-}
-
-func (o *Icon) SetDrawX(f float64) {
-	o.Ptr.fDrawX = C.gdouble(f)
-}
-
-func (o *Icon) SetDrawY(f float64) {
-	o.Ptr.fDrawY = C.gdouble(f)
-}
-
-func (o *Icon) SetXAtRest(f float64) {
-	o.Ptr.fXAtRest = C.gdouble(f)
-}
-
-func (o *Icon) SetAllocatedSize(w, h int) {
-	o.Ptr.iAllocatedWidth = C.gint(w)
-	o.Ptr.iAllocatedHeight = C.gint(h)
-}
-
-func (o *Icon) SetWidthFactor(f float64) {
-	o.Ptr.fWidthFactor = C.gdouble(f)
-}
-
-func (o *Icon) SetHeightFactor(f float64) {
-	o.Ptr.fHeightFactor = C.gdouble(f)
-}
-
-func (o *Icon) SetOrientation(f float64) {
-	o.Ptr.fOrientation = C.gdouble(f)
-}
-
-func (o *Icon) SetAlpha(f float64) {
-	o.Ptr.fAlpha = C.gdouble(f)
-}
-
-func (o *Icon) Order() float64 {
-	return float64(o.Ptr.fOrder)
-}
-
-func (o *Icon) IconExtent() (int, int) {
-	var width, height C.int
-	C.cairo_dock_get_icon_extent(o.Ptr, &width, &height)
-	return int(width), int(height)
-}
-
-// func (icon *Icon) GetIconType() int {
-// 	return int(C.cairo_dock_get_icon_type(icon.Ptr))
-// }
-
-func (icon *Icon) IsApplet() bool {
-	return icon.Ptr != nil && icon.Ptr.pModuleInstance != nil
-}
-
-// IsAppli returns whether the icon manages an application. CAIRO_DOCK_IS_APPLI
-//
-func (icon *Icon) IsAppli() bool {
-	return icon.Ptr != nil && icon.Ptr.pAppli != nil
-}
-
-// IsClassIcon returns whether the icon .
-// GLDI_OBJECT_IS_CLASS_ICON / CAIRO_DOCK_ICON_TYPE_IS_CLASS_CONTAINER
-//
-func (o *Icon) IsClassIcon() bool {
-	return ObjectIsManagerChild(o, &C.myClassIconObjectMgr)
-}
-
-//
-func (o *Icon) IsDetachableApplet() bool {
-	return o.IsApplet() &&
-		o.ModuleInstance().Module().VisitCard().GetContainerType()&C.CAIRO_DOCK_MODULE_CAN_DESKLET > 0
-}
-
-// IsMultiAppli returns whether the icon manages multiple applications. CAIRO_DOCK_IS_MULTI_APPLI
-//
-func (icon *Icon) IsMultiAppli() bool {
-	return icon.Ptr.pSubDock != nil &&
-		(icon.IsLauncher() ||
-			icon.IsClassIcon() ||
-			(icon.IsApplet() && icon.GetClass() != ""))
-}
-
-// IsTaskbar returns whether the icon belongs to the taskbar or not.
-//
-func (icon *Icon) IsTaskbar() bool {
-	return icon.IsAppli() && !icon.IsLauncher() && !icon.IsApplet()
-}
-
-func (icon *Icon) IsSeparator() bool {
-	return gobool(C.IconIsSeparator(icon.Ptr))
-}
-func (icon *Icon) IsSeparatorAuto() bool {
-	return gobool(C.IconIsSeparatorAuto(icon.Ptr))
-}
-
-func (icon *Icon) IsLauncher() bool {
-	return gobool(C.IconIsLauncher(icon.Ptr))
-}
-
-func (icon *Icon) IsStackIcon() bool { // CAIRO_DOCK_ICON_TYPE_IS_CONTAINER
-	return gobool(C.IconIsStackIcon(icon.Ptr))
-}
-
-// cairo-dock-core/src/gldit/cairo-dock-icon-factory.h
-// #define CAIRO_DOCK_IS_AUTOMATIC_SEPARATOR(icon) (CAIRO_DOCK_ICON_TYPE_IS_SEPARATOR (icon) && (icon)->cDesktopFileName == NULL)
-// #define CAIRO_DOCK_IS_USER_SEPARATOR(icon) (CAIRO_DOCK_ICON_TYPE_IS_SEPARATOR (icon) && (icon)->cDesktopFileName != NULL)
-
-func (icon *Icon) RemoveFromDock() {
-	C.cairo_dock_trigger_icon_removal_from_dock(icon.Ptr)
-}
-
-func (icon *Icon) WriteContainerNameInConfFile(newdock string) {
-	cstr := (*C.gchar)(C.CString(newdock))
-	defer C.free(unsafe.Pointer((*C.char)(cstr)))
-	C.gldi_theme_icon_write_container_name_in_conf_file(icon.Ptr, cstr)
-}
-
-func (icon *Icon) ModuleInstance() *ModuleInstance {
-	if !icon.IsApplet() {
-		return nil
-	}
-	return NewModuleInstanceFromNative(unsafe.Pointer(icon.Ptr.pModuleInstance))
-}
-
-func (icon *Icon) GetSubDock() *CairoDock {
-	return NewDockFromNative(unsafe.Pointer(icon.Ptr.pSubDock))
-}
-
-func (o *Icon) RemoveSubdockEmpty() {
-	if o.Ptr.pSubDock != nil && o.Ptr.pSubDock.icons == nil {
-		o.Ptr.pSubDock = nil
-	}
-}
-
-func (o *Icon) RemoveDialogs() {
-	C.gldi_dialogs_remove_on_icon(o.Ptr)
-}
-
-func (o *Icon) IsDemandingAttention() bool {
-	return gobool(o.Ptr.bIsDemandingAttention)
-}
-
-func (o *Icon) RequestAttention(animation string, nbRounds int) {
-	cstr := (*C.gchar)(C.CString(animation))
-	defer C.free(unsafe.Pointer((*C.char)(cstr)))
-	C.gldi_icon_request_attention(o.Ptr, cstr, C.int(nbRounds))
-}
-
-func (o *Icon) StopAttention() {
-	C.gldi_icon_stop_attention(o.Ptr)
-}
-
-func (icon *Icon) ClassIsInhibited() bool {
-	return gobool(C.cairo_dock_class_is_inhibited(icon.Ptr.cClass))
-}
-
-func (o *Icon) InhibiteClass(class string) {
-	cstr := (*C.gchar)(C.CString(class))
-	defer C.free(unsafe.Pointer((*C.char)(cstr)))
-	C.cairo_dock_inhibite_class(cstr, o.Ptr)
-}
-
-func (o *Icon) DeinhibiteClass() {
-	C.cairo_dock_deinhibite_class(o.Ptr.cClass, o.Ptr)
-}
-
-func (o *Icon) Window() *WindowActor {
-	return NewWindowActorFromNative(unsafe.Pointer(o.Ptr.pAppli))
-}
-
-// GetInhibitor returns the icon that inhibits the current one (has registered the class).
-//
-func (icon *Icon) GetInhibitor(b bool) *Icon {
-	c := C.cairo_dock_get_inhibitor(icon.Ptr, cbool(b))
-	return NewIconFromNative(unsafe.Pointer(c))
-	// 			pNewActiveIcon = cairo_dock_get_inhibitor (pNewActiveIcon, FALSE);
-}
-
-func (o *Icon) RemoveIconsFromSubdock(dest *CairoDock) {
-	C.cairo_dock_remove_icons_from_dock(o.Ptr.pSubDock, dest.Ptr)
-}
-
-// TODO: may have to move.
-func (icon *Icon) SubDockIcons() []*Icon {
-	if icon.Ptr == nil || icon.Ptr.pSubDock == nil {
-		return nil
-	}
-	clist := glib.WrapList(uintptr(unsafe.Pointer(icon.Ptr.pSubDock.icons)))
-	return goListIcons(clist)
-}
-
-// SetLabel sets the label of an icon.
-// If it has a sub-dock, it is renamed (the name is possibly altered to stay unique).
-// The label buffer is updated too.
-//
-func (icon *Icon) SetLabel(str string) {
-	var cstr *C.gchar
-	if str != "" {
-		cstr = (*C.gchar)(C.CString(str))
-		defer C.free(unsafe.Pointer((*C.char)(cstr)))
-	}
-	C.gldi_icon_set_name(icon.Ptr, cstr)
-}
-
-// SetQuickInfo sets the quick-info of an icon.
-// This is a small text (a few characters) that is superimposed on the icon.
-//
-func (icon *Icon) SetQuickInfo(str string) {
-	var cstr *C.gchar
-	if str != "" {
-		cstr = (*C.gchar)(C.CString(str))
-		defer C.free(unsafe.Pointer((*C.char)(cstr)))
-	}
-	C.gldi_icon_set_quick_info(icon.Ptr, cstr)
-}
-
-func (icon *Icon) SetIcon(str string) error {
-	if icon.Ptr.image.pSurface == nil {
-		return errors.New("icon has no image.pSurface")
-	}
-
-	var cstr *C.gchar
-	if str != "" {
-		cstr = (*C.gchar)(C.CString(str))
-		defer C.free(unsafe.Pointer((*C.char)(cstr)))
-	}
-	ctx := C.cairo_create(icon.Ptr.image.pSurface)
-	C.cairo_dock_set_image_on_icon(ctx, cstr, icon.Ptr, icon.GetContainer().Ptr) // returns gboolean
-	C.cairo_destroy(ctx)
-
-	return nil
-}
-
-func (icon *Icon) AddNewDataRenderer(attr DataRendererAttributer) {
-	cAttr, free := attr.ToAttribute()
-	C.cairo_dock_add_new_data_renderer_on_icon(icon.Ptr, icon.GetContainer().Ptr, cAttr)
-	free()
-}
-
-func (icon *Icon) AddDataRendererWithText(attr DataRendererAttributer, dataRendererText DataRendererText) {
-	cAttr, free := attr.ToAttribute()
-	C.cairo_dock_add_new_data_renderer_on_icon(icon.Ptr, icon.GetContainer().Ptr, cAttr)
-	icon.dataRendererText = dataRendererText
-	free()
-}
-
-func (icon *Icon) Render(values ...float64) error {
-	if icon.Ptr.image.pSurface == nil {
-		return errors.New("Render: icon has no image.pSurface")
-	}
-	if icon.GetContainer() == nil {
-		return errors.New("Render: icon has no container")
-	}
-
-	list := make([]C.double, len(values))
-	for i, val := range values {
-		list[i] = C.double(val)
-	}
-
-	C.render_new_data_on_icon(icon.Ptr, &list[0]) // points to the first element of the slice array (good enough for C).
-	return nil
-}
-
-type DataRendererText func(...float64) []string
-
-func (icon *Icon) DataRendererTextPercent(values ...float64) []string {
-	list := make([]string, len(values))
-	for i, val := range values {
-		list[i] = fmt.Sprintf("%.1f%%%%", val*100)
-
-		//snprintf (cFormatBuffer, iBufferLength, fValue < .0995 ? "%.1f%%" : (fValue < 1 ? " %.0f%%" : "%.0f%%"), fValue * 100.);
-
-	}
-	return list
-}
-
-func (icon *Icon) RemoveDataRenderer() {
-	C.cairo_dock_remove_data_renderer_on_icon(icon.Ptr)
-	icon.dataRendererText = nil
-}
-
-// AddOverlayFromImage adds an overlay on the icon.
-//
-func (icon *Icon) AddOverlayFromImage(iconPath string, position cdtype.EmblemPosition) {
-	var cstr *C.gchar
-	if iconPath != "" {
-		cstr = (*C.gchar)(C.CString(iconPath))
-		defer C.free(unsafe.Pointer((*C.char)(cstr)))
-	}
-	// last arg was 'myApplet' to identify the overlays set by the Dbus plug-in (since the plug-in can't be deactivated, 'myApplet' is constant).
-	C.cairo_dock_add_overlay_from_image(icon.Ptr, cstr, C.CairoOverlayPosition(position), C.gpointer(icon.Ptr))
-}
-
-// RemoveOverlayAtPosition removes an overlay on the icon.
-//
-func (icon *Icon) RemoveOverlayAtPosition(position cdtype.EmblemPosition) {
-	C.cairo_dock_remove_overlay_at_position(icon.Ptr, C.CairoOverlayPosition(position), C.gpointer(icon.Ptr))
-}
-
-func (icon *Icon) RequestAnimation(animation string, rounds int) {
-	cstr := (*C.gchar)(C.CString(animation))
-	defer C.free(unsafe.Pointer((*C.char)(cstr)))
-	C.gldi_icon_request_animation(icon.Ptr, cstr, C.int(rounds))
-}
-
-func (icon *Icon) Redraw() {
-	C.cairo_dock_redraw_icon(icon.Ptr)
-}
-
-// MoveAfterIcon moves the icon position after the given icon.
-//
-func (icon *Icon) MoveAfterIcon(container *CairoDock, target *Icon) {
-	C.cairo_dock_move_icon_after_icon(container.Ptr, icon.Ptr, target.Ptr)
-}
-
-// CallbackActionWindow returns a func to use as gtk callback.
-// On event, it will test if the icon still has a valid window and launch the
-// provided action on this window.
-//
-func (icon *Icon) CallbackActionWindow(call func(*WindowActor)) func() {
-	return func() {
-		if icon.IsAppli() {
-			call(icon.Window())
-		}
-	}
-}
-
-// CallbackActionSubWindows is the same as CallbackActionWindow but launch the
-// action on all subdock windows.
-//
-func (icon *Icon) CallbackActionSubWindows(call func(*WindowActor)) func() {
-	return func() {
-		for _, ic := range icon.SubDockIcons() {
-			if ic.IsAppli() {
-				call(ic.Window())
-			}
-		}
-	}
-}
-
-func (icon *Icon) CallbackActionWindowToggle(call func(*WindowActor, bool), getvalue func(*WindowActor) bool) func() {
-	return icon.CallbackActionWindow(func(win *WindowActor) {
-		v := getvalue(win)
-		call(win, !v)
-	})
 }
 
 //
@@ -1879,7 +1309,7 @@ func (mi *ModuleInstance) Desklet() *Desklet {
 
 // Icon returns the icon holding the instance.
 //
-func (mi *ModuleInstance) Icon() *Icon {
+func (mi *ModuleInstance) Icon() Icon {
 	return NewIconFromNative(unsafe.Pointer(mi.Ptr.pIcon))
 }
 
@@ -1891,7 +1321,7 @@ func (mi *ModuleInstance) PopupAboutApplet() {
 	C.gldi_module_instance_popup_description(mi.Ptr)
 }
 
-func (mi *ModuleInstance) PrepareNewIcons(fields []string) (map[string]*Icon, *C.GList) {
+func (mi *ModuleInstance) PrepareNewIcons(fields []string) (map[string]Icon, *C.GList) {
 	var list *C.GList
 	switch {
 	case mi.Ptr.pDock == nil: // In desklet mode.
@@ -1911,12 +1341,12 @@ func (mi *ModuleInstance) PrepareNewIcons(fields []string) (map[string]*Icon, *C
 	// Icon *pLastIcon = cairo_dock_get_last_icon (pCurrentIconsList);
 	// int n = (pLastIcon ? pLastIcon->fOrder + 1 : 0);
 
-	icons := make(map[string]*Icon)
+	icons := make(map[string]Icon)
 	var clist *C.GList
 	for i := 0; i < len(fields)/3; i++ {
 		id := fields[3*i+2]
 		icon := CreateDummyLauncher(fields[3*i], fields[3*i+1], fields[3*i+2], "", float64(i+n))
-		clist = C.g_list_append(clist, C.gpointer(icon.Ptr))
+		clist = C.g_list_append(clist, C.gpointer(icon.ToNative()))
 		icons[id] = icon
 	}
 
@@ -1939,7 +1369,7 @@ func (mi *ModuleInstance) RemoveAllIcons() {
 
 // NewShortkey is a helper to create a shortkey related to a module instance.
 //
-func (mi *ModuleInstance) NewShortkey(group, key, desc, shortkey string, call func(string)) *Shortkey {
+func (mi *ModuleInstance) NewShortkey(group, key, desc, shortkey string, call func(string)) cdglobal.Shortkeyer {
 	vc := mi.Module().VisitCard()
 
 	cGroup := (*C.gchar)(C.CString(group))
@@ -1984,7 +1414,7 @@ func (mi *ModuleInstance) NewShortkey(group, key, desc, shortkey string, call fu
 		CIntPointer(ID),
 	)
 
-	return NewShortkeyFromNative(unsafe.Pointer(c))
+	return shortkeys.NewFromNative(unsafe.Pointer(c))
 }
 
 //export onShortkey
@@ -2142,180 +1572,6 @@ func (vc *VisitCard) IsMultiInstance() bool {
 //
 func (vc *VisitCard) GetContainerType() int {
 	return int(vc.Ptr.iContainerType)
-}
-
-//
-//---------------------------------------------------------------[ WINDOWACTOR ]--
-
-// WindowActor defines a dock window actor.
-//
-type WindowActor struct {
-	Ptr *C.GldiWindowActor
-}
-
-// NewWindowActorFromNative wraps a dock window actor from C pointer.
-//
-func NewWindowActorFromNative(p unsafe.Pointer) *WindowActor {
-	if p == nil {
-		return nil
-	}
-	return &WindowActor{(*C.GldiWindowActor)(p)}
-}
-
-// ToNative returns the pointer to the native object.
-//
-func (o *WindowActor) ToNative() unsafe.Pointer {
-	return unsafe.Pointer(o.Ptr)
-}
-
-// CanMinMaxClose returns whether the window can do those actions.
-//
-func (o *WindowActor) CanMinMaxClose() (bool, bool, bool) {
-	var bCanMinimize, bCanMaximize, bCanClose C.gboolean
-	C.gldi_window_can_minimize_maximize_close(o.Ptr, &bCanMinimize, &bCanMaximize, &bCanClose)
-	return gobool(bCanMinimize), gobool(bCanMaximize), gobool(bCanClose)
-}
-
-// IsActive returns whether the window is active.
-//
-func (o *WindowActor) IsActive() bool {
-	return o.Ptr == C.gldi_windows_get_active()
-}
-
-// IsAbove returns whether the window is above.
-//
-func (o *WindowActor) IsAbove() bool { // could split OrBelow but seem unused.
-	var isAbove, isBelow C.gboolean
-	C.gldi_window_is_above_or_below(o.Ptr, &isAbove, &isBelow)
-	return gobool(isAbove)
-}
-
-// IsFullScreen returns whether the window is full screen.
-//
-func (o *WindowActor) IsFullScreen() bool {
-	return gobool(o.Ptr.bIsFullScreen)
-}
-
-// IsHidden returns whether the window is hidden.
-//
-func (o *WindowActor) IsHidden() bool {
-	return gobool(o.Ptr.bIsHidden)
-}
-
-// IsMaximized returns whether the window is maximized.
-//
-func (o *WindowActor) IsMaximized() bool {
-	return gobool(o.Ptr.bIsMaximized)
-}
-
-// IsOnCurrentDesktop returns whether the window is on current desktop.
-//
-func (o *WindowActor) IsOnCurrentDesktop() bool {
-	return gobool(C.gldi_window_is_on_current_desktop(o.Ptr))
-}
-
-// IsOnDesktop returns whether the window is the given desktop and viewport number.
-//
-func (o *WindowActor) IsOnDesktop(desktopNumber, viewPortX, viewPortY int) bool {
-	return gobool(C.gldi_window_is_on_desktop(o.Ptr, C.int(desktopNumber), C.int(viewPortX), C.int(viewPortY)))
-}
-
-// IsSticky returns whether the window is sticky.
-//
-func (o *WindowActor) IsSticky() bool {
-	return gobool(C.gldi_window_is_sticky(o.Ptr))
-}
-
-// Close closes window.
-//
-func (o *WindowActor) Close() {
-	C.gldi_window_close(o.Ptr)
-}
-
-// Kill kills the window.
-//
-func (o *WindowActor) Kill() {
-	C.gldi_window_kill(o.Ptr)
-}
-
-// Lower lowers the window.
-//
-func (o *WindowActor) Lower() {
-	C.gldi_window_lower(o.Ptr)
-}
-
-// Minimize minimizes the window.
-//
-func (o *WindowActor) Minimize() {
-	C.gldi_window_minimize(o.Ptr)
-}
-
-// Maximize maximizes the window.
-//
-func (o *WindowActor) Maximize(full bool) {
-	C.gldi_window_maximize(o.Ptr, cbool(full))
-}
-
-// MoveToCurrentDesktop moves the window to the current desktop.
-//
-func (o *WindowActor) MoveToCurrentDesktop() {
-	C.gldi_window_move_to_current_desktop(o.Ptr)
-}
-
-// MoveToDesktop move the window to the given desktop and viewport number.
-//
-func (o *WindowActor) MoveToDesktop(desktopNumber, viewPortX, viewPortY int) {
-	C.gldi_window_move_to_desktop(o.Ptr, C.int(desktopNumber), C.int(viewPortX), C.int(viewPortY))
-}
-
-// SetAbove sets the window above.
-//
-func (o *WindowActor) SetAbove(above bool) {
-	C.gldi_window_set_above(o.Ptr, cbool(above))
-}
-
-// SetFullScreen sets the window full screen state.
-//
-func (o *WindowActor) SetFullScreen(full bool) {
-	C.gldi_window_set_fullscreen(o.Ptr, cbool(full))
-}
-
-// SetSticky sets the window sticky state.
-//
-func (o *WindowActor) SetSticky(sticky bool) {
-	C.gldi_window_set_sticky(o.Ptr, cbool(sticky))
-}
-
-// Show shows the window.
-//
-func (o *WindowActor) Show() {
-	C.gldi_window_show(o.Ptr)
-}
-
-// SetVisibility sets the window visibility.
-//
-func (o *WindowActor) SetVisibility(show bool) {
-	if show {
-		o.Show()
-	}
-	o.Minimize()
-}
-
-// ToggleVisibility toggles the window visibility.
-//
-func (o *WindowActor) ToggleVisibility() {
-	if o.IsActive() {
-		o.Minimize()
-	} else {
-		o.Show()
-	}
-}
-
-// GetAppliIcon returns the icon managing the window.
-//
-func (o *WindowActor) GetAppliIcon() *Icon {
-	c := C.cairo_dock_get_appli_icon(o.Ptr)
-	return NewIconFromNative(unsafe.Pointer(c))
 }
 
 //
@@ -2484,157 +1740,32 @@ func ManagerReload(name string, b bool, keyf *keyfile.KeyFile) {
 }
 
 //
-//---------------------------------------------------------[ DESKTOPGEOMETRY ]--
+//------------------------------------------------------------------[ CRYPTO ]--
 
-// DesktopGeometry defines the dock desktop geometry.
+// Crypto gives access to the dock string crypto.
 //
-type DesktopGeometry struct {
-	Ptr C.GldiDesktopGeometry
+var Crypto cdglobal.Crypto = crypto{}
+
+type crypto struct{}
+
+func (crypto) DecryptString(str string) string {
+	cstr := (*C.gchar)(C.CString(str))
+	defer C.free(unsafe.Pointer((*C.char)(cstr)))
+	var out *C.gchar
+	C.cairo_dock_decrypt_string(cstr, &out)
+	defer C.free(unsafe.Pointer((*C.char)(out))) // test enable this.
+	return C.GoString((*C.char)(out))
+	// return DecryptString(str)
 }
 
-// GetDesktopGeometry gets desktop geometry settings.
-//
-func GetDesktopGeometry() *DesktopGeometry {
-	return &DesktopGeometry{C.g_desktopGeometry}
-}
-
-// NbDesktops returns the number of desktops.
-//
-func (dg *DesktopGeometry) NbDesktops() int {
-	return int(dg.Ptr.iNbDesktops)
-}
-
-// NbScreens returns the number of desktop screens.
-//
-func (dg *DesktopGeometry) NbScreens() int {
-	return int(dg.Ptr.iNbScreens)
-}
-
-// NbViewportX returns the number of horizontal viewports.
-//
-func (dg *DesktopGeometry) NbViewportX() int {
-	return int(dg.Ptr.iNbViewportX)
-}
-
-// NbViewportY returns the number of vertical viewports.
-//
-func (dg *DesktopGeometry) NbViewportY() int {
-	return int(dg.Ptr.iNbViewportY)
-}
-
-// WidthAll returns the desktop total width.
-//
-func (dg *DesktopGeometry) WidthAll() int {
-	return int(dg.Ptr.Xscreen.width)
-}
-
-// WidthScreen returns the width of a desktop screen.
-//
-func (dg *DesktopGeometry) WidthScreen(screenNb int) int {
-	return int(C.screen_width_i(C.int(screenNb)))
-}
-
-// HeightAll returns the desktop total height.
-//
-func (dg *DesktopGeometry) HeightAll() int {
-	return int(dg.Ptr.Xscreen.height)
-}
-
-// HeightScreen returns the height of a desktop screen.
-//
-func (dg *DesktopGeometry) HeightScreen(screenNb int) int {
-	return int(C.screen_height_i(C.int(screenNb)))
-}
-
-// int iCurrentDesktop, iCurrentViewportX, iCurrentViewportY;
-
-// ScreenPosition returns the desktop screen position.
-//
-func (dg *DesktopGeometry) ScreenPosition(i int) (int, int) {
-	if 0 > i || i >= dg.NbScreens() {
-		return 0, 0
-	}
-	x := int(C.screen_position_x(C.int(i)))
-	y := int(C.screen_position_y(C.int(i)))
-	return x, y
-}
-
-//
-//----------------------------------------------------------------[ SHORTKEY ]--
-
-// Shortkey defines a dock shortkey.
-//
-type Shortkey struct {
-	Ptr *C.GldiShortkey
-}
-
-// NewShortkeyFromNative wraps a dock shortkey from C pointer.
-//
-func NewShortkeyFromNative(p unsafe.Pointer) *Shortkey {
-	return &Shortkey{(*C.GldiShortkey)(p)}
-}
-
-// GetDemander returns the shortkey Demander.
-//
-func (dr *Shortkey) GetDemander() string {
-	return C.GoString((*C.char)(dr.Ptr.cDemander))
-}
-
-// GetDescription returns the shortkey description.
-//
-func (dr *Shortkey) GetDescription() string {
-	return C.GoString((*C.char)(dr.Ptr.cDescription))
-}
-
-// GetKeyString returns the shortkey key reference as string.
-//
-func (dr *Shortkey) GetKeyString() string {
-	return C.GoString((*C.char)(dr.Ptr.keystring))
-}
-
-// GetIconFilePath returns the shortkey icon file path.
-//
-func (dr *Shortkey) GetIconFilePath() string {
-	return C.GoString((*C.char)(dr.Ptr.cIconFilePath))
-}
-
-// GetConfFilePath returns the shortkey conf file path.
-//
-func (dr *Shortkey) GetConfFilePath() string {
-	return C.GoString((*C.char)(dr.Ptr.cConfFilePath))
-}
-
-// GetGroupName returns the shortkey group name.
-//
-func (dr *Shortkey) GetGroupName() string {
-	return C.GoString((*C.char)(dr.Ptr.cGroupName))
-}
-
-// GetKeyName returns the config key name.
-//
-func (dr *Shortkey) GetKeyName() string {
-	return C.GoString((*C.char)(dr.Ptr.cKeyName))
-}
-
-// GetSuccess returns the shortkey success.
-//
-func (dr *Shortkey) GetSuccess() bool {
-	return gobool(dr.Ptr.bSuccess)
-}
-
-// Rebind rebinds the shortkey.
-//
-func (dr *Shortkey) Rebind(keystring, description string) bool {
-	ckey := (*C.gchar)(C.CString(keystring))
-	defer C.free(unsafe.Pointer((*C.char)(ckey)))
-	var cdesc *C.gchar
-	if description != "" {
-		cdesc := (*C.gchar)(C.CString(description))
-		defer C.free(unsafe.Pointer((*C.char)(cdesc)))
-	}
-
-	c := C.gldi_shortkey_rebind(dr.Ptr, ckey, cdesc)
-	return gobool(c)
+func (crypto) EncryptString(str string) string {
+	cstr := (*C.gchar)(C.CString(str))
+	defer C.free(unsafe.Pointer((*C.char)(cstr)))
+	var out *C.gchar
+	C.cairo_dock_encrypt_string(cstr, &out)
+	defer C.free(unsafe.Pointer((*C.char)(out))) // test enable this.
+	return C.GoString((*C.char)(out))
+	// return EncryptString(str)
 }
 
 //
@@ -2679,7 +1810,7 @@ func goListDocks(clist *glib.List) (list []*CairoDock) {
 	return
 }
 
-func goListIcons(clist *glib.List) (list []*Icon) {
+func goListIcons(clist *glib.List) (list []Icon) {
 	clist.Foreach(func(data interface{}) {
 		list = append(list, NewIconFromNative(data.(unsafe.Pointer)))
 	})

@@ -2,16 +2,17 @@
 package confdata
 
 import (
-	"github.com/sqp/godock/libs/cdglobal"
+	"github.com/sqp/godock/libs/cdglobal" // Dock types.
 	"github.com/sqp/godock/libs/gldi"
-	"github.com/sqp/godock/libs/gldi/desktopclass"
-	"github.com/sqp/godock/libs/gldi/docklist"
-	"github.com/sqp/godock/libs/gldi/globals"
-	"github.com/sqp/godock/libs/packages"
-	"github.com/sqp/godock/libs/ternary"
-	"github.com/sqp/godock/libs/text/tran"
-	"github.com/sqp/godock/widgets/cfbuild/datatype"
-	"github.com/sqp/godock/widgets/gtk/keyfile"
+	"github.com/sqp/godock/libs/gldi/desktopclass"   // XDG desktop class info.
+	"github.com/sqp/godock/libs/gldi/desktops"       // Desktop and screens info.
+	"github.com/sqp/godock/libs/gldi/docklist"       // Dock items lists.
+	"github.com/sqp/godock/libs/gldi/globals"        // Global variables.
+	"github.com/sqp/godock/libs/packages"            //
+	"github.com/sqp/godock/libs/ternary"             // Ternary operators.
+	"github.com/sqp/godock/libs/text/tran"           // Translate.
+	"github.com/sqp/godock/widgets/cfbuild/datatype" // Types for config file builder data source.
+	"github.com/sqp/godock/widgets/gtk/keyfile"      // Write config file.
 
 	"errors"
 	"path/filepath"
@@ -51,7 +52,7 @@ func (icon *IconConf) Reload() {
 	default: // else if (pIcon)
 
 		// prend tout en compte, y compris le redessin et declenche le rechargement de l'IHM.
-		gldi.ObjectReload(&icon.Icon)
+		gldi.ObjectReload(icon.Icon)
 
 	}
 }
@@ -62,11 +63,11 @@ func (icon *IconConf) MoveBeforePrevious() {
 	if icon.GetContainer().IsDesklet() {
 		return
 	}
-	prev := icon.GetContainer().ToCairoDock().GetPreviousIcon(&icon.Icon)
+	prev := icon.GetContainer().ToCairoDock().GetPreviousIcon(icon.Icon)
 	if prev == nil {
 		return
 	}
-	prev.MoveAfterIcon(icon.GetContainer().ToCairoDock(), &icon.Icon)
+	prev.MoveAfterIcon(icon.GetContainer().ToCairoDock(), icon.Icon)
 }
 
 // MoveAfterNext swaps the icon position with the next one.
@@ -75,7 +76,7 @@ func (icon *IconConf) MoveAfterNext() {
 	if icon.GetContainer().IsDesklet() {
 		return
 	}
-	next := icon.GetContainer().ToCairoDock().GetNextIcon(&icon.Icon)
+	next := icon.GetContainer().ToCairoDock().GetNextIcon(icon.Icon)
 	if next != nil {
 		icon.MoveAfterIcon(icon.GetContainer().ToCairoDock(), next)
 	}
@@ -385,7 +386,10 @@ func (dv *HandbookDescTranslate) GetDescription() string {
 
 // Data provides a config Source interface based on the dock gldi backend.
 //
-type Data struct{ datatype.SourceCommon }
+type Data struct {
+	datatype.SourceCommon
+	cdglobal.Crypto
+}
 
 //MainConfigFile returns the full path to the dock config file.
 //
@@ -492,12 +496,12 @@ func (Data) ListIcons() *datatype.ListIcon {
 					}
 
 				} else {
-					found = append(found, &IconConf{*icon})
+					found = append(found, &IconConf{icon})
 				}
 
 			} else { // Subdock.
 				parentName := icon.GetParentDockName()
-				list.Subdocks[parentName] = append(list.Subdocks[parentName], &IconConf{*icon})
+				list.Subdocks[parentName] = append(list.Subdocks[parentName], &IconConf{icon})
 			}
 		}
 
@@ -529,7 +533,7 @@ func (Data) ListIcons() *datatype.ListIcon {
 	for _, desklet := range docklist.Desklet() {
 		icon := desklet.GetIcon()
 		if icon != nil {
-			desklets = append(desklets, &IconConf{*icon})
+			desklets = append(desklets, &IconConf{icon})
 		}
 	}
 
@@ -579,32 +583,28 @@ func (Data) ListIcons() *datatype.ListIcon {
 
 // ListShortkeys returns the list of dock shortkeys.
 //
-func (Data) ListShortkeys() (list []datatype.Shortkeyer) {
-	for _, rend := range docklist.Shortkey() {
-		list = append(list, datatype.Shortkeyer(rend))
-	}
-	return list
+func (Data) ListShortkeys() (list []cdglobal.Shortkeyer) {
+	return docklist.Shortkey()
 }
 
 // ListScreens returns the list of screens.
 //
 func (Data) ListScreens() (list []datatype.Field) {
-	geo := gldi.GetDesktopGeometry()
-	nb := geo.NbScreens()
+	nb := desktops.NbScreens()
 	if nb <= 1 {
 		return []datatype.Field{{Key: "0", Name: "Use all screens"}}
 	}
 
 	var xmax, ymax int
 	for i := 0; i < nb; i++ {
-		x, y := geo.ScreenPosition(i)
+		x, y := desktops.ScreenPosition(i)
 		xmax = ternary.Max(x, xmax)
 		ymax = ternary.Max(y, ymax)
 	}
 
 	for i := 0; i < nb; i++ {
 		var xstr, ystr string
-		x, y := geo.ScreenPosition(i)
+		x, y := desktops.ScreenPosition(i)
 		if xmax > 0 { // at least 2 screens horizontally
 			switch {
 			case x == 0:
@@ -760,7 +760,7 @@ func (Data) ListDocks(parent, subdock string) []datatype.Field {
 func (Data) ListIconsMainDock() (list []datatype.Field) {
 	for _, icon := range globals.Maindock().Icons() {
 		if !icon.IsTaskbar() && !icon.IsSeparatorAuto() && icon.GetParentDockName() == datatype.KeyMainDock {
-			iconer := IconConf{*icon}
+			iconer := IconConf{icon}
 
 			name, img := iconer.DefaultNameIcon()
 			list = append(list, datatype.Field{

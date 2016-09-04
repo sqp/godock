@@ -37,6 +37,8 @@ Very common case of chained tests:
 package log
 
 import (
+	"github.com/google/shlex"
+
 	"github.com/sqp/godock/libs/cdtype"
 	"github.com/sqp/godock/libs/text/color"
 	"github.com/sqp/godock/libs/text/strhelp"
@@ -260,6 +262,19 @@ func (l *Log) ExecCmd(command string, args ...string) *exec.Cmd {
 	}
 
 	return cmd
+}
+
+// ExecShlex parse the command with shlex before returning an ExecCmd.
+//
+func (l *Log) ExecShlex(command string, args ...string) (*exec.Cmd, error) {
+	cmds, e := shlex.Split(command)
+	if l.Err(e, "parse command args", command) {
+		return nil, e
+	}
+	command = cmds[0]
+	args = append(cmds[1:], args...)
+	l.Debug("launch", command, args)
+	return l.ExecCmd(command, args...), nil
 }
 
 //

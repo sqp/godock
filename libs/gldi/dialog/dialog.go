@@ -83,13 +83,13 @@ func ShowGeneralMessage(str string, duration float64) {
 
 // ShowTemporaryWithIcon opens a simple dialog with a timeout.
 //
-func ShowTemporaryWithIcon(str string, icon *gldi.Icon, container *gldi.Container, duration float64, iconPath string) {
+func ShowTemporaryWithIcon(str string, icon gldi.Icon, container *gldi.Container, duration float64, iconPath string) {
 	cstr := (*C.gchar)(C.CString(str))
 	defer C.free(unsafe.Pointer((*C.char)(cstr)))
 	cpath := (*C.gchar)(C.CString(iconPath))
 	defer C.free(unsafe.Pointer((*C.char)(cpath)))
 
-	cicon := (*C.Icon)(unsafe.Pointer(icon.Ptr))
+	cicon := (*C.Icon)(unsafe.Pointer(icon.ToNative()))
 	ccontainer := (*C.GldiContainer)(unsafe.Pointer(container.Ptr))
 
 	C.gldi_dialog_show_temporary_with_icon(cstr, cicon, ccontainer, C.double(duration), cpath)
@@ -97,13 +97,13 @@ func ShowTemporaryWithIcon(str string, icon *gldi.Icon, container *gldi.Containe
 
 // ShowWithQuestion opens a dialog with a question to answer.
 //
-func ShowWithQuestion(str string, icon *gldi.Icon, container *gldi.Container, iconPath string, onAnswer func(int, *gtk.Widget)) {
+func ShowWithQuestion(str string, icon gldi.Icon, container *gldi.Container, iconPath string, onAnswer func(int, *gtk.Widget)) {
 	cstr := (*C.gchar)(C.CString(str))
 	defer C.free(unsafe.Pointer((*C.char)(cstr)))
 	cpath := (*C.gchar)(C.CString(iconPath))
 	defer C.free(unsafe.Pointer((*C.char)(cpath)))
 
-	cicon := (*C.Icon)(unsafe.Pointer(icon.Ptr))
+	cicon := (*C.Icon)(unsafe.Pointer(icon.ToNative()))
 	ccontainer := (*C.GldiContainer)(unsafe.Pointer(container.Ptr))
 
 	dialogCall = onAnswer
@@ -117,13 +117,13 @@ func ShowWithQuestion(str string, icon *gldi.Icon, container *gldi.Container, ic
 
 // NewDialog creates a custom dialog.
 //
-func NewDialog(icon *gldi.Icon, container *gldi.Container, dialog cdtype.DialogData) *Dialog {
+func NewDialog(icon gldi.Icon, container *gldi.Container, dialog cdtype.DialogData) *Dialog {
 	dialogCall = nil
 
 	// Common dialog attributes.
 	attr := new(C.CairoDialogAttr)
 	if icon != nil {
-		attr.pIcon = (*C.Icon)(unsafe.Pointer(icon.Ptr))
+		attr.pIcon = (*C.Icon)(unsafe.Pointer(icon.ToNative()))
 	}
 	attr.pContainer = (*C.GldiContainer)(unsafe.Pointer(container.Ptr))
 

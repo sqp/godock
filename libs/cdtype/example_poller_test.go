@@ -37,7 +37,7 @@ func NewPollerApplet(base cdtype.AppBase, events *cdtype.Events) cdtype.AppInsta
 	//
 	// This can be used for example to display an activity emblem on the icon.
 	//
-	imgPath := "/usr/share/cairo-dock/icons/icon-movment.png"
+	imgPath := "/usr/share/cairo-dock/icons/icon-bubble.png"
 	poller.SetPreCheck(func() { app.SetEmblem(imgPath, emblemAction) })
 	poller.SetPostCheck(func() { app.SetEmblem("none", emblemAction) })
 

@@ -107,6 +107,9 @@ func (s *Srv) Stop(key string) error {
 	if !ok {
 		return errors.New("stop webservice: key not found")
 	}
+	if !app.started {
+		return nil
+	}
 
 	app.started = false
 

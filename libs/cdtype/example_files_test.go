@@ -10,7 +10,7 @@ package cdtype_test
 // Files naming convention:
 //
 //   demo              must match the directory name, this is used as applet name.
-//   demo.conf         same as applet name with extention .conf.
+//   demo.conf         same as applet name with extension .conf.
 //   auto-load.conf    constant.
 //   applet.go         only used by convention, can be customized.
 
@@ -30,7 +30,7 @@ description = This is the description of the applet.\nIt can be on several lines
 # Category of the applet : 2 = files, 3 = internet, 4 = Desktop, 5 = accessory, 6 = system, 7 = fun
 category = 5
 
-# Version of the applet; change it everytime you change something in the config file. Don't forget to update the version both in this file and in the config file.
+# Version of the applet; change it every time you change something in the config file. Don't forget to update the version both in this file and in the config file.
 version = 0.0.1
 
 # Default icon to use if no icon has been defined by the user. If not specified, or if the file is not found, the "icon" file will be used.

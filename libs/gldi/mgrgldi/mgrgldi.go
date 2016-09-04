@@ -38,9 +38,10 @@ import (
 
 	"github.com/sqp/godock/libs/gldi"
 	"github.com/sqp/godock/libs/gldi/appgldi"
-	"github.com/sqp/godock/libs/gldi/backendevents"
 	"github.com/sqp/godock/libs/gldi/backendmenu"
 	"github.com/sqp/godock/libs/gldi/globals"
+	"github.com/sqp/godock/libs/gldi/notif"  // Dock notifs.
+	"github.com/sqp/godock/libs/gldi/window" // Desktop windows control.
 	"github.com/sqp/godock/libs/packages"
 	"github.com/sqp/godock/widgets/gtk/keyfile"
 
@@ -57,11 +58,16 @@ var apps *AppManager
 //
 func Register(log cdtype.Logger) *AppManager {
 	apps = NewAppManager(log)
-	backendevents.Register(apps)
+
+	notif.RegisterContainerLeftClick(apps.OnLeftClick)
+	notif.RegisterContainerMiddleClick(apps.OnMiddleClick)
+	notif.RegisterContainerMouseScroll(apps.OnMouseScroll)
+	notif.RegisterContainerDropData(apps.OnDropData)
+	notif.RegisterWindowChangeFocus(apps.OnChangeFocus)
+	notif.RegisterContainerMenuIcon(backendmenu.WrapDockMenuCallback(apps.BuildMenu))
 
 	apps.registerApplets()
 
-	backendmenu.Register("applets", nil, apps.BuildMenu)
 	return apps
 }
 
@@ -78,7 +84,7 @@ type AppManager struct {
 	// menu *backendmenu.DockMenu
 	// activeWin  *gldi.WindowActor
 
-	activeIcon *gldi.Icon // Applet whose window has the focus.
+	activeIcon gldi.Icon // Applet whose window has the focus.
 
 	stop chan struct{} // Manual exit chan.
 	log  cdtype.Logger
@@ -245,7 +251,7 @@ func (o *AppManager) startApplet(mi *gldi.ModuleInstance, kf *keyfile.KeyFile) {
 	}
 
 	// Everything was fine. We can add the applet in the managed list.
-	o.actives[unsafe.Pointer(icon.Ptr)] = app
+	o.actives[unsafe.Pointer(icon.ToNative())] = app
 }
 
 // StopApplet close the applet instance.
@@ -268,7 +274,7 @@ func (o *AppManager) stopApplet(mi *gldi.ModuleInstance) {
 
 	o.log.Debug("Applet stopped", mi.Module().VisitCard().GetName())
 
-	delete(o.actives, unsafe.Pointer(icon.Ptr))
+	delete(o.actives, unsafe.Pointer(icon.ToNative()))
 }
 
 func (o *AppManager) reloadApplet(mi *gldi.ModuleInstance, oldContainer *gldi.Container, kf *keyfile.KeyFile) bool {
@@ -278,7 +284,7 @@ func (o *AppManager) reloadApplet(mi *gldi.ModuleInstance, oldContainer *gldi.Co
 	o.sendApp(icon, "on_reload_module", kf != nil)
 
 	if o.log.GetDebug() { // If the service debug is active, force it also on applets.
-		app := o.actives[unsafe.Pointer(icon.Ptr)]
+		app := o.actives[unsafe.Pointer(icon.ToNative())]
 		if app != nil {
 			app.Log().SetDebug(true)
 		}
@@ -310,7 +316,7 @@ func (o *AppManager) reloadApplet(mi *gldi.ModuleInstance, oldContainer *gldi.Co
 		// 				cairo_dock_resize_data_renderer_history (pIcon, pIcon->fWidth);
 		// 		}
 	}
-	return true
+	return notif.AnswerIntercept
 }
 
 //
@@ -361,31 +367,31 @@ func (o *AppManager) reloadApplet(mi *gldi.ModuleInstance, oldContainer *gldi.Co
 
 // OnLeftClick forwards a click event to the applet.
 //
-func (o *AppManager) OnLeftClick(icon *gldi.Icon, container *gldi.Container, btnState uint) bool {
+func (o *AppManager) OnLeftClick(icon gldi.Icon, container *gldi.Container, btnState uint) bool {
 	return o.sendIconOrSub(icon, container, "on_click", "on_click_sub_icon", int(btnState))
 }
 
 // OnMiddleClick forwards a click event to the applet.
 //
-func (o *AppManager) OnMiddleClick(icon *gldi.Icon, container *gldi.Container) bool {
+func (o *AppManager) OnMiddleClick(icon gldi.Icon, container *gldi.Container) bool {
 	return o.sendIconOrSub(icon, container, "on_middle_click", "on_middle_click_sub_icon")
 }
 
 // OnMouseScroll forwards a mouse event to the applet.
 //
-func (o *AppManager) OnMouseScroll(icon *gldi.Icon, container *gldi.Container, scrollUp bool) bool {
+func (o *AppManager) OnMouseScroll(icon gldi.Icon, container *gldi.Container, scrollUp bool) bool {
 	return o.sendIconOrSub(icon, container, "on_scroll", "on_scroll_sub_icon", scrollUp)
 }
 
 // OnDropData forwards a drop event to the applet.
 //
-func (o *AppManager) OnDropData(icon *gldi.Icon, container *gldi.Container, data string) bool {
+func (o *AppManager) OnDropData(icon gldi.Icon, container *gldi.Container, data string, order float64) bool {
 	return o.sendIconOrSub(icon, container, "on_drop_data", "on_drop_data_sub_icon", data)
 }
 
 // OnChangeFocus forwards a window focus event to the applet.
 //
-func (o *AppManager) OnChangeFocus(win *gldi.WindowActor) bool {
+func (o *AppManager) OnChangeFocus(win window.Type) bool {
 	// Emit signal on the applet that had focus.
 	if o.activeIcon != nil {
 		o.sendApp(o.activeIcon, "on_change_focus", false)
@@ -394,7 +400,7 @@ func (o *AppManager) OnChangeFocus(win *gldi.WindowActor) bool {
 
 	// Emit signal on the applet that now has focus.
 	if win != nil {
-		icon := win.GetAppliIcon()
+		icon := gldi.GetAppliIcon(win)
 		if icon != nil {
 			icon = icon.GetInhibitor(false)
 			if icon != nil && icon.IsApplet() {
@@ -403,20 +409,20 @@ func (o *AppManager) OnChangeFocus(win *gldi.WindowActor) bool {
 			}
 		}
 	}
-	return false
+	return notif.AnswerLetPass
 }
 
 // BuildMenu forwards a build menu event to the applet.
 //
-func (o *AppManager) BuildMenu(m *backendmenu.DockMenu) int {
+func (o *AppManager) BuildMenu(m *backendmenu.DockMenu) bool {
 	o.sendIconOrSub(m.Icon, m.Container, "on_build_menu", "on_build_menu_sub_icon", &MenuerLike{*m})
-	return 0 // don't intercept menu. (to check)
+	return notif.AnswerLetPass // don't intercept menu. (to check)
 }
 
 // sendIconOrSub sends an event to the applet matching the icon or subicon.
 //
-func (o *AppManager) sendIconOrSub(icon *gldi.Icon, container *gldi.Container, mainEvent, subEvent string, data ...interface{}) bool {
-	var appIcon *gldi.Icon
+func (o *AppManager) sendIconOrSub(icon gldi.Icon, container *gldi.Container, mainEvent, subEvent string, data ...interface{}) bool {
+	var appIcon gldi.Icon
 	switch { // Find the base icon of the icon that was clicked on (for subdock or desklets).
 	case container.IsDesklet():
 		appIcon = container.ToDesklet().GetIcon()
@@ -428,11 +434,11 @@ func (o *AppManager) sendIconOrSub(icon *gldi.Icon, container *gldi.Container, m
 		appIcon = icon
 	}
 
-	if appIcon == nil || icon == nil || icon.Ptr == nil { // TODO: need to check why.
-		return false
+	if appIcon == nil || icon == nil || icon.ToNative() == nil { // TODO: need to check why.
+		return notif.AnswerLetPass
 	}
 
-	if appIcon.Ptr == icon.Ptr {
+	if appIcon.ToNative() == icon.ToNative() {
 		return o.sendApp(appIcon, mainEvent, data...) // Main Icon event.
 	}
 	data = append(data, icon.GetCommand())       // add reference to subicon key.
@@ -441,14 +447,14 @@ func (o *AppManager) sendIconOrSub(icon *gldi.Icon, container *gldi.Container, m
 
 // sendApp sends an event to the applet matching the icon.
 //
-func (o *AppManager) sendApp(icon *gldi.Icon, event string, data ...interface{}) bool {
-	app := o.actives[unsafe.Pointer(icon.Ptr)]
+func (o *AppManager) sendApp(icon gldi.Icon, event string, data ...interface{}) bool {
+	app := o.actives[unsafe.Pointer(icon.ToNative())]
 	if app == nil {
-		return false
+		return notif.AnswerLetPass
 	}
 	o.log.Debug(event, data...)
 	app.OnEvent(event, data...)
-	return true // an app received the event (even if unused). intercept it.
+	return notif.AnswerIntercept // an app received the event (even if unused). intercept it.
 }
 
 // func (dock *CairoDock) SearchIconPointingOnDock(unknown interface{}) *Icon { // TODO: add param CairoDock **pParentDock
@@ -525,9 +531,9 @@ func onAppletReload(cInstance *C.GldiModuleInstance, oldContainer *C.GldiContain
 	cont := gldi.NewContainerFromNative(unsafe.Pointer(oldContainer))
 	kf := keyfile.NewFromNative(unsafe.Pointer(cKeyfile))
 	if apps.reloadApplet(mi, cont, kf) { // if applet matched, which should always be true.
-		return 1
+		return notif.ActionIntercept
 	}
-	return 0
+	return notif.ActionLetPass
 }
 
 //

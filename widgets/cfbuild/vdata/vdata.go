@@ -7,6 +7,8 @@ package vdata
 import (
 	"github.com/gotk3/gotk3/gtk"
 
+	"github.com/sqp/godock/libs/cdglobal" // Dock types.
+
 	"github.com/sqp/godock/widgets/cfbuild/cftype"   // Types for config file builder usage.
 	"github.com/sqp/godock/widgets/cfbuild/datatype" // Types for config file builder data source.
 	"github.com/sqp/godock/widgets/gtk/keyfile"
@@ -81,7 +83,7 @@ func (o *source) DirUserAppData(path ...string) (string, error)                 
 func (o *source) ListKnownApplets() map[string]datatype.Appleter                           { return nil }
 func (o *source) ListDownloadApplets() (map[string]datatype.Appleter, error)               { return nil, nil }
 func (o *source) ListIcons() *datatype.ListIcon                                            { return nil }
-func (o *source) ListShortkeys() (list []datatype.Shortkeyer)                              { return nil }
+func (o *source) ListShortkeys() (list []cdglobal.Shortkeyer)                              { return nil }
 func (o *source) ListScreens() (list []datatype.Field)                                     { return nil }
 func (o *source) ListDialogDecorator() (list []datatype.Field)                             { return nil }
 func (o *source) ListAnimations() (list []datatype.Field)                                  { return nil }

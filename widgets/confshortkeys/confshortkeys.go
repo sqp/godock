@@ -6,13 +6,13 @@ import (
 	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
 
-	"github.com/sqp/godock/libs/cdtype"
+	"github.com/sqp/godock/libs/cdglobal"     // Dock types.
+	"github.com/sqp/godock/libs/cdtype"       // Logger type.
+	"github.com/sqp/godock/libs/dock/confown" // New dock own settings.
 
 	"github.com/sqp/godock/widgets/cfbuild/cftype"
-	"github.com/sqp/godock/widgets/cfbuild/datatype"
 	"github.com/sqp/godock/widgets/common"
 	"github.com/sqp/godock/widgets/confgui/btnaction"
-	"github.com/sqp/godock/widgets/confsettings"
 	"github.com/sqp/godock/widgets/gtk/buildhelp"
 	"github.com/sqp/godock/widgets/gtk/gunvalue"
 	"github.com/sqp/godock/widgets/gtk/keyfile"
@@ -44,7 +44,7 @@ type Shortkeys struct {
 
 	cbID glib.SignalHandle // Grab callback id.
 
-	rows map[*gtk.TreeIter]datatype.Shortkeyer // index of iter -> shortkey.
+	rows map[*gtk.TreeIter]cdglobal.Shortkeyer // index of iter -> shortkey.
 }
 
 // New creates a dock shortkeys management widget.
@@ -60,7 +60,7 @@ func New(control cftype.Source, log cdtype.Logger, btn btnaction.Tune) *Shortkey
 		control:        control,
 		btn:            btn,
 		log:            log,
-		rows:           make(map[*gtk.TreeIter]datatype.Shortkeyer),
+		rows:           make(map[*gtk.TreeIter]cdglobal.Shortkeyer),
 	}
 
 	rend := builder.GetCellRendererText("cellrenderertextShortkey")
@@ -86,7 +86,7 @@ func (widget *Shortkeys) Clear() {
 		widget.onKeyGrabFinish() // Was grabbing, cancel it, not sure what event was triggerred since (refresh was asked).
 	}
 
-	widget.rows = make(map[*gtk.TreeIter]datatype.Shortkeyer)
+	widget.rows = make(map[*gtk.TreeIter]cdglobal.Shortkeyer)
 	widget.model.Clear()
 }
 
@@ -100,13 +100,13 @@ func (widget *Shortkeys) Load() {
 		widget.rows[iter] = sk
 
 		widget.model.SetCols(iter, gtk.Cols{
-			rowDemander:    sk.GetDemander(),
-			rowDescription: sk.GetDescription(),
-			rowShortkey:    sk.GetKeyString(),
+			rowDemander:    sk.Demander(),
+			rowDescription: sk.Description(),
+			rowShortkey:    sk.KeyString(),
 			rowColor:       getColor(sk),
 			rowEditable:    true}) // Editable forced for all shortkey cells.
 
-		img := sk.GetIconFilePath()
+		img := sk.IconFilePath()
 		if pix, e := common.PixbufNewFromFile(img, 24); !widget.log.Err(e, "Load icon") {
 			widget.model.SetValue(iter, rowIcon, pix)
 		}
@@ -115,12 +115,12 @@ func (widget *Shortkeys) Load() {
 
 // getColor returns the color displayed for the shortcut cell.
 //
-func getColor(sk datatype.Shortkeyer) string {
+func getColor(sk cdglobal.Shortkeyer) string {
 	switch {
-	case sk.GetSuccess():
+	case sk.Success():
 		return "#116E08"
 
-	case sk.GetKeyString() != "": // defined but failed.
+	case sk.KeyString() != "": // defined but failed.
 		return "#B00000"
 	}
 	return "#000000" // unused, who cares what color an empty text can be (still prevents logged errors).
@@ -162,28 +162,28 @@ func (widget *Shortkeys) updateShortkey(accel string) {
 
 	sk.Rebind(accel, "")
 
-	file := sk.GetConfFilePath()
+	file := sk.ConfFilePath()
 	if file == "" {
-		widget.log.NewErr("shortkeys wrong filepath", sk.GetConfFilePath())
+		widget.log.NewErr("shortkeys wrong filepath", sk.ConfFilePath())
 		return
 	}
 
-	if sk.GetDescription() == "-" {
+	if sk.Description() == "-" {
 		widget.log.Info("shortkeys update aren't saved to file from this page for external applets.", "You muse use the applet config page.")
 		return
 	}
 
-	// TODO: improve code. need to use files.UpdateConfFile(file, sk.GetGroupName(), sk.GetKeyName(), accel)
+	// TODO: improve code. need to use files.UpdateConfFile(file, sk.GroupName(), sk.KeyName(), accel)
 	pKeyF, e := keyfile.NewFromFile(file, keyfile.FlagsKeepComments|keyfile.FlagsKeepTranslations)
 	if widget.log.Err(e, "Update shortkey in file") {
 		return
 	}
 	defer pKeyF.Free()
-	pKeyF.Set(sk.GetGroupName(), sk.GetKeyName(), accel)
+	pKeyF.Set(sk.GroupName(), sk.KeyName(), accel)
 
 	_, str, _ := pKeyF.ToData()
 
-	confsettings.SaveFile(file, str)
+	confown.SaveFile(file, str)
 
 	// 				cairo_dock_update_conf_file (binding->cConfFilePath,
 	// 					G_TYPE_STRING, binding->cGroupName, binding->cKeyName, key,
@@ -198,13 +198,13 @@ func (widget *Shortkeys) updateDisplay() {
 	if sk == nil {
 		return
 	}
-	widget.model.SetValue(iter, rowShortkey, sk.GetKeyString())
+	widget.model.SetValue(iter, rowShortkey, sk.KeyString())
 	widget.model.SetValue(iter, rowColor, getColor(sk))
 }
 
 // selectedShortkey returns the Shortkeyer matching the selected line.
 //
-func (widget *Shortkeys) selectedShortkey() (datatype.Shortkeyer, *gtk.TreeIter) {
+func (widget *Shortkeys) selectedShortkey() (cdglobal.Shortkeyer, *gtk.TreeIter) {
 	iter, e := gunvalue.SelectedIter(widget.model, widget.selection)
 	if widget.log.Err(e, "selectedShortkey") {
 		return nil, nil

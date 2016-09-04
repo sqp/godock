@@ -35,7 +35,7 @@ type Bridge struct {
 //
 func New(log cdtype.Logger) *Bridge {
 	return &Bridge{
-		Source: &confdata.Data{},
+		Source: &confdata.Data{Crypto: gldi.Crypto},
 		Log:    log,
 	}
 }
@@ -91,7 +91,7 @@ func (gc *Bridge) ShowModuleGui(key string) {
 
 // ShowItems opens the GUI and displays the given item icon config.
 //
-func (gc *Bridge) ShowItems(icon *gldi.Icon, container *gldi.Container, moduleInstance *gldi.ModuleInstance, showPage int) {
+func (gc *Bridge) ShowItems(icon gldi.Icon, container *gldi.Container, moduleInstance *gldi.ModuleInstance, showPage int) {
 	confpath := ""
 	if icon != nil {
 		confpath = icon.ConfigPath()
@@ -172,7 +172,7 @@ func (gc *Bridge) UpdateShortkeys() {
 //
 func (gc *Bridge) UpdateDeskletParams(desklet *gldi.Desklet) {
 	if gc.Widget != nil && desklet != nil {
-		gc.Widget.UpdateDeskletParams(&confdata.IconConf{Icon: *desklet.GetIcon()})
+		gc.Widget.UpdateDeskletParams(&confdata.IconConf{Icon: desklet.GetIcon()})
 	}
 }
 
@@ -180,7 +180,7 @@ func (gc *Bridge) UpdateDeskletParams(desklet *gldi.Desklet) {
 //
 func (gc *Bridge) UpdateDeskletVisibility(desklet *gldi.Desklet) {
 	if gc.Widget != nil && desklet != nil {
-		gc.Widget.UpdateDeskletVisibility(&confdata.IconConf{Icon: *desklet.GetIcon()})
+		gc.Widget.UpdateDeskletVisibility(&confdata.IconConf{Icon: desklet.GetIcon()})
 	}
 }
 

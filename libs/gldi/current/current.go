@@ -37,10 +37,6 @@ func (DocksParamType) FrameMargin() int { return int(C.myDocksParam.iFrameMargin
 //
 func (DocksParamType) LineWidth() int { return int(C.myDocksParam.iDockLineWidth) }
 
-// Radius defines the radius of dock corners.
-//
-func (DocksParamType) Radius() int { return int(C.myDocksParam.iDockRadius) }
-
 // LockAll gets and sets the lock all state.
 //
 func (DocksParamType) LockAll(b ...bool) bool {
@@ -58,6 +54,14 @@ func (DocksParamType) LockIcons(b ...bool) bool {
 	}
 	return gobool(C.myDocksParam.bLockIcons)
 }
+
+// Radius defines the radius of dock corners.
+//
+func (DocksParamType) Radius() int { return int(C.myDocksParam.iDockRadius) }
+
+// ShowSubDockOnClick returns whether we need to show the subdock when icon is clicked or not.
+//
+func (DocksParamType) ShowSubDockOnClick() bool { return gobool(C.myDocksParam.bShowSubDockOnClick) }
 
 //
 //-------------------------------------------------------------[ ICONS PARAM ]--
@@ -117,17 +121,28 @@ type TaskbarParamType struct{}
 //
 func (TaskbarParamType) ActionOnMiddleClick() int { return int(C.myTaskbarParam.iActionOnMiddleClick) }
 
+// MinimizeOnClick returns whether applications should be minimized on click.
+//
+func (TaskbarParamType) MinimizeOnClick() bool { return gobool(C.myTaskbarParam.bMinimizeOnClick) }
+
+// MixLauncherAppli returns whether applications and launchers are mixed.
+//
+func (TaskbarParamType) MixLauncherAppli() bool { return gobool(C.myTaskbarParam.bMixLauncherAppli) }
+
 // OverWriteXIcons returns whether default X (desktop) icons are overwritten.
 //
 func (TaskbarParamType) OverWriteXIcons() bool { return gobool(C.myTaskbarParam.bOverWriteXIcons) }
+
+// PresentClassOnClick returns whether we need to show class windows when icon is clicked or not.
+//
+func (TaskbarParamType) PresentClassOnClick() bool {
+	return gobool(C.myTaskbarParam.bPresentClassOnClick)
+}
 
 // struct _CairoTaskbarParam {
 // 	gboolean bShowAppli;
 // 	gboolean bGroupAppliByClass;
 // 	gint iAppliMaxNameLength;
-// 	gboolean bMinimizeOnClick;
-// 	gboolean bPresentClassOnClick;
-// // 	gint iActionOnMiddleClick;
 // 	gboolean bHideVisibleApplis;
 // 	gdouble fVisibleAppliAlpha;
 // 	gboolean bAppliOnCurrentDesktopOnly;
@@ -135,9 +150,7 @@ func (TaskbarParamType) OverWriteXIcons() bool { return gobool(C.myTaskbarParam.
 // 	gint iDialogDuration;
 // 	gchar *cAnimationOnDemandsAttention;
 // 	gchar *cAnimationOnActiveWindow;
-// 	gboolean bOverWriteXIcons;
 // 	gint iMinimizedWindowRenderType;
-// 	gboolean bMixLauncherAppli;
 // 	gchar *cOverwriteException;
 // 	gchar *cGroupException;
 // 	gchar *cForceDemandsAttention;

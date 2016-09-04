@@ -6,8 +6,6 @@ import (
 	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
 
-	"github.com/google/shlex"
-
 	"github.com/sqp/godock/libs/helper/cast"
 	"github.com/sqp/godock/libs/ternary"
 	"github.com/sqp/godock/libs/text/tran" // Translate.
@@ -700,13 +698,6 @@ func LaunchCommand(key *cftype.Key) {
 		// g_free (cResult);
 	}
 
-	args, e := shlex.Split(key.AuthorizedValues[0])
-	if key.Log().Err(e, "widget LaunchCommand parse command", key.Name, ":", key.AuthorizedValues[0], "==>", args) {
-		return
-	}
-
-	// key.Log().DEV("new args", len(args), args)
-
 	spinner := newgtk.Spinner()
 	spinner.SetNoShowAll(true)
 	key.PackSubWidget(spinner)
@@ -715,9 +706,12 @@ func LaunchCommand(key *cftype.Key) {
 	key.PackSubWidget(btn)
 
 	btn.Connect("clicked", func() {
-		cmd := key.Log().ExecCmd(args[0], args[1:]...)
+		cmd, e := key.Log().ExecShlex(key.AuthorizedValues[0])
+		if key.Log().Err(e, "widget LaunchCommand parse command", key.Name, ":", key.AuthorizedValues[0]) {
+			return
+		}
 
-		e := cmd.Start()
+		e = cmd.Start()
 		if key.Log().Err(e, "widget LaunchCommand exec", key.AuthorizedValues[0]) {
 			return
 		}

@@ -18,7 +18,7 @@ http://www.gnu.org/licenses/licenses.html#GPL
 Package Update is an applet for Cairo-Dock to build and update the dock and applets.
 
 Play with cairo-dock sources:
-download/update, compile, restart dock... Usefull for developers, testers and
+download/update, compile, restart dock... Useful for developers, testers and
 users who want to stay up to date, or maybe on a distro without packages.
 */
 package Update

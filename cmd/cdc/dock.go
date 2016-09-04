@@ -5,9 +5,10 @@ package main
 import (
 	"github.com/pkg/profile"
 
+	"github.com/sqp/godock/libs/dock"
+	"github.com/sqp/godock/libs/dock/maindock"
+	"github.com/sqp/godock/libs/gldi"
 	"github.com/sqp/godock/libs/gldi/globals"
-	"github.com/sqp/godock/libs/gldi/maindock"
-	"github.com/sqp/godock/libs/gldi/startdock"
 
 	"fmt"
 	"strings"
@@ -176,11 +177,11 @@ func runDock(cmd *Command, args []string) {
 		fmt.Println(globals.Version()) // -v option only prints gldi version.
 
 	case *showVersionAll:
-		startdock.PrintVersions() // -vv option only prints all versions.
+		dock.PrintVersions() // -vv option only prints all versions.
 
-	case startdock.Run(logger, dockSettings):
+	case dock.Run(logger, dockSettings): // Start dock success => lock gtk.
 		dockSettings = nil // free
-		maindock.Lock()
+		gldi.LockGTK()
 		maindock.Clean() // may be better with defer, but cause confused panic messages.
 	}
 }

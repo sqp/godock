@@ -29,13 +29,13 @@ package cfbuild
 import (
 	"github.com/gotk3/gotk3/gtk"
 
-	"github.com/sqp/godock/libs/cdtype"    // Logger type.
-	"github.com/sqp/godock/libs/text/tran" // Translate.
+	"github.com/sqp/godock/libs/cdtype"       // Logger type.
+	"github.com/sqp/godock/libs/dock/confown" // New dock own settings.
+	"github.com/sqp/godock/libs/text/tran"    // Translate.
 
 	"github.com/sqp/godock/widgets/cfbuild/cfprint"  // Print config file builder keys.
 	"github.com/sqp/godock/widgets/cfbuild/cftype"   // Types for config file builder usage.
 	"github.com/sqp/godock/widgets/cfbuild/cfwidget" // Widgets for config file builder.
-	"github.com/sqp/godock/widgets/confsettings"     // User save settings.
 	"github.com/sqp/godock/widgets/gtk/newgtk"       // Create widgets.
 
 	"strings"
@@ -343,7 +343,7 @@ func (build *builder) buildKey(key *cftype.Key) {
 // Save updates the configuration file with user changes.
 //
 func (build *builder) Save() {
-	if confsettings.Settings.ToVirtual(build.conf.FilePath()) {
+	if confown.Settings.ToVirtual(build.conf.FilePath()) {
 		cfprint.Updated(build)
 		return
 	}
@@ -357,7 +357,7 @@ func (build *builder) Save() {
 		return
 	}
 
-	tofile, e := confsettings.SaveFile(build.conf.FilePath(), str)
+	tofile, e := confown.SaveFile(build.conf.FilePath(), str)
 	if !build.Log().Err(e, "save config") && build.postSave != nil && tofile {
 		build.postSave()
 	}

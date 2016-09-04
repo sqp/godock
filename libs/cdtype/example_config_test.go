@@ -3,12 +3,12 @@ package cdtype_test
 // The configuration loading can be fully handled by LoadConfig if the config
 // struct is created accordingly.
 //
-// Main conf struct: one nested struct for each config page with its name refered
-// to in the "group" tag.
+// Main conf struct: one nested struct for each config page with its name
+// referred to in the "group" tag.
 //
 // Sub conf structs: one field for each setting you need with the keys and types
-// refering to those in your .conf file loaded by the dock. As fields are filled by
-// reflection, they must be public and start with an uppercase letter.
+// referring to those in your .conf file loaded by the dock. As fields are
+// filled by reflection, they must be public and start with an uppercase letter.
 //
 // If the name of your field is the same as in the config file, just declare it.
 //

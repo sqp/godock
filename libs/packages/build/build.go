@@ -46,11 +46,11 @@ var (
 
 	CloseGui = func() {}
 
-	// dirDockData is the location of dock data for icons (overriden by gldi backend with real values).
+	// dirDockData is the location of dock data for icons (overridden by gldi backend with real values).
 	//
 	dirShareData = "/usr/share/cairo-dock"
 
-	// iconCore defines the name of the dock icon (overriden by gldi backend with real values).
+	// iconCore defines the name of the dock icon (overridden by gldi backend with real values).
 	//
 	iconCore = "/usr/share/cairo-dock/cairo-dock.svg"
 )
@@ -292,7 +292,7 @@ func (build *BuilderGodock) Build() error {
 		return errors.New("GOPATH is not set")
 	}
 
-	cmd := build.log.ExecCmd("make", "dock")
+	cmd := build.log.ExecCmd("make", "-B", "dock")
 	cmd.Dir = path
 	e := cmd.Run()
 	if e != nil {
