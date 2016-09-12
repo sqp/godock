@@ -64,7 +64,8 @@ const (
 
 // Translation domain.
 const (
-	CairoDockGettextPackage = "cairo-dock" // CAIRO_DOCK_GETTEXT_PACKAGE
+	GettextPackageCairoDock = "cairo-dock"         // CAIRO_DOCK_GETTEXT_PACKAGE
+	GettextPackagePlugins   = "cairo-dock-plugins" // GETTEXT_NAME_EXTRAS
 )
 
 // Config files.

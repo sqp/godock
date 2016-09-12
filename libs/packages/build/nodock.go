@@ -2,11 +2,14 @@
 
 package build
 
-import "github.com/sqp/godock/libs/srvdbus/dockbus"
+import (
+	"github.com/sqp/godock/libs/cdtype"          // Logger type.
+	"github.com/sqp/godock/libs/srvdbus/dockbus" // Dock remote commands.
+)
 
 func init() {
-	AppletInfo = func(name string) (dir, icon string) {
-		pack := dockbus.InfoApplet(name)
+	AppletInfo = func(log cdtype.Logger, name string) (dir, icon string) {
+		pack := dockbus.InfoApplet(log, name)
 		if pack == nil {
 			return "", ""
 		}
@@ -14,7 +17,7 @@ func init() {
 	}
 
 	AppletRestart = func(name string) {
-		dockbus.Send(dockbus.AppletRemove(name + ".conf"))
-		dockbus.Send(dockbus.AppletAdd(name))
+		dockbus.AppletRemove(name + ".conf")
+		dockbus.AppletAdd(name)
 	}
 }

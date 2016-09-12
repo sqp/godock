@@ -3,16 +3,16 @@ Upstream-Name: godock
 Source: <http://github.com/sqp/godock>
 
 Files: *
-Copyright: 2012-2015 SQP <sqp@glx-dock.org>
+Copyright: 2012-2016 SQP <sqp@glx-dock.org>
 License: GPL-3.0+
 
 Files: src/github.com/sqp/godock/*
-Copyright: 2012-2015 SQP <sqp@glx-dock.org>
+Copyright: 2012-2016 SQP <sqp@glx-dock.org>
 License: GPL-3.0+
 
 
 Files: debian/*
-Copyright: 2015 SQP <sqp@glx-dock.org>
+Copyright: 2015-2016 SQP <sqp@glx-dock.org>
 License: GPL-3.0+
 
 
@@ -62,11 +62,11 @@ Copyright: Copyright 2009  The "config" Authors
 License: MPL-2.0
 
 Files: src/github.com/sqp/gupnp/*
-Copyright: 2014-2015 SQP <sqp@glx-dock.org>
+Copyright: 2014-2016 SQP <sqp@glx-dock.org>
 License: ISC
 
 Files: src/github.com/sqp/pulseaudio/*
-Copyright: 2014-2015 SQP <sqp@glx-dock.org>
+Copyright: 2014-2016 SQP <sqp@glx-dock.org>
 License: ISC
 
 

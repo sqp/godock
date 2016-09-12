@@ -2,6 +2,7 @@ package weather
 
 import (
 	"github.com/sqp/godock/libs/net/download"
+	"github.com/sqp/godock/libs/text/tran"
 
 	"fmt"
 	"sync"
@@ -104,6 +105,7 @@ func (w *weatherCom) dlCurrent() error {
 
 	// Received data is valid, update it.
 	w.current = cur
+	cur.WeatherDescription = tran.Splug(cur.WeatherDescription)
 
 	// Prepend degree symbol to unit if missing.
 	cur.UnitTemp = unitDegree(cur.UnitTemp)
@@ -144,9 +146,13 @@ func (w *weatherCom) dlForecast() error {
 			return e
 		}
 
+		day.DayName = tran.Splug(day.DayName)
 		for i := range day.Part {
+
 			if day.Part[i].WeatherDescription == "" {
 				day.Part[i].WeatherDescription = ValueMissing
+			} else {
+				day.Part[i].WeatherDescription = tran.Splug(day.Part[i].WeatherDescription)
 			}
 		}
 	}

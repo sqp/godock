@@ -52,7 +52,8 @@ import "C"
 import (
 	"github.com/gotk3/gotk3/glib"
 
-	"github.com/sqp/godock/libs/cdtype"            // Dock types.
+	"github.com/sqp/godock/libs/cdglobal"          // Dock types.
+	"github.com/sqp/godock/libs/cdtype"            // Applet types.
 	"github.com/sqp/godock/libs/gldi/desktopclass" // XDG desktop class info.
 	"github.com/sqp/godock/libs/gldi/shortkeys"    // Keyboard shortkeys.
 	"github.com/sqp/godock/libs/gldi/window"       // Desktop windows control.
@@ -187,7 +188,7 @@ type Icon interface {
 
 	DeinhibiteClass()
 
-	Window() window.Type
+	Window() cdglobal.Window
 
 	// GetInhibitor returns the icon that inhibits the current one (has registered the class).
 	//
@@ -241,14 +242,14 @@ type Icon interface {
 	// On event, it will test if the icon still has a valid window and launch the
 	// provided action on this window.
 	//
-	CallbackActionWindow(call func(window.Type)) func()
+	CallbackActionWindow(call func(cdglobal.Window)) func()
 
 	// CallbackActionSubWindows is the same as CallbackActionWindow but launch the
 	// action on all subdock windows.
 	//
-	CallbackActionSubWindows(call func(window.Type)) func()
+	CallbackActionSubWindows(call func(cdglobal.Window)) func()
 
-	CallbackActionWindowToggle(call func(window.Type, bool), getvalue func(window.Type) bool) func()
+	CallbackActionWindowToggle(call func(cdglobal.Window, bool), getvalue func(cdglobal.Window) bool) func()
 
 	GetPrevNextClassMateIcon(next bool) Icon
 }
@@ -303,7 +304,7 @@ func IconsGetAnyWithoutDialog() Icon {
 
 // GetAppliIcon returns the icon managing the window.
 //
-func GetAppliIcon(win window.Type) Icon {
+func GetAppliIcon(win cdglobal.Window) Icon {
 	c := C.cairo_dock_get_appli_icon(win.ToNative())
 	return NewIconFromNative(unsafe.Pointer(c))
 }
@@ -360,7 +361,7 @@ func (o *dockIcon) SetY(f float64)                { o.Ptr.fY = C.gdouble(f) }
 func (o *dockIcon) ShowSubdock(parent *CairoDock) { C.cairo_dock_show_subdock(o.Ptr, parent.ToNative()) }
 func (o *dockIcon) StopAttention()                { C.gldi_icon_stop_attention(o.Ptr) }
 func (o *dockIcon) Width() float64                { return float64(o.Ptr.fWidth) }
-func (o *dockIcon) Window() window.Type           { return window.NewFromNative(unsafe.Pointer(o.Ptr.pAppli)) }
+func (o *dockIcon) Window() cdglobal.Window       { return window.NewFromNative(unsafe.Pointer(o.Ptr.pAppli)) }
 func (o *dockIcon) X() float64                    { return float64(o.Ptr.fX) }
 func (o *dockIcon) XAtRest() float64              { return float64(o.Ptr.fXAtRest) }
 func (o *dockIcon) Y() float64                    { return float64(o.Ptr.fY) }
@@ -375,7 +376,7 @@ func (o *dockIcon) AddOverlayFromImage(iconPath string, position cdtype.EmblemPo
 	C.cairo_dock_add_overlay_from_image(o.Ptr, cstr, C.CairoOverlayPosition(position), C.gpointer(o.Ptr))
 }
 
-func (o *dockIcon) CallbackActionSubWindows(call func(window.Type)) func() {
+func (o *dockIcon) CallbackActionSubWindows(call func(cdglobal.Window)) func() {
 	return func() {
 		for _, ic := range o.SubDockIcons() {
 			if ic.IsAppli() {
@@ -385,7 +386,7 @@ func (o *dockIcon) CallbackActionSubWindows(call func(window.Type)) func() {
 	}
 }
 
-func (o *dockIcon) CallbackActionWindow(call func(window.Type)) func() {
+func (o *dockIcon) CallbackActionWindow(call func(cdglobal.Window)) func() {
 	return func() {
 		if o.IsAppli() {
 			call(o.Window())
@@ -393,8 +394,8 @@ func (o *dockIcon) CallbackActionWindow(call func(window.Type)) func() {
 	}
 }
 
-func (o *dockIcon) CallbackActionWindowToggle(call func(window.Type, bool), getvalue func(window.Type) bool) func() {
-	return o.CallbackActionWindow(func(win window.Type) {
+func (o *dockIcon) CallbackActionWindowToggle(call func(cdglobal.Window, bool), getvalue func(cdglobal.Window) bool) func() {
+	return o.CallbackActionWindow(func(win cdglobal.Window) {
 		v := getvalue(win)
 		call(win, !v)
 	})

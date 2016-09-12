@@ -1,5 +1,5 @@
-// Package menu fills the main menu for cairo-dock.
-package menu
+// Package mainmenu fills the main menu for cairo-dock.
+package mainmenu
 
 import (
 	"github.com/sqp/godock/libs/gldi/backendmenu" // Menu types.

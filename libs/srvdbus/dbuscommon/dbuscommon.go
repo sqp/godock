@@ -26,7 +26,8 @@ func NewError(msg string) *dbus.Error {
 //
 type Client struct {
 	dbus.BusObject
-	srvObj string
+	srvObj  string
+	testErr func(e error, method string)
 }
 
 // GetClient return a connection to the active instance of the internal Dbus
@@ -55,13 +56,19 @@ func GetClient(SrvObj, SrvPath string, InterfacePath ...string) (*Client, error)
 	}
 
 	// Found active instance, return client.
-	return &Client{conn.Object(SrvObj, dbus.ObjectPath(SrvPath)), InterfacePath[0]}, nil
+	return &Client{
+		BusObject: conn.Object(SrvObj, dbus.ObjectPath(SrvPath)),
+		srvObj:    InterfacePath[0],
+		testErr:   func(e error, method string) {},
+	}, nil
 }
 
 // Call calls a method on a Dbus object.
 //
 func (cl *Client) Call(method string, args ...interface{}) error {
-	return cl.BusObject.Call(cl.srvObj+"."+method, 0, args...).Err
+	e := cl.BusObject.Call(cl.srvObj+"."+method, 0, args...).Err
+	cl.testErr(e, method)
+	return e
 }
 
 // Get calls a method on a Dbus object with returned values.
@@ -70,19 +77,24 @@ func (cl *Client) Call(method string, args ...interface{}) error {
 // type as expected to be returned by the Dbus method called (its go version).
 //
 func (cl *Client) Get(method string, answers []interface{}, args ...interface{}) error {
+	var e error
+	defer cl.testErr(e, method)
 	call := cl.BusObject.Call(cl.srvObj+"."+method, 0, args...)
 	if call.Err != nil {
-		return call.Err
+		e = call.Err
+		return e
 	}
 	if len(call.Body) == 0 {
-		return errors.New("no data received")
+		e = errors.New("no data received")
+		return e
 	}
 	if len(call.Body) != len(answers) {
-		return fmt.Errorf("size mismatch, need %d found %d", len(call.Body), len(answers))
+		e = fmt.Errorf("size mismatch, need %d found %d", len(call.Body), len(answers))
+		return e
 	}
 
 	for i := range call.Body {
-		e := parseShit(call.Body[i], answers[i])
+		e = parseShit(call.Body[i], answers[i])
 		if e != nil {
 			return e
 		}
@@ -138,7 +150,15 @@ func parseShit(src, dest interface{}) error {
 // Go calls a method on a Dbus object without waiting for an answer.
 //
 func (cl *Client) Go(method string, args ...interface{}) error {
-	return cl.BusObject.Go(cl.srvObj+"."+method, dbus.FlagNoReplyExpected, nil, args...).Err
+	e := cl.BusObject.Go(cl.srvObj+"."+method, dbus.FlagNoReplyExpected, nil, args...).Err
+	cl.testErr(e, method)
+	return e
+}
+
+// SetTestErr sets a test error function.
+//
+func (cl *Client) SetTestErr(testErr func(e error, method string)) {
+	cl.testErr = testErr
 }
 
 //

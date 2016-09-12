@@ -708,7 +708,7 @@ func (key *Key) UpdateStorage() {
 		value := key.Value().String()
 
 		if key.IsType(KeyPasswordEntry) {
-			// TODO: cairo_dock_encrypt_string(value, &value)
+			value = key.Source().EncryptString(value)
 		}
 
 		key.Storage().Set(key.Group, key.Name, value)

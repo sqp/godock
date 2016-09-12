@@ -6,6 +6,7 @@ import (
 	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
 
+	"github.com/sqp/godock/libs/log"                  // Display info in terminal.
 	"github.com/sqp/godock/widgets/cfbuild/cfprint"   // Print config file builder keys.
 	"github.com/sqp/godock/widgets/cfbuild/cftype"    // Types for config file builder usage.
 	"github.com/sqp/godock/widgets/cfbuild/vdata"     // Virtual data source.
@@ -36,7 +37,7 @@ func main() {
 	} else {
 		saveCall = func(build cftype.Builder) { cfprint.Default(build, true) }
 	}
-	source := vdata.New(win, saveCall)
+	source := vdata.New(log.NewLog(log.Logs), win, saveCall)
 	build := vdata.TestInit(source, path)
 	source.SetGrouper(build)
 
@@ -49,6 +50,7 @@ func packWindow(win *gtk.Window, source vdata.Sourcer, build cftype.Grouper) fun
 		win.SetDefaultSize(winWidth, winHeight)
 		win.SetTitle(winTitle)
 		win.SetIconFromFile(source.AppIcon())
+		win.Connect("destroy", gtk.MainQuit)
 
 		// widgets.
 		box := newgtk.Box(gtk.ORIENTATION_VERTICAL, 0)

@@ -20,10 +20,11 @@ import (
 // Commands lists the available commands and help topics.
 // The order here is the order in which they are printed by 'cdc help'.
 var Commands = CommandList{
+	cmdAppInfo,
+	cmdBuild,
 	cmdExternal,
 	cmdRemote,
 	cmdUpload,
-	cmdBuild,
 	cmdVersion,
 
 	// helpGopath,

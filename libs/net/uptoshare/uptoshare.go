@@ -2,9 +2,8 @@
 package uptoshare
 
 import (
-	"github.com/robfig/config" // Config parser.
-
 	"github.com/sqp/godock/libs/cdtype"
+	"github.com/sqp/godock/libs/config"
 	"github.com/sqp/godock/libs/files"
 	"github.com/sqp/godock/libs/net/upload"
 
@@ -253,24 +252,17 @@ func (up *Uploader) trimHistory() {
 //
 func (up *Uploader) loadHistory() error {
 	up.history = nil
-	c, e := config.Read(up.historyFile, config.DEFAULT_COMMENT, config.ALTERNATIVE_SEPARATOR, false, false)
-	if up.Log.Err(e, "load uptoshare history") {
-		return e
-	}
 
-	for _, group := range c.Sections() {
-		if group != "DEFAULT" {
+	e := config.GetFromFile(up.Log, up.historyFile, func(cfg cdtype.ConfUpdater) {
+		cfg.ParseGroups(func(group string, keys []cdtype.ConfKeyer) {
 			links := NewLinks()
 			up.history = append(up.history, links)
-
-			opts, _ := c.Options(group)
-			for _, key := range opts {
-				str, _ := c.String(group, key)
-				links.Add(key, str)
+			for _, key := range keys {
+				links.Add(key.Name(), key.String())
 			}
-		}
-	}
-	return nil
+		})
+	})
+	return up.Log.GetErr(e, "load uptoshare history")
 }
 
 //
@@ -279,15 +271,14 @@ func (up *Uploader) saveHistory() {
 		os.Mkdir(filepath.Dir(up.historyFile), os.ModePerm)
 	}
 
-	conf := config.New(config.DEFAULT_COMMENT, config.ALTERNATIVE_SEPARATOR, false, false)
+	cfg := config.NewEmpty(up.Log, up.historyFile)
+	defer cfg.Save()
 	for _, hist := range up.ListHistory() {
 		group := hist["link"]
-		conf.AddSection(group)
 		for key, link := range hist {
-			conf.AddOption(group, key, link)
+			cfg.Set(group, key, link)
 		}
 	}
-	up.Log.Err(conf.WriteFile(up.historyFile, 0644, ""), "save uptoshare history")
 }
 
 //

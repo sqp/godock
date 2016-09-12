@@ -2,13 +2,11 @@
 package files
 
 import (
-	"github.com/sqp/godock/libs/cdtype"         // ConfUpdater
-	"github.com/sqp/godock/widgets/gtk/keyfile" // Write config file.
+	"github.com/sqp/godock/libs/cdtype" // Logger type.
 
 	"bufio"
 	"errors"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,67 +14,23 @@ import (
 )
 
 //
-//------------------------------------------------------------[ CONF UPDATER ]--
+//--------------------------------------------------------------[ FILE MUTEX ]--
 
-// Access prevents concurrent access to config files.
+var access = sync.Mutex{}
+
+// AccessLock locks and prevents concurrent access to config files.
 // Could be improved, but it may be safer to use for now.
 //
-var Access = sync.Mutex{}
+func AccessLock(log cdtype.Logger) {
+	log.Debug("files.Access", "Lock")
+	access.Lock()
+}
 
-// UpdateConfFile udates a key in a configuration file.
+// AccessUnlock releases the access to config files.
 //
-func UpdateConfFile(configFile, group, key string, value interface{}) error {
-	cu, e := NewConfUpdater(configFile)
-	if e != nil {
-		return e
-	}
-	cu.Set(group, key, value)
-	return cu.Save()
-}
-
-// NewConfUpdater creates a ConfUpdater for the given config file (full path).
-//
-func NewConfUpdater(configFile string) (cdtype.ConfUpdater, error) {
-	// Ensure the file exists and get the file access rights to preserve them.
-	fi, e := os.Stat(configFile)
-	if e != nil {
-		return nil, e
-	}
-
-	Access.Lock()
-
-	flags := keyfile.FlagsKeepComments | keyfile.FlagsKeepTranslations
-	pKeyF, e := keyfile.NewFromFile(configFile, flags)
-	if e != nil {
-		Access.Unlock()
-		return nil, e
-	}
-
-	return &confUpdate{
-		KeyFile:  *pKeyF,
-		filePath: configFile,
-		fileMode: fi.Mode(),
-	}, nil
-}
-
-type confUpdate struct {
-	keyfile.KeyFile             // Provides the Set method.
-	filePath        string      // Full path to config file.
-	fileMode        os.FileMode // File access rights.
-}
-
-func (cu *confUpdate) Save() error {
-	defer cu.Cancel()
-	_, content, e := cu.ToData()
-	if e != nil {
-		return e
-	}
-	return ioutil.WriteFile(cu.filePath, []byte(content), cu.fileMode)
-}
-
-func (cu *confUpdate) Cancel() {
-	cu.KeyFile.Free()
-	Access.Unlock()
+func AccessUnlock(log cdtype.Logger) {
+	log.Debug("files.Access", "Unlock")
+	access.Unlock()
 }
 
 //

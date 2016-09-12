@@ -50,11 +50,11 @@ type groupConfiguration struct {
 	DialogDuration        int
 
 	SourceDir   string // base cairo-dock sources directory. Must contain core and plug-ins folders, same as bzr script.
-	BuildReload bool   // true if the reload action should be triggered after build
+	BuildReload bool   `action:"8"` // true if the reload action should be triggered after build
 
 	DiffCommand   string // Command to launch on Show diff action.
 	DiffMonitored bool   // true if the diff command application should be monitored (like a launcher).
-	DiffStash     bool
+	DiffStash     bool   `action:"9"` // true to show the diff vs stash (use git difftool -d).
 	CmdOpenSource string
 
 	BuildTargets []string // list of buildable targets.

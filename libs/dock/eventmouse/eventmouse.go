@@ -4,13 +4,13 @@ package eventmouse
 import (
 	"github.com/gotk3/gotk3/gdk"
 
-	"github.com/sqp/godock/libs/cdtype"
+	"github.com/sqp/godock/libs/cdglobal"     // Dock types.
+	"github.com/sqp/godock/libs/cdtype"       // Applet types.
 	"github.com/sqp/godock/libs/dock/confown" // New dock own settings.
 	"github.com/sqp/godock/libs/gldi"
 	"github.com/sqp/godock/libs/gldi/current"  // Current theme settings.
 	"github.com/sqp/godock/libs/gldi/desktops" // Desktop and screens info.
 	"github.com/sqp/godock/libs/gldi/notif"    // Dock notifs.
-	"github.com/sqp/godock/libs/gldi/window"   // Desktop windows control.
 
 	"strings"
 )
@@ -49,7 +49,7 @@ func OnLeftClick(icon gldi.Icon, container *gldi.Container, btnState uint) bool 
 			icon.SubDockIsVisible() && // or this sub-dock is already visible
 				icon.DesktopPresentClass()): // we use the scale plugin if it's possible
 
-		icon.CallbackActionSubWindows((window.Type).Show)()
+		icon.CallbackActionSubWindows((cdglobal.Window).Show)()
 
 		// in case the dock is visible or about to be visible, hide it, as it would confuse the user to have both.
 		// cairo_dock_emit_leave_signal (CAIRO_CONTAINER (icon->pSubDock));
@@ -124,7 +124,7 @@ func OnMiddleClick(icon gldi.Icon, container *gldi.Container) bool {
 		return notif.AnswerIntercept
 
 	case multi && actmid == 1: // Close all.
-		icon.CallbackActionSubWindows((window.Type).Close)()
+		icon.CallbackActionSubWindows((cdglobal.Window).Close)()
 		return notif.AnswerIntercept
 
 	case multi && actmid == 2: // Minimise all.

@@ -2,14 +2,14 @@
 package cdapplet
 
 import (
-	"github.com/sqp/godock/libs/cdapplet/action"
-	"github.com/sqp/godock/libs/cdglobal"
-	"github.com/sqp/godock/libs/cdtype"
-	"github.com/sqp/godock/libs/config"
-	"github.com/sqp/godock/libs/files"
-	"github.com/sqp/godock/libs/log"     // Display info in terminal.
-	"github.com/sqp/godock/libs/poller"  // Polling counter.
-	"github.com/sqp/godock/libs/ternary" // Ternary operators.
+	"github.com/sqp/godock/libs/cdapplet/action" // Applet actions.
+	"github.com/sqp/godock/libs/cdglobal"        // Dock types.
+	"github.com/sqp/godock/libs/cdtype"          // Applets types.
+	"github.com/sqp/godock/libs/config"          // Config parser.
+	"github.com/sqp/godock/libs/log"             // Display info in terminal.
+	"github.com/sqp/godock/libs/poller"          // Polling counter.
+	"github.com/sqp/godock/libs/ternary"         // Ternary operators.
+	"github.com/sqp/godock/libs/text/tran"
 
 	"errors"
 	"path/filepath"
@@ -292,11 +292,9 @@ func (cda *CDApplet) LoadConfig(loadConf bool) (cdtype.Defaults, error) {
 		return def, errors.New("conf pointer missing")
 	}
 
-	files.Access.Lock()
-	defer files.Access.Unlock()
-
 	// Try to load config.
-	def, liste, e := config.Load(cda.confFile, cda.FileLocation(), cda.confPtr, config.GetBoth)
+	def, toActions, liste, e := config.Load(cda.log, cda.confFile, cda.FileLocation(), cda.confPtr, config.GetBoth)
+
 	if cda.Log().Err(e, "LoadConfig") {
 		return def, e
 	}
@@ -305,6 +303,11 @@ func (cda *CDApplet) LoadConfig(loadConf bool) (cdtype.Defaults, error) {
 	for _, e := range liste {
 		cda.Log().Err(e, "LoadConfig")
 	}
+
+	for _, call := range toActions {
+		call(cda.Action())
+	}
+
 	return def, nil
 }
 
@@ -314,7 +317,7 @@ func (cda *CDApplet) LoadConfig(loadConf bool) (cdtype.Defaults, error) {
 // leaks and deadlocks.
 //
 func (cda *CDApplet) UpdateConfig() (cdtype.ConfUpdater, error) {
-	return files.NewConfUpdater(cda.confFile)
+	return config.NewFromFile(cda.log, cda.confFile)
 }
 
 //
@@ -350,4 +353,10 @@ func (cda *CDApplet) Log() cdtype.Logger {
 //
 func (cda *CDApplet) Name() string {
 	return cda.appletName
+}
+
+// Translate translates a string in the applet domain.
+//
+func (cda *CDApplet) Translate(str string) string {
+	return tran.Sloc(cdglobal.GettextPackagePlugins, str)
 }

@@ -734,41 +734,6 @@ func onKeyGrabReceived(_ *gtk.Window, event *gdk.Event, data *textGrabData) {
 	data.entry.SetText(accel)
 }
 
-func onClassGrabClicked(obj *gtk.Button) {
-	println("grab class is still to do")
-
-	// 	GtkEntry *pEntry = data[0];
-	// 	GtkWindow *pParentWindow = data[1];
-
-	// 	//set widget insensitive
-	// 	gtk_widget_set_sensitive (GTK_WIDGET(pEntry), FALSE);
-
-	// 	g_signal_connect (G_OBJECT(pParentWindow), "key-press-event", G_CALLBACK(_cairo_dock_key_grab_cb), pEntry);
-}
-
-// static void _cairo_dock_key_grab_class (G_GNUC_UNUSED GtkButton *button, gpointer *data)
-// {
-// 	GtkEntry *pEntry = data[0];
-// 	// GtkWindow *pParentWindow = data[1];
-
-// 	cd_debug ("clicked");
-// 	gtk_widget_set_sensitive (GTK_WIDGET(pEntry), FALSE);  // lock the widget during the grab (it makes it more comprehensive).
-
-// 	const gchar *cResult = NULL;
-// 	GldiWindowActor *actor = gldi_window_pick ();
-
-// 	if (actor && actor->bIsTransientFor)
-// 		actor = gldi_window_get_transient_for (actor);
-
-// 	if (actor)
-// 		cResult = actor->cClass;
-// 	else
-// 		cd_warning ("couldn't get a window actor");
-
-// 	gtk_widget_set_sensitive (GTK_WIDGET(pEntry), TRUE);  // unlock the widget
-// 	gtk_entry_set_text (pEntry, cResult);  // write the result in the entry-box
-// }
-
 // //Sound Callback
 // static void _cairo_dock_play_a_sound (G_GNUC_UNUSED GtkButton *button, gpointer *data)
 // {

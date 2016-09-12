@@ -8,10 +8,9 @@ import (
 	"github.com/gotk3/gotk3/glib"
 
 	"github.com/sqp/godock/libs/cdglobal" // Dock types.
-	"github.com/sqp/godock/libs/cdtype"   // Applets types.
+	"github.com/sqp/godock/libs/cdtype"   // Applet types.
 	"github.com/sqp/godock/libs/gldi"
 	"github.com/sqp/godock/libs/gldi/dialog"
-	"github.com/sqp/godock/libs/gldi/window" // Desktop windows control.
 	"github.com/sqp/godock/libs/ternary"
 
 	"errors"
@@ -236,7 +235,7 @@ func (o *winAction) SetAppliClass(applicationClass string) error {
 
 // act sends an action to the application controlled by the icon.
 //
-func (o *winAction) act(call func(window.Type)) error {
+func (o *winAction) act(call func(cdglobal.Window)) error {
 	if !o.icon.IsAppli() {
 		return errors.New("no application")
 	}
@@ -247,22 +246,22 @@ func (o *winAction) act(call func(window.Type)) error {
 }
 
 func (o *winAction) IsOpened() bool             { return o.icon.Window() != nil }
-func (o *winAction) Minimize() error            { return o.act((window.Type).Minimize) }
-func (o *winAction) Show() error                { return o.act((window.Type).Show) }
+func (o *winAction) Minimize() error            { return o.act((cdglobal.Window).Minimize) }
+func (o *winAction) Show() error                { return o.act((cdglobal.Window).Show) }
 func (o *winAction) SetVisibility(b bool) error { return o.act(callVisibility(b)) }
-func (o *winAction) ToggleVisibility() error    { return o.act((window.Type).ToggleVisibility) }
+func (o *winAction) ToggleVisibility() error    { return o.act((cdglobal.Window).ToggleVisibility) }
 func (o *winAction) Maximize() error            { return o.act(winMaximize) }
 func (o *winAction) Restore() error             { return o.act(winRestore) }
 func (o *winAction) ToggleSize() error          { return o.act(winToggleSize) }
-func (o *winAction) Close() error               { return o.act((window.Type).Close) }
-func (o *winAction) Kill() error                { return o.act((window.Type).Kill) }
+func (o *winAction) Close() error               { return o.act((cdglobal.Window).Close) }
+func (o *winAction) Kill() error                { return o.act((cdglobal.Window).Kill) }
 
-func winMaximize(win window.Type)   { win.Maximize(true) }
-func winRestore(win window.Type)    { win.Maximize(false) }
-func winToggleSize(win window.Type) { win.Maximize(!win.IsMaximized()) }
+func winMaximize(win cdglobal.Window)   { win.Maximize(true) }
+func winRestore(win cdglobal.Window)    { win.Maximize(false) }
+func winToggleSize(win cdglobal.Window) { win.Maximize(!win.IsMaximized()) }
 
-func callVisibility(show bool) func(window.Type) {
-	return func(win window.Type) { win.SetVisibility(show) }
+func callVisibility(show bool) func(cdglobal.Window) {
+	return func(win cdglobal.Window) { win.SetVisibility(show) }
 }
 
 //

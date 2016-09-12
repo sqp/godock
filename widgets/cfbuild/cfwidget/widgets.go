@@ -1141,17 +1141,15 @@ func Strings(key *cftype.Key) {
 	widget := newgtk.Entry()
 	widget.SetText(value)
 
-	if key.IsType(cftype.KeyPasswordEntry) { // on cache le texte entre et on decrypte 'cValue'.
+	if key.IsType(cftype.KeyPasswordEntry) { // Hide text and decrypt value.
 		widget.SetVisibility(false)
-		// gchar *cDecryptedString = NULL;
-		// cairo_dock_decrypt_string ( cValue, &cDecryptedString );
-		// g_free (cValue);
-		// cValue = cDecryptedString;
+		value = key.Source().DecryptString(value)
 	}
 
 	// Pack the widget before any other (in full size if needed).
 	// So we do it now and fill the callbacks later
 	key.PackKeyWidget(key, nil, nil, widget)
+	var setValue func(interface{})
 
 	// 	Add special buttons to fill the entry box.
 	switch key.Type {
@@ -1182,7 +1180,25 @@ func Strings(key *cftype.Key) {
 
 		switch key.Type {
 		case cftype.KeyClassSelector:
-			grab.Connect("clicked", onClassGrabClicked)
+			grab.Connect("clicked", func() {
+				widget.SetSensitive(false) // Block widgets.
+				grab.SetSensitive(false)
+
+				go func() {
+					class, e := key.Source().GrabWindowClass() // Wait user selection in a routine.
+					glib.IdleAdd(func() {                      // And resync with the GTK loop to display results.
+
+						widget.SetSensitive(true) // Reactivate widgets.
+						grab.SetSensitive(true)
+
+						if !key.Log().Err(e, "ClassSelector", key.Group, key.Name) {
+
+							setValue(class) // On success.
+							key.Log().Debug("KeyClassSelector window selected", class)
+						}
+					})
+				}()
+			})
 
 		case cftype.KeyShortkeySelector:
 			grab.Connect("clicked", onKeyGrabClicked, &textGrabData{entry: widget, win: key.Source().GetWindow()})
@@ -1196,7 +1212,6 @@ func Strings(key *cftype.Key) {
 
 	}
 
-	var setValue func(interface{})
 	// Display a default value when empty.
 	if len(key.AuthorizedValues) > 0 && key.AuthorizedValues[0] != "" {
 		defaultText := key.Translate(key.AuthorizedValues[0])

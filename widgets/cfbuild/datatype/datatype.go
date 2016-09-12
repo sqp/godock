@@ -190,28 +190,37 @@ type Source interface {
 	// CreateMainDock creates a new main dock to store a moved icon.
 	//
 	CreateMainDock() string
+
+	// GrabWindowClass waits a user window selection and returns its class.
+	//
+	GrabWindowClass() (string, error)
 }
 
 // SourceCommon provides common methods for dock config data source.
 //
-type SourceCommon struct{}
+type SourceCommon struct {
+	Log     cdtype.Logger
+	ConfDir string // Path to user config dir with "extras" themes dir.
+}
 
 // ListThemeXML builds a list of icon theme in system and user dir.
 //
-func (SourceCommon) ListThemeXML(localSystem, localUser, distant string) map[string]Handbooker {
+func (sc SourceCommon) ListThemeXML(localSystem, localUser, distant string) map[string]Handbooker {
 	// list, _ := packages.ListExternalUser(localSystem, "theme")
-	list, _ := packages.ListThemesDir(localSystem, packages.TypeLocal)
+	// Themes installed in system dir.
+	list, _ := packages.ListThemesDir(sc.Log, localSystem, packages.TypeLocal)
 
-	if userDir, e := packages.DirTheme(localUser); e == nil {
-		users, _ := packages.ListThemesDir(userDir, packages.TypeUser)
-
+	// Themes installed in user dir.
+	userDir, e := packages.DirThemeExtra(sc.ConfDir, localUser)
+	if e == nil {
+		users, _ := packages.ListThemesDir(sc.Log, userDir, packages.TypeUser)
 		list = append(list, users...)
-
 	}
+	sc.Log.Debug("ListThemeXML found total ", len(list), userDir)
 
 	// Rename theme title with the online list.
 	// TODO: maybe need to use hint here.
-	dist, _ := packages.ListDistant(distant)
+	dist, _ := packages.ListDistant(sc.Log, distant)
 	for k, v := range list {
 		more := dist.Get(v.DirName)
 		if more != nil && more.Title != "" {
@@ -235,15 +244,17 @@ func (SourceCommon) ListThemeXML(localSystem, localUser, distant string) map[str
 
 // ListThemeINI builds a list of icon theme in system and user dir.
 //
-func (SourceCommon) ListThemeINI(localSystem, localUser, distant string) map[string]Handbooker {
+func (sc SourceCommon) ListThemeINI(localSystem, localUser, distant string) map[string]Handbooker {
 	// Themes installed in system dir.
-	list, _ := packages.ListFromDir(localSystem, packages.TypeLocal, packages.SourceTheme)
+	list, _ := packages.ListFromDir(sc.Log, localSystem, packages.TypeLocal, packages.SourceTheme)
 
 	// Themes installed in user dir.
-	if userDir, e := packages.DirTheme(localUser); e == nil {
-		dist, _ := packages.ListFromDir(userDir, packages.TypeUser, packages.SourceTheme)
+	userDir, e := packages.DirThemeExtra(sc.ConfDir, localUser)
+	if e == nil {
+		dist, _ := packages.ListFromDir(sc.Log, userDir, packages.TypeUser, packages.SourceTheme)
 		list = append(list, dist...)
 	}
+	sc.Log.Debug("ListThemeINI found total ", len(list), userDir)
 
 	out := make(map[string]Handbooker)
 	for _, v := range list {

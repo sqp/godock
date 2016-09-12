@@ -42,7 +42,7 @@ Current golang thread on cairo-dock forum: http://glx-dock.org/bg_topic.php?t=76
 Cairo-Dock : http://glx-dock.org/
 
 
-Copyright (C) 2012-2015 SQP  <sqp@glx-dock.org>
+Copyright (C) 2012-2016 SQP  <sqp@glx-dock.org>
 
 License: Released under GPLv3
 */

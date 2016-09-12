@@ -35,8 +35,14 @@ type Bridge struct {
 //
 func New(log cdtype.Logger) *Bridge {
 	return &Bridge{
-		Source: &confdata.Data{Crypto: gldi.Crypto},
-		Log:    log,
+		Source: &confdata.Data{
+			Crypto: gldi.Crypto,
+			SourceCommon: datatype.SourceCommon{
+				Log:     log,
+				ConfDir: globals.DirDockData(),
+			},
+		},
+		Log: log,
 	}
 }
 

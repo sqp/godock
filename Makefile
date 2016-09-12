@@ -52,6 +52,9 @@ patch:
 	# Patch Dbus (for Notifications)
 	cd "$(GOPATH)/src/github.com/godbus/dbus" && git pull --commit --no-edit https://github.com/sqp/dbus fixeavesdrop
 
+	# Patch ini parser for config.
+	cd "$(GOPATH)/src/github.com/go-ini/ini"  && git pull --commit --no-edit https://github.com/sqp/ini gtk_keyfile_compat
+
 patch-dock: patch
 
 

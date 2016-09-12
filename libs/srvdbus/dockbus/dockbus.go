@@ -15,14 +15,13 @@
 package dockbus
 
 import (
-	"github.com/sqp/godock/libs/log"
+	"github.com/sqp/godock/libs/cdtype" // Logger type.
 	"github.com/sqp/godock/libs/packages"
 	"github.com/sqp/godock/libs/srvdbus/dbuscommon"
 	"github.com/sqp/godock/libs/srvdbus/dockpath" // Path to main dock dbus service.
 
 	"errors"
 	"fmt"
-	"path/filepath"
 	"sort"
 	"strings"
 )
@@ -43,9 +42,7 @@ import (
 //   Icon location (main or subdock name)     "container":"_MainDock_"
 //   Launcher application class               "class":"gjiten"
 //
-func DockAdd(args map[string]interface{}) func(*Client) error {
-	return func(client *Client) error { return client.Call("Add", dbuscommon.ToMapVariant(args)) }
-}
+func DockAdd(args map[string]interface{}) error { return Action(dockAdd(args)) }
 
 // DockRemove removes an item from the Dock.
 //
@@ -54,48 +51,31 @@ func DockAdd(args map[string]interface{}) func(*Client) error {
 //   Module                                    "type=Module & name=clock"
 //   Instance of a module                      "type=Module-Instance & config-file=clock.conf"
 //
-func DockRemove(arg string) func(*Client) error {
-	return func(client *Client) error { return client.Call("Remove", arg) }
-}
-
-// func (cda *CdDbus) ActivateModule(module string, state bool) {
-// 	busDock().Call(DbusInterfaceDock+".ActivateModule", 0, module, state)
-// 	// return cda.launch(base, "ActivateModule", interface{}(module), interface{}(state))
-// }
+func DockRemove(arg string) error { return Action(dockRemove(arg)) }
 
 // DockReboot reload the current theme of the Dock, as if you had quit and restarted the dock.
 //
-func DockReboot(client *Client) error {
-	return client.Call("Reboot")
-}
+func DockReboot() error { return Action((*Client).Reboot) }
 
 // DockQuit sends the Quit action to the dock dbus.
 //
-func DockQuit(client *Client) error {
-	return client.Call("Quit")
-}
+func DockQuit() error { return Action((*Client).Quit) }
 
 // DockShow sets the dock visibility: 0 = HIDE, 1 = SHOW, 2 = TOGGLE.
 // If you have several docks, it will show/hide all of them.
 //
-func DockShow(mode int32) func(*Client) error {
-	return func(client *Client) error { return client.Call("ShowDock", mode) }
-}
+func DockShow(mode int32) error { return Action(dockShow(mode)) }
 
-// ShowDesklet TODO: need to complete this part.
+// DeskletShow TODO: need to complete this part.
 //
-func ShowDesklet(mode int32) func(*Client) error {
-	return func(client *Client) error { return client.Call("ShowDeslet", mode) }
-}
+func DeskletShow(mode int32) error { return Action(deskletShow(mode)) }
 
 // IconReload reloads an icon settings from disk.
 //
 //   "type=Module & name=weather"
 //   "config-file=full_path_to_config_or_desktop_file"
 //
-func IconReload(arg string) func(*Client) error {
-	return func(client *Client) error { return client.Call("Reload", arg) }
-}
+func IconReload(arg string) error { return Action(iconReload(arg)) }
 
 // DockProperties gets properties of different parts of the dock.
 // API may change for this function. Need to figure out the best way to return the data.
@@ -114,29 +94,22 @@ func IconReload(arg string) func(*Client) error {
 //   	}
 //   }
 func DockProperties(arg string) ([]map[string]interface{}, error) {
-	client, e := NewClient()
-	if log.Err(e, "dbus GetProperties") {
+	cl, e := NewClient()
+	if e != nil {
 		return nil, e
 	}
-
-	var list []map[string]interface{}
-	e = client.Get("GetProperties", []interface{}{&list}, arg)
-	return list, e
+	return cl.DockProperties(arg)
 }
 
 // //--------------------------------------------------[ GET SPECIAL PROPERTIES ]--
 
 // AppletAdd adds an applet instance referenced by its name.
 //
-func AppletAdd(name string) func(*Client) error {
-	return DockAdd(map[string]interface{}{"type": "Module", "module": name})
-}
+func AppletAdd(name string) error { return Action(appletAdd(name)) }
 
 // AppletRemove removes an applet instance referenced by its config file.
 //
-func AppletRemove(configFile string) func(*Client) error {
-	return DockRemove("type=Module-Instance & config-file=" + configFile)
-}
+func AppletRemove(configFile string) error { return Action(appletRemove(configFile)) }
 
 // AppletInstances asks the dock the list of active instances for an applet.
 // Instances references are full paths to their config files.
@@ -193,6 +166,31 @@ type CDIcon struct {
 	Icon       string
 	Class      string
 	Module     string
+
+	log cdtype.Logger
+}
+
+// ListIcons asks the dock the list of active icons.
+//
+// TODO: add argument for advanced queries.
+// would be cool to have argument list.
+//
+func ListIcons(log cdtype.Logger) (list []*CDIcon) {
+	iconsInfo, e := DockProperties("type=Icon")
+	log.Err(e, "ListIcons")
+	for _, props := range iconsInfo {
+		ic := &CDIcon{log: log}
+		for k, v := range props {
+			ic.getProp(k, v)
+
+		}
+		// if ic.Name == "" {
+		// 	log.NewErr("ListIcons name empty", ic.Type, ic.ConfigFile)
+		// } else {
+		list = append(list, ic)
+		// }
+	}
+	return
 }
 
 // FormatName return the user readable name for the icon.
@@ -227,7 +225,7 @@ func (icon *CDIcon) DefaultNameIcon(applets map[string]*packages.AppletPackage) 
 		if pack, ok := applets[icon.Module]; ok {
 			img = pack.Icon
 		} else {
-			log.Info("module not found for icon", icon.Module)
+			icon.log.Info("module not found for icon", icon.Module)
 		}
 
 	case icon.Icon != "":
@@ -250,18 +248,18 @@ func (icon *CDIcon) DefaultNameIcon(applets map[string]*packages.AppletPackage) 
 
 // ConfigPath returns the full path to the icon config file.
 //
-func (icon *CDIcon) ConfigPath() string {
-	switch icon.Type {
-	case IconTypeApplet, IconTypeTaskbar:
-		return icon.ConfigFile
+// func (icon *CDIcon) ConfigPath() string {
+// 	switch icon.Type {
+// 	case IconTypeApplet, IconTypeTaskbar:
+// 		return icon.ConfigFile
 
-	case IconTypeLauncher, IconTypeSeparator, IconTypeSubDock:
-		if dir, e := packages.DirLaunchers(); !log.Err(e, "config launchers") {
-			return filepath.Join(dir, icon.ConfigFile)
-		}
-	}
-	return ""
-}
+// 	case IconTypeLauncher, IconTypeSeparator, IconTypeSubDock:
+// 		if dir, e := packages.DirLaunchers(); !log.Err(e, "config launchers") {
+// 			return filepath.Join(dir, icon.ConfigFile)
+// 		}
+// 	}
+// 	return ""
+// }
 
 // IsTaskbar returns whether the icon belongs to the taskbar or not.
 //
@@ -271,62 +269,57 @@ func (icon *CDIcon) IsTaskbar() bool {
 
 //
 
-// ListIcons asks the dock the list of active icons.
-//
-// TODO: add argument for advanced queries.
-// would be cool to have argument list.
-//
-func ListIcons() (list []*CDIcon) {
-	// TODO: should log or return error.
-	iconsInfo, _ := DockProperties("type=Icon")
-
-	for _, props := range iconsInfo {
-		pack := &CDIcon{}
-		for k, v := range props {
-			switch k {
-			case "name":
-				pack.Name = v.(string)
-			case "Xid":
-				pack.Xid = v.(uint32)
-			case "position":
-				pack.Position = v.(int32)
-			case "type":
-				pack.Type = v.(string)
-			case "quick-info":
-				pack.QuickInfo = v.(string)
-			case "container":
-				pack.Container = v.(string)
-			case "command":
-				pack.Command = v.(string)
-			case "order":
-				pack.Order = v.(float64)
-			case "config-file":
-				pack.ConfigFile = v.(string)
-			case "icon":
-				pack.Icon = v.(string)
-			case "class":
-				pack.Class = v.(string)
-			case "module":
-				pack.Module = v.(string)
-			default:
-				log.Info("ListIcons key not found: "+k, v)
-			}
-		}
-		// if pack.Name == "" {
-		// 	log.DEV("*****NONAME", pack.Type, pack.ConfigFile)
-		// 	// } else {
-		// 	// 	log.DEV(pack.Name, pack.Order)
-		// }
-		list = append(list, pack)
+func (icon *CDIcon) getProp(key string, value interface{}) {
+	switch key {
+	case "name":
+		icon.Name = value.(string)
+	case "Xid":
+		icon.Xid = value.(uint32)
+	case "position":
+		icon.Position = value.(int32)
+	case "type":
+		icon.Type = value.(string)
+	case "quick-info":
+		icon.QuickInfo = value.(string)
+	case "container":
+		icon.Container = value.(string)
+	case "command":
+		icon.Command = value.(string)
+	case "order":
+		icon.Order = value.(float64)
+	case "config-file":
+		icon.ConfigFile = value.(string)
+	case "icon":
+		icon.Icon = value.(string)
+	case "class":
+		icon.Class = value.(string)
+	case "module":
+		icon.Module = value.(string)
+	default:
+		icon.log.Info("ListIcons key not found: "+key, value)
 	}
-	return
 }
 
+//
 //----------------------------------------------------------[ ICONS BY ORDER ]--
 
 // IconsByOrder defines a list of icons that can be sorted on the order field.
 //
 type IconsByOrder []*CDIcon
+
+// ListIconsOrdered builds the list of dock icons sorted by container and order.
+//
+func ListIconsOrdered(log cdtype.Logger) map[string]IconsByOrder {
+	list := make(map[string]IconsByOrder)
+	for _, icon := range ListIcons(log) {
+		list[icon.Container] = append(list[icon.Container], icon)
+	}
+
+	for container := range list {
+		sort.Sort(IconsByOrder(list[container]))
+	}
+	return list
+}
 
 // Len returns the size of the list.
 //
@@ -344,20 +337,6 @@ func (a IconsByOrder) Swap(i, j int) {
 //
 func (a IconsByOrder) Less(i, j int) bool {
 	return a[i].Order < a[j].Order
-}
-
-// ListIconsOrdered builds the list of dock icons sorted by container and order.
-//
-func ListIconsOrdered() map[string]IconsByOrder {
-	list := make(map[string]IconsByOrder)
-	for _, icon := range ListIcons() {
-		list[icon.Container] = append(list[icon.Container], icon)
-	}
-
-	for container := range list {
-		sort.Sort(IconsByOrder(list[container]))
-	}
-	return list
 }
 
 // func ListLaunchers() (list []*CDIcon) {
@@ -403,28 +382,31 @@ func ListIconsOrdered() map[string]IconsByOrder {
 // 	return
 // }
 
+//
+//----------------------------------------------------------[ APPLET PACKAGE ]--
+
 // InfoApplet asks the dock all informations about an applet.
 //
-func InfoApplet(name string) *packages.AppletPackage {
-	// TODO: should log or return error.
+func InfoApplet(log cdtype.Logger, name string) *packages.AppletPackage {
 	vars, _ := DockProperties("type=Module & name=" + name)
-	for _, props := range vars {
-		pack, _ := parseApplet(props)
-		return pack
+	if len(vars) == 0 {
+		log.NewErr("unknown applet", "InfoApplet", name)
+		return nil
 	}
-	return nil
+	pack, _ := parseApplet(log, vars[0])
+	return pack
 }
 
 // ListKnownApplets asks the dock informations about all known applets.
 //
-func ListKnownApplets() (map[string]*packages.AppletPackage, error) {
+func ListKnownApplets(log cdtype.Logger) (map[string]*packages.AppletPackage, error) {
 	vars, e := DockProperties("type=Module")
 	if e != nil {
 		return nil, e
 	}
 	list := make(map[string]*packages.AppletPackage)
 	for _, props := range vars {
-		pack, e := parseApplet(props)
+		pack, e := parseApplet(log, props)
 		if e != nil {
 			return nil, e
 		}
@@ -435,72 +417,62 @@ func ListKnownApplets() (map[string]*packages.AppletPackage, error) {
 	return list, nil
 }
 
-func parseApplet(props map[string]interface{}) (*packages.AppletPackage, error) {
-	pack := &packages.AppletPackage{}
+func parseApplet(log cdtype.Logger, props map[string]interface{}) (*packages.AppletPackage, error) {
+	pack := packages.NewAppletPackage(log)
 	for k, v := range props {
-		switch k {
-		case "type": // == "Module"
-
-		case "name":
-			pack.DisplayedName = v.(string)
-
-		case "title":
-			pack.Title = v.(string)
-
-		case "author":
-			pack.Author = v.(string)
-
-		case "instances":
-			if instances, ok := v.([]string); ok {
-				pack.Instances = instances
-			}
-
-		case "icon":
-			pack.Icon = v.(string)
-
-		case "description":
-			pack.Description = v.(string)
-
-		case "is-multi-instance":
-			pack.IsMultiInstance = v.(bool)
-
-		case "category":
-			if cat, ok := v.(uint32); ok {
-				pack.Category = int(cat)
-			}
-
-		case "preview":
-			pack.Preview = v.(string)
-
-		case "module-type":
-			pack.ModuleType = int(v.(uint32))
-
-		default:
-			return nil, fmt.Errorf("parseApplet field unmatched: %s => %#v", k, v)
+		e := appletProp(pack, k, v)
+		if e != nil {
+			return nil, e
 		}
 	}
 	return pack, nil
 }
 
-// type AppletPackage struct {
-// 	DisplayedName string      // name of the package
-// 	Type          PackageType // type of package : installed, user, distant...
-// 	Path          string      // complete path of the package.
-// 	LastModifDate string      `conf:"last modif"` // date of latest changes in the package.
+func appletProp(pack *packages.AppletPackage, key string, value interface{}) error {
+	switch key {
+	case "type": // == "Module"
 
-// 	// On server only.
-// 	CreationDate int     `conf:"creation"` // date of creation of the package.
-// 	Size         float64 `conf:"size"`     // size in Mo
-// 	// Rating int
+	case "name":
+		pack.DisplayedName = value.(string)
 
-// 	Author      string `conf:"author"` // author(s)
-// 	Description string `conf:"description"`
-// 	Category    int    `conf:"category"`
+	case "title":
+		pack.Title = value.(string)
 
-// 	Version       string `conf:"version"`
-// 	ActAsLauncher bool   `conf:"act as launcher"`
+	case "author":
+		pack.Author = value.(string)
 
-// }
+	case "instances":
+		instances, ok := value.([]string)
+		if ok {
+			pack.Instances = instances
+		}
+
+	case "icon":
+		pack.Icon = value.(string)
+
+	case "description":
+		pack.Description = value.(string)
+
+	case "is-multi-instance":
+		pack.IsMultiInstance = value.(bool)
+
+	case "category":
+		cat, ok := value.(uint32)
+		if ok {
+			pack.Category = int(cat)
+		}
+
+	case "preview":
+		pack.Preview = value.(string)
+
+	case "module-type":
+		pack.ModuleType = int(value.(uint32))
+
+	default:
+		return fmt.Errorf("parseApplet field unmatched: %s => %#v", key, value)
+	}
+	return nil
+}
 
 //
 //------------------------------------------------------------------[ CLIENT ]--
@@ -521,9 +493,9 @@ func NewClient() (*Client, error) {
 	return &Client{cl}, nil
 }
 
-// Send sends an action to the dock server.
+// Action sends an action to the dock server.
 //
-func Send(action func(*Client) error) error {
+func Action(action func(*Client) error) error {
 	client, e := NewClient()
 	if e != nil {
 		return e
@@ -531,6 +503,53 @@ func Send(action func(*Client) error) error {
 	return action(client) // we have a server, launch the provided action.
 }
 
-// Restart sends the Restart action to the dock dbus.
+// Reboot reload the current theme of the Dock, as if you had quit and restarted the dock.
 //
-// func Restart(client *Client) error { return client.Call("Restart") }
+func (cl *Client) Reboot() error {
+	return cl.Call("Reboot")
+}
+
+// Quit sends the Quit action to the dock dbus.
+//
+func (cl *Client) Quit() error {
+	return cl.Call("Quit")
+}
+
+// DockProperties gets properties of different parts of the dock.
+// see dockbus.DockProperties
+//
+func (cl *Client) DockProperties(arg string) ([]map[string]interface{}, error) {
+	var list []map[string]interface{}
+	e := cl.Get("GetProperties", []interface{}{&list}, arg)
+	return list, e
+}
+
+func dockAdd(args map[string]interface{}) func(*Client) error {
+	return func(client *Client) error { return client.Call("Add", dbuscommon.ToMapVariant(args)) }
+}
+
+func dockRemove(arg string) func(*Client) error {
+	return func(cl *Client) error { return cl.Call("Remove", arg) }
+}
+
+func dockShow(mode int32) func(*Client) error {
+	return func(cl *Client) error { return cl.Call("ShowDock", mode) }
+}
+
+func deskletShow(mode int32) func(*Client) error {
+	return func(cl *Client) error { return cl.Call("ShowDeslet", mode) }
+}
+
+func iconReload(arg string) func(*Client) error {
+	return func(cl *Client) error { return cl.Call("Reload", arg) }
+}
+
+func appletAdd(name string) func(*Client) error {
+	return dockAdd(map[string]interface{}{"type": "Module", "module": name})
+}
+
+func appletRemove(configFile string) func(*Client) error {
+	return dockRemove("type=Module-Instance & config-file=" + configFile)
+}
+
+// 	ActivateModule, moduleName, state)

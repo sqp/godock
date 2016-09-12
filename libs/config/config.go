@@ -56,40 +56,48 @@ optional Icon).
 package config
 
 import (
-	"github.com/robfig/config" // Config parser.
+	"github.com/go-ini/ini"
 
 	"github.com/sqp/godock/libs/cdtype"
+	"github.com/sqp/godock/libs/files"
+	"github.com/sqp/godock/widgets/cfbuild/valuer"
 
-	"bufio"
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strconv"
 	"strings"
 )
 
-//
-//--------------------------------------------------------------------[ KEYS ]--
+// ini parser global config.
+func init() {
+	ini.LineBreak = "\n\n"
+	ini.ValueComment = ""
+	ini.PrettyFormat = false
+}
 
-// GetFieldKey is method to match config key name and struct field.
 //
-type GetFieldKey func(reflect.StructField) string
+//--------------------------------------------------------------[ MATCH KEYS ]--
 
-// GetKey is a GetFieldKey test that matches by the field name.
+// GetKey is a cdtype.GetFieldKey test that matches by the field name.
 //
 func GetKey(struc reflect.StructField) string {
 	return struc.Name
 }
 
-// GetTag is a test GetFieldKey that matches by the struct tag is defined.
+// GetTag is a cdtype.GetFieldKey test that matches by the struct tag if defined.
 //
 func GetTag(struc reflect.StructField) string {
 	return struc.Tag.Get("conf")
 }
 
-// GetBoth is a GetFieldKey test that matches by the struct tag is defined,
-// otherwise, use the field name.
+// GetBoth is a cdtype.GetFieldKey test that matches by the struct tag if
+//  defined, otherwise use the field name.
 //
 func GetBoth(struc reflect.StructField) string {
 	if tag := struc.Tag.Get("conf"); tag != "" {
@@ -104,39 +112,75 @@ func GetBoth(struc reflect.StructField) string {
 // Config file unmarshall. Parsing errors will be stacked in the Errors field.
 //
 type Config struct {
-	config.Config // Extends the real config.
+	ini.File // Extends the real config.
 
 	Errors    []error
 	appdir    string             // applet dir for templates loading.
 	shortkeys []*cdtype.Shortkey // shortkeys found.
+	actions   []func(cdtype.AppAction)
+
+	filePath string      // Full path to config file.
+	fileMode os.FileMode // File access rights.
+	log      cdtype.Logger
 }
 
-// New creates a new Config parser.
+// NewEmpty creates a new empty Config parser.
+// Also locks files access.
 //
-func New() *Config {
-	c := config.New(config.DEFAULT_COMMENT, config.ALTERNATIVE_SEPARATOR, false, false)
-	return &Config{Config: *c}
+func NewEmpty(log cdtype.Logger, configFile string) *Config {
+	files.AccessLock(log)
+	return &Config{
+		File:     *ini.Empty(),
+		filePath: configFile,
+		fileMode: 0644,
+		log:      log,
+	}
 }
 
-// NewFromFile creates a new Config parser with reflection to fill fields.
+// NewFromFile creates a ConfUpdater for the given config file (full path).
+// This lock files access. Ensure you Save or Cancel fast.
 //
-func NewFromFile(filename string) (*Config, error) {
-	c, e := config.ReadDefault(filename)
+func NewFromFile(log cdtype.Logger, configFile string) (*Config, error) {
+	// Ensure the file exists and get the file access rights to preserve them.
+	var e error
+	configFile, e = filepath.Abs(configFile)
 	if e != nil {
 		return nil, e
 	}
-	return &Config{Config: *c}, nil
+	fi, e := os.Stat(configFile)
+	if e != nil {
+		return nil, e
+	}
+
+	log.Debug("lock", configFile)
+
+	files.AccessLock(log)
+
+	cfg, e := ini.Load(configFile)
+	if e != nil {
+		files.AccessUnlock(log)
+		return nil, e
+	}
+	return &Config{
+		File:     *cfg,
+		filePath: configFile,
+		fileMode: fi.Mode(),
+		log:      log,
+	}, nil
 }
 
 // NewFromReader creates a new Config parser with reflection to fill fields.
 //
 func NewFromReader(reader io.Reader) (*Config, error) {
-	c := &Config{Config: *config.NewDefault()}
-	e := c.Read(bufio.NewReader(reader))
+	buf := bytes.NewBuffer(nil)
+	io.Copy(buf, reader)
+	cfg, e := ini.Load(buf.Bytes())
 	if e != nil {
 		return nil, e
 	}
-	return c, nil
+	return &Config{
+		File: *cfg,
+	}, nil
 }
 
 // Load loads a config file and fills a config data struct.
@@ -144,21 +188,104 @@ func NewFromReader(reader io.Reader) (*Config, error) {
 // Returns parsed defaults data, the list of parsing errors, and the main error
 // if the load failed (file missing / not readable).
 //
+//   log        Logger.
 //   filename   Full path to the config file.
 //   appdir     Application directory, to find templates.
 //   v          The pointer to the data struct.
 //   fieldKey   Func to choose what key to load for each field.
 //              Usable methods provided: GetKey, GetTag, GetBoth.
 //
-func Load(filename, appdir string, v interface{}, fieldKey GetFieldKey) (cdtype.Defaults, []error, error) {
-	conf, e := NewFromFile(filename)
+func Load(log cdtype.Logger, filename, appdir string, v interface{}, fieldKey cdtype.GetFieldKey) (cdtype.Defaults, []func(cdtype.AppAction), []error, error) {
+	cfg, e := NewFromFile(log, filename)
 	if e != nil {
-		return cdtype.Defaults{}, nil, e
+		return cdtype.Defaults{}, nil, nil, e
 	}
-	conf.appdir = appdir
-	def := conf.Unmarshall(v, fieldKey)
-	def.Shortkeys = conf.shortkeys
-	return def, conf.Errors, nil
+	cfg.appdir = appdir
+	def := cfg.Unmarshall(v, fieldKey)
+	cfg.Cancel()
+	return def, cfg.actions, cfg.Errors, nil
+}
+
+// SetToFile gets a conf updater in read/write mode.
+//
+func SetToFile(log cdtype.Logger, filename string, call func(cdtype.ConfUpdater) error) error {
+	cfg, e := NewFromFile(log, filename)
+	if e != nil {
+		return e
+	}
+	e = call(cfg)
+	if e != nil {
+		cfg.Cancel()
+		return e
+	}
+	return cfg.Save()
+}
+
+// GetFromFile gets a conf updater in read only.
+//
+func GetFromFile(log cdtype.Logger, filename string, call func(cdtype.ConfUpdater)) error {
+	cfg, e := NewFromFile(log, filename)
+	if e != nil {
+		return e
+	}
+	call(cfg)
+	cfg.Cancel()
+	return nil
+}
+
+// UpdateFile udates one key in a configuration file.
+//
+func UpdateFile(log cdtype.Logger, filename, group, key string, value interface{}) error {
+	return SetToFile(log, filename, func(cfg cdtype.ConfUpdater) error {
+		return cfg.Set(group, key, value)
+	})
+}
+
+// Cancel releases the file locks.
+//
+func (c *Config) Cancel() {
+	files.AccessUnlock(c.log)
+}
+
+// Save saves the edited config to disk, and releases the file locks.
+//
+func (c *Config) Save() error {
+	defer files.AccessUnlock(c.log)
+
+	buf := bytes.NewBuffer(nil)
+	_, e := c.WriteToIndent(buf, "")
+	if e != nil {
+		return e
+	}
+
+	// Remove empty space at the end, except one endline.
+	data := append(bytes.TrimRight(buf.Bytes(), "\n "), []byte("\n")...)
+	return ioutil.WriteFile(c.filePath, data, c.fileMode)
+}
+
+// Valuer returns the valuer for the given group/key combo.
+//
+func (c *Config) Valuer(group, key string) valuer.Valuer {
+	return &value{
+		c:     *c,
+		group: group,
+		name:  key,
+	}
+}
+
+// ParseGroups calls the given func for every group with its list of keys.
+//
+func (c *Config) ParseGroups(call func(group string, keys []cdtype.ConfKeyer)) {
+	for _, group := range c.SectionStrings() {
+		var keys []cdtype.ConfKeyer
+		for _, key := range c.Section(group).Keys() {
+			keys = append(keys, &confKey{
+				key:    key,
+				Valuer: c.Valuer(group, key.Name()),
+			})
+		}
+		call(group, keys)
+	}
 }
 
 //
@@ -168,7 +295,7 @@ func Load(filename, appdir string, v interface{}, fieldKey GetFieldKey) (cdtype.
 // The First level is config group, matched by the key group.
 // Second level is data fields, matched by the supplied GetFieldKey func.
 //
-func (c *Config) Unmarshall(v interface{}, fieldKey GetFieldKey) cdtype.Defaults {
+func (c *Config) Unmarshall(v interface{}, fieldKey cdtype.GetFieldKey) cdtype.Defaults {
 	typ := reflect.Indirect(reflect.ValueOf(v)).Type().Elem() // Get the type of the struct behind the pointer.
 	val := reflect.ValueOf(v).Elem()                          // ReflectValue of the config struct.
 
@@ -179,60 +306,48 @@ func (c *Config) Unmarshall(v interface{}, fieldKey GetFieldKey) cdtype.Defaults
 	// Range over the first level of fields to find struct with tag "group".
 	for i := 0; i < typ.NumField(); i++ { // Parsing all fields in grre.
 		// log.Info("field", i, typ.Field(i).Name, typ.Field(i).Tag.Get("group"))
-		if group := typ.Field(i).Tag.Get("group"); group != "" {
-			// Get user data from the group.
-			c.unmarshalGroup(val.Elem().Field(i), group, fieldKey)
+		group := typ.Field(i).Tag.Get("group")
+		if group == "" {
+			continue
+		}
+		// Get user data from the group.
+		c.unmarshalGroup(val.Elem().Field(i), group, fieldKey)
 
-			// Get applet defaults from the group if it's public and provides a ToDefaults method.
-			if val.Elem().Field(i).CanInterface() {
-				uncast := val.Elem().Field(i).Interface()
-				getDef, ok := uncast.(cdtype.ToDefaultser)
-				if ok {
-					getDef.ToDefaults(&def)
-				}
+		// Get applet defaults from the group if it's public and provides a ToDefaults method.
+		if val.Elem().Field(i).CanInterface() {
+			uncast := val.Elem().Field(i).Interface()
+			getDef, ok := uncast.(cdtype.ToDefaultser)
+			if ok {
+				getDef.ToDefaults(&def)
 			}
 		}
 	}
-
-	// Get instance behind pointer. Not sure why I have to use 2x Elem()
-	// maybe once to get inside the pointer and once inside the struct.
-	// val = val.Elem().Elem()
-
-	// // Parse struct to fill each group according to its tag.
-	// typ := val.Type()
-	// log.Info("kind", typ.Kind())
-	// for i := 0; i < typ.NumField(); i++ { // Parsing all fields in type.
-	// 	log.Info("field", i, typ.Field(i).Name, typ.Field(i).Tag.Get("group"))
-	// 	if group := typ.Field(i).Tag.Get("group"); group != "" {
-	// 		// log.Debug(typ.Field(i).Name, typ.Field(i).Tag.Get("group"))
-	// 		c.UnmarshalGroup(val.Field(i), group, fieldKey)
-	// 	}
-	// }
+	def.Shortkeys = c.shortkeys
 	return def
 }
 
-// UnmarshalGroup parse config to fill the struct provided with values from the
-// given group in the file.
+// UnmarshalGroup parse a config group to fill the ptr to struct provided.
 //
 // The group param must match a group in the file with the format [MYGROUP]
 //
-func (c *Config) UnmarshalGroup(v interface{}, group string, fieldKey GetFieldKey) {
+func (c *Config) UnmarshalGroup(v interface{}, group string, fieldKey cdtype.GetFieldKey) []error {
 	conf := reflect.ValueOf(v).Elem()
 	c.unmarshalGroup(conf, group, fieldKey)
+	return c.Errors
 }
 
 // see UnmarshalGroup.
-func (c *Config) unmarshalGroup(conf reflect.Value, group string, fieldKey GetFieldKey) {
+func (c *Config) unmarshalGroup(conf reflect.Value, group string, fieldKey cdtype.GetFieldKey) {
 	typ := conf.Type()
 	for i := 0; i < typ.NumField(); i++ { // Parsing all fields in type.
-		c.getField(conf.Field(i), group, fieldKey(typ.Field(i)), typ.Field(i).Tag)
+		c.fieldFromConf(conf.Field(i), group, fieldKey(typ.Field(i)), typ.Field(i).Tag)
 	}
 }
 
 // Fill a single reflected field if it has the conf tag.
 //
-func (c *Config) getField(elem reflect.Value, group, key string, tag reflect.StructTag) {
-	if key == "-" { // Disabled config key.
+func (c *Config) fieldFromConf(elem reflect.Value, group, key string, tag reflect.StructTag) {
+	if key == "" || key == "-" || !elem.CanInterface() { // Disabled or private config key.
 		return
 	}
 
@@ -247,20 +362,27 @@ func (c *Config) getField(elem reflect.Value, group, key string, tag reflect.Str
 		}
 	}
 
+	ck := c.Section(group).Key(key)
+
 	switch elem.Interface().(type) {
 
 	case bool:
-		val, e := c.Bool(group, key)
+		val, e := ck.Bool()
 		c.testerr(e, group, key, "bool value")
 		elem.SetBool(val)
+		tagInt(tag.Get("action"), func(id int) {
+			// Get the pointer to value for the set value action callback.
+			b := elem.Addr().Interface().(*bool)
+			c.actions = append(c.actions, func(act cdtype.AppAction) { act.SetBool(id, b) })
+		})
 
 	case int, int32, int64, cdtype.InfoPosition, cdtype.RendererGraphType:
-		val, e := c.Int(group, key)
+		val, e := ck.Int()
 		c.testerr(e, group, key, "int value")
 		elem.SetInt(int64(val))
 
 	case cdtype.Duration:
-		val, e := c.Int(group, key)
+		val, e := ck.Int()
 		c.testerr(e, group, key, "Duration value")
 
 		dur := cdtype.NewDuration(val)
@@ -273,21 +395,19 @@ func (c *Config) getField(elem reflect.Value, group, key string, tag reflect.Str
 		elem.Set(reflect.ValueOf(*dur))
 
 	case string:
-		val, e := c.String(group, key)
-		c.testerr(e, group, key, "string value")
+		val := ck.String()
 		if val == "" {
 			val = tag.Get("default")
 		}
 		elem.SetString(val)
 
 	case float64:
-		val, e := c.Float(group, key)
+		val, e := ck.Float64()
 		c.testerr(e, group, key, "float64 value")
 		elem.SetFloat(val)
 
 	case []string:
-		val, e := c.String(group, key)
-		c.testerr(e, group, key, "[]string value")
+		val := ck.String()
 		list := strings.Split(strings.TrimRight(val, ";"), ";")
 		if list[len(list)-1] == "" {
 			list = list[:len(list)-1]
@@ -295,9 +415,7 @@ func (c *Config) getField(elem reflect.Value, group, key string, tag reflect.Str
 		elem.Set(reflect.ValueOf(list))
 
 	case *cdtype.Shortkey:
-		val, e := c.String(group, key)
-
-		c.testerr(e, group, key, "Shortkey value")
+		val := ck.String()
 		sk := &cdtype.Shortkey{
 			ConfGroup: group,
 			ConfKey:   key,
@@ -311,24 +429,21 @@ func (c *Config) getField(elem reflect.Value, group, key string, tag reflect.Str
 		c.shortkeys = append(c.shortkeys, sk)
 
 	case cdtype.Template:
-		name, e := c.String(group, key)
-		c.testerr(e, group, key, "Template value")
+		name := ck.String()
 		if name == "" {
 			name = tag.Get("default")
 		}
-		if e == nil {
-			tmpl, e := cdtype.NewTemplate(name, c.appdir)
+		tmpl, e := cdtype.NewTemplate(name, c.appdir)
 
-			if e == nil {
-				elem.Set(reflect.ValueOf(*tmpl))
-			} else {
-				elem.Set(reflect.ValueOf(cdtype.Template{FilePath: name}))
-			}
+		if e == nil {
+			elem.Set(reflect.ValueOf(*tmpl))
+		} else {
+			elem.Set(reflect.ValueOf(cdtype.Template{FilePath: name}))
 		}
 
 	default:
 		if elem.Kind().String() == "int" { // Int like types often used as ref types.
-			val, e := c.Int(group, key)
+			val, e := ck.Int()
 			c.testerr(e, group, key, "int like value")
 			elem.SetInt(int64(val))
 
@@ -351,74 +466,209 @@ func (c *Config) adderr(group, key, msg string, args ...interface{}) {
 	c.Errors = append(c.Errors, fmt.Errorf("config: %s / %s -- "+msg, args...))
 }
 
-//------------------------------------------------------------[ TEMP ]--
+//-----------------------------------------------------------------[ MARSHAL ]--
 
-// Need to get access to the read function of our config library.
-// this is just a copy with public access.
-
-// Read config from a Reader.
-func (c *Config) Read(buf *bufio.Reader) (err error) {
-	var section, option string
-
-	for {
-		l, err := buf.ReadString('\n') // parse line-by-line
-		if err == io.EOF {
-			break
-		} else if err != nil {
-			return err
-		}
-
-		l = strings.TrimSpace(l)
-
-		// Switch written for readability (not performance)
-		switch {
-		// Empty line and comments
-		case len(l) == 0, l[0] == '#', l[0] == ';':
+// MarshalGroup fills the config with data from the struct provided.
+//
+// The group param must match a group in the file with the format [MYGROUP]
+//
+func (c *Config) MarshalGroup(v interface{}, group string, fieldKey cdtype.GetFieldKey) error {
+	conf := reflect.ValueOf(v).Elem()
+	typ := conf.Type()
+	for i := 0; i < typ.NumField(); i++ { // Parsing all fields in type.
+		elem := conf.Field(i)
+		key := fieldKey(typ.Field(i))
+		if key == "" || key == "-" || !elem.CanInterface() { // Disabled config key.
 			continue
-
-		// New section
-		case l[0] == '[' && l[len(l)-1] == ']':
-			option = "" // reset multi-line value
-			section = strings.TrimSpace(l[1 : len(l)-1])
-			c.AddSection(section)
-
-		// No new section and no section defined so
-		//case section == "":
-		//return os.NewError("no section defined")
-
-		// Other alternatives
-		default:
-			i := strings.IndexAny(l, "=:")
-
-			switch {
-			// Option and value
-			case i > 0:
-				i := strings.IndexAny(l, "=:")
-				option = strings.TrimSpace(l[0:i])
-				value := strings.TrimSpace(stripComments(l[i+1:]))
-				c.AddOption(section, option, value)
-			// Continuation of multi-line value
-			case section != "" && option != "":
-				prev, _ := c.RawString(section, option)
-				value := strings.TrimSpace(stripComments(l))
-				c.AddOption(section, option, prev+"\n"+value)
-
-			default:
-				return errors.New("could not parse line: " + l)
-			}
+		}
+		// tag := typ.Field(i).Tag
+		e := keyset(c.Section(group).Key(key), elem.Interface())
+		if e != nil {
+			return e
 		}
 	}
 	return nil
 }
 
-func stripComments(l string) string {
-	// Comments are preceded by space or TAB
-	for _, c := range []string{" ;", "\t;", " #", "\t#"} {
-		if i := strings.Index(l, c); i != -1 {
-			l = l[0:i]
-		}
+//--------------------------------------------------------------[ NEW CONFIG ]--
+
+// Set sets a config value.
+//
+func (c *Config) Set(group, key string, uncast interface{}) error {
+	return keyset(c.Section(group).Key(key), uncast)
+}
+
+func keyset(todisk *ini.Key, uncast interface{}) error {
+	switch v := uncast.(type) {
+	case string:
+		todisk.SetValue(v)
+
+	case bool,
+		int, int8, int16, int32, int64,
+		uint, uint8, uint16, uint32, uint64,
+		float32, float64:
+
+		todisk.SetValue(fmt.Sprint(v))
+
+	default:
+		return fmt.Errorf("unsupported type '%#v'", v)
+
 	}
-	return l
+	return nil
 }
 
 //
+//-----------------------------------------------------------------[ VERSION ]--
+
+// SetFileVersion replaces the version in a config file.
+// The given group must represent the first group of the file.
+//
+func SetFileVersion(log cdtype.Logger, filename, group, oldver, newver string) error {
+	return SetToFile(log, filename, func(cfg cdtype.ConfUpdater) error {
+		return cfg.SetNewVersion(group, oldver, newver)
+	})
+}
+
+// SetNewVersion replaces the version in a config file.
+// The given group must represent the first group of the file.
+//
+func (c *Config) SetNewVersion(group, oldver, newver string) error {
+	comment := c.Section(group).Comment
+	prefix := "#" + oldver
+	if !strings.HasPrefix(comment, prefix) {
+		return errors.New("config.NewVersion: old version not found")
+	}
+	c.Section(group).Comment = strings.Replace(comment, prefix, "#"+newver, 1)
+	return nil
+}
+
+//
+//---------------------------------------------------------------[ CONFKEYER ]--
+
+// confKey implements cdtype.ConfKeyer
+type confKey struct {
+	key *ini.Key
+	valuer.Valuer
+}
+
+func (ck *confKey) Name() string    { return ck.key.Name() }
+func (ck *confKey) Comment() string { return ck.key.Comment }
+
+//
+//------------------------------------------------------------------[ VALUER ]--
+
+// value gives access to a storage group/key value. Implements cftype.Valuer
+//
+type value struct {
+	c     Config
+	group string
+	name  string
+	Err   error
+}
+
+// Get assigns the value to the given pointer to value (of the matching type).
+//
+func (o *value) Get(ptr interface{}) {
+	switch v := ptr.(type) {
+	case *bool:
+		*v = o.Bool()
+
+	case *int:
+		*v = o.Int()
+
+	case *float64:
+		*v = o.Float()
+
+	case *string:
+		*v = o.String()
+
+	case *[]bool:
+		*v = o.ListBool()
+
+	case *[]int:
+		*v = o.ListInt()
+
+	case *[]float64:
+		*v = o.ListFloat()
+
+	case *[]string:
+		*v = o.ListString()
+	}
+}
+
+// Bool returns the value as bool.
+func (o *value) Bool() (v bool) {
+	v, o.Err = o.c.Section(o.group).Key(o.name).Bool()
+	return v
+}
+
+// Int returns the value as int.
+func (o *value) Int() (v int) {
+	v, o.Err = o.c.Section(o.group).Key(o.name).Int()
+	return v
+}
+
+// Float returns the value as float64.
+func (o *value) Float() (v float64) {
+	v, o.Err = o.c.Section(o.group).Key(o.name).Float64()
+	return v
+}
+
+// String returns the value as string.
+func (o *value) String() (v string) {
+	return o.c.Section(o.group).Key(o.name).String()
+}
+
+// ListBool returns the value as list of bool.
+func (o *value) ListBool() (v []bool) {
+	for _, tob := range o.ListString() {
+		v = append(v, tob == "1" || tob == "true")
+	}
+	return v
+	// return	o.c.Section(o.group).Key(o.name).
+}
+
+// ListInt returns the value as list of int.
+func (o *value) ListInt() (v []int) {
+	return o.c.Section(o.group).Key(o.name).Ints(";")
+}
+
+// ListFloat returns the value as list of float64.
+func (o *value) ListFloat() (v []float64) {
+	return o.c.Section(o.group).Key(o.name).Float64s(";")
+}
+
+// ListString returns the value as list of string.
+func (o *value) ListString() (v []string) {
+	return o.c.Section(o.group).Key(o.name).Strings(";")
+}
+
+// Set sets the pointed keyfile key value.
+func (o *value) Set(v interface{}) { keyset(o.c.Section(o.group).Key(o.name), v) }
+
+// Sprint returns the value as printable text.
+func (o *value) Sprint() string {
+	return o.String()
+}
+
+// SprintI returns the value as printable text of the element at position I in
+// the list if possible.
+//
+func (o *value) SprintI(id int) string {
+	list := o.ListString()
+	if id >= len(list) {
+		println("valuer SprintI. out of range:", id, list)
+		return ""
+	}
+	return list[id]
+}
+
+// Count returns the number of elements in the list.
+//
+func (o *value) Count() int { return len(o.ListString()) } // unsure.
+
+// MarshalGroup marshals a struct to a config group.
+//
+// func (c *Config) MarshalGroup(group string, v interface{}) error {
+// 	return c.Section(group).ReflectFrom(v)
+// }

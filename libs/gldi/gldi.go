@@ -168,12 +168,16 @@ func Init(rendering int) {
 
 // SetPaths sets the default paths for the gldi backend.
 //
-func SetPaths(dataDir string, extra, themes, current, shareTheme, distantTheme, serverTheme string) {
-	DirExtra := filepath.Join(dataDir, extra)
-	DirThemes := filepath.Join(dataDir, themes)
-	DirCurrent := filepath.Join(dataDir, current)
-	C.cairo_dock_set_paths(gchar(dataDir), gchar(DirExtra), gchar(DirThemes), gchar(DirCurrent),
-		gchar(shareTheme), gchar(distantTheme), gchar(serverTheme))
+func SetPaths(dataDir, extra, themes, current, shareTheme, distantTheme, serverTheme string) {
+	C.cairo_dock_set_paths(
+		gchar(dataDir),
+		gchar(filepath.Join(dataDir, extra)),
+		gchar(filepath.Join(dataDir, themes)),
+		gchar(filepath.Join(dataDir, current)),
+		gchar(shareTheme),
+		gchar(distantTheme),
+		gchar(serverTheme),
+	)
 }
 
 // ModulesNewFromDirectory loads internal modules from the given directory.
@@ -424,7 +428,7 @@ func ConfFileNeedUpdate(kf *keyfile.KeyFile, version string) bool {
 	return gobool(C.cairo_dock_conf_file_needs_update(cKeyfile, cstr))
 }
 
-// unused, see files.UpdateConfFile
+// unused, see config.UpdateFile
 // func ConfFileUpgradeFull(kf *keyfile.KeyFile, current, original string, updateKeys bool) {
 // 	cKeyfile := (*C.GKeyFile)(unsafe.Pointer(kf.ToNative()))
 // 	cCurrent := (*C.gchar)(C.CString(current))
@@ -1458,7 +1462,7 @@ func NewVisitCardFromPackage(pack *packages.AppletPackage) *VisitCard {
 
 	// cShareDataDir ? g_strdup_printf ("%s/preview", cShareDataDir) : NULL;
 	vc.cPreviewFilePath = gchar(filepath.Join(pack.Path, "preview"))
-	vc.cGettextDomain = gchar("cairo-dock-plugins") // TODO: NEED-GETTEXT-FFS:  GETTEXT_NAME_EXTRAS ... no, need another domain for go applets.
+	vc.cGettextDomain = gchar(cdglobal.GettextPackagePlugins) // TODO: need a dedicated domain for go applets.
 	vc.cUserDataDir = gchar(pack.DisplayedName)
 	vc.cShareDataDir = gchar(pack.Path) // TODO: check cShareDataDir
 	vc.cConfFileName = gchar(pack.DisplayedName + ".conf")

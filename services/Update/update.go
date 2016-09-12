@@ -119,11 +119,6 @@ func (app *Applet) Init(def *cdtype.Defaults, confLoaded bool) {
 	// Build globals.
 	build.CmdSudo = app.conf.CommandSudo
 	build.IconMissing = app.FileLocation("img", app.conf.IconMissing)
-
-	// Set booleans references for menu checkboxes.
-	app.Action().SetBool(ActionToggleUserMode, &app.conf.UserMode)
-	app.Action().SetBool(ActionToggleReload, &app.conf.BuildReload)
-	app.Action().SetBool(ActionToggleDiffStash, &app.conf.DiffStash)
 }
 
 //------------------------------------------------------------------[ EVENTS ]--
@@ -317,12 +312,10 @@ func (app *Applet) actions() []*cdtype.Action {
 			ID:   ActionToggleReload,
 			Name: "Reload target",
 			Menu: cdtype.MenuCheckBox,
-			Call: app.actionToggleReload,
 		}, {
 			ID:   ActionToggleDiffStash,
 			Name: "Diff vs stash",
 			Menu: cdtype.MenuCheckBox,
-			// Call: app.actionToggleReload,
 		}, {
 			ID:       ActionBuildTarget,
 			Name:     "Build target",
@@ -440,10 +433,6 @@ func (app *Applet) actionCycleTarget(delta int) {
 func (app *Applet) actionToggleUserMode() {
 	app.conf.UserMode = !app.conf.UserMode
 	app.setBuildTarget()
-}
-
-func (app *Applet) actionToggleReload() {
-	app.conf.BuildReload = !app.conf.BuildReload
 }
 
 //--------------------------------------------------------[ THREADED ACTIONS ]--

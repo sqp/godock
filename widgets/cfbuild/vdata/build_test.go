@@ -5,6 +5,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/sqp/godock/libs/log" // Display info in terminal.
+
 	"github.com/sqp/godock/widgets/cfbuild/cftype"
 	"github.com/sqp/godock/widgets/cfbuild/vdata"
 	"github.com/sqp/godock/widgets/pageswitch" // Switcher for config pages.
@@ -15,7 +17,7 @@ import (
 func TestConfig(t *testing.T) {
 	gtk.Init(nil)
 
-	build := vdata.TestInit(vdata.New(nil, nil), vdata.PathTestConf())
+	build := vdata.TestInit(vdata.New(log.NewLog(log.Logs), nil, nil), vdata.PathTestConf())
 	if build == nil {
 		return
 	}

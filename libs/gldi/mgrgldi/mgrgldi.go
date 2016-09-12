@@ -40,8 +40,7 @@ import (
 	"github.com/sqp/godock/libs/gldi/appgldi"
 	"github.com/sqp/godock/libs/gldi/backendmenu"
 	"github.com/sqp/godock/libs/gldi/globals"
-	"github.com/sqp/godock/libs/gldi/notif"  // Dock notifs.
-	"github.com/sqp/godock/libs/gldi/window" // Desktop windows control.
+	"github.com/sqp/godock/libs/gldi/notif" // Dock notifs.
 	"github.com/sqp/godock/libs/packages"
 	"github.com/sqp/godock/widgets/gtk/keyfile"
 
@@ -161,7 +160,7 @@ func (o *AppManager) StopLoop() {
 
 func (o *AppManager) registerApplets() {
 	dir := globals.DirShareData(cdglobal.ConfigDirAppletsGo)
-	packs, e := packages.ListFromDir(dir, packages.TypeGoInternal, packages.SourceApplet)
+	packs, e := packages.ListFromDir(o.log, dir, packages.TypeGoInternal, packages.SourceApplet)
 	if o.log.Err(e, "registerapplets") {
 		return
 	}
@@ -391,7 +390,7 @@ func (o *AppManager) OnDropData(icon gldi.Icon, container *gldi.Container, data 
 
 // OnChangeFocus forwards a window focus event to the applet.
 //
-func (o *AppManager) OnChangeFocus(win window.Type) bool {
+func (o *AppManager) OnChangeFocus(win cdglobal.Window) bool {
 	// Emit signal on the applet that had focus.
 	if o.activeIcon != nil {
 		o.sendApp(o.activeIcon, "on_change_focus", false)

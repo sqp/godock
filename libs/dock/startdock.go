@@ -5,14 +5,12 @@ import (
 	// Dock frontend.
 	"github.com/sqp/godock/libs/dock/confown"    // New dock own settings.
 	"github.com/sqp/godock/libs/dock/eventmouse" // Mouse events callbacks.
+	"github.com/sqp/godock/libs/dock/guibridge"  // GUI interface.
 	"github.com/sqp/godock/libs/dock/maindock"   // Dock settings.
-	"github.com/sqp/godock/libs/gldi/guibridge"  // GUI interface.
-	"github.com/sqp/godock/libs/gldi/menu"       // Build menu callbacks.
+	"github.com/sqp/godock/libs/dock/mainmenu"   // Build menu callbacks.
 
 	// Dock backend.
-	"github.com/sqp/godock/libs/cdglobal" // Dock types.
 	"github.com/sqp/godock/libs/cdtype"
-	"github.com/sqp/godock/libs/gldi"
 	"github.com/sqp/godock/libs/gldi/backendgui"
 	"github.com/sqp/godock/libs/gldi/backendmenu" // Menu items.
 	"github.com/sqp/godock/libs/gldi/globals"     // Dock globals.
@@ -27,9 +25,7 @@ import (
 	"github.com/sqp/godock/libs/srvdbus/dockpath" // hack dock dbus path
 
 	// Help.
-	"github.com/sqp/godock/libs/ternary"      // Ternary operators.
-	"github.com/sqp/godock/libs/text/color"   // Colored text.
-	"github.com/sqp/godock/libs/text/strhelp" // String helpers.
+	"github.com/sqp/godock/libs/text/versions" // Print API version.
 
 	"errors"
 	"fmt"
@@ -67,7 +63,8 @@ func Run(log cdtype.Logger, getSettings func() maindock.DockSettings) bool {
 
 	// Load new config settings. New options are in an other file to keep the
 	// original config file as compatible with the real dock as possible.
-	e := confown.Init(globals.DirUserAppData(confown.GuiFilename))
+	file, e := globals.DirUserAppData(confown.GuiFilename)
+	e = confown.Init(log, file, e)
 	log.Err(e, "Load ConfigSettings")
 
 	// Register go internal applets events.
@@ -94,7 +91,8 @@ func Run(log cdtype.Logger, getSettings func() maindock.DockSettings) bool {
 		websrv.Service.Start("debug/pprof")
 	}
 
-	PrintVersions()
+	// Print useful packages versions.
+	versions.Print()
 
 	// Custom calls added by devs for their own uses and tests.
 	CustomHacks()
@@ -106,29 +104,12 @@ func Run(log cdtype.Logger, getSettings func() maindock.DockSettings) bool {
 	eventmouse.Register(log)
 
 	// Register menus events.
-	backendmenu.Register(log, menu.BuildMenuContainer, menu.BuildMenuIcon)
+	backendmenu.Register(log, mainmenu.BuildMenuContainer, mainmenu.BuildMenuIcon)
 
 	// Finish startup.
 	settings.Start()
 
 	return true
-}
-
-// PrintVersions prints all program and backends versions.
-//
-func PrintVersions() {
-	gtkA, gtkB, gtkC := globals.GtkVersion()
-
-	for _, line := range []struct{ k, v string }{
-		{"Custom Dock", cdglobal.AppVersion},
-		{"   gldi    ", globals.Version()},
-		{"   GTK     ", fmt.Sprintf("%d.%d.%d", gtkA, gtkB, gtkC)},
-		{"  OpenGL   ", ternary.String(gldi.GLBackendIsUsed(), "Yes", "No")},
-		{"Build date ", cdglobal.BuildDate},
-		{" Git Hash  ", cdglobal.GitHash},
-	} {
-		println(strhelp.Bracket(color.Colored(line.k, color.FgGreen)), line.v)
-	}
 }
 
 // Start Loader.

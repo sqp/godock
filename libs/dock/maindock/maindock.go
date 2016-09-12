@@ -107,9 +107,7 @@ func (settings *DockSettings) Init() {
 
 	gtk.Init(nil)
 
-	//\___________________ internationalize the app.
-	tran.Scend(cdglobal.CairoDockGettextPackage, cdglobal.CairoDockLocaleDir, "UTF-8")
-
+	//\___________________ C dock log.
 	if settings.Verbosity != "" {
 		gldi.LogSetLevelFromName(settings.Verbosity)
 	}
@@ -243,7 +241,7 @@ func (settings *DockSettings) Start() {
 	}
 
 	if settings.isNewVersion { // update the version in the file.
-		files.UpdateConfFile(globals.DirDockData(cdglobal.FileHiddenConfig), "Launch", "last version", globals.Version())
+		updateHiddenFile("last version", globals.Version())
 
 		// If any operation must be done on the user theme (like activating
 		// a module by default, or disabling an option), it should be done
@@ -332,7 +330,7 @@ func createConfigDir(settings *DockSettings) {
 	if os.Getenv("DESKTOP_SESSION") == "cairo-dock" { // We're using the CD session for the first time
 		themeName = "Default-Panel"
 		settings.sessionWasUsed = true
-		files.UpdateConfFile(globals.DirDockData(cdglobal.FileHiddenConfig), "Launch", "cd session", true)
+		updateHiddenFile("cd session", true)
 	}
 
 	files.CopyDir(globals.DirShareData(cdglobal.ConfigDirDockThemes, themeName), globals.CurrentThemePath())
@@ -375,7 +373,7 @@ func dialogAskBackend() {
 
 	if remember { // save user choice to file.
 		value := ternary.String(gtk.ResponseType(answer) == gtk.RESPONSE_YES, "opengl", "cairo")
-		files.UpdateConfFile(globals.DirDockData(cdglobal.FileHiddenConfig), "Launch", "default backend", value)
+		updateHiddenFile("default backend", value)
 	}
 }
 
@@ -404,36 +402,29 @@ func dialogChangelog() {
 
 func getChangelog() string {
 	changelogPath := globals.DirShareData(cdglobal.FileChangelog)
+	msg := ""
+	e := config.GetFromFile(log, changelogPath, func(cfg cdtype.ConfUpdater) {
+		major, minor, micro := globals.VersionSplit()
 
-	conf, e := config.NewFromFile(changelogPath)
-	if e != nil {
-		log.Debug("changelog not found", changelogPath, e.Error())
-		return ""
-	}
-
-	major, minor, micro := globals.VersionSplit()
-
-	// Get first line
-	strver := fmt.Sprintf("%d.%d.%d", major, minor, micro) // version without "alpha", "beta", "rc", etc.
-	msg, e := conf.String("ChangeLog", strver)
-	if e != nil {
-		log.Debug("changelog", "no info for version", globals.Version())
-		return ""
-	}
-	msg = tran.Slate(msg)
-
-	// Add all changelog lines for that version.
-	i := 0
-	for {
-		strver := fmt.Sprintf("%d.%d.%d.%d", major, minor, micro, i)
-		sub, e := conf.String("ChangeLog", strver)
-		if e != nil {
-			break
+		// Get first line
+		strver := fmt.Sprintf("%d.%d.%d", major, minor, micro) // version without "alpha", "beta", "rc", etc.
+		msg = cfg.Valuer("ChangeLog", strver).String()
+		if msg == "" {
+			log.Debug("changelog", "no info for version", globals.Version())
+			return
 		}
-		msg += "\n " + tran.Slate(sub)
-		i++
-	}
+		msg = tran.Slate(msg)
 
+		// Add all changelog lines for that version.
+		i := 0
+		for {
+			strver := fmt.Sprintf("%d.%d.%d.%d", major, minor, micro, i)
+			sub := cfg.Valuer("ChangeLog", strver).String()
+			msg += "\n " + tran.Slate(sub)
+			i++
+		}
+	})
+	log.Err(e, "load changelog", changelogPath)
 	return msg
 }
 
@@ -447,27 +438,34 @@ type hiddenConfig struct {
 	SessionWasUsed bool   `conf:"cd session"`
 }
 
+const hiddenGroup = "Launch"
+
 // loadHidden will try to load the hidden config data from the file.
 //
 func loadHidden(path string) *hiddenConfig {
 	file := filepath.Join(path, cdglobal.FileHiddenConfig)
-	conf, e := config.NewFromFile(file)
-
-	if e != nil { // File missing, create it.
-		conf = config.New()
-		conf.AddSection("Launch")
-		conf.AddOption("Launch", "last version", "")
-		conf.AddOption("Launch", "default backend", "")
-		conf.AddOption("Launch", "last year", "0")
-		conf.AddSection("Gui")
-		conf.AddOption("Gui", "mode", "0")
-
-		log.Err(conf.WriteFile(file, 0644, ""), "create hidden conf", file)
-		return &hiddenConfig{}
-	}
+	hidden := &hiddenConfig{}
 
 	// Load data from file.
-	hidden := &hiddenConfig{}
-	conf.UnmarshalGroup(hidden, "Launch", config.GetTag)
+	e := config.GetFromFile(log, file, func(cfg cdtype.ConfUpdater) {
+		cfg.UnmarshalGroup(hidden, hiddenGroup, config.GetTag)
+	})
+
+	if e != nil { // File missing, create it.
+		conf := config.NewEmpty(log, file)
+
+		conf.MarshalGroup(hidden, hiddenGroup, config.GetTag)
+		conf.Set("Gui", "mode", "0") // another section unused here.
+
+		e = conf.Save()
+		log.Err(e, "create hidden conf", file)
+	}
+
 	return hidden
+}
+
+func updateHiddenFile(key string, value interface{}) {
+	file := globals.DirDockData(cdglobal.FileHiddenConfig)
+	e := config.UpdateFile(log, file, hiddenGroup, key, value)
+	log.Err(e, "updateHiddenFile", key, value)
 }

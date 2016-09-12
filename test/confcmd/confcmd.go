@@ -5,6 +5,7 @@ package main
 import (
 	"github.com/gotk3/gotk3/gtk"
 
+	"github.com/sqp/godock/libs/log"                // Display info in terminal.
 	"github.com/sqp/godock/widgets/cfbuild/cfprint" // Print config file builder keys.
 	"github.com/sqp/godock/widgets/cfbuild/vdata"   // Virtual data source.
 	"github.com/sqp/godock/widgets/pageswitch"      // Switcher for config pages.
@@ -19,7 +20,7 @@ func main() {
 
 	gtk.Init(nil)
 
-	source := vdata.New(nil, nil)
+	source := vdata.New(log.NewLog(log.Logs), nil, nil)
 	build := vdata.TestInit(source, path)
 	if build == nil {
 		return

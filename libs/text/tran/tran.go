@@ -3,15 +3,27 @@ package tran
 
 import (
 	"github.com/gosexy/gettext"
+
+	"github.com/sqp/godock/libs/cdglobal" // Global consts.
 )
 
-// Slate translates the given string.
+func init() {
+	Scend(cdglobal.GettextPackageCairoDock, cdglobal.CairoDockLocaleDir, "UTF-8")
+}
+
+// Slate translates the given string in the dock domain.
 //
 func Slate(str string) string {
 	return gettext.Gettext(str)
 }
 
-// Sloc translates the given string with another package name.
+// Splug translates the given string in the applet domain.
+//
+func Splug(str string) string {
+	return gettext.DGettext(cdglobal.GettextPackagePlugins, str)
+}
+
+// Sloc translates the given string using another domain name.
 //
 func Sloc(domain, str string) string {
 	return gettext.DGettext(domain, str)
@@ -20,10 +32,8 @@ func Sloc(domain, str string) string {
 // Scend transcends your program with its gettext settings.
 //
 func Scend(pkg, dir, codeset string) {
-	// gettext.BindTextdomain(pkg, dir, nil)
-	// gettext.Textdomain(pkg)
-
+	gettext.SetLocale(gettext.LcAll, "")
 	gettext.BindTextdomain(pkg, dir)
-	gettext.BindTextdomainCodeset(pkg, codeset)
 	gettext.Textdomain(pkg)
+	gettext.BindTextdomainCodeset(pkg, codeset)
 }

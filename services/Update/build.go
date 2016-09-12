@@ -2,6 +2,7 @@ package Update
 
 import (
 	"github.com/sqp/godock/libs/packages/build"
+	"github.com/sqp/godock/libs/srvdbus/dlogbus"
 
 	"path/filepath"
 	"time"
@@ -19,7 +20,7 @@ func (app *Applet) setBuildTarget() {
 	} else {
 		var (
 			name       = app.conf.BuildTargets[app.targetID]
-			sourceType = build.GetSourceType(name)
+			sourceType = build.GetSourceType(name, app.Log())
 		)
 		app.target = app.newBuilder(sourceType, name)
 		app.Log().Debug("setBuildTarget", app.target.Label())
@@ -45,7 +46,7 @@ func (app *Applet) restartTarget() {
 	}
 	target := app.conf.BuildTargets[app.targetID]
 	app.Log().Info("restart", target)
-	switch build.GetSourceType(target) {
+	switch build.GetSourceType(target, app.Log()) {
 	case build.TypeAppletScript, build.TypeAppletCompiled:
 		if target == app.Name() { // Don't eat the chicken, or you won't have any more eggs.
 			app.Log().ExecAsync("make", "reload")
@@ -55,6 +56,8 @@ func (app *Applet) restartTarget() {
 		}
 
 	case build.TypeGodock:
+		build.CloseGui()
+		go app.Log().Err(dlogbus.Action((*dlogbus.Client).Restart), "restart") // No need to wait an answer, it blocks.
 
 	default:
 		func() {

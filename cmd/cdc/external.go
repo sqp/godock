@@ -120,7 +120,7 @@ func installOrRemoveApplets(list []string, remove bool) {
 			e := pack.Uninstall(externalUserDir)
 			return testErr(e, "uninstall", "Applet removed", appname)
 		}
-		packs, e = packages.ListFromDir(externalUserDir, packages.TypeUser, packages.SourceApplet)
+		packs, e = packages.ListFromDir(logger, externalUserDir, packages.TypeUser, packages.SourceApplet)
 
 	} else { // install.
 		options := ""
@@ -132,7 +132,7 @@ func installOrRemoveApplets(list []string, remove bool) {
 			e := pack.Install(externalUserDir, options)
 			return testErr(e, "install", "Applet installed", appname)
 		}
-		packs, e = packages.ListDistant(cdglobal.AppletsDirName + "/" + cdglobal.AppletsServerTag)
+		packs, e = packages.ListDistant(logger, cdglobal.AppletsDirName+"/"+cdglobal.AppletsServerTag)
 	}
 	exitIfFail(e, "get applets list") // Ensure we have the server list.
 
@@ -165,7 +165,7 @@ func listPackages() (list packages.AppletPackages, e error) {
 
 	// List server only.
 	if *listServer {
-		return packages.ListDistant(cdglobal.AppletsDirName + "/" + cdglobal.AppletsServerTag)
+		return packages.ListDistant(logger, cdglobal.AppletsDirName+"/"+cdglobal.AppletsServerTag)
 	}
 
 	// Get applets dir.
@@ -176,11 +176,11 @@ func listPackages() (list packages.AppletPackages, e error) {
 
 	// List local only.
 	if *listLocal {
-		return packages.ListFromDir(externalUserDir, packages.TypeUser, packages.SourceApplet)
+		return packages.ListFromDir(logger, externalUserDir, packages.TypeUser, packages.SourceApplet)
 	}
 
 	// List default (merged both).
-	packs, e := packages.ListDownloadApplets(externalUserDir)
+	packs, e := packages.ListDownloadApplets(logger, externalUserDir)
 	if e != nil {
 		return nil, e
 	}

@@ -2,9 +2,8 @@
 package build
 
 import (
-	"github.com/sqp/godock/libs/cdglobal"
-	"github.com/sqp/godock/libs/cdtype"
-	"github.com/sqp/godock/libs/srvdbus/dlogbus"
+	"github.com/sqp/godock/libs/cdglobal" // Dock types.
+	"github.com/sqp/godock/libs/cdtype"   // Logger type.
 	"github.com/sqp/godock/libs/text/color"
 	"github.com/sqp/godock/libs/text/linesplit" // Parse command output.
 
@@ -38,7 +37,7 @@ var (
 var (
 	// AppletInfo returns an applet location and icon.
 	//
-	AppletInfo func(string) (dir, icon string)
+	AppletInfo func(cdtype.Logger, string) (dir, icon string)
 
 	// AppletRestart restarts an applet.
 	//
@@ -72,7 +71,7 @@ const (
 // GetSourceType try to detect an applet type based on its location and content.
 // Could be improved.
 //
-func GetSourceType(name string) SourceType {
+func GetSourceType(name string, log cdtype.Logger) SourceType {
 	switch name {
 	case "core":
 		return TypeCore
@@ -82,7 +81,7 @@ func GetSourceType(name string) SourceType {
 		return TypeGodock
 	}
 
-	dir, _ := AppletInfo(name)
+	dir, _ := AppletInfo(log, name)
 	if dir != "" {
 		if filepath.Base(filepath.Dir(dir)) != cdglobal.AppletsDirName { // AppletsDirName is used for system and user external dirs.
 			return TypeAppletInternal
@@ -136,7 +135,7 @@ func NewBuilder(target SourceType, name string, log cdtype.Logger) Builder {
 		return build
 
 	case TypeAppletCompiled:
-		dir, icon := AppletInfo(name)
+		dir, icon := AppletInfo(log, name)
 		if dir == "" {
 			log.NewErr("applet not found: "+name, "new builder")
 			return &BuilderNull{}
@@ -150,7 +149,7 @@ func NewBuilder(target SourceType, name string, log cdtype.Logger) Builder {
 
 	case TypeAppletInternal:
 		// Ask icon of module to the Dock as we can't guess its dir and icon name.
-		_, icon := AppletInfo(strings.Replace(name, "-", " ", -1))
+		_, icon := AppletInfo(log, strings.Replace(name, "-", " ", -1))
 		if icon == "" {
 			icon = IconMissing
 		}
@@ -298,9 +297,6 @@ func (build *BuilderGodock) Build() error {
 	if e != nil {
 		return e
 	}
-
-	CloseGui()
-	go build.log.Err(dlogbus.Action((*dlogbus.Client).Restart), "restart") // No need to wait an answer, it blocks.
 	return nil
 }
 

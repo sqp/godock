@@ -4,9 +4,10 @@
 package confown
 
 import (
-	"github.com/sqp/godock/libs/config" // config parser.
-	"github.com/sqp/godock/libs/files"
-	"github.com/sqp/godock/libs/gldi/globals"
+	"github.com/sqp/godock/libs/cdtype"       // Logger type.
+	"github.com/sqp/godock/libs/config"       // Config parser.
+	"github.com/sqp/godock/libs/files"        // Files operations.
+	"github.com/sqp/godock/libs/gldi/globals" // Global variables.
 
 	"io/ioutil"
 	"os"
@@ -51,20 +52,23 @@ type ConfigSettings struct {
 	SaveEnabled bool
 
 	File string `conf:"-"` // File location, not saved.
+	log  cdtype.Logger
 }
 
 // Load loads the own config settings.
 //
 func (cs *ConfigSettings) Load() error {
-	file := cs.File                     // Backup the file path.
-	conf, e := config.NewFromFile(file) // Special conf reflector around the config file parser.
-	if e != nil {
-		return e
-	}
-	conf.UnmarshalGroup(cs, GuiGroup, config.GetBoth)
-	// TODO: need to forward conf.Errors
+	file := cs.File // Backup the file path.
+	e := config.GetFromFile(cs.log, file, func(cfg cdtype.ConfUpdater) {
+		// Special conf reflector around the config file parser.
+		liste := cfg.UnmarshalGroup(cs, GuiGroup, config.GetBoth)
+		for _, e := range liste {
+			cs.log.Err(e, "confown parse")
+		}
+	})
 	cs.File = file // Force value of file every time, it's set to blank by unmarshal.
-	return nil
+
+	return e
 }
 
 // ToVirtual returns whether the save is virtual or not (only prints).
@@ -76,7 +80,7 @@ func (cs *ConfigSettings) ToVirtual(file string) bool {
 
 // Init will try to load the own config data from the file, and create it if missing.
 //
-func Init(file string, e error) error {
+func Init(log cdtype.Logger, file string, e error) error {
 	if e != nil {
 		return e
 	}
@@ -88,11 +92,14 @@ func Init(file string, e error) error {
 		if e != nil {
 			return e
 		}
-		// TODO: need to inform about file created (need logger).
+		log.Info("created config file", file)
 	}
 
 	// Create our user settings
-	Settings = ConfigSettings{File: file}
+	Settings = ConfigSettings{
+		File: file,
+		log:  log,
+	}
 	return Settings.Load()
 }
 

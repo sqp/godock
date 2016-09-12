@@ -1,8 +1,8 @@
 /*
 Package appdbus is the godock cairo-dock connector using DBus.
 
-// Its goal is to connect the main Cairo-Dock Golang applet object,
-// godock/libs/cdapplet, to its parent, the dock.
+Its goal is to connect the cairo-dock applet to its parent, the dock, send
+actions, and forward events through the backend.
 */
 package appdbus
 
@@ -13,6 +13,7 @@ import (
 	"github.com/sqp/godock/libs/cdtype"             // Applets types.
 	"github.com/sqp/godock/libs/srvdbus/dbuscommon" // Dbus session.
 	"github.com/sqp/godock/libs/srvdbus/dockpath"   // Path to main dock dbus service.
+	"github.com/sqp/godock/libs/text/versions"      // Print API version.
 
 	"errors"
 	"os"
@@ -32,7 +33,7 @@ import (
 // It can handle only one poller for now.
 //
 // If a fatal error is received during one of those steps, the applet will not
-// be started and errors should be logged. Can't do much about it.
+// be started and errors should be logged. Can't do much more about it.
 //
 func StandAlone(callnew cdtype.NewAppletFunc) {
 	args := os.Args
@@ -66,6 +67,7 @@ func StandAlone(callnew cdtype.NewAppletFunc) {
 	}
 
 	app.Log().Debug("Applet started")
+	versions.TestPrint(app.Log().GetDebug())
 	defer app.Log().Debug("Applet stopped")
 
 	var waiter <-chan time.Time
@@ -134,6 +136,8 @@ func New(callnew cdtype.NewAppletFunc, args []string, dir string) (cdtype.AppIns
 	return app, backend, callinit
 }
 
+func (cda *CDDbus) testErr(e error, method string) { cda.log.Err(e, method) }
+
 // SetOnEvent sets the OnEvent callback to forwards events.
 //
 func (cda *CDDbus) SetOnEvent(onEvent func(string, ...interface{}) bool) {
@@ -150,7 +154,6 @@ func (cda *CDDbus) SubIcon(key string) cdtype.IconBase {
 //
 func (cda *CDDbus) RemoveSubIcons() error {
 	e := cda.dbusSub.Call("RemoveSubIcon", "any")
-	cda.log.Err(e, "RemoveSubIcons")
 	if e == nil {
 		cda.icons = make(map[string]*SubIcon)
 	}
@@ -187,6 +190,10 @@ func (cda *CDDbus) ConnectEvents(conn *dbus.Conn) (e error) {
 	if cda.dbusIcon == nil || cda.dbusSub == nil {
 		return errors.New("missing Dbus interface")
 	}
+
+	// Log all errors returned from DBus calls. Applets won't have to bother about that.
+	cda.dbusIcon.SetTestErr(cda.testErr)
+	cda.dbusSub.SetTestErr(cda.testErr)
 
 	// Listen to all events emitted for the icon.
 	matchIcon := "type='signal',path='" + string(cda.busPath) + "',interface='" + dockpath.DbusInterfaceApplet + "',sender='" + dockpath.DbusObject + "'"
@@ -599,7 +606,6 @@ func (cda *CDDbus) RemoveSubIcon(id string) error {
 	}
 
 	e := cda.dbusSub.Call("RemoveSubIcon", id)
-	cda.log.Err(e, "RemoveSubIcon")
 	if e == nil {
 		delete(cda.icons, id)
 	}

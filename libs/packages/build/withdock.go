@@ -3,6 +3,7 @@
 package build
 
 import (
+	"github.com/sqp/godock/libs/cdtype" // Logger type.
 	"github.com/sqp/godock/libs/gldi"
 	"github.com/sqp/godock/libs/gldi/backendgui"
 	"github.com/sqp/godock/libs/gldi/globals"
@@ -13,7 +14,7 @@ func init() {
 
 	iconCore = globals.FileCairoDockIcon()
 
-	AppletInfo = func(name string) (dir, icon string) {
+	AppletInfo = func(log cdtype.Logger, name string) (dir, icon string) {
 		mod := gldi.ModuleGet(name)
 		if mod == nil {
 			return "", ""

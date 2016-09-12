@@ -8,6 +8,7 @@ import (
 	"github.com/gotk3/gotk3/gtk"
 
 	"github.com/sqp/godock/libs/cdglobal" // Dock types.
+	"github.com/sqp/godock/libs/cdtype"   // Logger type.
 
 	"github.com/sqp/godock/widgets/cfbuild/cftype"   // Types for config file builder usage.
 	"github.com/sqp/godock/widgets/cfbuild/datatype" // Types for config file builder data source.
@@ -30,10 +31,11 @@ type Sourcer interface {
 
 // New creates a virtual data source for the config file builder.
 //
-func New(win *gtk.Window, saveCall func(cftype.Builder)) Sourcer {
+func New(log cdtype.Logger, win *gtk.Window, saveCall func(cftype.Builder)) Sourcer {
 	return &source{
-		win:      win,
-		saveCall: saveCall,
+		win:          win,
+		saveCall:     saveCall,
+		SourceCommon: datatype.SourceCommon{Log: log},
 	}
 }
 
@@ -45,15 +47,17 @@ type source struct {
 	win *gtk.Window // pointer to the parent window.
 
 	saveCall func(cftype.Builder) // save button callback.
-	// log cdtype.Logger
 }
 
-func (o *source) GetWindow() *gtk.Window        { return o.win }
-func (o *source) ClickedSave()                  { o.saveCall(o.Grouper) }
-func (o *source) ClickedQuit()                  { gtk.MainQuit() }
-func (o *source) SetBox(box *gtk.Box)           { o.box = box }
-func (o *source) SetGrouper(g cftype.Grouper)   { o.Grouper = g }
-func (o *source) Select(string, ...string) bool { return false }
+func (o *source) GetWindow() *gtk.Window           { return o.win }
+func (o *source) GrabWindowClass() (string, error) { return "windowclass", nil }
+func (o *source) ClickedSave()                     { o.saveCall(o.Grouper) }
+func (o *source) ClickedQuit()                     { gtk.MainQuit() }
+func (o *source) SetBox(box *gtk.Box)              { o.box = box }
+func (o *source) SetGrouper(g cftype.Grouper)      { o.Grouper = g }
+func (o *source) Select(string, ...string) bool    { return false }
+func (o *source) DecryptString(str string) string  { return str }
+func (o *source) EncryptString(str string) string  { return str }
 
 //
 //-------------------------------------------------------------[ DATA SOURCE ]--

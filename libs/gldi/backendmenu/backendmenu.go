@@ -11,8 +11,9 @@ import (
 	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/gtk"
 
-	"github.com/sqp/godock/libs/cdtype"
-	"github.com/sqp/godock/libs/files"           // UpdateConfFile.
+	"github.com/sqp/godock/libs/cdglobal"        // Dock types.
+	"github.com/sqp/godock/libs/cdtype"          // Applet types.
+	"github.com/sqp/godock/libs/config"          // Config parser.
 	"github.com/sqp/godock/libs/gldi"            // Gldi access.
 	"github.com/sqp/godock/libs/gldi/backendgui" // GUI callbacks.
 	"github.com/sqp/godock/libs/gldi/current"    // Current theme settings.
@@ -20,7 +21,6 @@ import (
 	"github.com/sqp/godock/libs/gldi/dialog"     // Popup dialog.
 	"github.com/sqp/godock/libs/gldi/globals"    // Global variables.
 	"github.com/sqp/godock/libs/gldi/notif"      // Dock notifs.
-	"github.com/sqp/godock/libs/gldi/window"     // Desktop windows control.
 	"github.com/sqp/godock/libs/ternary"         // Helpers.
 	"github.com/sqp/godock/libs/text/tran"       // Translate.
 
@@ -439,7 +439,7 @@ func (m *DockMenu) Entry(entry MenuEntry) bool {
 			current.Docks.LockIcons(),
 			func() {
 				current.Docks.LockIcons(!current.Docks.LockIcons())
-				files.UpdateConfFile(globals.ConfigFile(), "Accessibility", "lock icons", current.Docks.LockIcons())
+				config.UpdateFile(log, globals.ConfigFile(), "Accessibility", "lock icons", current.Docks.LockIcons())
 			},
 		).SetTooltipText(tran.Slate("This will (un)lock the position of the icons."))
 
@@ -673,14 +673,14 @@ func (m *DockMenu) Entry(entry MenuEntry) bool {
 		m.AddEntry(
 			ternary.String(flag, tran.Slate("Don't keep above"), tran.Slate("Keep above")),
 			ternary.String(flag, globals.IconNameGotoBottom, globals.IconNameGotoTop),
-			m.Icon.CallbackActionWindowToggle((window.Type).SetAbove, (window.Type).IsAbove))
+			m.Icon.CallbackActionWindowToggle((cdglobal.Window).SetAbove, (cdglobal.Window).IsAbove))
 
 	case MenuWindowBelow:
 		if !m.Icon.Window().IsHidden() { // this could be a button in the menu, if we find an icon that doesn't look too much like the "minimise" one
 			m.AddEntry(
 				tran.Slate("Below other windows")+actionMiddleClick(m.Icon, 4),
 				globals.DirShareData("icons", "icon-lower.svg"),
-				m.Icon.CallbackActionWindow((window.Type).Lower))
+				m.Icon.CallbackActionWindow((cdglobal.Window).Lower))
 		}
 
 	case MenuWindowFullScreen:
@@ -688,24 +688,24 @@ func (m *DockMenu) Entry(entry MenuEntry) bool {
 		m.AddEntry(
 			ternary.String(flag, tran.Slate("Not Fullscreen"), tran.Slate("Fullscreen")),
 			ternary.String(flag, globals.IconNameLeaveFullScreen, globals.IconNameFullScreen),
-			m.Icon.CallbackActionWindowToggle((window.Type).SetFullScreen, (window.Type).IsFullScreen))
+			m.Icon.CallbackActionWindowToggle((cdglobal.Window).SetFullScreen, (cdglobal.Window).IsFullScreen))
 
 	case MenuWindowKill:
 		m.AddEntry(
 			tran.Slate("Kill"),
 			globals.IconNameClose,
-			m.Icon.CallbackActionWindow((window.Type).Kill))
+			m.Icon.CallbackActionWindow((cdglobal.Window).Kill))
 
 	case MenuWindowMoveAllHere:
 		m.AddEntry(
 			tran.Slate("Move all to this desktop"),
 			globals.IconNameJumpTo,
-			m.Icon.CallbackActionSubWindows((window.Type).MoveToCurrentDesktop))
+			m.Icon.CallbackActionSubWindows((cdglobal.Window).MoveToCurrentDesktop))
 
 	case MenuWindowMoveHere:
 		var callback func()
 		if !m.Icon.Window().IsOnCurrentDesktop() {
-			callback = m.Icon.CallbackActionWindow(func(win window.Type) {
+			callback = m.Icon.CallbackActionWindow(func(win cdglobal.Window) {
 				win.MoveToCurrentDesktop()
 				if !win.IsHidden() {
 					win.Show()
@@ -718,7 +718,7 @@ func (m *DockMenu) Entry(entry MenuEntry) bool {
 		m.AddEntry(
 			ternary.String(m.Icon.Window().IsSticky(), tran.Slate("Visible only on this desktop"), tran.Slate("Visible on all desktops")),
 			globals.IconNameJumpTo,
-			m.Icon.CallbackActionWindowToggle((window.Type).SetSticky, (window.Type).IsSticky))
+			m.Icon.CallbackActionWindowToggle((cdglobal.Window).SetSticky, (cdglobal.Window).IsSticky))
 
 	}
 	return notif.AnswerLetPass
@@ -738,44 +738,44 @@ func (m *DockMenu) AddButtonsEntry(label string, btns ...MenuBtn) *menus.Buttons
 			entry.AddButton(
 				tran.Slate("Close")+actionMiddleClick(m.Icon, 1),
 				globals.DirShareData("icons", "icon-close.svg"),
-				m.Icon.CallbackActionWindow((window.Type).Close))
+				m.Icon.CallbackActionWindow((cdglobal.Window).Close))
 
 		case MenuWindowCloseAll:
 			entry.AddButton(
 				tran.Slate("Close all")+actionMiddleClick(m.Icon, 1),
 				globals.DirShareData("icons", "icon-close.svg"),
-				m.Icon.CallbackActionSubWindows((window.Type).Close))
+				m.Icon.CallbackActionSubWindows((cdglobal.Window).Close))
 
 		case MenuWindowMax:
 			max := m.Icon.Window().IsMaximized()
 			entry.AddButton(
 				ternary.String(max, tran.Slate("Unmaximise"), tran.Slate("Maximise")),
 				globals.DirShareData("icons", ternary.String(max, "icon-restore.svg", "icon-maximize.svg")),
-				m.Icon.CallbackActionWindowToggle((window.Type).Maximize, (window.Type).IsMaximized))
+				m.Icon.CallbackActionWindowToggle((cdglobal.Window).Maximize, (cdglobal.Window).IsMaximized))
 
 		case MenuWindowMin:
 			entry.AddButton(
 				tran.Slate("Minimise")+actionMiddleClick(m.Icon, 2),
 				globals.DirShareData("icons", "icon-minimize.svg"),
-				m.Icon.CallbackActionWindow((window.Type).Minimize))
+				m.Icon.CallbackActionWindow((cdglobal.Window).Minimize))
 
 		case MenuWindowMinAll:
 			entry.AddButton(
 				tran.Slate("Minimise all")+actionMiddleClick(m.Icon, 2),
 				globals.DirShareData("icons", "icon-minimize.svg"),
-				m.Icon.CallbackActionSubWindows((window.Type).Minimize))
+				m.Icon.CallbackActionSubWindows((cdglobal.Window).Minimize))
 
 		case MenuWindowShow:
 			entry.AddButton(
 				tran.Slate("Show"),
 				globals.IconNameFind,
-				m.Icon.CallbackActionWindow((window.Type).Show))
+				m.Icon.CallbackActionWindow((cdglobal.Window).Show))
 
 		case MenuWindowShowAll:
 			entry.AddButton(
 				tran.Slate("Show all"),
 				globals.IconNameFind,
-				m.Icon.CallbackActionSubWindows((window.Type).Show))
+				m.Icon.CallbackActionSubWindows((cdglobal.Window).Show))
 
 		default:
 			log.NewWarn(fmt.Sprintf("invalid id: %d", btnID), "AddButtonsEntry")
@@ -875,7 +875,7 @@ type menuMoveToDesktop struct {
 	format   string
 	mode     int
 	nbx      int
-	cbAction func(call func(window.Type)) func()
+	cbAction func(call func(cdglobal.Window)) func()
 }
 
 func newMenuMoveToDesktop(icon gldi.Icon, useAll bool) *menuMoveToDesktop {
@@ -941,5 +941,5 @@ func (g *menuMoveToDesktop) Label(i, j, k int) string {
 // Callback returns a move to action callback.
 //
 func (g *menuMoveToDesktop) Callback(i, j, k int) func() {
-	return g.cbAction(func(win window.Type) { win.MoveToDesktop(i, j, k) })
+	return g.cbAction(func(win cdglobal.Window) { win.MoveToDesktop(i, j, k) })
 }

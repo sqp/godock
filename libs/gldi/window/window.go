@@ -8,130 +8,11 @@ package window
 */
 import "C"
 
-import "unsafe"
+import (
+	"github.com/sqp/godock/libs/cdglobal" // Dock types.
 
-//
-//---------------------------------------------------------------[ INTERFACE ]--
-
-// Type defines the interface to desktop windows.
-//
-type Type interface {
-
-	// ToNative returns the pointer to the native object.
-	//
-	ToNative() unsafe.Pointer
-
-	// CanMinMaxClose returns whether the window can do those actions.
-	//
-	CanMinMaxClose() (bool, bool, bool)
-
-	// IsAbove returns whether the window is above.
-	//
-	IsAbove() bool // could split OrBelow but seem unused
-
-	// IsActive returns whether the window is active.
-	//
-	IsActive() bool
-
-	// IsFullScreen returns whether the window is full screen.
-	//
-	IsFullScreen() bool
-
-	// IsHidden returns whether the window is hidden.
-	//
-	IsHidden() bool
-
-	// IsMaximized returns whether the window is maximized.
-	//
-	IsMaximized() bool
-
-	// IsOnCurrentDesktop returns whether the window is on current desktop.
-	//
-	IsOnCurrentDesktop() bool
-
-	// IsOnDesktop returns whether the window is the given desktop and viewport number.
-	//
-	IsOnDesktop(desktopNumber, viewPortX, viewPortY int) bool
-
-	// IsSticky returns whether the window is sticky.
-	//
-	IsSticky() bool
-
-	// NumDesktop returns window desktop number. Can be -1.
-	//
-	NumDesktop() int
-
-	// StackOrder returns window stack order.
-	//
-	StackOrder() int
-
-	// ViewPortX returns window horizontal viewport number.
-	//
-	ViewPortX() int
-
-	// ViewPortY returns window vertical viewport number.
-	//
-	ViewPortY() int
-
-	// XID returns the window X identifier.
-	//
-	XID() uint
-
-	// Close closes window.
-	//
-	Close()
-
-	// Kill kills the window.
-	//
-	Kill()
-
-	// Lower lowers the window.
-	//
-	Lower()
-
-	// Maximize maximizes the window.
-	//
-	Maximize(full bool)
-
-	// Minimize minimizes the window.
-	//
-	Minimize()
-
-	// MoveToCurrentDesktop moves the window to the current desktop.
-	//
-	MoveToCurrentDesktop()
-
-	// MoveToDesktop move the window to the given desktop and viewport number.
-	//
-	MoveToDesktop(desktopNumber, viewPortX, viewPortY int)
-
-	// SetAbove sets the window above.
-	//
-	SetAbove(above bool)
-
-	// SetFullScreen sets the window full screen state.
-	//
-	SetFullScreen(full bool)
-
-	// SetSticky sets the window sticky state.
-	//
-	SetSticky(sticky bool)
-
-	// Show shows the window.
-	//
-	Show()
-
-	// SetVisibility sets the window visibility.
-	//
-	SetVisibility(show bool)
-
-	// ToggleVisibility toggles the window visibility.
-	//
-	ToggleVisibility()
-}
-
-//
-//------------------------------------------------------------[ WINDOW ACTOR ]--
+	"unsafe"
+)
 
 // window defines a dock window actor.
 //
@@ -141,7 +22,7 @@ type window struct {
 
 // NewFromNative wraps a dock window actor from C pointer.
 //
-func NewFromNative(p unsafe.Pointer) Type {
+func NewFromNative(p unsafe.Pointer) cdglobal.Window {
 	if p == nil {
 		return nil
 	}
@@ -151,14 +32,16 @@ func NewFromNative(p unsafe.Pointer) Type {
 // Get
 
 func (o *window) ToNative() unsafe.Pointer { return unsafe.Pointer(o.Ptr) }
+func (o *window) Class() string            { return C.GoString((*C.char)(o.Ptr.cClass)) }
 func (o *window) IsActive() bool           { return o.Ptr == C.gldi_windows_get_active() }
 func (o *window) IsFullScreen() bool       { return gobool(o.Ptr.bIsFullScreen) }
 func (o *window) IsHidden() bool           { return gobool(o.Ptr.bIsHidden) }
 func (o *window) IsMaximized() bool        { return gobool(o.Ptr.bIsMaximized) }
 func (o *window) IsOnCurrentDesktop() bool { return gobool(C.gldi_window_is_on_current_desktop(o.Ptr)) }
 func (o *window) IsSticky() bool           { return gobool(C.gldi_window_is_sticky(o.Ptr)) }
-func (o *window) StackOrder() int          { return int(o.Ptr.iStackOrder) }
+func (o *window) IsTransientWin() bool     { return gobool(o.Ptr.bIsTransientFor) }
 func (o *window) NumDesktop() int          { return int(o.Ptr.iNumDesktop) }
+func (o *window) StackOrder() int          { return int(o.Ptr.iStackOrder) }
 func (o *window) ViewPortX() int           { return int(o.Ptr.iViewPortX) }
 func (o *window) ViewPortY() int           { return int(o.Ptr.iViewPortY) }
 func (o *window) XID() uint                { return uint(C.gldi_window_get_id(o.Ptr)) }
@@ -191,6 +74,10 @@ func (o *window) SetAbove(above bool)     { C.gldi_window_set_above(o.Ptr, cbool
 func (o *window) SetFullScreen(full bool) { C.gldi_window_set_fullscreen(o.Ptr, cbool(full)) }
 func (o *window) SetSticky(sticky bool)   { C.gldi_window_set_sticky(o.Ptr, cbool(sticky)) }
 func (o *window) Show()                   { C.gldi_window_show(o.Ptr) }
+
+func (o *window) GetTransientWin() cdglobal.Window {
+	return NewFromNative(unsafe.Pointer(C.gldi_window_get_transient_for(o.Ptr)))
+}
 
 func (o *window) MoveToDesktop(desktopNumber, viewPortX, viewPortY int) {
 	C.gldi_window_move_to_desktop(o.Ptr, C.int(desktopNumber), C.int(viewPortX), C.int(viewPortY))

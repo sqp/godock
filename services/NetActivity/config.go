@@ -63,7 +63,6 @@ type groupUpload struct {
 
 type groupVideo struct {
 	VideoDLEnabled bool
-	EnabledDL      bool
 	EnabledWeb     videodl.WebState
 }
 

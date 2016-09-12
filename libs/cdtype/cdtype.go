@@ -1,7 +1,10 @@
 package cdtype
 
 import (
+	"github.com/sqp/godock/widgets/cfbuild/valuer"
+
 	"os/exec"
+	"reflect"
 	"time"
 )
 
@@ -96,6 +99,10 @@ type AppBase interface {
 	// Name returns the applet name as known by the dock. As an external app = dir name.
 	//
 	Name() string // Name returns the applet name as known by the dock. As an external app = dir name.
+
+	// Translate translates a string in the applet domain.
+	//
+	Translate(str string) string
 
 	// SetDefaults set basic defaults icon settings in one call.
 	// Empty fields will be reset, so this is better used in the Init() call.
@@ -829,17 +836,52 @@ func (g ConfGroupIconBoth) ToDefaults(def *Defaults) {
 // leaks and deadlocks.
 //
 type ConfUpdater interface {
+	// Save saves the edited config to disk, and releases the file locks.
+	//
+	Save() error
+
+	// Cancel releases the file locks.
+	//
+	Cancel()
+
 	// Set sets a new value for the group/key reference.
 	//
 	Set(group, key string, value interface{}) error
 
-	// Save saves the edited config to disk, and release locks and memory.
+	// Valuer returns the valuer for the given group/key combo.
 	//
-	Save() error
+	Valuer(group, key string) valuer.Valuer
 
-	// Cancel releases locks and memory.
+	// ParseGroups calls the given func for every group with its list of keys.
 	//
-	Cancel()
+	ParseGroups(func(group string, keys []ConfKeyer))
+
+	// MarshalGroup fills the config with data from the struct provided.
+	//
+	MarshalGroup(value interface{}, group string, fieldKey GetFieldKey) error
+
+	// UnmarshalGroup parse a config group to fill the ptr to struct provided.
+	//
+	// The group param must match a group in the file with the format [MYGROUP]
+	//
+	UnmarshalGroup(v interface{}, group string, fieldKey GetFieldKey) []error
+
+	// SetNewVersion replaces the version in a config file.
+	// The given group must represent the first group of the file.
+	//
+	SetNewVersion(group, oldver, newver string) error
+}
+
+// GetFieldKey is method to match config key name and struct field.
+//
+type GetFieldKey func(reflect.StructField) string
+
+// ConfKeyer defines a config key interaction.
+//
+type ConfKeyer interface {
+	Name() string
+	Comment() string
+	valuer.Valuer
 }
 
 //

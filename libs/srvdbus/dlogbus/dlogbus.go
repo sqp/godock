@@ -114,7 +114,7 @@ func (o *Server) DockStart() error {
 //
 func (o *Server) DockStop() error {
 	dockpath.DbusPathDock = "/org/cdc/Cdc"
-	return dockbus.Send(dockbus.DockQuit)
+	return dockbus.DockQuit()
 }
 
 // DockRestart restarts the dock.

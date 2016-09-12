@@ -8,6 +8,7 @@ import (
 	"github.com/sqp/godock/libs/gldi/desktops"       // Desktop and screens info.
 	"github.com/sqp/godock/libs/gldi/docklist"       // Dock items lists.
 	"github.com/sqp/godock/libs/gldi/globals"        // Global variables.
+	"github.com/sqp/godock/libs/gldi/notif"          // Dock notifs.
 	"github.com/sqp/godock/libs/packages"            //
 	"github.com/sqp/godock/libs/ternary"             // Ternary operators.
 	"github.com/sqp/godock/libs/text/tran"           // Translate.
@@ -17,6 +18,7 @@ import (
 	"errors"
 	"path/filepath"
 	"strconv"
+	"time"
 )
 
 //
@@ -446,9 +448,9 @@ func (Data) ListKnownApplets() map[string]datatype.Appleter {
 
 // ListDownloadApplets builds the list of downloadable user applets (installed or not).
 //
-func (Data) ListDownloadApplets() (map[string]datatype.Appleter, error) {
+func (d Data) ListDownloadApplets() (map[string]datatype.Appleter, error) {
 	externalUserDir := globals.DirDockData(cdglobal.AppletsDirName)
-	packs, e := packages.ListDownloadApplets(externalUserDir)
+	packs, e := packages.ListDownloadApplets(d.Log, externalUserDir)
 	if e != nil {
 		return nil, e
 	}
@@ -775,9 +777,9 @@ func (Data) ListIconsMainDock() (list []datatype.Field) {
 
 // ListDockThemeLoad builds the list of dock themes for load widget (local and distant).
 //
-func (Data) ListDockThemeLoad() (map[string]datatype.Appleter, error) {
+func (d Data) ListDockThemeLoad() (map[string]datatype.Appleter, error) {
 	dir := globals.DirDockData(cdglobal.ConfigDirDockThemes)
-	packs, e := packages.ListDownloadDockThemes(dir)
+	packs, e := packages.ListDownloadDockThemes(d.Log, dir)
 	if e != nil {
 		return nil, e
 	}
@@ -792,9 +794,9 @@ func (Data) ListDockThemeLoad() (map[string]datatype.Appleter, error) {
 
 // ListDockThemeSave builds the list of dock themes for save widget (local).
 //
-func (Data) ListDockThemeSave() []datatype.Field {
+func (d Data) ListDockThemeSave() []datatype.Field {
 	dir := globals.DirDockData(cdglobal.ConfigDirDockThemes)
-	packs, e := packages.ListFromDir(dir, packages.TypeUser, packages.SourceDockTheme)
+	packs, e := packages.ListFromDir(d.Log, dir, packages.TypeUser, packages.SourceDockTheme)
 	if e != nil {
 		println("ListDockThemeSave wrong dir:", dir) // TODO: use a logger.
 		return nil
@@ -928,4 +930,43 @@ func (Data) CreateMainDock() string {
 //
 func (Data) DesktopClasser(class string) datatype.DesktopClasser {
 	return desktopclass.Info(class)
+}
+
+var winFocusRegistered bool
+var winFocusChan chan cdglobal.Window
+
+// GrabWindowClass waits a user window selection and returns its class.
+//
+func (Data) GrabWindowClass() (string, error) {
+	if !winFocusRegistered {
+		winFocusRegistered = true
+		notif.RegisterWindowChangeFocus(onChangeFocus)
+	}
+	// Not sure the buffer is needed, but just in case,
+	// this could prevent stupid deadlock as the callback stay active for the session.
+	winFocusChan = make(chan cdglobal.Window, 10)
+	defer func() { close(winFocusChan); winFocusChan = nil }()
+	select {
+	case <-time.After(5 * time.Second): // Timeout.
+		return "", errors.New("timeout 5s")
+
+	case win := <-winFocusChan: // Get the first window selected, valid or not, to prevent confusion.
+		if win == nil {
+			return "", errors.New("no window information found")
+		}
+
+		if win.IsTransientWin() {
+			win = win.GetTransientWin()
+		}
+		return win.Class(), nil
+	}
+
+	return "", errors.New("unknown case")
+}
+
+func onChangeFocus(win cdglobal.Window) bool {
+	if winFocusChan != nil {
+		winFocusChan <- win
+	}
+	return false
 }

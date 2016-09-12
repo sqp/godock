@@ -6,16 +6,15 @@ import (
 	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
 
-	"github.com/sqp/godock/libs/cdglobal"     // Dock types.
-	"github.com/sqp/godock/libs/cdtype"       // Logger type.
-	"github.com/sqp/godock/libs/dock/confown" // New dock own settings.
+	"github.com/sqp/godock/libs/cdglobal" // Dock types.
+	"github.com/sqp/godock/libs/cdtype"   // Logger type.
+	"github.com/sqp/godock/libs/config"   // Config parser.
 
 	"github.com/sqp/godock/widgets/cfbuild/cftype"
 	"github.com/sqp/godock/widgets/common"
 	"github.com/sqp/godock/widgets/confgui/btnaction"
 	"github.com/sqp/godock/widgets/gtk/buildhelp"
 	"github.com/sqp/godock/widgets/gtk/gunvalue"
-	"github.com/sqp/godock/widgets/gtk/keyfile"
 )
 
 //--------------------------------------------------------[ WIDGET SHORTKEYS ]--
@@ -173,22 +172,10 @@ func (widget *Shortkeys) updateShortkey(accel string) {
 		return
 	}
 
-	// TODO: improve code. need to use files.UpdateConfFile(file, sk.GroupName(), sk.KeyName(), accel)
-	pKeyF, e := keyfile.NewFromFile(file, keyfile.FlagsKeepComments|keyfile.FlagsKeepTranslations)
-	if widget.log.Err(e, "Update shortkey in file") {
-		return
-	}
-	defer pKeyF.Free()
-	pKeyF.Set(sk.GroupName(), sk.KeyName(), accel)
+	e := config.UpdateFile(widget.log, file, sk.GroupName(), sk.KeyName(), accel)
+	widget.log.Err(e, "Update shortkey in file")
 
-	_, str, _ := pKeyF.ToData()
-
-	confown.SaveFile(file, str)
-
-	// 				cairo_dock_update_conf_file (binding->cConfFilePath,
-	// 					G_TYPE_STRING, binding->cGroupName, binding->cKeyName, key,
-	// 					G_TYPE_INVALID);
-
+	// TODO : need reload applet config.
 }
 
 // updateDisplay sets shortcut text after a cancelled edit.

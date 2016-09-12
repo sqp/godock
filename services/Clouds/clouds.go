@@ -43,14 +43,10 @@ import (
 //
 //--------------------------------------------------------------------[ TODO ]--
 
-// translations : dialog and gui default for strings
 // theme location : conf and real
 // reduce timer when fail on first try?
-
 // reenable show current dialog when show on icon is disabled (need to dl data)
 // maybe other backends (at least one to provide a fallback and comparisons)
-
-func trans(str string) string { return str }
 
 //
 //-------------------------------------------------------------------[ CONST ]--
@@ -134,7 +130,6 @@ func NewApplet(base cdtype.AppBase, events *cdtype.Events) cdtype.AppInstance {
 	app.Poller().Add(app.Check)
 	app.Poller().SetPreCheck(func() { app.SetEmblem(app.FileLocation("img", IconWork), EmblemWork) })
 	app.Poller().SetPostCheck(func() { app.SetEmblem("none", EmblemWork) })
-
 	return app
 }
 
@@ -185,27 +180,27 @@ func (app *Applet) actions() []*cdtype.Action {
 			Menu: cdtype.MenuSeparator,
 		}, {
 			ID:   ActionShowCurrent,
-			Name: "Show current conditions",
+			Name: app.Translate("Show current conditions"),
 			Icon: "dialog-information",
 			Call: app.DialogWeatherCurrent,
 		}, {
 			ID:   ActionShowTomorrow,
-			Name: "Show conditions for tomorrow",
+			Name: app.Translate("Show conditions for tomorrow"),
 			Icon: "dialog-information",
 			Call: func() { app.DialogWeatherForecast("1") },
 		}, {
 			ID:   ActionOpenWebpage,
-			Name: "Open webpage",
+			Name: app.Translate("Open webpage"),
 			Icon: "go-jump",
 			Call: func() { app.OpenWeb(0) },
 		}, {
 			ID:   ActionRecheckNow,
-			Name: "Recheck now",
+			Name: app.Translate("Recheck now"),
 			Icon: "view-refresh",
 			Call: app.Check,
 		}, {
 			ID:   ActionSetLocation,
-			Name: "Set location",
+			Name: app.Translate("Set location"),
 			Icon: "user-home",
 			Call: func() { app.AskLocationText("") },
 		},
@@ -326,9 +321,9 @@ func (app *Applet) Draw() {
 		// if errordata{...}
 
 		icon := cur.WeatherIcon
-		// if cur.IsNight() {
-		// 	icon = strconv.Itoa(cur.MoonIcon)
-		// }
+		if cur.IsNight {
+			icon = strconv.Itoa(cur.MoonIcon)
+		}
 
 		icon = app.WeatherIcon(icon)
 		app.SetIcon(icon)
@@ -337,11 +332,19 @@ func (app *Applet) Draw() {
 
 	// Show forecast.
 	app.RemoveSubIcons()
+	needNight := false
 	for i, day := range app.weather.Forecast().Days {
 		for _, part := range day.Part {
-			if !app.conf.DisplayNights && part.Period != "d" {
+			if !app.conf.DisplayNights && part.Period != "d" && !needNight { // Drop nights cases.
 				continue
 			}
+
+			needNight = false
+			if i == 0 && part.WeatherIcon == "" { // Current daylight part is over. Show night instead.
+				needNight = true
+				continue
+			}
+
 			key := strconv.Itoa(i)
 			iconName := app.WeatherIcon(part.WeatherIcon)
 			app.AddSubIcon(day.DayName, iconName, key)
@@ -422,8 +425,8 @@ func (app *Applet) DialogWeatherForecast(ref string) {
 // A default text may be used as argument.
 //
 func (app *Applet) AskLocationText(deftxt string) {
-	msg := trans("Enter your location:") + "\n\n" +
-		trans("Leave empty to autodetect.")
+	msg := app.Translate("Enter your location:") + "\n\n" +
+		app.Translate("Leave empty to autodetect.")
 
 	e := app.PopupDialog(cdtype.DialogData{
 		Message:  msg,
@@ -462,7 +465,7 @@ func (app *Applet) AskLocationConfirm(locstr string) {
 	}
 
 	e = app.PopupDialog(cdtype.DialogData{
-		Message: trans("Select your location:"),
+		Message: app.Translate("Select your location:"),
 		Widget: cdtype.DialogWidgetList{
 			Values: ids,
 		},

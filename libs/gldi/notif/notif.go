@@ -46,6 +46,7 @@ import "C"
 import (
 	"github.com/gotk3/gotk3/gtk"
 
+	"github.com/sqp/godock/libs/cdglobal" // Dock types.
 	"github.com/sqp/godock/libs/gldi"
 	"github.com/sqp/godock/libs/gldi/window" // Desktop windows control.
 	"github.com/sqp/godock/widgets/gtk/togtk"
@@ -136,7 +137,7 @@ type OnShortkeyFunc func()
 
 // OnWindowChangeFocusFunc defines a window focus callback.
 //
-type OnWindowChangeFocusFunc func(window.Type) bool
+type OnWindowChangeFocusFunc func(cdglobal.Window) bool
 
 //
 //------------------------------------------------------[ REGISTER CONTAINER ]--

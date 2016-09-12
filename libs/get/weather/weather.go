@@ -3,6 +3,7 @@ package weather
 
 import (
 	"github.com/sqp/godock/libs/cdtype"
+	"github.com/sqp/godock/libs/text/tran"
 
 	"bytes"
 	"errors"
@@ -25,9 +26,9 @@ type Weather interface {
 
 // Weather errors.
 var (
-	ErrMissingConfObject   = errors.New("weather #1: " + trans("conf object missing"))
-	ErrMissingLocationCode = errors.New("weather #2: " + trans("location missing"))
-	ValueMissing           = trans("N/A")
+	ErrMissingConfObject   = errors.New("weather #1: conf object missing")
+	ErrMissingLocationCode = errors.New("weather #2: location missing")
+	ValueMissing           = "N/A"
 )
 
 // BackendID represents the reference for a backend source of weather data.
@@ -62,11 +63,6 @@ type Config struct {
 	DisplayCurrentIcon bool   // current weather.
 	NbDays             int    // forecast (next days).
 }
-
-//
-//--------------------------------------------------------[ TRANSLATION TODO ]--
-
-func trans(str string) string { return str }
 
 //
 //-----------------------------------------------------------------[ CURRENT ]--
@@ -136,7 +132,7 @@ type Forecast struct {
 	Locale       string `xml:"head>locale"`
 	Form         string `xml:"head>form"`
 	Tm           string `xml:"loc>tm"`
-	Dnam         string `xml:"loc>dnam"`
+	LocName      string `xml:"loc>dnam"`
 	Lon          string `xml:"loc>lon"`
 	Lat          string `xml:"loc>lat"`
 	Zone         string `xml:"loc>zone"`
@@ -208,6 +204,10 @@ func (wc *Forecast) DayPart(dayNum int, getNight bool) *Part {
 //
 func (wc *Forecast) Format(template *cdtype.Template, dayNum int, time24H bool) (string, error) {
 	wc.Part = wc.DayPart(dayNum, false)
+	if dayNum == 0 && wc.Part != nil && wc.Part.WeatherIcon == "" { // use night when daylight info are missing.
+		wc.Part = wc.DayPart(dayNum, true)
+	}
+
 	if wc.Part == nil {
 		return "", fmt.Errorf("data missing forecast day: %d  (have %d)", dayNum, len(wc.Days))
 	}
@@ -271,28 +271,28 @@ func FormatField(template *cdtype.Template, list []string, data interface{}) (st
 		title := ""
 		switch key {
 		case "tempReal":
-			title = trans("Temperature")
+			title = tran.Splug("Temperature")
 
 		case "tempFelt":
-			title = trans("Feels like")
+			title = tran.Splug("Feels like")
 
 		case "wind":
-			title = trans("Wind")
+			title = tran.Splug("Wind")
 
 		case "humidity":
-			title = trans("Humidity")
+			title = tran.Splug("Humidity")
 
 		case "pressure":
-			title = trans("Pressure")
+			title = tran.Splug("Pressure")
 
 		case "sun":
-			title = trans("Sunrise") + " - " + trans("Sunset")
+			title = tran.Splug("Sunrise") + " - " + tran.Splug("Sunset")
 
 		case "tempDay":
-			title = trans("Temperature")
+			title = tran.Splug("Temperature")
 
 		case "precipitation":
-			title = trans("Precipitation probability")
+			title = tran.Splug("Precipitation probability")
 		}
 
 		fmt.Fprint(tw, title+":\t")
