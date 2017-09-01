@@ -13,6 +13,8 @@ import (
 	"testing"
 )
 
+var logger = log.NewLog(log.Logs)
+
 func TestValuerToBoth(t *testing.T) {
 	group := "group"
 
@@ -34,7 +36,7 @@ func testGetSet(t *testing.T, v extendedStorage, group string) {
 
 	getSet := func(v cftype.Storage, group, name string, i, o interface{}) {
 		v.Set(group, name+"2", i)
-		log.Err(v.Get(group, name+"2", o), "get")
+		logger.Err(v.Get(group, name+"2", o), "get")
 	}
 
 	ib := true
@@ -43,7 +45,7 @@ func testGetSet(t *testing.T, v extendedStorage, group string) {
 	getSet(v, group, name, ib, &ob)
 	v.SetBool(group, name, ib)
 	rb, e := v.Bool(group, name)
-	log.Err(e, "get bool")
+	logger.Err(e, "get bool")
 	assert.Equal(t, ib, ob, "get/set bool")
 	assert.Equal(t, ib, rb, "get/set bool")
 
@@ -53,7 +55,7 @@ func testGetSet(t *testing.T, v extendedStorage, group string) {
 	getSet(v, group, name, ii, &oi)
 	v.SetInt(group, name, ii)
 	ri, e := v.Int(group, name)
-	log.Err(e, "get int")
+	logger.Err(e, "get int")
 	assert.Equal(t, ii, oi, "get/set int")
 	assert.Equal(t, ii, ri, "get/set int")
 
@@ -63,7 +65,7 @@ func testGetSet(t *testing.T, v extendedStorage, group string) {
 	getSet(v, group, name, ifl, &ofl)
 	v.SetFloat(group, name, ifl)
 	rfl, e := v.Float(group, name)
-	log.Err(e, "get float64")
+	logger.Err(e, "get float64")
 	assert.Equal(t, ifl, ofl, "get/set float64")
 	assert.Equal(t, ifl, rfl, "get/set float64")
 
@@ -73,7 +75,7 @@ func testGetSet(t *testing.T, v extendedStorage, group string) {
 	getSet(v, group, name, is, &os)
 	v.SetString(group, name, is)
 	rs, e := v.String(group, name)
-	log.Err(e, "get string")
+	logger.Err(e, "get string")
 	assert.Equal(t, is, os, "get/set string")
 	assert.Equal(t, is, rs, "get/set string")
 
@@ -83,7 +85,7 @@ func testGetSet(t *testing.T, v extendedStorage, group string) {
 	getSet(v, group, name, ilb, &olb)
 	v.SetListBool(group, name, ilb)
 	rlb, e := v.ListBool(group, name)
-	log.Err(e, "get list bool")
+	logger.Err(e, "get list bool")
 	assert.Equal(t, ilb, olb, "get/set list bool")
 	assert.Equal(t, ilb, rlb, "get/set list bool")
 
@@ -93,7 +95,7 @@ func testGetSet(t *testing.T, v extendedStorage, group string) {
 	getSet(v, group, name, ili, &oli)
 	v.SetListInt(group, name, ili)
 	rli, e := v.ListInt(group, name)
-	log.Err(e, "get list int")
+	logger.Err(e, "get list int")
 	assert.Equal(t, ili, oli, "get/set list int")
 	assert.Equal(t, ili, rli, "get/set list int")
 
@@ -103,7 +105,7 @@ func testGetSet(t *testing.T, v extendedStorage, group string) {
 	getSet(v, group, name, ilfl, &olfl)
 	v.SetListFloat(group, name, ilfl)
 	rlfl, e := v.ListFloat(group, name)
-	log.Err(e, "get list float")
+	logger.Err(e, "get list float")
 	assert.Equal(t, ilfl, olfl, "get/set list float")
 	assert.Equal(t, ilfl, rlfl, "get/set list float")
 
@@ -113,7 +115,7 @@ func testGetSet(t *testing.T, v extendedStorage, group string) {
 	getSet(v, group, name, ils, &ols)
 	v.SetListString(group, name, ils)
 	rls, e := v.ListString(group, name)
-	log.Err(e, "get list string")
+	logger.Err(e, "get list string")
 	assert.Equal(t, ils, ols, "get/set list string")
 	assert.Equal(t, ils, rls, "get/set list string")
 }
@@ -199,14 +201,14 @@ func testValuerToBoth(t *testing.T, conf cftype.Storage, group string) {
 	olf := []float64{}
 	ols := []string{}
 
-	log.Err(conf.Get(group, "int", &oi), "get int")
-	log.Err(conf.Get(group, "bool", &ob), "get bool")
-	log.Err(conf.Get(group, "float", &ot), "get float")
-	log.Err(conf.Get(group, "string", &os), "get string")
-	log.Err(conf.Get(group, "listint", &oli), "get listint")
-	log.Err(conf.Get(group, "listbool", &olb), "get listbool")
-	log.Err(conf.Get(group, "listfloat", &olf), "get listfloat")
-	log.Err(conf.Get(group, "liststring", &ols), "get liststring")
+	logger.Err(conf.Get(group, "int", &oi), "get int")
+	logger.Err(conf.Get(group, "bool", &ob), "get bool")
+	logger.Err(conf.Get(group, "float", &ot), "get float")
+	logger.Err(conf.Get(group, "string", &os), "get string")
+	logger.Err(conf.Get(group, "listint", &oli), "get listint")
+	logger.Err(conf.Get(group, "listbool", &olb), "get listbool")
+	logger.Err(conf.Get(group, "listfloat", &olf), "get listfloat")
+	logger.Err(conf.Get(group, "liststring", &ols), "get liststring")
 
 	assert.Equal(t, ii, oi, "get Source Get int")
 	assert.Equal(t, ib, ob, "get Source Get bool")

@@ -52,7 +52,7 @@ func (o *idxID) SetActive(id int) bool {
 
 func (o *idxID) FindIter(id int) (*gtk.TreeIter, bool) {
 	if id >= len(o.list) {
-		o.log.NewErrf("out of range", "indexiter FindIter=%d size=%d", id, len(o.list))
+		o.log.Errorf("out of range", "indexiter FindIter=%d size=%d", id, len(o.list))
 		return nil, false
 	}
 	return o.list[id], true
@@ -97,7 +97,7 @@ func (o *idxStr) FindID(search string) (int, bool) {
 			return i, true
 		}
 	}
-	o.Log().NewErrf("out of range", "indexiter FindID=%s", search)
+	o.Log().Errorf("out of range", "indexiter FindID=%s", search)
 	return 0, false
 }
 

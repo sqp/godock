@@ -4,51 +4,49 @@ package versions
 import (
 	"github.com/sqp/godock/libs/cdglobal"     // Dock types.
 	"github.com/sqp/godock/libs/text/color"   // Colored text.
-	"github.com/sqp/godock/libs/text/strhelp" // String helpers.
+	"github.com/sqp/godock/libs/text/tablist" // Format table.
 
 	"fmt"
 	"runtime"
 )
 
 var (
-	// Name defines the name printed for the program. By default its an applet.
-	// Overridden with the dock build tag.
-	//
-	Name = "Applets API"
+	// name stores the printed name for the program or backend.
+	name = "missing, use versions.SetName"
 
-	// List stores the list of versions activated by build tags.
-	//
-	List Fields
+	// Dock stores dock and deps versions.
+	Dock = []Field{}
 )
+
+// SetName sets the name of the program or backend used.
+//
+func SetName(backendName string) {
+	name = backendName
+}
 
 // Field defines a printable field with its version text.
 //
 type Field struct{ K, V string }
 
-// Fields defines a list of field to format.
+// Fields returns the list of fields to format.
 //
-type Fields []Field
+func Fields() []Field {
+	list := append([]Field{{name, cdglobal.AppVersion}}, Dock...)
 
-// String formats the fields content with colored output.
-//
-func (fields Fields) String() string {
-	fields = append([]Field{
-		{Name, cdglobal.AppVersion},
-		{"  go       ", fmt.Sprintf("%s %s/%s", runtime.Version(), runtime.GOOS, runtime.GOARCH)},
-	}, List...)
+	list = append(list, []Field{
+		{"OS", fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH)},
+		{"Compiler", runtime.Version()},
+		{"BuildMode", cdglobal.BuildMode},
+	}...)
 
 	if cdglobal.BuildDate != "" {
-		fields = append(fields,
-			Field{"  Compiled ", cdglobal.BuildDate},
-			Field{"  Git Hash ", cdglobal.GitHash},
+		list = append(list,
+			Field{"Date", cdglobal.BuildDate},
+			Field{"CommitID", cdglobal.GitHash},
+			Field{"FilesEdited", cdglobal.BuildNbEdited},
 		)
 	}
-
-	out := ""
-	for _, line := range fields {
-		out += strhelp.Bracket(color.Colored(line.K, color.FgGreen)) + " " + line.V + "\n"
-	}
-	return out
+	return list
 }
 
 //
@@ -57,14 +55,21 @@ func (fields Fields) String() string {
 // Print prints versions numbers.
 //
 func Print() {
-	print(List.String())
+	fmt.Println(Format(Fields()))
 }
 
-// TestPrint prints versions numbers if the value is true.
+// Format formats fields content with colored output.
 //
-func TestPrint(display bool) {
-	if !display {
-		return
+func Format(fields []Field) (out string) {
+	lf := tablist.NewFormater(
+		tablist.NewColLeft(0, ""),
+		tablist.NewColLeft(0, fmt.Sprintf("[ %s  %s ]", fields[0].K, fields[0].V)),
+	)
+
+	for _, field := range fields[1:] {
+		lf.AddLine().
+			Colored(0, color.FgGreen, field.K).
+			Set(1, field.V)
 	}
-	Print()
+	return lf.Sprint()
 }

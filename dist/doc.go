@@ -6,25 +6,10 @@ Linux package installation.
 
 Debian - Ubuntu - LinuxMint and related from the repository
 
-(please confirm if they're working on Debian 8)
+You can find packages links and install configuration on our repository:
 
-Create a source.list entry by adding the file:
+  https://software.opensuse.org//download.html?project=home%3ASQP%3Acairo-dock-go&package=cairo-dock-rework
 
-/etc/apt/sources.list.d/cairo-dock-go.list
-  deb http://download.opensuse.org/repositories/home:/SQP:/cairo-dock-go/xUbuntu_16.04/ ./
-
-Install command:
-  apt update && apt install cairo-dock-goapplets # or cairo-dock-rework
-
-Archlinux builded packages repository
-
-Add to your /etc/pacman.conf
-  [home_SQP_cairo-dock-go_Arch_Extra]
-  SigLevel = Never
-  Server = http://download.opensuse.org/repositories/home:/SQP:/cairo-dock-go/Arch_Extra/$arch
-
-Install command:
-  pacman -Sy cairo-dock-goapplets # or cairo-dock-rework
 
 Create Archlinux package
 
@@ -50,6 +35,8 @@ Remove Package:
 
 
 Build from sources
+
+Requires go 1.8 or newer (GOPATH from go).
 
 Single applet:
 

@@ -33,13 +33,13 @@ type Applet struct {
 // NewApplet creates a new applet instance.
 //
 func NewApplet(base cdtype.AppBase, events *cdtype.Events) cdtype.AppInstance {
-	app := &Applet{AppBase: base, notifs: &Notifs{}}
+	app := &Applet{AppBase: base, notifs: &Notifs{log: base.Log()}}
 	app.SetConfig(&app.conf, app.actions()...)
 
 	// Events.
 	events.OnClick = app.Action().Callback(ActionShowAll)
 	events.OnMiddleClick = app.Action().Callback(ActionClear)
-	events.OnBuildMenu = app.Action().CallbackMenu(menuUser)
+	events.OnBuildMenu = app.Action().CallbackMenu(menuUser...)
 
 	// Notifs.
 	app.notifs.SetOnCount(app.UpdateCount)
@@ -150,6 +150,7 @@ type Notifs struct {
 
 	messages  []*Notif
 	callCount func(int)
+	log       cdtype.Logger
 }
 
 // NotifConfig defines the notification service configuration.
@@ -232,7 +233,7 @@ func (notifs *Notifs) Start() error {
 	if e != nil {
 		return e
 	}
-	go notifs.Listen()
+	notifs.log.GoTry(notifs.Listen)
 	return nil
 }
 

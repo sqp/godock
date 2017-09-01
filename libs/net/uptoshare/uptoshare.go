@@ -231,10 +231,47 @@ func (up *Uploader) SetHistorySize(nb int) {
 	up.trimHistory()
 }
 
+// ListRemove removes an item from the history..
+//
+func (up *Uploader) ListRemove(uri string) error {
+	found := -1
+	for i, link := range up.history {
+		if link["link"] == uri {
+			found = i
+			break
+		}
+	}
+	if found == -1 {
+		return errors.New("link not found: " + uri)
+	}
+	count := len(up.history)
+	up.history = append(up.history[:found], up.history[found+1:]...)
+	up.Log.Info("remove", count, len(up.history))
+	return nil
+}
+
+// Walk parse the links list.
+//
+func (up *Uploader) Walk(call func(Links) bool) {
+	for _, l := range up.history {
+		if !call(l) {
+			return
+		}
+	}
+}
+
 // ListHistory returns the history content.
 //
 func (up *Uploader) ListHistory() []Links {
 	return up.history
+}
+
+// SetHistory sets the new history content.
+//
+func (up *Uploader) SetHistory(links []Links) {
+	up.history = links
+	up.trimHistory()
+	up.saveHistory()
 }
 
 func (up *Uploader) addHistory(list map[string]string) {
@@ -244,7 +281,7 @@ func (up *Uploader) addHistory(list map[string]string) {
 }
 
 func (up *Uploader) trimHistory() {
-	if len(up.history) > up.historyMax {
+	if up.historyMax > 0 && len(up.history) > up.historyMax {
 		up.history = up.history[len(up.history)-up.historyMax:]
 	}
 }
@@ -262,7 +299,8 @@ func (up *Uploader) loadHistory() error {
 			}
 		})
 	})
-	return up.Log.GetErr(e, "load uptoshare history")
+	up.Log.Err(e, "load uptoshare history")
+	return e
 }
 
 //
@@ -284,9 +322,9 @@ func (up *Uploader) saveHistory() {
 //
 //------------------------------------------------------------------[ UPLOAD ]--
 
-// Upload data to the configured server for file type.
+// UploadGuess data to the configured server for file type.
 //
-func (up *Uploader) Upload(data string) {
+func (up *Uploader) UploadGuess(data string) {
 	if data == "" {
 		return
 	}

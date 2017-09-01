@@ -122,39 +122,9 @@ type RenderingMethod int
 
 // Screen display backends.
 const (
+	RenderingDefault RenderingMethod = C.GLDI_DEFAULT
 	RenderingOpenGL  RenderingMethod = C.GLDI_OPENGL
 	RenderingCairo   RenderingMethod = C.GLDI_CAIRO
-	RenderingDefault RenderingMethod = C.GLDI_DEFAULT
-)
-
-// DeskEnvironment represents a desktop environment.
-//
-type DeskEnvironment C.CairoDockDesktopEnv
-
-// Desktop environment backends.
-//
-const (
-	DeskEnvGnome   DeskEnvironment = C.CAIRO_DOCK_GNOME
-	DeskEnvKDE     DeskEnvironment = C.CAIRO_DOCK_KDE
-	DeskEnvXFCE    DeskEnvironment = C.CAIRO_DOCK_XFCE
-	DeskEnvUnknown DeskEnvironment = C.CAIRO_DOCK_UNKNOWN_ENV
-)
-
-// ModuleCategory represents a module category.
-//
-type ModuleCategory C.GldiModuleCategory
-
-// Module categories.
-//
-const (
-	CategoryBehavior        ModuleCategory = C.CAIRO_DOCK_CATEGORY_BEHAVIOR
-	CategoryTheme           ModuleCategory = C.CAIRO_DOCK_CATEGORY_THEME
-	CategoryAppletFiles     ModuleCategory = C.CAIRO_DOCK_CATEGORY_APPLET_FILES
-	CategoryAppletInternet  ModuleCategory = C.CAIRO_DOCK_CATEGORY_APPLET_INTERNET
-	CategoryAppletDesktop   ModuleCategory = C.CAIRO_DOCK_CATEGORY_APPLET_DESKTOP
-	CategoryAppletAccessory ModuleCategory = C.CAIRO_DOCK_CATEGORY_APPLET_ACCESSORY
-	CategoryAppletSystem    ModuleCategory = C.CAIRO_DOCK_CATEGORY_APPLET_SYSTEM
-	CategoryAppletFun       ModuleCategory = C.CAIRO_DOCK_CATEGORY_APPLET_FUN
 )
 
 //
@@ -162,7 +132,7 @@ const (
 
 // Init initialises the gldi backend with the rendering method provided.
 //
-func Init(rendering int) {
+func Init(rendering RenderingMethod) {
 	C.gldi_init(C.GldiRenderingMethod(rendering))
 }
 
@@ -267,8 +237,18 @@ func CurrentThemePackage(themeName, dirPath string) error {
 
 // FMForceDeskEnv forces the dock to use the given desktop environment backend.
 //
-func FMForceDeskEnv(env DeskEnvironment) {
-	C.cairo_dock_fm_force_desktop_env(C.CairoDockDesktopEnv(env))
+func FMForceDeskEnv(env cdglobal.DeskEnvironment) {
+	c := C.CAIRO_DOCK_UNKNOWN_ENV
+	switch env {
+	case cdglobal.DeskEnvGnome:
+		env = C.CAIRO_DOCK_GNOME
+	case cdglobal.DeskEnvKDE:
+		env = C.CAIRO_DOCK_KDE
+	case cdglobal.DeskEnvXFCE:
+		env = C.CAIRO_DOCK_XFCE
+	}
+
+	C.cairo_dock_fm_force_desktop_env(C.CairoDockDesktopEnv(c))
 }
 
 // ForceDocksAbove forces all docks to appear on top of other windows.
@@ -428,15 +408,21 @@ func ConfFileNeedUpdate(kf *keyfile.KeyFile, version string) bool {
 	return gobool(C.cairo_dock_conf_file_needs_update(cKeyfile, cstr))
 }
 
-// unused, see config.UpdateFile
-// func ConfFileUpgradeFull(kf *keyfile.KeyFile, current, original string, updateKeys bool) {
-// 	cKeyfile := (*C.GKeyFile)(unsafe.Pointer(kf.ToNative()))
-// 	cCurrent := (*C.gchar)(C.CString(current))
-// 	defer C.free(unsafe.Pointer((*C.char)(cCurrent)))
-// 	cOriginal := (*C.gchar)(C.CString(original))
-// 	defer C.free(unsafe.Pointer((*C.char)(cOriginal)))
-// 	C.cairo_dock_upgrade_conf_file_full(cCurrent, cKeyfile, cOriginal, cbool(updateKeys))
-// }
+// ConfFileUpgrade upgrades a config file (copy from default and reapply keys).
+//
+func ConfFileUpgrade(current, original string, updateKeys bool) error {
+	kf, e := keyfile.NewFromFile(current, keyfile.FlagsKeepComments|keyfile.FlagsKeepTranslations)
+	if e != nil {
+		return e
+	}
+	cKeyfile := (*C.GKeyFile)(unsafe.Pointer(kf.ToNative()))
+	cCurrent := (*C.gchar)(C.CString(current))
+	defer C.free(unsafe.Pointer((*C.char)(cCurrent)))
+	cOriginal := (*C.gchar)(C.CString(original))
+	defer C.free(unsafe.Pointer((*C.char)(cOriginal)))
+	C.cairo_dock_upgrade_conf_file_full(cCurrent, cKeyfile, cOriginal, cbool(updateKeys))
+	return nil
+}
 
 // EmitSignalDropData emits the signal on the container.
 //
@@ -582,7 +568,7 @@ func ObjectIsDock(obj IObject) bool {
 // ObjectNotify notifies the given object.
 //
 func ObjectNotify(container *Container, notif int, icon Icon, dock *CairoDock, key gdk.ModifierType) {
-	C.objectNotify(container.Ptr, C.int(notif), icon.ToNative(), dock.Ptr, C.GdkModifierType(key))
+	C.objectNotify(container.Ptr, C.int(notif), (*C.Icon)(icon.ToNative()), dock.Ptr, C.GdkModifierType(key))
 }
 
 //
@@ -688,14 +674,14 @@ func (o *CairoDock) Container() *Container {
 // GetNextIcon returns the icon after the given one in the dock.
 //
 func (o *CairoDock) GetNextIcon(icon Icon) Icon {
-	c := C.cairo_dock_get_next_icon(o.Ptr.icons, icon.ToNative())
+	c := C.cairo_dock_get_next_icon(o.Ptr.icons, (*C.Icon)(icon.ToNative()))
 	return NewIconFromNative(unsafe.Pointer(c))
 }
 
 // GetPreviousIcon returns the icon before the given one in the dock.
 //
 func (o *CairoDock) GetPreviousIcon(icon Icon) Icon {
-	c := C.cairo_dock_get_previous_icon(o.Ptr.icons, icon.ToNative())
+	c := C.cairo_dock_get_previous_icon(o.Ptr.icons, (*C.Icon)(icon.ToNative()))
 	return NewIconFromNative(unsafe.Pointer(c))
 }
 
@@ -711,16 +697,17 @@ func (o *CairoDock) ScreenNumber() int {
 func (o *CairoDock) ScreenWidth() int {
 	i := o.ScreenNumber()
 	isHoriz := o.Container().IsHorizontal()
+	screens := desktops.Screens()
 
 	switch {
-	case isHoriz && 0 <= i && i < desktops.NbScreens():
-		return desktops.WidthScreen(i)
+	case isHoriz && 0 <= i && i < len(screens):
+		return screens[i].Width()
 
 	case isHoriz:
 		return desktops.WidthAll()
 
-	case 0 <= i && i < desktops.NbScreens():
-		return desktops.HeightScreen(i)
+	case 0 <= i && i < len(screens):
+		return screens[i].Height()
 	}
 
 	return desktops.HeightAll()
@@ -912,14 +899,20 @@ func (o *Container) ToNative() unsafe.Pointer {
 	return unsafe.Pointer(o.Ptr)
 }
 
+// ToCairoDock returns the container as a dock if possible.
+//
 func (o *Container) ToCairoDock() *CairoDock {
 	return NewDockFromNative(unsafe.Pointer(o.Ptr))
 }
 
+// ToDesklet returns the container as a desklet if possible.
+//
 func (o *Container) ToDesklet() *Desklet {
 	return NewDeskletFromNative(unsafe.Pointer(o.Ptr))
 }
 
+// Type returns the type of container.
+//
 func (o *Container) Type() cdtype.ContainerType {
 	switch {
 	case ObjectIsDock(o):
@@ -938,54 +931,80 @@ func (o *Container) Type() cdtype.ContainerType {
 	return cdtype.ContainerUnknown
 }
 
+// IsDesklet returns whether the container is a desklet or not.
+//
 func (o *Container) IsDesklet() bool {
 	return ObjectIsManagerChild(o, &C.myDeskletObjectMgr)
 }
 
+// IsDialog returns whether the container is a dialog or not.
+//
 func (o *Container) IsDialog() bool {
 	return ObjectIsManagerChild(o, &C.myDialogObjectMgr)
 }
 
+// IsFlyingContainer returns whether the container is a flying container or not.
+//
 func (o *Container) IsFlyingContainer() bool {
 	return ObjectIsManagerChild(o, &C.myFlyingObjectMgr)
 }
 
+// Width returns the container width.
+//
 func (o *Container) Width() int {
 	return int(o.Ptr.iWidth)
 }
 
+// Height returns the container height.
+//
 func (o *Container) Height() int {
 	return int(o.Ptr.iHeight)
 }
 
+// Ratio returns the container ratio.
+//
 func (o *Container) Ratio() float64 {
 	return float64(o.Ptr.fRatio)
 }
 
+// MouseX returns the mouse horizontal position on the container.
+//
 func (o *Container) MouseX() int {
 	return int(o.Ptr.iMouseX)
 }
 
+// MouseY returns the mouse vertical position on the container.
+//
 func (o *Container) MouseY() int {
 	return int(o.Ptr.iMouseY)
 }
 
+// WindowPositionX TODO usage.
+//
 func (o *Container) WindowPositionX() int {
 	return int(o.Ptr.iWindowPositionX)
 }
 
+// WindowPositionY TODO usage.
+//
 func (o *Container) WindowPositionY() int {
 	return int(o.Ptr.iWindowPositionY)
 }
 
+// IsHorizontal returns if the container orientation is horizontal.
+//
 func (o *Container) IsHorizontal() bool {
 	return gobool(C.gboolean(o.Ptr.bIsHorizontal))
 }
 
+// IsDirectionUp returns if the dock is positioned on top or bottom.
+//
 func (o *Container) IsDirectionUp() bool {
 	return gobool(C.gboolean(o.Ptr.bDirectionUp))
 }
 
+// ScreenBorder returns the border of the screen where the dock is attached.
+//
 func (o *Container) ScreenBorder() cdtype.ContainerPosition {
 	switch {
 	case o.IsHorizontal() && o.IsDirectionUp():
@@ -1031,23 +1050,33 @@ func (o *Desklet) IsSticky() bool {
 	return gobool(C.gldi_desklet_is_sticky(o.Ptr))
 }
 
+// PositionLocked gets the locked position state.
+//
 func (o *Desklet) PositionLocked() bool {
 	return gobool(o.Ptr.bPositionLocked)
 }
 
+// GetIcon gets the icon behind the desklet.
+//
 func (o *Desklet) GetIcon() Icon {
 	return NewIconFromNative(unsafe.Pointer(o.Ptr.pIcon))
 }
 
+// HasIcons returns whether the desklet has icons or not.
+//
 func (o *Desklet) HasIcons() bool {
 	return o.Ptr.icons != nil
 }
 
+// Icons returns the list of icons in the desklet.
+//
 func (o *Desklet) Icons() []Icon {
 	clist := glib.WrapList(uintptr(unsafe.Pointer(o.Ptr.icons)))
 	return goListIcons(clist)
 }
 
+// RemoveIcons removes icons from the desklet.
+//
 func (o *Desklet) RemoveIcons() {
 	for _, ic := range o.Icons() {
 		ObjectUnref(ic)
@@ -1056,30 +1085,41 @@ func (o *Desklet) RemoveIcons() {
 	o.Ptr.icons = nil
 }
 
+// SetSticky sets the desklet sticky state.
+//
 func (o *Desklet) SetSticky(b bool) {
 	println("SetSticky", b)
 	C.gldi_desklet_set_sticky(o.Ptr, cbool(b))
 }
 
+// LockPosition sets the locked position state.
+//
 func (o *Desklet) LockPosition(b bool) {
 	C.gldi_desklet_lock_position(o.Ptr, cbool(b))
 }
 
+// Visibility gets the desklet visibility state.
+//
 func (o *Desklet) Visibility() cdtype.DeskletVisibility {
 	return cdtype.DeskletVisibility(o.Ptr.iVisibility)
 }
 
-// TRUE <=> save state in conf.
+// SetVisibility sets the desklet visibility. Can save to conf file.
+//
 func (o *Desklet) SetVisibility(vis cdtype.DeskletVisibility, save bool) {
 	C.gldi_desklet_set_accessibility(o.Ptr, C.CairoDeskletVisibility(vis), cbool(save))
 }
 
+// SetRendererByName sets the desklet renderer.
+//
 func (o *Desklet) SetRendererByName(name string) {
 	cstr := (*C.gchar)(C.CString(name))
 	defer C.free(unsafe.Pointer((*C.char)(cstr)))
 	C.cairo_dock_set_desklet_renderer_by_name(o.Ptr, cstr, nil)
 }
 
+// SetRendererByNameData sets the desklet renderer with TODO usage.
+//
 func (o *Desklet) SetRendererByNameData(name string, unk1, unk2 bool) {
 	cstr := (*C.gchar)(C.CString(name))
 	defer C.free(unsafe.Pointer((*C.char)(cstr)))
@@ -1091,10 +1131,14 @@ func (o *Desklet) SetRendererByNameData(name string, unk1, unk2 bool) {
 //
 //--------------------------------------------------[ DATARENDERERATTRIBUTES ]--
 
+// DataRendererAttributer defines the data renderer attribute interface.
+//
 type DataRendererAttributer interface {
 	ToAttribute() (attr *C.CairoDataRendererAttribute, free func())
 }
 
+// DataRendererAttributeCommon defines the base for a data renderer attribute.
+//
 type DataRendererAttributeCommon struct {
 	ModelName    string
 	LatencyTime  int
@@ -1120,14 +1164,20 @@ func (o *DataRendererAttributeCommon) parseCommon(p unsafe.Pointer) *C.CairoData
 	return attr
 }
 
+// Free frees the renderer object.
+//
 func (o *DataRendererAttributeCommon) Free() {
 	C.free(unsafe.Pointer((*C.char)(o.cType)))
 }
 
+// DataRendererAttributeProgressBar defines a progress bar data renderer attribute.
+//
 type DataRendererAttributeProgressBar struct {
 	DataRendererAttributeCommon
 }
 
+// NewDataRendererAttributeProgressBar creates a progress bar data renderer attribute.
+//
 func NewDataRendererAttributeProgressBar() *DataRendererAttributeProgressBar {
 	return &DataRendererAttributeProgressBar{
 		DataRendererAttributeCommon: DataRendererAttributeCommon{
@@ -1136,16 +1186,22 @@ func NewDataRendererAttributeProgressBar() *DataRendererAttributeProgressBar {
 	}
 }
 
+// ToAttribute converts the renderer to C attribute.
+//
 func (o *DataRendererAttributeProgressBar) ToAttribute() (*C.CairoDataRendererAttribute, func()) {
 	aGaugeAttr := new(C.CairoProgressBarAttribute)
 	return o.parseCommon(unsafe.Pointer(aGaugeAttr)), o.Free
 }
 
+// DataRendererAttributeGauge defines a gauge data renderer attribute.
+//
 type DataRendererAttributeGauge struct {
 	DataRendererAttributeCommon
 	Theme string
 }
 
+// NewDataRendererAttributeGauge creates a gauge data renderer attribute.
+//
 func NewDataRendererAttributeGauge() *DataRendererAttributeGauge {
 	return &DataRendererAttributeGauge{
 		DataRendererAttributeCommon: DataRendererAttributeCommon{
@@ -1154,6 +1210,8 @@ func NewDataRendererAttributeGauge() *DataRendererAttributeGauge {
 	}
 }
 
+// ToAttribute converts the renderer to C attribute.
+//
 func (o *DataRendererAttributeGauge) ToAttribute() (*C.CairoDataRendererAttribute, func()) {
 	aGaugeAttr := new(C.CairoGaugeAttribute)
 	cTheme := (*C.gchar)(C.CString(o.Theme))
@@ -1167,6 +1225,8 @@ func (o *DataRendererAttributeGauge) ToAttribute() (*C.CairoDataRendererAttribut
 	return o.parseCommon(unsafe.Pointer(aGaugeAttr)), free
 }
 
+// DataRendererAttributeGraph defines a graph data renderer attribute.
+//
 type DataRendererAttributeGraph struct {
 	DataRendererAttributeCommon
 	Type            cdtype.RendererGraphType
@@ -1176,6 +1236,8 @@ type DataRendererAttributeGraph struct {
 	BackGroundColor [4]float64
 }
 
+// NewDataRendererAttributeGraph creates a graph data renderer attribute.
+//
 func NewDataRendererAttributeGraph() *DataRendererAttributeGraph {
 	return &DataRendererAttributeGraph{
 		DataRendererAttributeCommon: DataRendererAttributeCommon{
@@ -1184,6 +1246,8 @@ func NewDataRendererAttributeGraph() *DataRendererAttributeGraph {
 	}
 }
 
+// ToAttribute converts the renderer to C attribute.
+//
 func (o *DataRendererAttributeGraph) ToAttribute() (*C.CairoDataRendererAttribute, func()) {
 	attr := new(C.CairoGraphAttribute)
 
@@ -1206,10 +1270,14 @@ func (o *DataRendererAttributeGraph) ToAttribute() (*C.CairoDataRendererAttribut
 //
 //------------------------------------------------------------------[ MODULE ]--
 
+// Module defines a gldi module.
+//
 type Module struct {
 	Ptr *C.GldiModule
 }
 
+// ModuleGet gets the module for the given name.
+//
 func ModuleGet(name string) *Module {
 	cstr := (*C.gchar)(C.CString(name))
 	defer C.free(unsafe.Pointer((*C.char)(cstr)))
@@ -1217,6 +1285,8 @@ func ModuleGet(name string) *Module {
 	return NewModuleFromNative(unsafe.Pointer(c))
 }
 
+// NewModuleFromNative wraps a gldi module from C pointer.
+//
 func NewModuleFromNative(p unsafe.Pointer) *Module {
 	if p == nil {
 		return nil
@@ -1230,33 +1300,63 @@ func NewModuleFromNative(p unsafe.Pointer) *Module {
 // 	return NewModuleFromNative(unsafe.Pointer(c)), interf
 // }
 
+// ToNative returns the pointer to the native object.
+//
 func (m *Module) ToNative() unsafe.Pointer {
 	return unsafe.Pointer(m.Ptr)
 }
 
+// IsAutoLoaded returns whether the module was auto loaded or not.
+//
 func (m *Module) IsAutoLoaded() bool {
 	return gobool(C._module_is_auto_loaded(m.Ptr))
 }
 
+// VisitCard returns the module visit card.
+//
 func (m *Module) VisitCard() *VisitCard {
 	return NewVisitCardFromNative(unsafe.Pointer(m.Ptr.pVisitCard))
 }
 
+// InstancesList returns the list of active instances for the module.
+//
 func (m *Module) InstancesList() (list []*ModuleInstance) {
 	clist := glib.WrapList(uintptr(unsafe.Pointer(m.Ptr.pInstancesList)))
 	return goListModuleInstance(clist)
 }
 
+// Activate activates the module.
+//
 func (m *Module) Activate() {
 	C.gldi_module_activate(m.Ptr)
 }
 
+// Deactivate deactivates the module.
+//
 func (m *Module) Deactivate() {
 	C.gldi_module_deactivate(m.Ptr)
 }
 
+// AddInstance creates a new instance for the module.
+//
 func (m *Module) AddInstance() {
 	C.gldi_module_add_instance(m.Ptr)
+}
+
+// ConfFileUpgrade upgrades the config file for active instances of the module.
+// The file is renewed from default, and current values are reapplied.
+//
+func (m *Module) ConfFileUpgrade() []string {
+	var files []string
+	vc := m.VisitCard()
+	original := filepath.Join(vc.GetShareDataDir(), vc.GetConfFileName())
+	for _, inst := range m.InstancesList() {
+		current := inst.GetConfFilePath()
+		ConfFileUpgrade(current, original, true)
+		ObjectReload(inst)
+		files = append(files, current)
+	}
+	return files
 }
 
 //
@@ -1267,6 +1367,8 @@ var (
 	shortkeyMapMutex  = &sync.Mutex{}
 )
 
+// ModuleInstance defines a gldi module instance.
+//
 type ModuleInstance struct {
 	Ptr *C.GldiModuleInstance
 
@@ -1282,6 +1384,8 @@ type ModuleInstance struct {
 // /// a drawing context on the icon.
 // cairo_t *pDrawContext;
 
+// NewModuleInstanceFromNative wraps a gldi module instance from C pointer.
+//
 func NewModuleInstanceFromNative(p unsafe.Pointer) *ModuleInstance {
 	return &ModuleInstance{
 		Ptr:       (*C.GldiModuleInstance)(p),
@@ -1289,6 +1393,8 @@ func NewModuleInstanceFromNative(p unsafe.Pointer) *ModuleInstance {
 	}
 }
 
+// ToNative returns the pointer to the native object.
+//
 func (mi *ModuleInstance) ToNative() unsafe.Pointer {
 	return unsafe.Pointer(mi.Ptr)
 }
@@ -1299,14 +1405,20 @@ func (mi *ModuleInstance) GetConfFilePath() string {
 	return C.GoString((*C.char)(mi.Ptr.cConfFilePath))
 }
 
+// Dock returns the applet parent dock.
+//
 func (mi *ModuleInstance) Dock() *CairoDock {
 	return NewDockFromNative(unsafe.Pointer(mi.Ptr.pDock))
 }
 
+// Module returns the module for the instance.
+//
 func (mi *ModuleInstance) Module() *Module {
 	return NewModuleFromNative(unsafe.Pointer(mi.Ptr.pModule))
 }
 
+// Desklet returns the instance as a desklet if possible.
+//
 func (mi *ModuleInstance) Desklet() *Desklet {
 	return NewDeskletFromNative(unsafe.Pointer(mi.Ptr.pDesklet))
 }
@@ -1317,14 +1429,20 @@ func (mi *ModuleInstance) Icon() Icon {
 	return NewIconFromNative(unsafe.Pointer(mi.Ptr.pIcon))
 }
 
+// Detach detaches the applet from the dock to a desklet.
+//
 func (mi *ModuleInstance) Detach() {
 	C.gldi_module_instance_detach(mi.Ptr)
 }
 
+// PopupAboutApplet opens the applet info dialog.
+//
 func (mi *ModuleInstance) PopupAboutApplet() {
 	C.gldi_module_instance_popup_description(mi.Ptr)
 }
 
+// PrepareNewIcons prepares icons to add in the subdock.
+//
 func (mi *ModuleInstance) PrepareNewIcons(fields []string) (map[string]Icon, *C.GList) {
 	var list *C.GList
 	switch {
@@ -1357,6 +1475,8 @@ func (mi *ModuleInstance) PrepareNewIcons(fields []string) (map[string]Icon, *C.
 	return icons, clist
 }
 
+// InsertIcons insert subdock icons in the applet.
+//
 func (mi *ModuleInstance) InsertIcons(clist *C.GList, dockRenderer, deskletRenderer string) {
 	data := [3]C.gpointer{CIntPointer(0), CIntPointer(1), nil}
 
@@ -1367,6 +1487,8 @@ func (mi *ModuleInstance) InsertIcons(clist *C.GList, dockRenderer, deskletRende
 		C.gpointer(unsafe.Pointer(&data))) // CairoDeskletRendererConfigPtr
 }
 
+// RemoveAllIcons removes all subdock icons in the applet.
+//
 func (mi *ModuleInstance) RemoveAllIcons() {
 	C.cairo_dock_remove_all_icons_from_applet(mi.Ptr)
 }
@@ -1556,8 +1678,8 @@ func (vc *VisitCard) GetModuleVersion() string {
 
 // GetCategory returns the module category.
 //
-func (vc *VisitCard) GetCategory() ModuleCategory {
-	return ModuleCategory(vc.Ptr.iCategory)
+func (vc *VisitCard) GetCategory() cdtype.CategoryType {
+	return cdtype.CategoryType(vc.Ptr.iCategory)
 }
 
 // GetConfFileName returns the module container file name.

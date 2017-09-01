@@ -8,7 +8,8 @@ import (
 
 	"github.com/sqp/godock/libs/helper/cast"
 	"github.com/sqp/godock/libs/ternary"
-	"github.com/sqp/godock/libs/text/tran" // Translate.
+	"github.com/sqp/godock/libs/text/gtktext" // Format text GTK.
+	"github.com/sqp/godock/libs/text/tran"    // Translate.
 
 	"github.com/sqp/godock/widgets/cfbuild/cftype"   // Types for config file builder usage.
 	"github.com/sqp/godock/widgets/cfbuild/datatype" // Types for config file builder data source.
@@ -78,12 +79,12 @@ func CheckButton(key *cftype.Key) {
 		}
 	}
 	if key.NbElements == 1 {
-		key.PackKeyWidget(key,
+		key.PackKeyWidget(
 			func() interface{} { return activers[0].GetActive() },
 			func(uncast interface{}) { activers[0].SetActive(uncast.(bool)) },
 		)
 	} else {
-		key.PackKeyWidget(key,
+		key.PackKeyWidget(
 			func() interface{} { return listActiverGet(activers) },
 			func(uncast interface{}) { listActiverSet(activers, uncast.([]bool)) },
 		)
@@ -209,7 +210,7 @@ func IntegerSize(key *cftype.Key) {
 		toggle.SetActive(values[0] == values[1])
 	}
 
-	key.PackKeyWidget(key,
+	key.PackKeyWidget(
 		func() interface{} { return cast.FloatsToInts(listValuerGet(valuers)) },
 		setValue,
 		toggle,
@@ -267,7 +268,7 @@ func Float(key *cftype.Key) {
 
 	switch {
 	case key.NbElements == 1:
-		key.PackKeyWidget(key,
+		key.PackKeyWidget(
 			func() interface{} { return valuers[0].GetValue() },
 			func(uncast interface{}) { valuers[0].SetValue(uncast.(float64)) },
 		)
@@ -277,7 +278,7 @@ func Float(key *cftype.Key) {
 		}
 
 	default:
-		key.PackKeyWidget(key,
+		key.PackKeyWidget(
 			func() interface{} { return listValuerGet(valuers) },
 			func(uncast interface{}) { listValuerSet(valuers, uncast.([]float64)) },
 		)
@@ -311,7 +312,7 @@ func ColorSelector(key *cftype.Key) {
 
 	widget.Set("use-alpha", key.IsType(cftype.KeyColorSelectorRGBA))
 
-	key.PackKeyWidget(key,
+	key.PackKeyWidget(
 		getValue,
 		func(uncast interface{}) { widget.SetRGBA(gdk.NewRGBA(uncast.([]float64)...)) },
 		widget,
@@ -478,7 +479,7 @@ func ListDock(key *cftype.Key) {
 	iter := fillModelWithFields(key, model, list, current, saved)
 	widget.SetActiveIter(iter)
 
-	key.PackKeyWidget(key,
+	key.PackKeyWidget(
 		getValueListCombo(widget, model, key.Log()),
 		func(uncast interface{}) { saved.SetActive(uncast.(string)) },
 		widget)
@@ -626,7 +627,7 @@ func ListIconsMainDock(key *cftype.Key) {
 	// 	g_free (cValue);
 	// }
 
-	key.PackKeyWidget(key,
+	key.PackKeyWidget(
 		getValueListCombo(widget, model, key.Log()),
 		func(uncast interface{}) { saved.SetActive(uncast.(string)) },
 		widget)
@@ -667,7 +668,7 @@ func JumpToModule(key *cftype.Key) {
 //
 func LaunchCommand(key *cftype.Key) {
 	if len(key.AuthorizedValues) == 0 || key.AuthorizedValues[0] == "" {
-		key.Log().NewErrf("command missing", "widget LaunchCommand: %s", key.Name)
+		key.Log().Errorf("command missing", "widget LaunchCommand: %s", key.Name)
 		return
 	}
 	// log.Info(key.Name, key.AuthorizedValues)
@@ -722,7 +723,7 @@ func LaunchCommand(key *cftype.Key) {
 
 		// Wait the external program in a go routine.
 		// When finished, restore buttons state in the gtk idle loop.
-		go func() {
+		key.Log().GoTry(func() {
 			cmd.Wait()
 
 			glib.IdleAdd(func() {
@@ -730,7 +731,7 @@ func LaunchCommand(key *cftype.Key) {
 				spinner.Hide()
 				spinner.Stop()
 			})
-		}()
+		})
 	})
 
 	// 	G_CALLBACK (_cairo_dock_widget_launch_command),
@@ -843,6 +844,8 @@ func Lists(key *cftype.Key) {
 		iSelectedItem = 0
 	}
 
+	key.Log().Debug("widget lists iSelectedItem", iSelectedItem)
+
 	// Build the combo widget.
 	widget, _, getValue, setValue := NewComboBox(key, key.IsType(cftype.KeyListEntry), listIsNumbered, current, list)
 
@@ -879,7 +882,7 @@ func Lists(key *cftype.Key) {
 			// 		//g_print (" pControlContainer:%x\n", pControlContainer);
 		}
 	}
-	key.PackKeyWidget(key, getValue, setValue, widget)
+	key.PackKeyWidget(getValue, setValue, widget)
 }
 
 // TreeView adds a treeview widget.
@@ -1010,7 +1013,7 @@ func TreeView(key *cftype.Key) {
 
 		setValues(values)
 
-		key.PackKeyWidget(key,
+		key.PackKeyWidget(
 			getValue,
 			func(uncast interface{}) { model.Clear(); setValues(uncast.([]string)) },
 			grid)
@@ -1103,7 +1106,7 @@ func FontSelector(key *cftype.Key) {
 	widget.Set("use-size", true)
 	widget.Set("use-font", true)
 
-	key.PackKeyWidget(key,
+	key.PackKeyWidget(
 		func() interface{} { return widget.GetFontName() },
 		func(val interface{}) { widget.SetFontName(val.(string)) },
 		widget)
@@ -1127,14 +1130,14 @@ func Link(key *cftype.Key) {
 
 	widget := newgtk.LinkButtonWithLabel(link, text)
 
-	key.PackKeyWidget(key,
+	key.PackKeyWidget(
 		func() interface{} { return widget.GetUri() },
 		func(val interface{}) { widget.SetUri(val.(string)) },
 		widget)
 }
 
 // Strings adds a string widget. Many options included.
-// TODO: need password cypher, G_USER_DIRECTORY_PICTURES, play sound.
+// TODO: G_USER_DIRECTORY_PICTURES.
 //
 func Strings(key *cftype.Key) {
 	value := key.Value().String()
@@ -1148,8 +1151,16 @@ func Strings(key *cftype.Key) {
 
 	// Pack the widget before any other (in full size if needed).
 	// So we do it now and fill the callbacks later
-	key.PackKeyWidget(key, nil, nil, widget)
+	key.PackKeyWidget(nil, nil, widget)
 	var setValue func(interface{})
+
+	getValue := func() (text interface{}) {
+		if key.IsDefault {
+			return ""
+		}
+		text, _ = widget.GetText()
+		return text
+	}
 
 	// 	Add special buttons to fill the entry box.
 	switch key.Type {
@@ -1168,7 +1179,10 @@ func Strings(key *cftype.Key) {
 			imgPlay := newgtk.ImageFromIconName("media-playback-start", gtk.ICON_SIZE_SMALL_TOOLBAR)
 			play.SetImage(imgPlay)
 
-			// play.Connect("clicked", C._cairo_dock_play_a_sound, data)
+			play.Connect("clicked", func() {
+				e := key.Log().PlaySound(getValue().(string))
+				key.Log().Err(e, "string play sound")
+			})
 
 			key.PackSubWidget(play)
 		}
@@ -1184,7 +1198,7 @@ func Strings(key *cftype.Key) {
 				widget.SetSensitive(false) // Block widgets.
 				grab.SetSensitive(false)
 
-				go func() {
+				key.Log().GoTry(func() {
 					class, e := key.Source().GrabWindowClass() // Wait user selection in a routine.
 					glib.IdleAdd(func() {                      // And resync with the GTK loop to display results.
 
@@ -1197,7 +1211,7 @@ func Strings(key *cftype.Key) {
 							key.Log().Debug("KeyClassSelector window selected", class)
 						}
 					})
-				}()
+				})
 			})
 
 		case cftype.KeyShortkeySelector:
@@ -1237,15 +1251,8 @@ func Strings(key *cftype.Key) {
 	} else {
 		setValue = func(uncast interface{}) { widget.SetText(uncast.(string)) }
 	}
-	getValue := func() (text interface{}) {
-		if key.IsDefault {
-			return ""
-		}
-		text, _ = widget.GetText()
-		return text
-	}
 
-	key.PackKeyWidget(key, getValue, setValue)
+	key.PackKeyWidget(getValue, setValue)
 }
 
 // Handbook adds a handbook widget to show basic applet informations.
@@ -1265,7 +1272,7 @@ func Handbook(key *cftype.Key) {
 	widget.SetPackage(book)
 	key.BoxPage().PackStart(widget, true, true, 0)
 
-	key.PackKeyWidget(key,
+	key.PackKeyWidget(
 		func() interface{} { return appletName },
 		func(uncast interface{}) {
 			appletName = uncast.(string)
@@ -1298,7 +1305,7 @@ func Frame(key *cftype.Key) {
 	// Create the frame label with the optional icon.
 	label := newgtk.Label("")
 	// key.SetLabel(label)
-	label.SetMarkup(" " + common.Bold(key.Translate(value)) + " ")
+	label.SetMarkup(" " + gtktext.Bold(key.Translate(value)) + " ")
 
 	var labelContainer gtk.IWidget
 	if img == "" {

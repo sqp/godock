@@ -23,7 +23,7 @@ import (
 	"github.com/sqp/godock/libs/cdtype"        // Applet types.
 	"github.com/sqp/godock/libs/clipboard"     // Set clipboard content.
 	"github.com/sqp/godock/libs/net/uptoshare" // Uploader service.
-	"github.com/sqp/godock/libs/net/videodl"   // Video downloader service.
+	"github.com/sqp/godock/libs/net/videodl"   // Video download service.
 	"github.com/sqp/godock/libs/sysinfo"       // IOActivity.
 	"github.com/sqp/godock/libs/text/bytesize" // Human readable bytes.
 
@@ -65,7 +65,7 @@ func NewApplet(base cdtype.AppBase, events *cdtype.Events) cdtype.AppInstance {
 				app.DownloadVideo(data)
 			}
 		} else {
-			app.UpToShareUpload(data)
+			app.UploadFiles(data)
 		}
 	}
 
@@ -167,13 +167,43 @@ func (app *Applet) buildMenu(menu cdtype.Menuer) {
 //
 //-----------------------------------------------------------[ PUBLIC REMOTE ]--
 
-// UpToShareUpload uploads data to a one-click site: file location or text.
+// UploadFiles uploads data to a one-click site: file location or text.
 //
-func (app *Applet) UpToShareUpload(data string) {
-	go app.up.Upload(data)
+func (app *Applet) UploadFiles(files ...string) {
+	for _, file := range files {
+		app.uploadConfirm(file)
+	}
 }
 
-// UpToShareLastLink uploads data to a one-click site: file location or text.
+// UpToShareUploadString uploads data to a one-click site: file location or text.
+//
+func (app *Applet) UpToShareUploadString(data string) {
+	app.uploadConfirm(data)
+}
+
+func (app *Applet) uploadConfirm(data string) {
+	if !app.conf.UploadEnabled {
+		app.Log().Info("Upload disabled for string", data)
+		return
+	}
+	upload := func() { app.Log().GoTry(func() { app.up.UploadGuess(data) }) }
+	if !app.conf.UploadConfirm {
+		upload()
+		return
+	}
+
+	e := app.PopupDialog(cdtype.DialogData{
+		Message:  "Confirm upload of:\n" + data,
+		Buttons:  "ok;cancel",
+		Callback: cdtype.DialogCallbackValidNoArg(upload),
+	})
+	app.Log().Err(e, "DialogWeatherCurrent")
+
+	app.Log().Info("Upload disabled for string", data)
+}
+
+// UpToShareLastLink gets the link of the last item sent to a one-click hosting
+// service.
 //
 func (app *Applet) UpToShareLastLink() string {
 	hists := app.up.ListHistory()
@@ -181,6 +211,12 @@ func (app *Applet) UpToShareLastLink() string {
 		return ""
 	}
 	return hists[0]["link"]
+}
+
+// UpToShareLinks gets all links of items sent to one-click hosting services.
+//
+func (app *Applet) UpToShareLinks() []uptoshare.Links {
+	return app.up.ListHistory()
 }
 
 // DownloadVideo downloads the video from url.

@@ -5,12 +5,10 @@ import (
 	"github.com/gizak/termui"
 
 	"github.com/sqp/godock/libs/cdtype" // Logger type.
-	"github.com/sqp/godock/libs/config" // Config parser.
 	"github.com/sqp/godock/libs/packages"
 	"github.com/sqp/godock/libs/ternary"
 
 	"errors"
-	"path/filepath"
 )
 
 const infoText = "[PgUp](fg-bold)/[PgDn](fg-bold):Applet" +
@@ -18,36 +16,42 @@ const infoText = "[PgUp](fg-bold)/[PgDn](fg-bold):Applet" +
 	" - [Left](fg-bold)/[Right](fg-bold):Value" +
 	" - [F7](fg-bold):Save - [F10](fg-bold):Quit"
 
-var fields = []string{
-	"",
-	"Name           ",
-	"Author         ",
-	"Version        ",
-	"Category       ",
-	"Act as launcher",
-	"Multi instance ",
-}
-
-var locked = []string{
-	"Path  ",
-	"Size  ",
-	"Type  ",
-}
+const lockedFmt = `Path: %s
+Size: %s
+Type: %s`
 
 const (
-	fieldBlank = iota
-	fieldName
-	fieldAuthor
-	fieldVersion
-	fieldCategory
-	fieldActAsLauncher
-	fieldMultiInstance
+	firstField     = 1 // field 0 is a blank line.
+	colorSelected  = "fg-white,bg-blue"
+	colorEdited    = "fg-green"
+	colorEditMinor = "fg-magenta"
+	colorEditMajor = "fg-red"
 )
+
+var fields = []packages.AppInfoField{
+	packages.AppInfoUnknown,
+	packages.AppInfoVersion,
+	packages.AppInfoCategory,
+	packages.AppInfoAuthor,
+	packages.AppInfoActAsLauncher,
+	packages.AppInfoMultiInstance,
+	packages.AppInfoTitle,
+	packages.AppInfoIcon,
+}
+
+func findField(field packages.AppInfoField) int {
+	for i, test := range fields {
+		if field == test {
+			return i
+		}
+	}
+	return 0
+}
 
 // PacksExternal lists applets packages in the given dir.
 //
 func PacksExternal(log cdtype.Logger, dir string) (packages.AppletPackages, error) {
-	packs, e := packages.ListFromDir(log, dir, packages.TypeUser, packages.SourceApplet)
+	packs, e := packages.ListFromDir(log, dir, cdtype.PackTypeUser, packages.SourceApplet)
 	if e != nil {
 		return nil, e
 	}
@@ -66,14 +70,26 @@ func Start(log cdtype.Logger, packs packages.AppletPackages) error {
 	}
 	defer termui.Close()
 
+	// Get applet names, and align text.
+	txtApplets := make([]string, len(packs))
+	for i, pack := range packs {
+		txtApplets[i] = pack.DisplayedName
+	}
+	txtApplets = expandTexts(txtApplets)
+
+	// Get translated fields, and align text.
+	txtFields := make([]string, len(fields))
+	for i, field := range fields[firstField:] {
+		txtFields[i+firstField] = field.Translated()
+	}
+	txtFields = expandTexts(txtFields)
+
 	// Applet info.
-	ed := New(log, packs)
-
-	selected := fieldVersion
-	appID := 0
-
-	ed.SetField(selected)
-	ed.SetPack(appID)
+	var (
+		ed       = New(log, packs, len(txtApplets[0]), len(txtFields[firstField]))
+		selected = ed.SetField(txtFields, 0)
+		appID    = ed.SetPack(txtApplets, 0)
+	)
 
 	// calculate layout and render.
 	ed.resize()
@@ -90,22 +106,23 @@ func Start(log cdtype.Logger, packs packages.AppletPackages) error {
 			e := ed.save(appID)
 			if e == nil {
 				// Refresh data to clear updated color.
-				ed.SetPack(appID)
+				ed.SetPack(txtApplets, appID)
 				termui.Render(ed.appinfo, ed.locked, ed.desc)
 
 			} else {
 				ed.locked.Text = "SAVE FAILED: " + e.Error()
+				termui.Render(ed.locked)
 			}
 
 		case "<up>", "<down>":
 			delta := ternary.Int(key == "<down>", 1, -1)
-			selected = ed.SetField(selected + delta)
+			selected = ed.SetField(txtFields, selected+delta)
 			termui.Render(ed.fields, ed.locked, ed.desc)
 
-		case "<previous>", "<next>":
+		case "<previous>", "<next>": // PgDn, PgUp
 			ed.edits = nil
 			delta := ternary.Int(key == "<next>", 1, -1)
-			appID = ed.SetPack(appID + delta)
+			appID = ed.SetPack(txtApplets, appID+delta)
 			termui.Render(ed.applets, ed.appinfo, ed.locked, ed.desc, ed.title)
 
 		case "<left>", "<right>":
@@ -129,27 +146,28 @@ func Start(log cdtype.Logger, packs packages.AppletPackages) error {
 
 func (ed *Editor) editValue(appID, field, delta int) {
 	if ed.edits == nil {
-		ed.edits = make(map[int]interface{})
+		ed.edits = make(map[packages.AppInfoField]interface{})
 	}
-	switch field {
-	case fieldVersion:
+	f := fields[field]
+	switch f {
+	case packages.AppInfoVersion:
 		ed.setVersion(delta)
 
-	case fieldCategory:
-		ed.setInt(field, delta, ed.packs[appID].Category, 0, 7)
+	case packages.AppInfoCategory:
+		ed.setInt(f, delta, int(ed.packs[appID].Category), 0, 7)
 
-	case fieldActAsLauncher:
-		ed.setBool(field, ed.packs[appID].ActAsLauncher)
+	case packages.AppInfoActAsLauncher:
+		ed.setBool(f, ed.packs[appID].ActAsLauncher)
 
-	case fieldMultiInstance:
-		ed.setBool(field, ed.packs[appID].IsMultiInstance)
+	case packages.AppInfoMultiInstance:
+		ed.setBool(f, ed.packs[appID].IsMultiInstance)
 	}
 
 	// Apply changes.
 	ed.showPack(appID)
 }
 
-func (ed *Editor) setBool(field int, def bool) {
+func (ed *Editor) setBool(field packages.AppInfoField, def bool) {
 	_, ok := ed.edits[field]
 	if ok {
 		delete(ed.edits, field)
@@ -158,29 +176,32 @@ func (ed *Editor) setBool(field int, def bool) {
 	}
 }
 
-func (ed *Editor) setInt(field, delta, def, min, max int) {
-	val := -1
+func (ed *Editor) setInt(field packages.AppInfoField, delta, def, min, max int) {
 	old, ok := ed.edits[field]
+	val := 0
 	if ok {
 		val = old.(int) + delta
-		if val == def {
-			delete(ed.edits, field)
-			return
-		}
 	} else {
 		val = def + delta
 	}
-	ed.edits[field] = ternary.Max(min, ternary.Min(val, max))
+	val = ternary.Max(min, ternary.Min(val, max))
+
+	if ok && val == def {
+		delete(ed.edits, field)
+	}
+	if val != def {
+		ed.edits[field] = val
+	}
 }
 
 func (ed *Editor) setVersion(delta int) {
 	var val int
-	old, ok := ed.edits[fieldVersion]
+	old, ok := ed.edits[packages.AppInfoVersion]
 	switch {
 	case ok:
 		val = old.(int) + delta
 		if val <= 0 {
-			delete(ed.edits, fieldVersion)
+			delete(ed.edits, packages.AppInfoVersion)
 			return
 		}
 
@@ -190,7 +211,7 @@ func (ed *Editor) setVersion(delta int) {
 	default:
 		val = delta
 	}
-	ed.edits[fieldVersion] = ternary.Min(val, 3)
+	ed.edits[packages.AppInfoVersion] = ternary.Min(val, 3)
 }
 
 //
@@ -198,66 +219,15 @@ func (ed *Editor) setVersion(delta int) {
 
 func (ed *Editor) save(appID int) error {
 	pack := ed.packs[appID]
-
-	if len(ed.edits) == 0 || pack == nil {
+	if pack == nil {
 		return nil
 	}
 
-	group := pack.Source.Group()
-	newver := ""
-
-	// Update version first in applet config file.
-	// When an upgrade is requested, we have to change versions in both files,
-	// so the config upgrade becomes mandatory.
-	if delta, upVer := ed.edits[fieldVersion]; upVer {
-		var e error
-		newver, e = packages.FormatNewVersion(pack.Version, delta.(int))
-		if e != nil {
-			return e
-		}
-		filename := filepath.Join(pack.Path, pack.DisplayedName+".conf")
-		e = config.SetFileVersion(ed.log, filename, "Icon", pack.Version, newver)
-		if e != nil {
-			return e
-		}
-	}
-
-	// Update edited fields.
-	filename := filepath.Join(pack.Path, pack.Source.File())
-	e := config.SetToFile(ed.log, filename, func(cfg cdtype.ConfUpdater) (e error) {
-		for k, v := range ed.edits {
-			switch k {
-			case fieldVersion:
-				e = cfg.Set(group, "version", newver)
-
-			case fieldCategory:
-				e = cfg.Set(group, "category", v.(int))
-
-			case fieldActAsLauncher:
-				e = cfg.Set(group, "act as launcher", v.(bool))
-
-			case fieldMultiInstance:
-				e = cfg.Set(group, "multi-instance", v.(bool))
-			}
-			if e != nil {
-				return e
-			}
-		}
-		return nil
-	})
+	newpack, e := pack.SaveUpdated(ed.edits)
 	if e != nil {
 		return e
 	}
-
-	// Reload data from disk.
-	pack, e = packages.NewAppletPackageUser(ed.log,
-		filepath.Dir(pack.Path), filepath.Base(pack.Path),
-		pack.Type, pack.Source)
-
-	if e != nil {
-		return e
-	}
-	ed.packs[appID] = pack
+	ed.packs[appID] = newpack
 	ed.edits = nil
 	return nil
 }

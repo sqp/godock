@@ -20,6 +20,7 @@ import (
 	"github.com/sqp/godock/libs/cdtype"    // Logger type.
 	"github.com/sqp/godock/libs/text/tran" // Translate.
 
+	"github.com/sqp/godock/widgets/cfbuild/cftype"
 	"github.com/sqp/godock/widgets/cfbuild/datatype"
 	"github.com/sqp/godock/widgets/confapplets"
 	"github.com/sqp/godock/widgets/confcore"
@@ -406,7 +407,7 @@ func (widget *GuiConfigure) SetWindow(win *gtk.Window) {
 
 // GetWindow returns the pointer to the parent window.
 //
-func (widget *GuiConfigure) GetWindow() *gtk.Window {
+func (widget *GuiConfigure) GetWindow() cftype.WinLike {
 	return widget.window
 }
 
@@ -419,7 +420,8 @@ func NewWindow(data datatype.Source, log cdtype.Logger) (*GuiConfigure, error) {
 	}
 	win.SetDefaultSize(WindowWidth, WindowHeight)
 	win.SetTitle(WindowTitle)
-	win.SetWMClass(WindowClass, WindowTitle)
+	win.SetRole(WindowClass)
+	// win.SetWMClass(WindowClass, WindowTitle)
 
 	win.SetIconFromFile(data.AppIcon())
 

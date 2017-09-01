@@ -262,10 +262,8 @@ func (app *Applet) sendAlert(delta int) {
 			sound = app.FileLocation(sound)
 		}
 
-		app.Log().ExecAsync("paplay", sound)
-		// if e := exec.Command("paplay", sound).Start(); e != nil {
-		//~ exec.Command("aplay", sound).Start()
-		// }
+		e := app.Log().PlaySound(sound)
+		app.Log().Err(e, "AlertSoundFile")
 	}
 }
 

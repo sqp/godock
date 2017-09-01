@@ -16,7 +16,13 @@ as possible, at least on the global behavior and for configuration files.
 But it will try to improve the user experience with a new GUI more focused on
 current needs.
 
-Install
+Install packages
+
+Pre-build packages for Debian, Ubuntu and Archlinux are available.
+
+    https://software.opensuse.org//download.html?project=home%3ASQP%3Acairo-dock-go&package=cairo-dock-rework
+
+Install from source
 
 Documentation for install, build and package creation is on the dist page, with
 pre build packages repositories (Debian, Ubuntu, Archlinux).

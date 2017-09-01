@@ -6,11 +6,15 @@ import (
 	"github.com/gotk3/gotk3/gtk"
 
 	"github.com/sqp/godock/libs/cdtype"
+	"github.com/sqp/godock/libs/files"
+	"github.com/sqp/godock/libs/packages"
 
 	"github.com/sqp/godock/widgets/cfbuild/datatype"
 	"github.com/sqp/godock/widgets/common"
 	"github.com/sqp/godock/widgets/gtk/buildhelp"
 	"github.com/sqp/godock/widgets/gtk/gunvalue"
+
+	"path/filepath"
 )
 
 //-----------------------------------------------------[ WIDGET APPLETS LIST ]--
@@ -197,14 +201,17 @@ func (widget *List) hideColumnCategory() {
 // ListAdd defines an applet list widget with applets allowed to be enabled.
 //
 type ListAdd struct {
-	List
+	ListPack
 	unused map[string]datatype.Appleter
 }
 
 // NewListAdd creates an applet list widget with applets allowed to be enabled.
 //
 func NewListAdd(control ControlDownload, log cdtype.Logger) *ListAdd {
-	return &ListAdd{*NewList(control, log), make(map[string]datatype.Appleter)}
+	return &ListAdd{
+		ListPack: ListPack{List: *NewList(control, log)},
+		unused:   make(map[string]datatype.Appleter),
+	}
 }
 
 // Load loads the applet list into the widget.
@@ -217,27 +224,6 @@ func (widget *ListAdd) Load(list map[string]datatype.Appleter) {
 			widget.unused[key] = app
 		}
 	}
-}
-
-// AddRow adds a row for the applet in the applet list.
-//
-func (widget *ListAdd) AddRow(name string, app datatype.Appleter) {
-	iter := widget.newIter(name, app)
-	widget.model.SetCols(iter, gtk.Cols{
-		RowKey:      name,
-		RowName:     app.GetTitle(),
-		RowCategory: app.FormatCategory(),
-	})
-
-	// 	int iSize = cairo_dock_search_icon_size (GTK_ICON_SIZE_LARGE_TOOLBAR);
-	// 	gchar *cIcon = cairo_dock_search_icon_s_path (pModule->pVisitCard->cIconFilePath, iSize);
-
-	img := app.GetIconFilePath()
-	if pix, e := common.PixbufNewFromFile(img, iconSize); !widget.log.Err(e, "Load icon") {
-		widget.model.SetValue(iter, RowIcon, pix)
-	}
-
-	widget.setActiveIter(iter, app.IsActive())
 }
 
 // UpdateModuleState updates the state of the given applet, from a dock event.
@@ -307,20 +293,16 @@ func (widget *ListExternal) Load(list map[string]datatype.Appleter) {
 	}
 }
 
-// UpdateModuleState does nothing (stub for interface).
-//
-func (widget *ListExternal) UpdateModuleState(name string, active bool) {}
-
 //
 //-------------------------------------------------------------[ LIST THEMES ]--
 
-// ListThemes defines an applet list widget with dock themes to install.
+// ListThemes defines an list and preview widget with dock themes to install.
 //
 type ListThemes struct {
 	List
 }
 
-// NewListThemes creates an applet list widget with external applets to install.
+// NewListThemes creates a list and preview widget with dock themes to install.
 //
 func NewListThemes(control ControlDownload, log cdtype.Logger) *ListThemes {
 	w := &ListThemes{*NewList(control, log)}
@@ -345,10 +327,6 @@ func (widget *ListThemes) Load(list map[string]datatype.Appleter) {
 	}
 }
 
-// UpdateModuleState does nothing (stub for interface).
-//
-func (widget *ListThemes) UpdateModuleState(name string, active bool) {}
-
 // func modelApplet() *gtk.ListStore {
 // 	store, _ := gtk.ListStoreNew(
 // 		glib.TYPE_STRING,  // AppletName
@@ -367,3 +345,58 @@ func (widget *ListThemes) UpdateModuleState(name string, active bool) {}
 // 	)
 // 	return store
 // }
+
+//
+//-------------------------------------------------------[ LIST EDIT APPINFO ]--
+
+// ListEditApp defines an applet list widget with applets allowed to be enabled.
+//
+type ListEditApp struct {
+	ListPack
+}
+
+// NewListEditApp creates an applet list widget with editable applet info.
+//
+func NewListEditApp(control ControlDownload, log cdtype.Logger) *ListEditApp {
+	return &ListEditApp{ListPack{List: *NewList(control, log)}}
+}
+
+// Load loads the applet list into the widget.
+//
+func (widget *ListEditApp) Load(list map[string]datatype.Appleter) {
+	for key, app := range list {
+		if files.IsExist(filepath.Join(app.Dir(), packages.SourceApplet.File())) {
+			widget.AddRow(key, app)
+		}
+	}
+}
+
+//
+//---------------------------------------------------------------[ LIST PACK ]--
+
+// ListPack defines an applet list widget with applets allowed to be enabled.
+//
+type ListPack struct {
+	List
+}
+
+// AddRow adds a row for the applet in the applet list.
+//
+func (widget *ListPack) AddRow(name string, app datatype.Appleter) {
+	iter := widget.newIter(name, app)
+	widget.model.SetCols(iter, gtk.Cols{
+		RowKey:      name,
+		RowName:     app.GetTitle(),
+		RowCategory: app.FormatCategory(),
+	})
+
+	// 	int iSize = cairo_dock_search_icon_size (GTK_ICON_SIZE_LARGE_TOOLBAR);
+	// 	gchar *cIcon = cairo_dock_search_icon_s_path (pModule->pVisitCard->cIconFilePath, iSize);
+
+	img := app.GetIconFilePath()
+	if pix, e := common.PixbufNewFromFile(img, iconSize); !widget.log.Err(e, "Load icon") {
+		widget.model.SetValue(iter, RowIcon, pix)
+	}
+
+	widget.setActiveIter(iter, app.IsActive())
+}

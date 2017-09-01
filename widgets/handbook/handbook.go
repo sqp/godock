@@ -5,11 +5,11 @@ import (
 	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/gtk"
 
-	"github.com/sqp/godock/libs/cdtype"
+	"github.com/sqp/godock/libs/cdtype"       // Logger type.
+	"github.com/sqp/godock/libs/text/gtktext" // Format text GTK.
 
-	"github.com/sqp/godock/widgets/cfbuild/datatype"
-	"github.com/sqp/godock/widgets/common"
-	"github.com/sqp/godock/widgets/gtk/buildhelp"
+	"github.com/sqp/godock/widgets/cfbuild/datatype" // Types for config file builder data source.
+	"github.com/sqp/godock/widgets/gtk/buildhelp"    // Widget builder.
 
 	"fmt"
 )
@@ -64,7 +64,7 @@ func New(log cdtype.Logger) *Handbook {
 // SetPackage fills the handbook data with a package.
 //
 func (widget *Handbook) SetPackage(book datatype.Handbooker) {
-	title := common.Bold(common.Big(book.GetTitle()))
+	title := gtktext.Bold(gtktext.Big(book.GetTitle()))
 	if widget.ShowVersion {
 		title += " v" + book.GetModuleVersion()
 	}
@@ -73,7 +73,7 @@ func (widget *Handbook) SetPackage(book datatype.Handbooker) {
 	author := book.GetAuthor()
 	if author != "" {
 		author = fmt.Sprintf("by %s", author)
-		widget.author.SetMarkup(common.Small(common.Mono(author)))
+		widget.author.SetMarkup(gtktext.Small(gtktext.Mono(author)))
 	}
 	widget.author.SetVisible(author != "")
 

@@ -2,16 +2,21 @@
 package dock
 
 import (
+	// Globals and extras.
+	"github.com/sqp/godock/libs/cdglobal"       // Global consts.
+	"github.com/sqp/godock/libs/dock/confown"   // New dock own settings.
+	"github.com/sqp/godock/libs/packages/build" // Pkgbuild config.
+
 	// Dock frontend.
-	"github.com/sqp/godock/libs/dock/confown"    // New dock own settings.
 	"github.com/sqp/godock/libs/dock/eventmouse" // Mouse events callbacks.
 	"github.com/sqp/godock/libs/dock/guibridge"  // GUI interface.
 	"github.com/sqp/godock/libs/dock/maindock"   // Dock settings.
 	"github.com/sqp/godock/libs/dock/mainmenu"   // Build menu callbacks.
 
 	// Dock backend.
-	"github.com/sqp/godock/libs/cdtype"
-	"github.com/sqp/godock/libs/gldi/backendgui"
+	"github.com/sqp/godock/libs/cdtype"           // Logger type.
+	"github.com/sqp/godock/libs/gldi"             // Gldi access.
+	"github.com/sqp/godock/libs/gldi/backendgui"  // GUI callbacks.
 	"github.com/sqp/godock/libs/gldi/backendmenu" // Menu items.
 	"github.com/sqp/godock/libs/gldi/globals"     // Dock globals.
 	"github.com/sqp/godock/libs/gldi/mgrgldi"     // Internal go applets service.
@@ -20,16 +25,16 @@ import (
 	_ "github.com/sqp/godock/services/allapps"
 
 	// Other services.
-	"github.com/sqp/godock/libs/net/websrv"       // Web service for pprof.
+	"github.com/sqp/godock/libs/net/websrv"       // Web server.
 	"github.com/sqp/godock/libs/srvdbus"          // DBus own service.
 	"github.com/sqp/godock/libs/srvdbus/dockpath" // hack dock dbus path
 
 	// Help.
+	"github.com/sqp/godock/libs/text/strhelp"  // String helpers.
 	"github.com/sqp/godock/libs/text/versions" // Print API version.
 
 	"errors"
 	"fmt"
-	"net/http/pprof"
 )
 
 var (
@@ -55,7 +60,7 @@ func Run(log cdtype.Logger, getSettings func() maindock.DockSettings) bool {
 	settings := getSettings()
 
 	// Logger debug state.
-	log.SetDebug(settings.Debug)
+	log.SetDebug(settings.Debug || confown.Current.OnStartDebug)
 	maindock.SetLogger(log)
 
 	// Dock init.
@@ -64,15 +69,18 @@ func Run(log cdtype.Logger, getSettings func() maindock.DockSettings) bool {
 	// Load new config settings. New options are in an other file to keep the
 	// original config file as compatible with the real dock as possible.
 	file, e := globals.DirUserAppData(confown.GuiFilename)
-	e = confown.Init(log, file, e)
-	log.Err(e, "Load ConfigSettings")
+	confown.Init(log, file, e)
+
+	// Build settings.
+	file, e = globals.DirUserAppData(cdglobal.FileBuildSource)
+	build.Init(log, file, e)
 
 	// Register go internal applets events.
 	appmgr := mgrgldi.Register(log)
 
 	// Start the polling loop for go internal applets (can be in DBus with other events).
 	if settings.DisableDBus {
-		go appmgr.StartLoop()
+		log.GoTry(appmgr.StartLoop)
 
 	} else {
 		// DBus service is mandatory if enabled. This prevent double launch.
@@ -82,16 +90,26 @@ func Run(log cdtype.Logger, getSettings func() maindock.DockSettings) bool {
 			return false
 		}
 		dbus.SetManager(appmgr)
-		go dbus.StartLoop()
+		log.GoTry(dbus.StartLoop)
 	}
 
 	// HTTP listener for the pprof debug.
-	if settings.HTTPPprof {
-		websrv.Service.Register("debug/pprof", pprof.Index, log)
-		websrv.Service.Start("debug/pprof")
+	websrv.Init(log)
+	websrv.Service.Host = settings.WebHost
+	websrv.Service.Port = settings.WebPort
+
+	if settings.WebMonitor || confown.Current.OnStartWebMon {
+		websrv.Service.SetMonitored(true)
 	}
 
 	// Print useful packages versions.
+	gtkX, gtkY, gtkZ := globals.GtkVersion()
+	versions.Dock = []versions.Field{
+		{K: "OpenGL", V: strhelp.YesNo(gldi.GLBackendIsUsed())},
+		{K: "gldi", V: globals.Version()},
+		{K: "GTK", V: fmt.Sprintf("%d.%d.%d", gtkX, gtkY, gtkZ)},
+	}
+	versions.SetName(cdglobal.AppName)
 	versions.Print()
 
 	// Custom calls added by devs for their own uses and tests.

@@ -32,6 +32,7 @@ import (
 
 	"github.com/sqp/godock/libs/cdglobal"
 	"github.com/sqp/godock/libs/cdtype" // Applet types.
+	"github.com/sqp/godock/libs/files"
 	"github.com/sqp/godock/libs/ternary"
 
 	"fmt"
@@ -52,8 +53,6 @@ import (
 //-------------------------------------------------------------------[ CONST ]--
 
 const (
-	defaultTheme = "Classic" // dir located in applet "themes" subdir.
-
 	// IconWork is the name of icon displayed during polling.
 	IconWork = "EmblemWork.svg" // file located in applet "img" subdir.
 
@@ -78,16 +77,16 @@ type groupConfig struct {
 	DialogDuration     int
 	DisplayNights      bool
 	DisplayTemperature bool
-	WeatherTheme       string
-	DialogTemplate     cdtype.Template `default:"weather"`
+	WeatherTheme       cdtype.ThemeExtra `default:"Classic"`
+	DialogTemplate     cdtype.Template   `default:"weather"`
 }
 
 type groupActions struct {
-	ShortkeyShowCurrent  *cdtype.Shortkey `action:"1" desc:"Show current conditions dialog"`
-	ShortkeyShowTomorrow *cdtype.Shortkey `action:"2" desc:"Show conditions for tomorrow"`
-	ShortkeyOpenWeb      *cdtype.Shortkey `action:"3" desc:"Open webpage"`
-	ShortkeyRecheck      *cdtype.Shortkey `action:"4" desc:"Recheck now"`
-	ShortkeySetLocation  *cdtype.Shortkey `action:"5" desc:"Set location"`
+	ShortkeyShowCurrent  *cdtype.Shortkey `action:"1"`
+	ShortkeyShowTomorrow *cdtype.Shortkey `action:"2"`
+	ShortkeyOpenWeb      *cdtype.Shortkey `action:"3"`
+	ShortkeyRecheck      *cdtype.Shortkey `action:"4"`
+	ShortkeySetLocation  *cdtype.Shortkey `action:"5"`
 }
 
 //
@@ -125,6 +124,12 @@ func NewApplet(base cdtype.AppBase, events *cdtype.Events) cdtype.AppInstance {
 		items = append(items, ActionSetLocation)
 		app.Action().BuildMenu(menu, items)
 	}
+	events.OnSubBuildMenu = func(ref string, menu cdtype.Menuer) {
+		menu.AddEntry(app.Translate("Open webpage"), "go-jump", func() {
+			numDay, _ := strconv.Atoi(ref)
+			app.OpenWebForecast(numDay)
+		})
+	}
 
 	// Weather polling.
 	app.Poller().Add(app.Check)
@@ -142,13 +147,6 @@ func (app *Applet) Init(def *cdtype.Defaults, confLoaded bool) {
 	// Share the conf with the weather service.
 	app.weather.SetConfig(&app.conf.Config)
 	app.weather.Clear()
-
-	// if app.conf.WeatherTheme == "" {
-	app.conf.WeatherTheme = defaultTheme
-	// }
-
-	// Set theme full path.
-	app.conf.WeatherTheme = app.ThemePath(app.conf.WeatherTheme)
 
 	if app.conf.LocationCode == "" {
 		app.DetectLocation()
@@ -192,7 +190,7 @@ func (app *Applet) actions() []*cdtype.Action {
 			ID:   ActionOpenWebpage,
 			Name: app.Translate("Open webpage"),
 			Icon: "go-jump",
-			Call: func() { app.OpenWeb(0) },
+			Call: app.OpenWebCurrent,
 		}, {
 			ID:   ActionRecheckNow,
 			Name: app.Translate("Recheck now"),
@@ -234,25 +232,29 @@ func (app *Applet) Check() {
 	}
 }
 
-// ThemePath gives the full path to the weather theme dir.
-//
-func (app *Applet) ThemePath(themeName string) string {
-	return app.FileLocation("themes", themeName)
-	// return filepath.Join(pathtoDockData/plug-ins/weather/themes, themeName)
-}
-
 // WeatherIcon returns the full path to the current weather theme icon.
 //
 func (app *Applet) WeatherIcon(icon string) string {
 	if icon == "" {
 		return IconMissing
 	}
-	return filepath.Join(app.conf.WeatherTheme, icon+".png")
+	path := filepath.Join(app.conf.WeatherTheme.Path(), icon)
+	png := path + ".png"
+	if files.IsExist(png) {
+		return png
+	}
+	return path + ".svg"
 }
 
-// OpenWeb opens a web page on the provider site for the given day.
+// OpenWebCurrent opens a web page on the provider site for the current day.
 //
-func (app *Applet) OpenWeb(numDay int) {
+func (app *Applet) OpenWebCurrent() {
+	app.Log().ExecAsync(cdglobal.CmdOpen, app.weather.WebpageURL(0))
+}
+
+// OpenWebForecast opens a web page on the provider site for the given day.
+//
+func (app *Applet) OpenWebForecast(numDay int) {
 	app.Log().ExecAsync(cdglobal.CmdOpen, app.weather.WebpageURL(numDay))
 }
 
@@ -333,24 +335,23 @@ func (app *Applet) Draw() {
 	// Show forecast.
 	app.RemoveSubIcons()
 	needNight := false
-	for i, day := range app.weather.Forecast().Days {
+	for _, day := range app.weather.Forecast().Days {
 		for _, part := range day.Part {
 			if !app.conf.DisplayNights && part.Period != "d" && !needNight { // Drop nights cases.
 				continue
 			}
 
 			needNight = false
-			if i == 0 && part.WeatherIcon == "" { // Current daylight part is over. Show night instead.
+			if day.DayCount == "0" && part.WeatherIcon == "" { // Current daylight part is over. Show night instead.
 				needNight = true
 				continue
 			}
 
-			key := strconv.Itoa(i)
 			iconName := app.WeatherIcon(part.WeatherIcon)
-			app.AddSubIcon(day.DayName, iconName, key)
-			icon := app.SubIcon(key)
+			app.AddSubIcon(day.DayName, iconName, day.DayCount)
+			icon := app.SubIcon(day.DayCount)
 			if icon == nil {
-				app.Log().NewErr("missing day="+key, "weather get subicon")
+				app.Log().NewErr("missing day="+day.DayCount, "weather get subicon")
 
 			} else if app.conf.DisplayTemperature {
 				icon.SetQuickInfo(day.TempMin + " / " + day.TempMax)

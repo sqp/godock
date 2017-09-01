@@ -31,7 +31,7 @@ type Sourcer interface {
 
 // New creates a virtual data source for the config file builder.
 //
-func New(log cdtype.Logger, win *gtk.Window, saveCall func(cftype.Builder)) Sourcer {
+func New(log cdtype.Logger, win cftype.WinLike, saveCall func(cftype.Builder)) Sourcer {
 	return &source{
 		win:          win,
 		saveCall:     saveCall,
@@ -43,13 +43,13 @@ type source struct {
 	cftype.Grouper        // extends the grouper.
 	datatype.SourceCommon // and the data source.
 
-	box *gtk.Box    // but this is the main box.
-	win *gtk.Window // pointer to the parent window.
+	box *gtk.Box       // but this is the main box.
+	win cftype.WinLike // pointer to the parent window.
 
 	saveCall func(cftype.Builder) // save button callback.
 }
 
-func (o *source) GetWindow() *gtk.Window           { return o.win }
+func (o *source) GetWindow() cftype.WinLike        { return o.win }
 func (o *source) GrabWindowClass() (string, error) { return "windowclass", nil }
 func (o *source) ClickedSave()                     { o.saveCall(o.Grouper) }
 func (o *source) ClickedQuit()                     { gtk.MainQuit() }
@@ -75,7 +75,7 @@ func (o *source) Handbook(name string) datatype.Handbooker {
 	return Handbooks[0]
 }
 
-func (o *source) DisplayMode() datatype.DisplayMode { return datatype.DisplayModeAll }
+func (o *source) DisplayMode() cdglobal.DisplayMode { return cdglobal.DisplayModeAll }
 
 func (o *source) CreateMainDock() string { return "_MainDock_-2.conf" }
 

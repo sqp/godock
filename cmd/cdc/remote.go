@@ -10,7 +10,7 @@ import (
 var cmdRemote = &Command{
 	Run:       runRemote,
 	UsageLine: "remote command [args...]",
-	Short:     "remote control of the dock",
+	Short:     "remote controls the active dock",
 	Long: `
 Remote sends a remote command to the active dock.
 
@@ -31,9 +31,16 @@ Remote sends a remote command to the active dock.
 `,
 }
 
+// Optional commands, provided only in dock mode.
+var remoteDockArgs func(cmd *Command, args []string) bool
+
 func runRemote(cmd *Command, args []string) {
 	if len(args) == 0 { // Ensure we have some data.
 		cmd.Usage()
+	}
+
+	if remoteDockArgs != nil && remoteDockArgs(cmd, args) {
+		return // Command matched.
 	}
 
 	var e error
@@ -67,12 +74,12 @@ func runRemote(cmd *Command, args []string) {
 		}
 
 	default:
-		logger.NewErrf("unknown remote command", "%v", args)
+		logger.Errorf("unknown remote command", "%v", args)
 		cmd.Usage()
 	}
 
 	if e != nil {
-		logger.NewErrf(e.Error(), "remote call %v  %s", args, e.Error())
+		logger.Errorf(e.Error(), "remote call %v  %s", args, e.Error())
 	}
 }
 

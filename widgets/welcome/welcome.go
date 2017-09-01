@@ -5,13 +5,13 @@
 package welcome
 
 import (
-	"github.com/sqp/godock/libs/cdtype"    // Logger type.
-	"github.com/sqp/godock/libs/text/tran" // Translate.
+	"github.com/sqp/godock/libs/cdtype"       // Logger type.
+	"github.com/sqp/godock/libs/text/gtktext" // Format text GTK.
+	"github.com/sqp/godock/libs/text/tran"    // Translate.
 
 	"github.com/sqp/godock/widgets/cfbuild"        // The config file builder.
 	"github.com/sqp/godock/widgets/cfbuild/cftype" // Types for config file builder usage.
 	"github.com/sqp/godock/widgets/cfbuild/newkey" // Create config file builder keys.
-	"github.com/sqp/godock/widgets/common"         // Text format gtk.
 )
 
 //
@@ -55,7 +55,7 @@ It's better to save your current theme, and check nothing wrong will be changed 
 Then, you can enable the save option under the "GUI Settings" config tab, at your own risks.`
 
 	keys := []*cftype.Key{
-		newkey.TextLabel(group, "title", common.Bold(common.Big(title))),
+		newkey.TextLabel(group, "title", gtktext.Bold(gtktext.Big(title))),
 		newkey.TextLabel(group, "header", header),
 		newkey.Separator(group, "sep_title"),
 		newkey.TextLabel(group, "warningSave", warningSave),
@@ -65,7 +65,7 @@ Then, you can enable the save option under the "GUI Settings" config tab, at you
 		newkey.Link(group, "URLdockInfo", "Cairo-Dock forum related thread", "glx-dock forum", URLdockInfo),
 	}
 	for _, link := range links {
-		str := common.Big(common.Bold(common.URI(link.URL, link.Title)))
+		str := gtktext.Big(gtktext.Bold(gtktext.URI(link.URL, link.Title)))
 		keys = append(keys,
 			// newkey.Frame(group, "F_"+title, str, link.Icon),
 			newkey.Separator(group, "sep_"+link.Title),

@@ -4,6 +4,7 @@ package download
 import (
 	"encoding/json"
 	"encoding/xml"
+	"io"
 	"io/ioutil"
 	"net/http"
 )
@@ -12,6 +13,12 @@ import (
 //
 func Get(uri string) ([]byte, error) {
 	return Default.Get(uri)
+}
+
+// Reader gets a reader for the url.
+//
+func Reader(uri string) (io.ReadCloser, error) {
+	return Default.Reader(uri)
 }
 
 // XML gets data from url and unmarshal as XML to data.
@@ -34,9 +41,9 @@ var Default = Header{}
 //
 type Header map[string]string
 
-// Get gets data from url.
+// Reader gets a reader for the url.
 //
-func (h Header) Get(uri string) ([]byte, error) {
+func (h Header) Reader(uri string) (io.ReadCloser, error) {
 	request, e := http.NewRequest("GET", uri, nil)
 	if e != nil {
 		return nil, e
@@ -50,8 +57,18 @@ func (h Header) Get(uri string) ([]byte, error) {
 	if e != nil {
 		return nil, e
 	}
-	body, e := ioutil.ReadAll(resp.Body)
-	resp.Body.Close()
+	return resp.Body, nil
+}
+
+// Get gets data from url.
+//
+func (h Header) Get(uri string) ([]byte, error) {
+	reader, e := h.Reader(uri)
+	if e != nil {
+		return nil, e
+	}
+	body, e := ioutil.ReadAll(reader)
+	reader.Close()
 	if e != nil {
 		return nil, e
 	}

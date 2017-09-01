@@ -6,7 +6,9 @@ import (
 	"github.com/sqp/godock/libs/cdtype" // Logger type.
 	"github.com/sqp/godock/libs/packages"
 	"github.com/sqp/godock/libs/ternary"
+	"github.com/sqp/godock/libs/text/tran"
 
+	"fmt"
 	"strconv"
 	"strings"
 )
@@ -24,13 +26,13 @@ type Editor struct {
 	desc    *termui.Par
 	title   *termui.Par
 	packs   packages.AppletPackages
-	edits   map[int]interface{}
+	edits   map[packages.AppInfoField]interface{}
 	log     cdtype.Logger
 }
 
 // New creates a new edit info console GUI.
 //
-func New(log cdtype.Logger, packs packages.AppletPackages) *Editor {
+func New(log cdtype.Logger, packs packages.AppletPackages, appwidth, fieldswidth int) *Editor {
 	ed := &Editor{
 		applets: termui.NewList(),
 		fields:  termui.NewList(),
@@ -42,29 +44,29 @@ func New(log cdtype.Logger, packs packages.AppletPackages) *Editor {
 		log:     log,
 	}
 
-	ed.applets.ItemFgColor = termui.ColorYellow
-	ed.applets.BorderLabel = "[ Applets ]"
-	ed.applets.Width = 20 // TODO autodetect.
+	ed.applets.BorderLabel = formatTitle(tran.Slate("Applets"))
+	ed.applets.Width = appwidth + 3 // offset 1 for text and 2 for border
 	ed.applets.BorderBottom = false
 	ed.applets.BorderFg = termui.ColorCyan
+	ed.applets.ItemFgColor = termui.ColorYellow
 
-	ed.fields.BorderLabel = "[ Fields ]"
+	ed.fields.BorderLabel = formatTitle(tran.Slate("Fields"))
 	ed.fields.X = ed.applets.Width
-	ed.fields.Height = 6 + 2 + 2 // last 2 for blank lines around text
-	ed.fields.Width = len(fields[1]) + 2
+	ed.fields.Width = fieldswidth + 2      // offset 1 for text and 1 for border
+	ed.fields.Height = len(fields) + 1 + 2 // offset 1 for the last blank line and 2 for borders.
 	ed.fields.BorderLeft = false
 	ed.fields.BorderBottom = false
 	ed.fields.BorderFg = termui.ColorCyan
 
-	ed.appinfo.BorderLabel = "[ Value ]"
+	ed.appinfo.BorderLabel = formatTitle(tran.Slate("Values"))
 	ed.appinfo.X = ed.fields.X + ed.fields.Width
-	ed.appinfo.Height = 6 + 2 + 2 // last 2 for blank lines around text
+	ed.appinfo.Height = ed.fields.Height
 	ed.appinfo.BorderLeft = false
 	ed.appinfo.BorderRight = false
 	ed.appinfo.BorderBottom = false
 	ed.appinfo.BorderFg = termui.ColorCyan
 
-	ed.locked.BorderLabel = "[ Details ]"
+	ed.locked.BorderLabel = formatTitle(tran.Slate("Details"))
 	ed.locked.X = ed.applets.Width
 	ed.locked.Y = ed.fields.Height - 1 // offset 1 for border
 	ed.locked.Height = 6
@@ -73,14 +75,14 @@ func New(log cdtype.Logger, packs packages.AppletPackages) *Editor {
 	ed.locked.BorderRight = false
 	ed.locked.BorderFg = termui.ColorCyan
 
-	ed.desc.BorderLabel = "[ Description ]"
+	ed.desc.BorderLabel = formatTitle(tran.Slate("Description"))
 	ed.desc.X = ed.applets.Width
 	ed.desc.BorderBottom = false
 	ed.desc.BorderLeft = false
 	ed.desc.BorderRight = false
 	ed.desc.BorderFg = termui.ColorCyan
 
-	ed.title.BorderLabel = "[ Edit applet info ]"
+	ed.title.BorderLabel = formatTitle(tran.Slate("Edit applet info"))
 	ed.title.Height = 2
 	ed.title.TextFgColor = termui.ColorWhite
 	ed.title.BorderBottom = false
@@ -110,30 +112,31 @@ func (ed *Editor) resize() {
 
 // SetField sets the current field number.
 //
-func (ed *Editor) SetField(id int) int {
-	ed.fields.Items = make([]string, len(fields))
-	for i, str := range fields {
-		ed.fields.Items[i] = str
-	}
+func (ed *Editor) SetField(txtFields []string, id int) int {
+	// Ensure selected item is in range.
+	id = ternary.Max(firstField, ternary.Min(id, len(ed.fields.Items)-1))
+
+	// Copy fields list.
+	ed.fields.Items = make([]string, len(txtFields))
+	copy(ed.fields.Items, txtFields)
+
 	// Highlight selected.
-	id = ternary.Max(1, ternary.Min(id, len(ed.fields.Items)-1))
-	ed.fields.Items[id] = "[" + ed.fields.Items[id] + "](fg-white,bg-blue)"
+	ed.fields.Items[id] = colored(colorSelected, ed.fields.Items[id])
 	return id
 }
 
 // SetPack sets the current package number.
 //
-func (ed *Editor) SetPack(appID int) int {
+func (ed *Editor) SetPack(appnames []string, appID int) int {
+	// Ensure selected item is in range.
 	appID = ternary.Max(0, ternary.Min(appID, len(ed.packs)-1))
 
-	var names []string
-	for _, pack := range ed.packs {
-		names = append(names, pack.DisplayedName)
-	}
-	names[appID] = "[" + names[appID] + "](fg-white,bg-blue)"
+	// Copy applets names list.
+	ed.applets.Items = make([]string, len(appnames))
+	copy(ed.applets.Items, appnames)
 
-	ed.applets.Items = names
-
+	// Show color on selected and display.
+	ed.applets.Items[appID] = colored(colorSelected, ed.applets.Items[appID])
 	ed.showPack(appID)
 	return appID
 }
@@ -144,51 +147,64 @@ func (ed *Editor) SetPack(appID int) int {
 func (ed *Editor) showPack(appID int) {
 	appID = ternary.Max(0, ternary.Min(appID, len(ed.packs)-1))
 	pack := ed.packs[appID]
-	catstr, _ := packages.FormatCategory(pack.Category)
 
-	ed.appinfo.BorderLabel = pack.Path
 	ed.appinfo.Items = []string{
 		"",
-		pack.DisplayedName,
-		pack.Author,
 		pack.Version,
-		strconv.Itoa(pack.Category) + " : " + catstr,
+		strconv.Itoa(int(pack.Category)) + " : " + pack.Category.Translated(),
+		pack.Author,
 		formatBool(pack.ActAsLauncher),
 		formatBool(pack.IsMultiInstance),
+		pack.Title,
+		pack.Icon,
 	}
 
-	ed.locked.Text = "this\nis\ndetails"
+	ed.locked.Text = fmt.Sprintf(lockedFmt, pack.Path, pack.FormatSize(), pack.Type)
 
 	ed.desc.Text = strings.Replace(pack.Description, "\\n", "\n", -1)
 
 	// Update edited fields.
 	for k, v := range ed.edits {
+		line := findField(k)
+		color := colorEdited
 		switch k {
-		case fieldVersion:
-			ed.appinfo.Items[k], _ = packages.FormatNewVersion(pack.Version, v.(int))
-			switch v.(int) {
+		case packages.AppInfoVersion:
+			ed.appinfo.Items[line], _ = packages.FormatNewVersion(pack.Version, v.(int))
+			switch v.(int) { // Other colors when upgrading minor and major.
 			case 2:
-				ed.appinfo.Items[k] = "[" + ed.appinfo.Items[k] + "](fg-magenta)"
-				continue
+				color = colorEditMinor
 
 			case 3:
-				ed.appinfo.Items[k] = "[" + ed.appinfo.Items[k] + "](fg-red)"
-				continue
+				color = colorEditMajor
 			}
 
-		case fieldCategory:
-			catstr, _ := packages.FormatCategory(v.(int))
-			ed.appinfo.Items[k] = strconv.Itoa(v.(int)) + " : " + catstr
+		case packages.AppInfoCategory:
+			cat := cdtype.CategoryType(v.(int)).String()
+			ed.appinfo.Items[line] = strconv.Itoa(v.(int)) + " : " + cat
 
-		case fieldActAsLauncher, fieldMultiInstance:
-			ed.appinfo.Items[k] = formatBool(v.(bool))
+		case packages.AppInfoActAsLauncher, packages.AppInfoMultiInstance:
+			ed.appinfo.Items[line] = formatBool(v.(bool))
 		}
 
 		// Add color to field to indicate it's modified.
-		ed.appinfo.Items[k] = "[" + ed.appinfo.Items[k] + "](fg-green)"
+		ed.appinfo.Items[line] = colored(color, ed.appinfo.Items[line])
 	}
 }
 
-func formatBool(val bool) string {
-	return ternary.String(val, "Yes", "No")
+func colored(color, text string) string { return "[" + text + "](" + color + ")" }
+func formatBool(val bool) string        { return ternary.String(val, "Yes", "No") }
+func formatTitle(text string) string    { return "[ " + text + " ]" }
+
+// expandTexts finds the largest text in the list, and expand them all to that max size.
+//
+func expandTexts(texts []string) []string {
+	max := 0
+	for _, str := range texts {
+		max = ternary.Max(max, len(str))
+	}
+	format := fmt.Sprintf(" %%-%ds ", max)
+	for i, str := range texts {
+		texts[i] = fmt.Sprintf(format, str)
+	}
+	return texts
 }

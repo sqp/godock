@@ -4,12 +4,12 @@ package desktopclass
 import (
 	"github.com/gotk3/gotk3/gtk"
 
+	"github.com/sqp/godock/libs/text/gtktext" // Format text GTK.
 	"github.com/sqp/godock/libs/text/strhelp" // String helpers.
 
 	"github.com/sqp/godock/widgets/cfbuild/cftype"   // Types for config file builder usage.
 	"github.com/sqp/godock/widgets/cfbuild/datatype" // Types for config file builder data source.
 	"github.com/sqp/godock/widgets/cfbuild/newkey"   // Create config file builder keys.
-	"github.com/sqp/godock/widgets/common"           // Text format gtk.
 	"github.com/sqp/godock/widgets/gtk/newgtk"       // Create widgets.
 
 	"os"
@@ -80,7 +80,7 @@ func Widget(source datatype.Source, selected datatype.DesktopClasser, origins st
 	grid.Attach(wDesktopFiles, 1, 3, 1, 1)
 
 	frame := newgtk.Frame("")
-	label := newgtk.Label(common.Bold("Launcher origin"))
+	label := newgtk.Label(gtktext.Bold("Launcher origin"))
 	label.SetUseMarkup(true)
 	frame.SetLabelWidget(label)
 	frame.Add(grid)
@@ -121,11 +121,11 @@ func desktopFileText(apps []string, dir, selected string) string {
 		isCurrent := name == selected
 
 		if fileExists(filepath.Join(dir, v)) {
-			name = common.URI("file://"+filepath.Join(dir, v), name)
+			name = gtktext.URI("file://"+filepath.Join(dir, v), name)
 		}
 
 		if isCurrent {
-			name = common.Bold(name)
+			name = gtktext.Bold(name)
 		}
 		text = strhelp.Separator(text, ", ", name)
 	}

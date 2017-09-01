@@ -194,7 +194,7 @@ func (im *itemMap) Value() interface{} {
 	defer im.Release()
 	switch im.typ {
 	case itemMapTypeAnimation:
-		C.list_animation(gldi.CIntPointer(im.ID))
+		C.list_animation(cIntPointer(im.ID))
 
 		ret := make(map[string]*gldi.Animation)
 		for name, mod := range im.list {
@@ -204,7 +204,7 @@ func (im *itemMap) Value() interface{} {
 	// return im.Value().(map[string]*gldi.Animation)
 
 	case itemMapTypeCairoDeskletDecoration:
-		C.list_desklet_decoration(gldi.CIntPointer(im.ID))
+		C.list_desklet_decoration(cIntPointer(im.ID))
 
 		ret := make(map[string]*gldi.CairoDeskletDecoration)
 		for name, mod := range im.list {
@@ -213,7 +213,7 @@ func (im *itemMap) Value() interface{} {
 		return ret
 
 	case itemMapTypeCairoDockRenderer:
-		C.list_dock_renderer(gldi.CIntPointer(im.ID))
+		C.list_dock_renderer(cIntPointer(im.ID))
 
 		ret := make(map[string]*gldi.CairoDockRenderer)
 		for name, mod := range im.list {
@@ -222,7 +222,7 @@ func (im *itemMap) Value() interface{} {
 		return ret
 
 	case itemMapTypeDialogDecorator:
-		C.list_dialog_decorator(gldi.CIntPointer(im.ID))
+		C.list_dialog_decorator(cIntPointer(im.ID))
 
 		ret := make(map[string]*gldi.DialogDecorator)
 		for name, mod := range im.list {
@@ -231,7 +231,7 @@ func (im *itemMap) Value() interface{} {
 		return ret
 
 	case itemMapTypeModule:
-		C.list_dock_module(gldi.CIntPointer(im.ID))
+		C.list_dock_module(cIntPointer(im.ID))
 
 		ret := make(map[string]*gldi.Module)
 		for name, mod := range im.list {
@@ -316,7 +316,7 @@ func (il *itemList) Value() interface{} {
 
 	switch il.typ {
 	case itemListTypeDesklet:
-		C.list_desklets(gldi.CIntPointer(il.ID))
+		C.list_desklets(cIntPointer(il.ID))
 
 		var ret []*gldi.Desklet
 		for _, mod := range il.list {
@@ -325,7 +325,7 @@ func (il *itemList) Value() interface{} {
 		return ret
 
 	case itemListTypeShortkey:
-		C.list_shortkey(gldi.CIntPointer(il.ID))
+		C.list_shortkey(cIntPointer(il.ID))
 
 		var ret []cdglobal.Shortkeyer
 		for _, mod := range il.list {
@@ -334,4 +334,10 @@ func (il *itemList) Value() interface{} {
 		return ret
 	}
 	return nil
+}
+
+// cIntPointer returns a C gpointer to an int value.
+//
+func cIntPointer(i int) C.gpointer {
+	return C.gpointer(gldi.CIntPointer(i))
 }

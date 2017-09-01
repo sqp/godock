@@ -443,9 +443,9 @@ func (m *Manager) getQuality(vid *Video) {
 
 	switch m.Quality {
 	case QualityAsk:
-		go func() {
+		m.log.GoTry(func() {
 			m.DialogQuality(m.FilterBlacklist(), m.control.PopupDialog, download, vid)
-		}()
+		})
 
 		// case QualityBestFound:
 		// 	download("best")
@@ -475,7 +475,7 @@ func (m *Manager) Start() {
 	if m.IsActive() || m.history.Queued() == 0 { // Only one worker.
 		return
 	}
-	go func() {
+	m.log.GoTry(func() {
 		m.active = true
 		if m.actionPre != nil {
 			m.log.Err(m.actionPre(), "actionPre")
@@ -518,7 +518,7 @@ func (m *Manager) Start() {
 			e = m.history.Done()
 			m.log.Err(e, "videodl: save data")
 		}
-	}()
+	})
 }
 
 //

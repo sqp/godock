@@ -40,6 +40,9 @@ func Green(msg string) string { return Colored(msg, FgGreen) }
 // Red formatting of text.
 func Red(msg string) string { return Colored(msg, FgRed) }
 
+// TxtBright formatting of text.
+func TxtBright(msg string) string { return Colored(msg, Bright) }
+
 // Colored returns a colored message if any.
 func Colored(msg, col string) string {
 	if msg == "" {

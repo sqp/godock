@@ -3,6 +3,7 @@ package cfbuild
 
 import (
 	"github.com/sqp/godock/libs/cdtype" // Logger type.
+	"github.com/sqp/godock/libs/config" //
 
 	"github.com/sqp/godock/widgets/cfbuild/cftype"   // Types for config file builder usage.
 	"github.com/sqp/godock/widgets/cfbuild/newkey"   // Create config file builder keys.
@@ -12,8 +13,6 @@ import (
 	"github.com/sqp/godock/widgets/pageswitch"       // page switcher for multi groups.
 
 	"errors"
-	"strconv"
-	"strings"
 )
 
 //
@@ -107,11 +106,7 @@ func NewVirtual(source cftype.Source, log cdtype.Logger, configFile, originalCon
 func (build *grouper) BuildSingle(group string, tweaks ...func(cftype.Builder)) cftype.Grouper {
 	// Add keys for the group.
 	build.AddGroup(group, build.Storage().List(group)...)
-
-	// Apply tweaks.
-	for _, tw := range tweaks {
-		tw(build)
-	}
+	build.BuildApply(tweaks...)
 
 	w := build.BuildPage(group)
 	build.PackStart(w, true, true, 0)
@@ -134,11 +129,7 @@ func (build *grouper) BuildGroups(switcher *pageswitch.Switcher, groups []string
 		keys := build.Storage().List(group)
 		build.AddGroup(group, keys...)
 	}
-
-	// Apply tweaks.
-	for _, tw := range tweaks {
-		tw(build)
-	}
+	build.BuildApply(tweaks...)
 
 	// Build groups.
 	first := true
@@ -161,6 +152,15 @@ func (build *grouper) BuildGroups(switcher *pageswitch.Switcher, groups []string
 	switcher.SetVisible(len(groups) > 1)
 
 	build.ShowAll()
+	return build
+}
+
+// BuildApply applies a list of custom updates to the builder and its keys.
+//
+func (build *grouper) BuildApply(custom ...func(cftype.Builder)) cftype.Grouper {
+	for _, tw := range custom {
+		tw(build)
+	}
 	return build
 }
 
@@ -210,7 +210,10 @@ func (conf *CDConfig) List(group string) (list []*cftype.Key) {
 	for _, cKeyName := range keys {
 		comment, _ := conf.GetComment(group, cKeyName)
 
-		if key := conf.ParseKeyComment(group, cKeyName, comment); key != nil {
+		keybase, typ := config.ParseKeyComment(comment)
+		if keybase != nil {
+			key := cftype.KeyType(typ).New(conf.Build, group, cKeyName)
+			key.KeyBase = *keybase
 			list = append(list, key)
 		}
 	}
@@ -251,81 +254,4 @@ func (conf *CDConfig) loadDefault() error {
 
 	conf.def = kf
 	return nil
-}
-
-//
-//-----------------------------------------------------------------[ PARSING ]--
-
-// ParseKeyComment parse comments for a key.
-//
-func (conf *CDConfig) ParseKeyComment(group, name, cKeyComment string) *cftype.Key {
-	cUsefulComment := strings.TrimLeft(cKeyComment, "# \n")  // remove #, spaces, and endline from start.
-	cUsefulComment = strings.TrimRight(cUsefulComment, "\n") // remove endline from end.
-
-	// Drop invalid or too short comments.
-	if len(cKeyComment) < 2 || len(cUsefulComment) == 0 || cUsefulComment[0] == '[' {
-		// '[' : on gere le bug de la Glib, qui rajoute les nouvelles cles apres le commentaire du groupe suivant !
-		// log.DEV("LIBC BUG, DETECTED", comment) // often seem to be a [gtk-convert]
-		return nil
-	}
-
-	key := cftype.KeyType(cUsefulComment[0]).New(conf.Build, group, name)
-
-	cUsefulComment = cUsefulComment[1:]
-
-	for i, c := range cUsefulComment {
-		if c != '-' && c != '+' && c != ' ' {
-			if c == cftype.FlagCairoOnly {
-				// If opengl, need drop key
-				// datatype.DisplayModeOpenGL
-
-			} else if c == cftype.FlagOpenGLOnly {
-				// If !opengl, need drop key
-				//  datatype.DisplayModeCairo
-
-			} else {
-				// Try to detect a value indicating the number of elements.
-				key.NbElements, _ = strconv.Atoi(string(cUsefulComment[i:]))
-
-				// Try to get authorized values between square brackets.
-				if c == '[' {
-					values := cUsefulComment[i+1 : strings.Index(cUsefulComment, "]")]
-					i += len(values) + 1
-
-					key.AuthorizedValues = strings.Split(values, ";")
-				}
-
-				// End of arguments at the start .
-				cUsefulComment = cUsefulComment[i:]
-				break
-			}
-		}
-	}
-
-	if key.NbElements == 0 {
-		key.NbElements = 1
-	}
-
-	cUsefulComment = strings.TrimLeft(cUsefulComment, "]1234567890") // Remove last bits of possible arguments.
-	cUsefulComment = strings.TrimLeft(cUsefulComment, " ")           // Remove separator.
-
-	// log.DEV("parsed", string(iType), iNbElements, cUsefulComment)
-
-	// Special widget alignment with a trailing slash.
-	if strings.HasSuffix(cUsefulComment, "/") {
-		cUsefulComment = strings.TrimSuffix(cUsefulComment, "/")
-		key.IsAlignedVertical = true
-	}
-
-	// Get tooltip.
-	toolStart := strings.IndexByte(cUsefulComment, '{')
-	toolEnd := strings.IndexByte(cUsefulComment, '}')
-	if toolStart > 0 && toolEnd > 0 && toolStart < toolEnd {
-		key.Tooltip = cUsefulComment[toolStart+1 : toolEnd]
-		cUsefulComment = cUsefulComment[:toolStart-1]
-	}
-
-	key.Text = cUsefulComment
-
-	return key
 }

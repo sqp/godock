@@ -160,7 +160,7 @@ func (o *AppManager) StopLoop() {
 
 func (o *AppManager) registerApplets() {
 	dir := globals.DirShareData(cdglobal.ConfigDirAppletsGo)
-	packs, e := packages.ListFromDir(o.log, dir, packages.TypeGoInternal, packages.SourceApplet)
+	packs, e := packages.ListFromDir(o.log, dir, cdtype.PackTypeGoInternal, packages.SourceApplet)
 	if o.log.Err(e, "registerapplets") {
 		return
 	}
@@ -219,11 +219,6 @@ func (o *AppManager) startApplet(mi *gldi.ModuleInstance, kf *keyfile.KeyFile) {
 		original := filepath.Join(vc.GetShareDataDir(), vc.GetConfFileName())
 
 		o.log.Info("Conf file upgrade", mi.GetConfFilePath(), original)
-		// gldi.ConfFileUpgrade(kf, mi.GetConfFilePath(), original, true)
-
-		// 			gchar *cTemplate = g_strdup_printf ("%s/%s", pModuleInstance->pModule->pVisitCard->cShareDataDir, pModuleInstance->pModule->pVisitCard->cConfFileName);
-		// 			cairo_dock_upgrade_conf_file (pModuleInstance->cConfFilePath, pKeyFile, cTemplate);
-		// 			g_free (cTemplate);
 	}
 
 	// Create applet instance and set its core data.

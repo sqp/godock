@@ -6,6 +6,7 @@ import (
 	"github.com/sqp/godock/libs/cdtype"        // Logger type.
 	"github.com/sqp/godock/libs/config"        // Config parser.
 	"github.com/sqp/godock/libs/text/bytesize" // Human readable bytes.
+	"github.com/sqp/godock/libs/text/tran"     // Translate.
 
 	"encoding/xml"
 	"errors"
@@ -13,36 +14,10 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
-)
-
-const (
-	// DistantURL is the location of cairo-dock applet market.
-	DistantURL = "http://download.tuxfamily.org/glxdock/themes/"
-
-	// DistantList is the name of the applets list file on the server.
-	DistantList = "list.conf"
-)
-
-// PackageType defines the type of a package (maybe rename to state?).
-//
-type PackageType int
-
-// Types of packages (location).
-//
-const (
-	TypeLocal      PackageType = iota // package installed as root on the machine (in a sub-folder /usr).
-	TypeUser                          // package located in the user's home
-	TypeDistant                       // package present on the server
-	TypeNew                           // package newly present on the server (for less than 1 month)
-	TypeUpdated                       // package present locally but with a more recent version on the server, or distant package that has been updated in the past month.
-	TypeInDev                         // package present locally but not on server. It's a user special applet we must not alter.
-	TypeGoInternal                    // package included in the dock binary.
-	TypeAny                           // joker (the search path function will search locally first, and on the server then).
 )
 
 // PackageSource defines whether the loaded package is an applet or a theme.
@@ -73,6 +48,86 @@ func (ps PackageSource) Group() string {
 		SourceApplet: "Register",
 		SourceTheme:  "Description",
 	}[ps]
+}
+
+// AppInfoField defines edit applet info fields.
+//
+type AppInfoField int
+
+// Applet info fields.
+const (
+	AppInfoUnknown       AppInfoField = iota // empty (or unused).
+	AppInfoVersion                           // string
+	AppInfoCategory                          // int
+	AppInfoAuthor                            // string
+	AppInfoDescription                       // string
+	AppInfoActAsLauncher                     // bool
+	AppInfoMultiInstance                     // bool
+	AppInfoTitle                             // string
+	AppInfoIcon                              // string
+)
+
+// Translated returns the translated name for the field.
+//
+func (field AppInfoField) Translated() string {
+	switch field {
+	case AppInfoVersion:
+		return tran.Slate("Version")
+	case AppInfoCategory:
+		return tran.Slate("Category")
+	case AppInfoAuthor:
+		return tran.Slate("Author")
+	case AppInfoDescription:
+		return tran.Slate("Description")
+	case AppInfoActAsLauncher:
+		return tran.Slate("Act as launcher")
+	case AppInfoMultiInstance:
+		return tran.Slate("Multi instance")
+	case AppInfoTitle:
+		return tran.Slate("Alternate title")
+	case AppInfoIcon:
+		return tran.Slate("Icon")
+	}
+	return ""
+}
+
+// Key returns the config file key for the field.
+//
+func (field AppInfoField) Key() string {
+	return map[AppInfoField]string{
+		AppInfoVersion:       "version",
+		AppInfoCategory:      "category",
+		AppInfoAuthor:        "author",
+		AppInfoDescription:   "description",
+		AppInfoActAsLauncher: "act as launcher",
+		AppInfoMultiInstance: "multi-instance",
+		AppInfoTitle:         "title",
+		AppInfoIcon:          "icon",
+	}[field]
+}
+
+// Comment returns the config comment for the field.
+//
+func (field AppInfoField) Comment() string {
+	switch field {
+	case AppInfoVersion:
+		return "# Version of the applet; change it everytime you change something in the config file. Don't forget to update the version both in this file and in the config file."
+	case AppInfoCategory:
+		return "# Category of the applet : 2 = files, 3 = internet, 4 = Desktop, 5 = accessory, 6 = system, 7 = fun"
+	case AppInfoAuthor:
+		return "# Author of the applet"
+	case AppInfoDescription:
+		return "# A short description of the applet and how to use it."
+	case AppInfoActAsLauncher:
+		return `# The applet is a "smart launcher"; it will behave as a launcher in the taskbar.`
+	case AppInfoMultiInstance:
+		return "# Whether the applet can be instanciated several times or not."
+	case AppInfoTitle:
+		return "# Rename the applet: useful if the name can be translated or if it contains spaces"
+	case AppInfoIcon:
+		return `# Default icon to use if no icon has been defined by the user. If not specified, or if the file is not found, the "icon" file will be used.`
+	}
+	return ""
 }
 
 //
@@ -150,7 +205,7 @@ func ListDownloadIndex(log cdtype.Logger, srvTag, externalUserDir string, source
 	}
 
 	// Get local applets.
-	local, eUsr := ListFromDir(log, externalUserDir, TypeUser, source)
+	local, eUsr := ListFromDir(log, externalUserDir, cdtype.PackTypeUser, source)
 	if eUsr != nil {
 		return filled, eUsr
 	}
@@ -160,7 +215,7 @@ func ListDownloadIndex(log cdtype.Logger, srvTag, externalUserDir string, source
 		// to prevent deletion.
 		if _, ok := filled[pack.DisplayedName]; !ok {
 			// fmt.Println("found unknown package", pack.DisplayedName)
-			pack.Type = TypeInDev
+			pack.Type = cdtype.PackTypeInDev
 		}
 
 		filled[pack.DisplayedName] = pack
@@ -188,10 +243,10 @@ func ListDownloadDockThemes(log cdtype.Logger, themeDir string) (map[string]*App
 // ListDistant lists packages available on the server applets market for given version.
 //
 func ListDistant(log cdtype.Logger, version string) (AppletPackages, error) {
-	url := DistantURL + version
+	url := cdglobal.DownloadServerURL + "/" + version
 
 	// Download list from packages server.
-	resp, e := http.Get(url + "/" + DistantList)
+	resp, e := http.Get(url + "/" + cdglobal.DownloadServerListFile)
 	if e != nil {
 		return nil, e
 	}
@@ -216,7 +271,7 @@ func ListDistant(log cdtype.Logger, version string) (AppletPackages, error) {
 		cfg.UnmarshalGroup(pack, name, config.GetTag)
 
 		pack.DisplayedName = name
-		pack.Type = TypeDistant
+		pack.Type = cdtype.PackTypeDistant
 		pack.Path = url + "/" + name
 
 		list = append(list, pack)
@@ -230,7 +285,7 @@ func ListDistant(log cdtype.Logger, version string) (AppletPackages, error) {
 
 // ListFromDir lists packages in external applets dir.
 //
-func ListFromDir(log cdtype.Logger, dir string, typ PackageType, source PackageSource) (AppletPackages, error) {
+func ListFromDir(log cdtype.Logger, dir string, typ cdtype.PackageType, source PackageSource) (AppletPackages, error) {
 	files, e := ioutil.ReadDir(dir) // ([]os.FileInfo, error)
 	if e != nil {
 		return nil, e
@@ -271,21 +326,21 @@ func ListFromDir(log cdtype.Logger, dir string, typ PackageType, source PackageS
 // AppletPackage defines a generic cairo-dock applet package.
 //
 type AppletPackage struct {
-	DisplayedName string        // name of the package
-	Type          PackageType   // type of package : installed, user, distant...
-	Path          string        // complete path of the package.
-	LastModifDate string        `conf:"last modif"` // date of latest changes in the package.
-	SrvTag        string        // webserver version tag to download.
-	Source        PackageSource // applet or theme.
+	DisplayedName string             // name of the package
+	Type          cdtype.PackageType // type of package : installed, user, distant...
+	Path          string             // complete path of the package.
+	LastModifDate string             `conf:"last modif"` // date of latest changes in the package.
+	SrvTag        string             // webserver version tag to download.
+	Source        PackageSource      // applet or theme.
 
-	Author      string `conf:"author"` // author(s)
-	Description string `conf:"description"`
-	Category    int    `conf:"category"`
-	Title       string `conf:"name"` // from file:alt name to use. From DBus: also translated.
-
-	Version         string `conf:"version"`
-	ActAsLauncher   bool   `conf:"act as launcher"`
-	IsMultiInstance bool   `conf:"multi-instance"`
+	Author          string              `conf:"author"` // author(s)
+	Description     string              `conf:"description"`
+	Category        cdtype.CategoryType `conf:"category"`
+	Title           string              `conf:"title"` // From file: alt applet name to use. From DBus: also translated.
+	Icon            string              `conf:"icon"`  // From file: alt icon name to use.   From DBus: with full path?.
+	Version         string              `conf:"version"`
+	ActAsLauncher   bool                `conf:"act as launcher"`
+	IsMultiInstance bool                `conf:"multi-instance"`
 
 	// On server only.
 	CreationDate int     `conf:"creation"` // date of creation of the package.
@@ -293,7 +348,6 @@ type AppletPackage struct {
 	// Rating int
 
 	// From Dbus only
-	Icon       string
 	Preview    string
 	Instances  []string
 	ModuleType int
@@ -311,7 +365,7 @@ func NewAppletPackage(log cdtype.Logger) *AppletPackage {
 
 // NewAppletPackageUser try to read an external applet package info from dir.
 //
-func NewAppletPackageUser(log cdtype.Logger, dir, name string, typ PackageType, source PackageSource) (*AppletPackage, error) {
+func NewAppletPackageUser(log cdtype.Logger, dir, name string, typ cdtype.PackageType, source PackageSource) (*AppletPackage, error) {
 
 	pack, e := ReadPackageFile(log, dir, name, source)
 	if e != nil {
@@ -349,15 +403,14 @@ func ReadPackageFile(log cdtype.Logger, dir, applet string, source PackageSource
 // IsInstalled return true if the package is installed on disk.
 //
 func (pack *AppletPackage) IsInstalled() bool {
-	return pack.Type == TypeUser || pack.Type == TypeUpdated || pack.Type == TypeInDev
+	return pack.Type == cdtype.PackTypeUser || pack.Type == cdtype.PackTypeUpdated || pack.Type == cdtype.PackTypeInDev
 }
 
 // Dir gives the location of the package on disk.
-// FIXME: do not hope that the icon is in the same dir as the applet.
-// Currently based on icon location, it could really be improved.
+// TODO: confirm same dir as the applet.
 //
 func (pack *AppletPackage) Dir() string {
-	return filepath.Dir(pack.Icon)
+	return filepath.Dir(pack.Path)
 }
 
 // FormatName returns the best available package name to display.
@@ -373,39 +426,24 @@ func (pack *AppletPackage) FormatName() string {
 // FormatState returns the human readable state for the applet.
 //
 func (pack *AppletPackage) FormatState() string {
-	switch pack.Type {
-	case TypeLocal:
-		return "Local"
-	case TypeUser:
-		return "User"
-	case TypeDistant:
-		return "On server"
-	case TypeNew:
-		return "New"
-	case TypeUpdated:
-		return "Updated"
-	case TypeInDev:
-		return "Dev by user"
-	}
-	return ""
+	return pack.Type.Translated()
 }
 
 // IconState returns the icon location for the state for the applet.
 //
 func (pack *AppletPackage) IconState() string {
 	switch pack.Type {
-	case TypeLocal:
+	case cdtype.PackTypeLocal:
 		return "icons/theme-local.svg"
-	case TypeUser:
+	case cdtype.PackTypeUser:
 		return "icons/theme-user.svg"
-	case TypeDistant:
+	case cdtype.PackTypeDistant:
 		return "icons/theme-distant.svg"
-	case TypeNew:
+	case cdtype.PackTypeNew:
 		return "icons/theme-new.svg"
-	case TypeUpdated:
+	case cdtype.PackTypeUpdated:
 		return "icons/theme-updated.svg"
-	case TypeInDev:
-		// return "TypeInDev"
+	case cdtype.PackTypeInDev:
 		return "icons/theme-local.svg" // TODO: improve !
 
 	}
@@ -430,7 +468,7 @@ func (pack *AppletPackage) GetPreview(tmp string) (string, bool) {
 	}
 
 	switch pack.Type {
-	case TypeDistant, TypeNew: // Applets not on disk.
+	case cdtype.PackTypeDistant, cdtype.PackTypeNew: // Applets not on disk.
 
 		resp, e := http.Get(pack.Path + "/preview")
 		if pack.log.Err(e, "Get applet image") {
@@ -474,11 +512,11 @@ func (pack *AppletPackage) GetPreview(tmp string) (string, bool) {
 func (pack *AppletPackage) GetDescription() string {
 	if pack.Description == "" {
 		switch pack.Type {
-		case TypeLocal, TypeUser:
+		case cdtype.PackTypeLocal, cdtype.PackTypeUser:
 			body, _ := ioutil.ReadFile(filepath.Join(pack.Path, "readme"))
 			pack.Description = string(body)
 
-		case TypeDistant, TypeNew: // Applets not on disk.
+		case cdtype.PackTypeDistant, cdtype.PackTypeNew: // Applets not on disk.
 
 			resp, e := http.Get(pack.Path + "/readme")
 			if pack.log.Err(e, "Get applet readme") {
@@ -533,24 +571,10 @@ func (pack *AppletPackage) GetPreviewFilePath() string {
 // Install downloads and extract an external archive to package dir.
 // Optional tar settings can be passed.
 //
-func (pack *AppletPackage) Install(externalUserDir, options string) error {
-	// Connect a reader to the archive on server.
-	resp, eNet := http.Get(DistantURL + pack.SrvTag + "/" + pack.DisplayedName + "/" + pack.DisplayedName + ".tar.gz")
-	if eNet != nil {
-		return eNet
-	}
-	defer resp.Body.Close()
-
-	// Connect http reader to tar command.
-	cmd := exec.Command("tar", "xz"+options) // Tar extract zip.
-	cmd.Dir = externalUserDir                // Extract in external applet externalUserDirectory.
-	cmd.Stdin = resp.Body                    // Input is the http stream.
-	cmd.Stdout = os.Stdout                   // Display output and error to console.
-	cmd.Stderr = os.Stderr
-
-	eRun := cmd.Run()
-	if eRun != nil {
-		return eRun
+func (pack *AppletPackage) Install(externalUserDir string) error {
+	_, e := cdtype.DownloadPack(pack.log, pack.SrvTag, externalUserDir, pack.DisplayedName)
+	if e != nil {
+		return e
 	}
 	return pack.SetInstalled(externalUserDir)
 }
@@ -563,7 +587,7 @@ func (pack *AppletPackage) SetInstalled(externalUserDir string) error {
 	// file := filepath.Join(dir, pack.DisplayedName, "last-modif")
 	// log.Err(ioutil.WriteFile(file, []byte(lastModif), 0644), "Write last-modif")
 
-	newpack, e := NewAppletPackageUser(pack.log, externalUserDir, pack.DisplayedName, TypeUser, SourceApplet)
+	newpack, e := NewAppletPackageUser(pack.log, externalUserDir, pack.DisplayedName, cdtype.PackTypeUser, SourceApplet)
 	if e != nil {
 		return e
 	}
@@ -585,7 +609,7 @@ func (pack *AppletPackage) SetInstalled(externalUserDir string) error {
 // Uninstall removes an external applet from disk.
 //
 func (pack *AppletPackage) Uninstall(externalUserDir string) error {
-	if pack.Type != TypeUser && pack.Type != TypeUpdated {
+	if pack.Type != cdtype.PackTypeUser && pack.Type != cdtype.PackTypeUpdated {
 		return errors.New("wrong package type " + pack.FormatState())
 	}
 	appdir := filepath.Join(externalUserDir, pack.DisplayedName)
@@ -599,59 +623,73 @@ func (pack *AppletPackage) Uninstall(externalUserDir string) error {
 	if e != nil {
 		return e
 	}
-	pack.Type = TypeDistant
-	pack.Path = DistantURL + pack.SrvTag + "/" + pack.DisplayedName
+	pack.Type = cdtype.PackTypeDistant
+	pack.Path = cdglobal.DownloadServerURL + "/" + pack.SrvTag + "/" + pack.DisplayedName
 	return nil
 }
 
+// SaveUpdated updates the package, then saves and returns a reloaded package.
 //
-//--------------------------------------------------------------------[ DIRS ]--
-
-// DirAppletsExternal returns external applets location.
-//
-func DirAppletsExternal(configDir string) (string, error) {
-	return dirUserConfig(configDir, cdglobal.AppletsDirName)
-}
-
-// DirThemeExtra returns external theme location for the given theme type.
-//
-func DirThemeExtra(configDir, themeType string) (dir string, e error) {
-	return dirUserConfig(configDir, cdglobal.ConfigDirExtras, themeType)
-}
-
-// DirLaunchers returns launchers location.
-//
-// func DirLaunchers() (dir string, e error) {
-// 	if home := os.Getenv("HOME"); home != "" {
-// 		return filepath.Join(home, ".config", "cairo-dock", "current_theme", "launchers"), nil
-// 	}
-// 	return "", errors.New("can't get HOME directory")
-// }
-
-// MainConf returns the location of the Cairo-Dock main config file.
-//
-// func MainConf() (filepat string, e error) {
-// 	if home := os.Getenv("HOME"); home != "" {
-// 		return filepath.Join(home, ".config", "cairo-dock", "current_theme", "cairo-dock.conf"), nil
-// 	}
-// 	return "", errors.New("can't get HOME directory")
-// }
-
-// dirUserConfig gets cairo-dock config directory, using the alternate config dir if
-// provided.
-//
-func dirUserConfig(configDir string, path ...string) (dir string, e error) {
-	if configDir == "" {
-		home := os.Getenv("HOME")
-		if home == "" {
-			return "", errors.New("can't get HOME directory")
-		}
-		path = append([]string{home, ".config", "cairo-dock"}, path...)
-
-	} else {
-		path = append([]string{configDir}, path...)
+func (pack *AppletPackage) SaveUpdated(edits map[AppInfoField]interface{}) (*AppletPackage, error) {
+	if len(edits) == 0 {
+		return nil, errors.New("package save: no fields to update")
 	}
-	return filepath.Join(path...), nil
+
+	group := pack.Source.Group()
+	newver := ""
+
+	// Update version first in applet config file.
+	// When an upgrade is requested, we have to change versions in both files,
+	// so the config upgrade becomes mandatory.
+	if delta, upVer := edits[AppInfoVersion]; upVer {
+		var e error
+		newver, e = FormatNewVersion(pack.Version, delta.(int))
+		if e != nil {
+			return nil, e
+		}
+		filename := filepath.Join(pack.Path, pack.DisplayedName+".conf")
+		e = config.SetFileVersion(pack.log, filename, "Icon", pack.Version, newver)
+		if e != nil {
+			return nil, e
+		}
+	}
+
+	// Update edited fields.
+	filename := filepath.Join(pack.Path, pack.Source.File())
+	e := config.SetToFile(pack.log, filename, func(cfg cdtype.ConfUpdater) (e error) {
+		for k, v := range edits {
+			switch k {
+			case AppInfoVersion:
+				e = cfg.Set(group, k.Key(), newver)
+
+			case AppInfoCategory:
+				e = cfg.Set(group, k.Key(), int(v.(cdtype.CategoryType)))
+
+			case AppInfoActAsLauncher, AppInfoMultiInstance:
+				e = cfg.Set(group, k.Key(), v.(bool))
+
+			case AppInfoAuthor, AppInfoDescription, AppInfoTitle, AppInfoIcon:
+				e = cfg.Set(group, k.Key(), v.(string))
+			}
+
+			if e != nil {
+				return e
+			}
+			comment, e := cfg.GetComment(group, k.Key())
+			if !pack.log.Err(e, "package update get comment") && comment == "" {
+				cfg.SetComment(group, k.Key(), k.Comment())
+			}
+		}
+		return nil
+	})
+	if e != nil {
+		return nil, e
+	}
+
+	// Reload data from disk.
+	return NewAppletPackageUser(pack.log,
+		filepath.Dir(pack.Path), filepath.Base(pack.Path),
+		pack.Type, pack.Source)
 }
 
 //
@@ -668,17 +706,17 @@ type Gauge struct {
 //
 type Theme struct {
 	// Name    string      `xml:"name"`   // name of the package
-	DirName string      // really = directory name (used as key).
-	Title   string      `xml:"name"`
-	Author  string      `xml:"author"` // author(s)
-	Version string      `xml:"version"`
-	Type    PackageType // type of package : installed, user, distant...
+	DirName string             // really = directory name (used as key).
+	Title   string             `xml:"name"`
+	Author  string             `xml:"author"` // author(s)
+	Version string             `xml:"version"`
+	Type    cdtype.PackageType // type of package : installed, user, distant...
 	path    string
 }
 
 // ListThemesDir lists themes in a given directory.
 //
-func ListThemesDir(log cdtype.Logger, dir string, typ PackageType) ([]Theme, error) {
+func ListThemesDir(log cdtype.Logger, dir string, typ cdtype.PackageType) ([]Theme, error) {
 	files, e := ioutil.ReadDir(dir) // ([]os.FileInfo, error)
 	if e != nil {
 		return nil, e
@@ -772,28 +810,6 @@ func dirSize(location string) (size int64) {
 		}
 	}
 	return
-}
-
-// FormatCategory returns the human readable category for the applet.
-//
-func FormatCategory(cat int) (text, RGB string) {
-	switch cat {
-	case 0:
-		return "Behavior", "888888"
-	case 2:
-		return "Files", "004EA1"
-	case 3:
-		return "Internet", "FF5555"
-	case 4:
-		return "Desktop", "116E08"
-	case 5:
-		return "Accessory", "900009"
-	case 6:
-		return "System", "A58B0D"
-	case 7:
-		return "Fun", "FF55FF"
-	}
-	return "", ""
 }
 
 // FormatNewVersion formats an upgraded X.Y.Z version string.

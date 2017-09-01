@@ -1,7 +1,8 @@
 package cdtype
 
 import (
-	"github.com/sqp/godock/widgets/cfbuild/valuer"
+	"github.com/sqp/godock/libs/text/tran"         // Translate.
+	"github.com/sqp/godock/widgets/cfbuild/valuer" // Converts interface value.
 
 	"os/exec"
 	"reflect"
@@ -484,7 +485,7 @@ type AppAction interface {
 
 	// CallbackMenu provides a fill menu callback with the given actions list.
 	//
-	CallbackMenu(actionIds []int) func(menu Menuer)
+	CallbackMenu(actionIds ...int) func(menu Menuer)
 }
 
 // Action is an applet internal actions that can be used for callbacks or menu.
@@ -657,10 +658,12 @@ type AppBackend interface {
 // Logger defines the interface for reporting information.
 //
 type Logger interface {
+	LogFmt // extends the log formater.
+
 	// SetDebug change the debug state of the logger.
 	// Only enable or disable messages send with the Debug command.
 	//
-	SetDebug(debug bool)
+	SetDebug(debug bool) Logger
 
 	// GetDebug gets the debug state of the logger.
 	//
@@ -672,7 +675,11 @@ type Logger interface {
 
 	// SetLogOut connects the optional forwarder to the logger.
 	//
-	SetLogOut(LogOut)
+	SetLogOut(LogOut) Logger
+
+	// LogOut returns the optional forwarder of the logger.
+	//
+	LogOut() LogOut
 
 	// Debug is to be used every time a useful step is reached in your module
 	// activity. It will display the flood to the user only when the debug flag is
@@ -680,22 +687,29 @@ type Logger interface {
 	//
 	Debug(msg string, more ...interface{})
 
+	// Debugf log a new debug message with arguments formatting.
+	//
+	Debugf(msg, format string, args ...interface{})
+
 	// Info displays normal informations on the standard output, with the first param in green.
 	//
 	Info(msg string, more ...interface{})
 
-	// Render displays the msg argument in the given color.
-	// The colored message is passed with others to classic println.
+	// Infof log a new info message with arguments formatting.
 	//
-	Render(color, msg string, more ...interface{})
+	Infof(msg, format string, args ...interface{})
 
 	// Warn test and log the error as warning type. Return true if an error was found.
 	//
-	Warn(e error, msg ...string) (fail bool)
+	Warn(e error, msg ...interface{}) (fail bool)
 
 	// NewWarn log a new warning.
 	//
-	NewWarn(e string, msg ...string)
+	NewWarn(msg string, args ...interface{})
+
+	// Warnf log a new warning with arguments formatting.
+	//
+	Warnf(msg, format string, args ...interface{})
 
 	// Err test and log the error as Error type. Return true if an error was found.
 	//
@@ -705,13 +719,9 @@ type Logger interface {
 	//
 	NewErr(e string, msg ...interface{})
 
-	// NewErrf log a new error with arguments formatting.
+	// Errorf log a new error with arguments formatting.
 	//
-	NewErrf(title, format string, args ...interface{})
-
-	// GetErr test and logs the error, and return it for later use.
-	//
-	GetErr(e error, msg ...interface{}) error
+	Errorf(msg, format string, args ...interface{})
 
 	// ExecShow run a command with output forwarded to console and wait.
 	//
@@ -734,6 +744,18 @@ type Logger interface {
 	//
 	ExecShlex(command string, args ...string) (*exec.Cmd, error)
 
+	// PlaySound plays a sound file.
+	//
+	PlaySound(file string) error
+
+	// Recover from crash. Use with defer before a dangerous action.
+	//
+	Recover()
+
+	// GoTry launch a secured go routine. Panic will be recovered and logged.
+	//
+	GoTry(call func())
+
 	// DEV is like Info, but to be used by the dev for his temporary tests (easier to grep).
 	//
 	DEV(msg string, more ...interface{})
@@ -742,11 +764,48 @@ type Logger interface {
 // LogOut defines the interface for log forwarding.
 //
 type LogOut interface {
+	LogFmt // extends the log formater.
+
 	Raw(sender, msg string)
-	Info(sender, msg string, more ...interface{})
-	Debug(sender, msg string, more ...interface{})
-	Err(e string, sender string, msg ...interface{})
+	Msg(level LogLevel, sender, msg string, more ...interface{})
+	Err(e error, level LogLevel, sender, msg string)
+	List() []LogMsg
 }
+
+// LogFmt defines the log formater display options.
+//
+type LogFmt interface {
+	FormatMsg(level LogLevel, sender, msg string, more ...interface{}) string
+	FormatErr(e error, level LogLevel, sender string, msg ...interface{}) string
+	SetTimeFormat(format string)
+	SetColorName(func(string) string)
+	SetColorInfo(func(string) string)
+	SetColorDebug(func(string) string)
+	SetColorDEV(func(string) string)
+	SetColorWarn(func(string) string)
+	SetColorError(func(string) string)
+}
+
+// LogMsg defines a single log message.
+//
+type LogMsg struct {
+	Text   string
+	Sender string
+	Time   time.Time
+}
+
+// LogLevel defines the log level of a message.
+type LogLevel int
+
+// Logging Levels
+const (
+	LevelUnknown LogLevel = iota
+	LevelInfo             // Those are with Msg
+	LevelDebug            //
+	LevelDEV              //
+	LevelWarn             // Those are with Err
+	LevelError            //
+)
 
 //
 //--------------------------------------------------------------------[ MENU ]--
@@ -792,9 +851,9 @@ type MenuWidgeter interface {
 //
 type Defaults struct {
 	// Those are provided by ConfGroupIconBoth.
-	Icon  string
-	Label string
-	Debug bool // Enable debug flood.
+	Icon  string // Icon path.
+	Label string // Text label.
+	Debug bool   // Enable debug flood.
 
 	// Gathered by LoadConfig.
 	Shortkeys []*Shortkey
@@ -803,6 +862,7 @@ type Defaults struct {
 	QuickInfo      string
 	PollerInterval int
 	Commands       Commands
+	AppliClass     string // Monitored application window class.
 }
 
 //
@@ -847,6 +907,14 @@ type ConfUpdater interface {
 	// Set sets a new value for the group/key reference.
 	//
 	Set(group, key string, value interface{}) error
+
+	// SetComment sets the comment for the key.
+	//
+	SetComment(group, key, comment string) error
+
+	// GetComment gets the comment for the key.
+	//
+	GetComment(group, key string) (string, error)
 
 	// Valuer returns the valuer for the given group/key combo.
 	//
@@ -915,7 +983,7 @@ type DialogData struct {
 	//     nil         if no widget is provided.
 	//     string      for a DialogWidgetText.
 	//     float64     for a DialogWidgetScale.
-	//     int32       for a DialogWidgetList with Editable=false.
+	//     int         for a DialogWidgetList with Editable=false.
 	//     string      for a DialogWidgetList with Editable=true.
 	//
 	// Callback can be tested and asserted with one of the following functions.
@@ -938,7 +1006,7 @@ type DialogWidgetText struct {
 	MultiLines   bool   // true to have a multi-lines text-entry, ie a text-view.
 	Locked       bool   // false if the user can modify the text.
 	Hidden       bool   // false if the input text is visible (set to true for passwords).
-	NbChars      int32  // Maximum number of chars (the current number of chars will be displayed next to the entry) (0=infinite).
+	NbChars      int    // Maximum number of chars (the current number of chars will be displayed next to the entry) (0=infinite).
 	InitialValue string // Text initially contained in the entry.
 }
 
@@ -947,7 +1015,7 @@ type DialogWidgetText struct {
 type DialogWidgetScale struct {
 	MinValue     float64 // Lower value.
 	MaxValue     float64 // Upper value.
-	NbDigit      int32   // Number of digits after the dot.
+	NbDigit      int     // Number of digits after the dot.
 	InitialValue float64 // Value initially set to the scale.
 	MinLabel     string  // Label displayed on the left of the scale.
 	MaxLabel     string  // Label displayed on the right of the scale.
@@ -957,7 +1025,7 @@ type DialogWidgetScale struct {
 //
 type DialogWidgetList struct {
 	// Editable represents whether the user can enter a custom choice or not.
-	//   false:  InitialValue and returned value are int32. // TODO: move to int
+	//   false:  InitialValue and returned value are int.
 	//   true:   InitialValue and returned value are string.
 	Editable bool
 
@@ -966,7 +1034,7 @@ type DialogWidgetList struct {
 	Values []string
 
 	// InitialValue defines the default value, presented to the user.
-	// Type:  int32 if Editable=false or string if Editable=true.
+	// Type:  int if Editable=false or string if Editable=true.
 	InitialValue interface{}
 }
 
@@ -994,7 +1062,7 @@ func DialogCallbackValidNoArg(call func()) func(int, interface{}) {
 //
 func DialogCallbackValidInt(call func(data int)) func(int, interface{}) {
 	return func(clickedButton int, data interface{}) {
-		id, ok := data.(int32)
+		id, ok := data.(int)
 		if ok && (clickedButton == DialogButtonFirst || clickedButton == DialogKeyEnter) {
 			call(int(id))
 		}
@@ -1017,11 +1085,91 @@ func DialogCallbackValidString(call func(data string)) func(int, interface{}) {
 //
 //---------------------------------------------------------------[ CONSTANTS ]--
 
+// CategoryType defines the applet category (group like desktop or network).
+//
+type CategoryType int
+
+// Source of package to load (applet or theme).
+//
+const (
+	CategoryBehavior CategoryType = iota // Behavior and theme are not for applets
+	CategoryTheme                        // except if its about internal dock use.
+	CategoryFiles
+	CategoryInternet
+	CategoryDesktop
+	CategoryAccessory
+	CategorySystem
+	CategoryFun
+	CategoryNB // The number of defined categories.
+)
+
+func (ct CategoryType) String() string { // keep in sync with Translated.
+	return map[CategoryType]string{
+		CategoryBehavior:  "Behavior",
+		CategoryTheme:     "Appearance",
+		CategoryFiles:     "Files",
+		CategoryInternet:  "Internet",
+		CategoryDesktop:   "Desktop",
+		CategoryAccessory: "Accessory",
+		CategorySystem:    "System",
+		CategoryFun:       "Fun",
+	}[ct]
+}
+
+// Translated returns the translated name for the category.
+//
+func (ct CategoryType) Translated() string { // redeclared for translation gen.
+	switch ct {
+	case CategoryBehavior:
+		return tran.Slate("Behavior")
+	case CategoryTheme:
+		return tran.Slate("Appearance")
+	case CategoryFiles:
+		return tran.Slate("Files")
+	case CategoryInternet:
+		return tran.Slate("Internet")
+	case CategoryDesktop:
+		return tran.Slate("Desktop")
+	case CategoryAccessory:
+		return tran.Slate("Accessory")
+	case CategorySystem:
+		return tran.Slate("System")
+	case CategoryFun:
+		return tran.Slate("Fun")
+	}
+	return ""
+}
+
+// Color returns the RBG color to display for the category.
+//
+func (ct CategoryType) Color() string {
+	return map[CategoryType]string{
+		CategoryBehavior:  "888888", // was "#000066" dark blue
+		CategoryTheme:     "888888", // TODO: find a color.
+		CategoryFiles:     "004EA1", // blue
+		CategoryInternet:  "FF5555", // orange
+		CategoryDesktop:   "116E08", // green
+		CategoryAccessory: "900009", // red
+		CategorySystem:    "A58B0D", // yellow
+		CategoryFun:       "FF55FF", // purple
+	}[ct]
+}
+
+// Categories returns the list of CategoryType as translated text.
+//
+func Categories() []string {
+	cats := make([]string, int(CategoryNB))
+	for i := 0; i < int(CategoryNB); i++ {
+		cats[i] = CategoryType(i).Translated()
+	}
+	return cats
+}
+
 // ContainerPosition refers to the border of the screen the dock is attached to.
 //
 // A desklet has always an orientation of BOTTOM.
 //
-type ContainerPosition int32
+type ContainerPosition int
 
 // Dock position on screen.
 const (
@@ -1033,7 +1181,7 @@ const (
 
 // ContainerType is the type of container that manages the icon.
 //
-type ContainerType int32
+type ContainerType int
 
 // Icon container type.
 const (
@@ -1058,7 +1206,7 @@ const (
 
 // InfoPosition is the location to render text data for an applet.
 //
-type InfoPosition int32
+type InfoPosition int
 
 // Applet text info position.
 const (
@@ -1069,7 +1217,7 @@ const (
 
 // EmblemPosition is the location where an emblem is displayed.
 //
-type EmblemPosition int32
+type EmblemPosition int
 
 // Applet emblem position.
 const (
@@ -1085,7 +1233,7 @@ const (
 	EmblemCount                             // Number of emblem positions.
 )
 
-// type EmblemModifier int32
+// type EmblemModifier int
 
 // const (
 // 	EmblemPersistent EmblemModifier = 0
@@ -1094,7 +1242,7 @@ const (
 
 // MenuItemType is the type of menu entry to create.
 //
-type MenuItemType int32
+type MenuItemType int
 
 // Applet menu entry type.
 const (

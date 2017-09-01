@@ -36,10 +36,9 @@ static void register_gui (void)
 */
 import "C"
 import (
-	"github.com/gotk3/gotk3/gtk"
-
 	"github.com/sqp/godock/libs/gldi"
 	"github.com/sqp/godock/libs/gldi/notif" // Dock notifs.
+	"github.com/sqp/godock/widgets/cfbuild/cftype"
 
 	"unsafe"
 )
@@ -73,7 +72,7 @@ type GuiInterface interface {
 	ShowModuleInstanceGui(*gldi.ModuleInstance, int) //
 	// GetWidgetFromName(moduleInstance *gldi.ModuleInstance, group string, key string)
 
-	Window() *gtk.Window
+	Window() cftype.WinLike
 }
 
 var dockGui GuiInterface
@@ -138,7 +137,7 @@ func onIconAddRemove(icon gldi.Icon, _ *gldi.CairoDock) {
 
 // ShowMainGui shows the main config page of the GUI.
 //
-func ShowMainGui() *gtk.Window {
+func ShowMainGui() cftype.WinLike {
 	if dockGui == nil {
 		return nil
 	}
@@ -148,7 +147,7 @@ func ShowMainGui() *gtk.Window {
 
 // ShowModuleGui opens the icons page of the GUI for the specific applet.
 //
-func ShowModuleGui(appletName string) *gtk.Window {
+func ShowModuleGui(appletName string) cftype.WinLike {
 	if dockGui == nil {
 		return nil
 	}
@@ -158,7 +157,7 @@ func ShowModuleGui(appletName string) *gtk.Window {
 
 // ShowItems opens the icons page of the GUI to configure the given item.
 //
-func ShowItems(icon gldi.Icon, container *gldi.Container, moduleInstance *gldi.ModuleInstance, showPage int) *gtk.Window {
+func ShowItems(icon gldi.Icon, container *gldi.Container, moduleInstance *gldi.ModuleInstance, showPage int) cftype.WinLike {
 	if dockGui == nil {
 		return nil
 	}
@@ -168,7 +167,7 @@ func ShowItems(icon gldi.Icon, container *gldi.Container, moduleInstance *gldi.M
 
 // ShowAddons opens the addons page of the GUI.
 //
-func ShowAddons() *gtk.Window {
+func ShowAddons() cftype.WinLike {
 	if dockGui == nil {
 		return nil
 	}

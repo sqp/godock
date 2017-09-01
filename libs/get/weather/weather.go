@@ -285,8 +285,11 @@ func FormatField(template *cdtype.Template, list []string, data interface{}) (st
 		case "pressure":
 			title = tran.Splug("Pressure")
 
-		case "sun":
-			title = tran.Splug("Sunrise") + " - " + tran.Splug("Sunset")
+		case "sunrise":
+			title = tran.Splug("Sunrise")
+
+		case "sunset":
+			title = tran.Splug("Sunset")
 
 		case "tempDay":
 			title = tran.Splug("Temperature")

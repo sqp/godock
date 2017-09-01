@@ -64,7 +64,7 @@ func NewApplet(base cdtype.AppBase, events *cdtype.Events) cdtype.AppInstance {
 		app.Action().Launch(key)
 	}
 
-	events.OnBuildMenu = app.Action().CallbackMenu(dockMenu)
+	events.OnBuildMenu = app.Action().CallbackMenu(dockMenu...)
 
 	events.End = func() {
 		if app.win != nil {

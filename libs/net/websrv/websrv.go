@@ -2,44 +2,74 @@
 package websrv
 
 import (
-	"github.com/braintree/manners"
-
-	"github.com/sqp/godock/libs/cdtype"
-
 	"errors"
+
+	"github.com/braintree/manners"      // Restartable webserver.
+	_ "github.com/mkevac/debugcharts"   // Register monitoring charts.
+	"github.com/sqp/godock/libs/cdtype" // Logger type.
+	// Secure handling crashs.
+	"fmt"
 	"net/http"
+	"net/http/pprof" // Web service for pprof.
 	"strconv"
 	"strings"
 )
 
-const defaultPort = 15610
+const (
+	// PathPprof is the registered url for the monitoring pprof service.
+	PathPprof = "debug/pprof"
+
+	// PathCharts is the registered url for the monitoring charts service.
+	PathCharts = "debug/charts"
+)
 
 var (
+	// DefaultHost is the default hostname used for the web service.
+	DefaultHost = "localhost"
+
+	// DefaultPort is the default port used for the web service.
+	DefaultPort = 15610
+
 	// Service manages the default web service for the program.
-	Service = NewSrv(defaultPort)
+	Service *Srv
 )
+
+// Init creates the default Service with a logger for monitoring.
+//
+func Init(log cdtype.Logger) {
+	Service = NewSrv(DefaultHost, DefaultPort, log)
+}
 
 type service struct {
 	started bool
 	call    http.HandlerFunc
+	log     cdtype.Logger
 }
 
 // Srv defines a web service handling subservices.
 //
 type Srv struct {
-	list map[string]*service
-	Host string
-	Port int
+	Host string // Where to
+	Port int    // Listen.
+
+	list map[string]*service // Registered services.
+	log  cdtype.Logger       // Logger.
 }
 
 // NewSrv creates a new web service managing multiple
 // You better use the already created Service var.
 //
-func NewSrv(port int) *Srv {
-	return &Srv{
-		list: make(map[string]*service),
+func NewSrv(host string, port int, log cdtype.Logger) *Srv {
+	srv := &Srv{
+		Host: host,
 		Port: port,
+		list: make(map[string]*service),
+		log:  log,
 	}
+	srv.Register(PathPprof, pprof.Index, log)
+	srv.Register(PathCharts, http.DefaultServeMux.ServeHTTP, log)
+
+	return srv
 }
 
 // URL returns the service location: host:port
@@ -53,9 +83,15 @@ func (s *Srv) URL() string {
 func (s *Srv) Register(key string, call http.HandlerFunc, log cdtype.Logger) error {
 	_, ok := s.list[key]
 	if ok {
-		return errors.New("register webservice: key already exist")
+		return fmt.Errorf("register web service: key already exist: %s", key)
 	}
-	s.list[key] = &service{call: call}
+	if call == nil {
+		return errors.New("register web service: callback is nil")
+	}
+	s.list[key] = &service{
+		call: call,
+		log:  log,
+	}
 	return nil
 }
 
@@ -64,7 +100,7 @@ func (s *Srv) Register(key string, call http.HandlerFunc, log cdtype.Logger) err
 func (s *Srv) Unregister(key string) error {
 	_, ok := s.list[key]
 	if !ok {
-		return errors.New("unregister webservice: key not found")
+		return fmt.Errorf("register web service: key not found: %s", key)
 	}
 
 	e := s.Stop(key)
@@ -79,64 +115,93 @@ func (s *Srv) Unregister(key string) error {
 // Start starts the registered service matching the given prefix key.
 //
 func (s *Srv) Start(key string) error {
-	app, ok := s.list[key]
+	svc, ok := s.list[key]
 	if !ok {
-		return errors.New("start webservice: key not found")
+		return fmt.Errorf("start web service: key not found: %s", key)
 	}
 
-	started := false
-	for _, v := range s.list {
-		started = started || v.started
-	}
+	isListening := s.needListen()
+	svc.started = true
 
-	app.started = true
-
-	if started {
+	if isListening {
 		return nil
 	}
+	s.log.GoTry(func() {
+		e := manners.ListenAndServe(s.URL(), s)
+		svc.log.Err(e, "start web server")
+	})
 
-	manners.NewServer()
-	go manners.ListenAndServe(s.URL(), s)
 	return nil
 }
 
 // Stop stops the registered service matching the given prefix key.
 //
 func (s *Srv) Stop(key string) error {
-	app, ok := s.list[key]
+	svc, ok := s.list[key]
 	if !ok {
-		return errors.New("stop webservice: key not found")
+		return fmt.Errorf("stop web service: key not found: %s", key)
 	}
-	if !app.started {
+	if !svc.started {
 		return nil
 	}
 
-	app.started = false
+	svc.started = false
 
-	started := false
-	for _, v := range s.list {
-		started = started || v.started
-	}
-
-	if !started {
+	if !s.needListen() {
 		manners.Close()
 	}
 	return nil
 }
 
-// type HandlerFunc func( http.ResponseWriter, *http.Request)
-
 // ServeHTTP forwards the web call to the services matching the url prefix.
 //
 func (s *Srv) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	url := req.URL.String()
-	for prefix, app := range s.list {
-		if url == "/"+prefix || strings.HasPrefix(url, "/"+prefix+"/") {
-			if app.call != nil {
-				app.call(rw, req)
+	for prefix, svc := range s.list {
+		if strings.HasPrefix(url, "/"+prefix) {
+			if svc.started {
+				svc.log.Debug("served", req.RemoteAddr+" asked "+url+"  UA="+req.UserAgent())
+				defer s.log.Recover()
+				svc.call(rw, req)
 			}
+			// Should we log refused because inactive?
 			return
 		}
 	}
-	// s.log.Err(req.URL.String(), "WebService: Wrong address")
+	s.log.Debug("refused", req.RemoteAddr+" asked "+url+"  UA="+req.UserAgent())
+}
+
+// IsMonitored returns whether monitoring pages are active or not.
+//
+func (s *Srv) IsMonitored() bool {
+	return s.list["debug/pprof"].started
+}
+
+// SetMonitored sets if monitoring pages are active or not.
+//
+func (s *Srv) SetMonitored(setActive bool) {
+	svc := s.list["debug/pprof"]
+
+	svc.log.Debug("websrv.SetMonitored", s.Host+":", s.Port, s.IsMonitored())
+	switch {
+	case setActive && !svc.started:
+		s.Start("debug/pprof")
+		s.Start("debug/charts")
+
+	case !setActive && svc.started:
+		s.Stop("debug/pprof")
+		s.Stop("debug/charts")
+
+	default:
+		svc.log.Errorf("webservice.SetMonitored", "current state:%v  new state:%v", setActive, svc.started)
+	}
+}
+
+func (s *Srv) needListen() bool {
+	for _, service := range s.list {
+		if service.started {
+			return true
+		}
+	}
+	return false
 }

@@ -1,9 +1,7 @@
 package videodl
 
 import (
-	"github.com/otium/ytdl"
-
-	// "github.com/kr/pretty"
+	"github.com/rylio/ytdl"
 
 	"github.com/sqp/godock/libs/cdtype"
 

@@ -63,16 +63,6 @@ const (
 	DirIconsUser = ".icons" // in $HOME
 )
 
-// DisplayMode defines the dock display backend.
-type DisplayMode int
-
-// Key display based on the display mode.
-const (
-	DisplayModeAll DisplayMode = iota
-	DisplayModeCairo
-	DisplayModeOpenGL
-)
-
 // Source defines external data needed by the config builder.
 //
 type Source interface {
@@ -104,7 +94,7 @@ type Source interface {
 
 	// DisplayMode tells which renderer mode is used.
 	//
-	DisplayMode() DisplayMode
+	DisplayMode() cdglobal.DisplayMode
 
 	// ListIcons builds the list of all icons.
 	//
@@ -208,14 +198,13 @@ type SourceCommon struct {
 func (sc SourceCommon) ListThemeXML(localSystem, localUser, distant string) map[string]Handbooker {
 	// list, _ := packages.ListExternalUser(localSystem, "theme")
 	// Themes installed in system dir.
-	list, _ := packages.ListThemesDir(sc.Log, localSystem, packages.TypeLocal)
+	list, _ := packages.ListThemesDir(sc.Log, localSystem, cdtype.PackTypeLocal)
 
 	// Themes installed in user dir.
-	userDir, e := packages.DirThemeExtra(sc.ConfDir, localUser)
-	if e == nil {
-		users, _ := packages.ListThemesDir(sc.Log, userDir, packages.TypeUser)
-		list = append(list, users...)
-	}
+	userDir := filepath.Join(sc.ConfDir, cdglobal.ConfigDirExtras, localUser)
+	users, _ := packages.ListThemesDir(sc.Log, userDir, cdtype.PackTypeUser)
+	list = append(list, users...)
+
 	sc.Log.Debug("ListThemeXML found total ", len(list), userDir)
 
 	// Rename theme title with the online list.
@@ -246,14 +235,13 @@ func (sc SourceCommon) ListThemeXML(localSystem, localUser, distant string) map[
 //
 func (sc SourceCommon) ListThemeINI(localSystem, localUser, distant string) map[string]Handbooker {
 	// Themes installed in system dir.
-	list, _ := packages.ListFromDir(sc.Log, localSystem, packages.TypeLocal, packages.SourceTheme)
+	list, _ := packages.ListFromDir(sc.Log, localSystem, cdtype.PackTypeLocal, packages.SourceTheme)
 
 	// Themes installed in user dir.
-	userDir, e := packages.DirThemeExtra(sc.ConfDir, localUser)
-	if e == nil {
-		dist, _ := packages.ListFromDir(sc.Log, userDir, packages.TypeUser, packages.SourceTheme)
-		list = append(list, dist...)
-	}
+	userDir := filepath.Join(sc.ConfDir, cdglobal.ConfigDirExtras, localUser)
+	dist, _ := packages.ListFromDir(sc.Log, userDir, cdtype.PackTypeUser, packages.SourceTheme)
+	list = append(list, dist...)
+
 	sc.Log.Debug("ListThemeINI found total ", len(list), userDir)
 
 	out := make(map[string]Handbooker)
@@ -340,6 +328,7 @@ type Appleter interface {
 	FormatState() string
 	FormatSize() string
 	FormatCategory() string
+	Dir() string
 }
 
 //

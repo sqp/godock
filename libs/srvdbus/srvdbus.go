@@ -4,9 +4,11 @@ package srvdbus
 import (
 	"github.com/godbus/dbus"
 
-	"github.com/sqp/godock/libs/cdtype"             // Logger type.
+	"github.com/sqp/godock/libs/cdtype" // Logger type.
+	"github.com/sqp/godock/libs/packages/versions"
 	"github.com/sqp/godock/libs/srvdbus/dbuscommon" // Dbus service.
 
+	"encoding/json"
 	"strings"
 	"time"
 )
@@ -138,12 +140,47 @@ func (load *Loader) UpToShareLastLink() (string, *dbus.Error) {
 	return link, e
 }
 
-// Upload send data (raw text or file) to a one-click hosting service.
+// UpToShareLinks gets all links of items sent to one-click hosting services.
 //
-func (load *Loader) Upload(data string) *dbus.Error {
-	return load.uploaderAction(func(app uploader) {
-		app.UpToShareUpload(data)
+func (load *Loader) UpToShareLinks() (out []map[string]string, e *dbus.Error) {
+	e = load.uploaderAction(func(app uploader) {
+		out = app.UpToShareLinks()
 	})
+	return
+}
+
+// UploadString send raw text to a one-click hosting service.
+//
+func (load *Loader) UploadString(data string) *dbus.Error {
+	return load.uploaderAction(func(app uploader) {
+		app.UpToShareUploadString(data)
+	})
+}
+
+// UploadFiles send files to a one-click hosting service.
+//
+func (load *Loader) UploadFiles(data []string) *dbus.Error {
+	return load.uploaderAction(func(app uploader) {
+		app.UploadFiles(data...)
+	})
+}
+
+// SourceCodeVersions gets versions data.
+// returned json: []*versions.Repo
+//
+func (load *Loader) SourceCodeVersions() (out []byte, err *dbus.Error) {
+	err = load.sourceCoderAction(func(app sourceCoder) {
+		var e error
+		out, e = json.Marshal(app.Versions())
+		load.Log.Err(e, "SourceCodeVersions marshal")
+		// tmp := app.Versions()
+		// out = make([]dbus.Variant, len(tmp))
+		// for i, repo := range tmp {
+		// 	println("add list", repo.Name)
+		// 	out[i] = dbus.MakeVariant(repo)
+		// }
+	})
+	return
 }
 
 // SourceCodeBuildTarget send data (raw text or file) to a one-click hosting service.
@@ -204,7 +241,7 @@ func AppletDebug(applet string, state bool) error {
 	return client.Call("AppletDebug", applet, state)
 }
 
-// SourceCodeBuildTarget forwards action open source code file to the dock.
+// SourceCodeBuildTarget forwards action build source target to the dock.
 //
 func SourceCodeBuildTarget() error {
 	client, e := dbuscommon.GetClient(SrvObj, SrvPath)
@@ -214,7 +251,7 @@ func SourceCodeBuildTarget() error {
 	return client.Call("SourceCodeBuildTarget")
 }
 
-// SourceCodeGrepTarget forwards action open source code file to the dock.
+// SourceCodeGrepTarget forwards action grep text in source code to the dock.
 //
 func SourceCodeGrepTarget(data string) error {
 	client, e := dbuscommon.GetClient(SrvObj, SrvPath)
@@ -234,9 +271,26 @@ func SourceCodeOpenFile(data string) error {
 	return client.Call("SourceCodeOpenFile", data)
 }
 
-// Upload forwards action upload data to the dock.
+// SourceCodeVersions get source versions data.
 //
-func Upload(data string) error {
+func SourceCodeVersions() (list []*versions.Repo, e error) {
+	client, e := dbuscommon.GetClient(SrvObj, SrvPath)
+	if e != nil {
+		return nil, e
+	}
+
+	var tmp []byte
+	e = client.Get("SourceCodeVersions", []interface{}{&tmp})
+	if e != nil {
+		return nil, e
+	}
+	e = json.Unmarshal(tmp, &list)
+	return list, e
+}
+
+// UploadString forwards action upload string content to the dock.
+//
+func UploadString(data string) error {
 	client, e := dbuscommon.GetClient(SrvObj, SrvPath)
 	if e != nil {
 		return e
@@ -244,7 +298,17 @@ func Upload(data string) error {
 	return client.Call("Upload", data)
 }
 
-// UpToShareLastLink forwards action upload data to the dock.
+// UploadFiles forwards action upload files (location) to the dock.
+//
+func UploadFiles(filePath ...string) error {
+	client, e := dbuscommon.GetClient(SrvObj, SrvPath)
+	if e != nil {
+		return e
+	}
+	return client.Call("Upload", filePath)
+}
+
+// UpToShareLastLink get the last uploaded link from the dock.
 //
 func UpToShareLastLink() (string, error) {
 	client, e := dbuscommon.GetClient(SrvObj, SrvPath)
@@ -257,6 +321,19 @@ func UpToShareLastLink() (string, error) {
 	return link, e
 }
 
+// UpToShareLinks get all uploaded links from the dock.
+//
+func UpToShareLinks() (string, error) {
+	client, e := dbuscommon.GetClient(SrvObj, SrvPath)
+	if e != nil {
+		return "", e
+	}
+
+	var link string
+	e = client.Get("UpToShareLinks", []interface{}{&link})
+	return link, e
+}
+
 //
 //---------------------------------------------------------[ APPLETS OPTIONS ]--
 
@@ -264,6 +341,7 @@ type sourceCoder interface {
 	BuildTarget() error
 	GrepTarget(string)
 	OpenFile(string)
+	Versions() []*versions.Repo
 }
 
 func (load *Loader) sourceCoderAction(call func(sc sourceCoder)) *dbus.Error {
@@ -281,8 +359,10 @@ func (load *Loader) sourceCoderAction(call func(sc sourceCoder)) *dbus.Error {
 }
 
 type uploader interface {
-	UpToShareUpload(string)
+	UploadFiles(...string)
+	UpToShareUploadString(string)
 	UpToShareLastLink() string
+	UpToShareLinks() []map[string]string
 }
 
 func (load *Loader) uploaderAction(call func(sc uploader)) *dbus.Error {

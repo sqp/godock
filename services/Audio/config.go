@@ -43,9 +43,9 @@ type groupActions struct {
 
 	MixerCommand  string
 	MixerClass    string
-	MixerShortkey *cdtype.Shortkey `desc:"Open volume mixer"`
+	MixerShortkey *cdtype.Shortkey
 
-	ShortkeyAllMute     *cdtype.Shortkey `desc:"Mute global sound"`
-	ShortkeyAllIncrease *cdtype.Shortkey `desc:"Increase global sound"`
-	ShortkeyAllDecrease *cdtype.Shortkey `desc:"Decrease global sound"`
+	ShortkeyAllMute     *cdtype.Shortkey
+	ShortkeyAllIncrease *cdtype.Shortkey
+	ShortkeyAllDecrease *cdtype.Shortkey
 }

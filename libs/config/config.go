@@ -58,9 +58,10 @@ package config
 import (
 	"github.com/go-ini/ini"
 
-	"github.com/sqp/godock/libs/cdtype"
-	"github.com/sqp/godock/libs/files"
-	"github.com/sqp/godock/widgets/cfbuild/valuer"
+	"github.com/sqp/godock/libs/cdglobal"          // Dock types.
+	"github.com/sqp/godock/libs/cdtype"            // Applet types.
+	"github.com/sqp/godock/libs/files/fileaccess"  // Serialize files access.
+	"github.com/sqp/godock/widgets/cfbuild/valuer" // Converts interface value.
 
 	"bytes"
 	"errors"
@@ -76,9 +77,8 @@ import (
 
 // ini parser global config.
 func init() {
-	ini.LineBreak = "\n\n"
-	ini.ValueComment = ""
-	ini.PrettyFormat = false
+	ini.LineBreak = "\n\n"   // Blank line between fields.
+	ini.PrettyFormat = false // Don't try to align equal signs.
 }
 
 //
@@ -112,10 +112,11 @@ func GetBoth(struc reflect.StructField) string {
 // Config file unmarshall. Parsing errors will be stacked in the Errors field.
 //
 type Config struct {
-	ini.File // Extends the real config.
+	*ini.File // Extends the real config.
 
 	Errors    []error
-	appdir    string             // applet dir for templates loading.
+	confdir   string             // user config dir.
+	appdir    string             // applet dir.
 	shortkeys []*cdtype.Shortkey // shortkeys found.
 	actions   []func(cdtype.AppAction)
 
@@ -128,9 +129,9 @@ type Config struct {
 // Also locks files access.
 //
 func NewEmpty(log cdtype.Logger, configFile string) *Config {
-	files.AccessLock(log)
+	fileaccess.Lock(log)
 	return &Config{
-		File:     *ini.Empty(),
+		File:     ini.Empty(),
 		filePath: configFile,
 		fileMode: 0644,
 		log:      log,
@@ -154,15 +155,16 @@ func NewFromFile(log cdtype.Logger, configFile string) (*Config, error) {
 
 	log.Debug("lock", configFile)
 
-	files.AccessLock(log)
+	fileaccess.Lock(log)
 
-	cfg, e := ini.Load(configFile)
+	iniOpts := ini.LoadOptions{IgnoreInlineComment: true} // don't parse # and ; in keys as comments.
+	cfg, e := ini.LoadSources(iniOpts, configFile)
 	if e != nil {
-		files.AccessUnlock(log)
+		fileaccess.Unlock(log)
 		return nil, e
 	}
 	return &Config{
-		File:     *cfg,
+		File:     cfg,
 		filePath: configFile,
 		fileMode: fi.Mode(),
 		log:      log,
@@ -178,8 +180,9 @@ func NewFromReader(reader io.Reader) (*Config, error) {
 	if e != nil {
 		return nil, e
 	}
+
 	return &Config{
-		File: *cfg,
+		File: cfg,
 	}, nil
 }
 
@@ -195,11 +198,12 @@ func NewFromReader(reader io.Reader) (*Config, error) {
 //   fieldKey   Func to choose what key to load for each field.
 //              Usable methods provided: GetKey, GetTag, GetBoth.
 //
-func Load(log cdtype.Logger, filename, appdir string, v interface{}, fieldKey cdtype.GetFieldKey) (cdtype.Defaults, []func(cdtype.AppAction), []error, error) {
+func Load(log cdtype.Logger, filename, confdir, appdir string, v interface{}, fieldKey cdtype.GetFieldKey) (cdtype.Defaults, []func(cdtype.AppAction), []error, error) {
 	cfg, e := NewFromFile(log, filename)
 	if e != nil {
 		return cdtype.Defaults{}, nil, nil, e
 	}
+	cfg.confdir = confdir
 	cfg.appdir = appdir
 	def := cfg.Unmarshall(v, fieldKey)
 	cfg.Cancel()
@@ -244,13 +248,13 @@ func UpdateFile(log cdtype.Logger, filename, group, key string, value interface{
 // Cancel releases the file locks.
 //
 func (c *Config) Cancel() {
-	files.AccessUnlock(c.log)
+	fileaccess.Unlock(c.log)
 }
 
 // Save saves the edited config to disk, and releases the file locks.
 //
 func (c *Config) Save() error {
-	defer files.AccessUnlock(c.log)
+	defer fileaccess.Unlock(c.log)
 
 	buf := bytes.NewBuffer(nil)
 	_, e := c.WriteToIndent(buf, "")
@@ -340,59 +344,50 @@ func (c *Config) UnmarshalGroup(v interface{}, group string, fieldKey cdtype.Get
 func (c *Config) unmarshalGroup(conf reflect.Value, group string, fieldKey cdtype.GetFieldKey) {
 	typ := conf.Type()
 	for i := 0; i < typ.NumField(); i++ { // Parsing all fields in type.
-		c.fieldFromConf(conf.Field(i), group, fieldKey(typ.Field(i)), typ.Field(i).Tag)
+		elem := conf.Field(i)
+		tag := typ.Field(i).Tag
+		key := fieldKey(typ.Field(i))
+		ck := c.Section(group).Key(key)
+
+		switch {
+		case key == "" || key == "-" || !elem.CanInterface(): // Ensure key is valid and data is usable.
+			// Dropped.
+
+		case c.fieldFromConfBasic(elem, ck, group, key, tag),
+			c.fieldFromConfDock(elem, ck, group, key, tag):
+			// Matched.
+
+		case elem.Kind().String() == "int": // Int like types often used as ref types.
+			val, e := ck.Int()
+			c.testerr(e, group, key, "int like value")
+			elem.SetInt(int64(val))
+
+		default:
+			c.adderr(group, key, "config.unmarshalGroup unknown type: %T", elem.Interface())
+		}
 	}
 }
 
 // Fill a single reflected field if it has the conf tag.
 //
-func (c *Config) fieldFromConf(elem reflect.Value, group, key string, tag reflect.StructTag) {
-	if key == "" || key == "-" || !elem.CanInterface() { // Disabled or private config key.
-		return
-	}
-
-	// tagInt makes the call only if there is a valid value.
-	tagInt := func(str string, call func(int)) {
-		if str == "" {
-			return
-		}
-		def, e := strconv.Atoi(str)
-		if !c.testerr(e, group, key, "tag int") {
-			call(def)
-		}
-	}
-
-	ck := c.Section(group).Key(key)
-
+func (c *Config) fieldFromConfBasic(elem reflect.Value, ck *ini.Key, group, key string, tag reflect.StructTag) bool {
 	switch elem.Interface().(type) {
 
 	case bool:
 		val, e := ck.Bool()
 		c.testerr(e, group, key, "bool value")
 		elem.SetBool(val)
-		tagInt(tag.Get("action"), func(id int) {
+		e = tagInt(tag.Get("action"), func(id int) {
 			// Get the pointer to value for the set value action callback.
 			b := elem.Addr().Interface().(*bool)
 			c.actions = append(c.actions, func(act cdtype.AppAction) { act.SetBool(id, b) })
 		})
+		c.testerr(e, group, key, "bool action")
 
 	case int, int32, int64, cdtype.InfoPosition, cdtype.RendererGraphType:
 		val, e := ck.Int()
 		c.testerr(e, group, key, "int value")
 		elem.SetInt(int64(val))
-
-	case cdtype.Duration:
-		val, e := ck.Int()
-		c.testerr(e, group, key, "Duration value")
-
-		dur := cdtype.NewDuration(val)
-		e = dur.SetUnit(tag.Get("unit"))
-		c.testerr(e, group, key, "Duration unit")
-
-		tagInt(tag.Get("default"), dur.SetDefault)
-		tagInt(tag.Get("min"), dur.SetMin)
-
-		elem.Set(reflect.ValueOf(*dur))
 
 	case string:
 		val := ck.String()
@@ -400,6 +395,13 @@ func (c *Config) fieldFromConf(elem reflect.Value, group, key string, tag reflec
 			val = tag.Get("default")
 		}
 		elem.SetString(val)
+
+	case []byte:
+		val := ck.String()
+		if val == "" {
+			val = tag.Get("default")
+		}
+		elem.SetBytes([]byte(val))
 
 	case float64:
 		val, e := ck.Float64()
@@ -414,17 +416,49 @@ func (c *Config) fieldFromConf(elem reflect.Value, group, key string, tag reflec
 		}
 		elem.Set(reflect.ValueOf(list))
 
+	default:
+		return false
+	}
+	return true
+}
+
+func (c *Config) fieldFromConfDock(elem reflect.Value, ck *ini.Key, group, key string, tag reflect.StructTag) bool {
+	switch elem.Interface().(type) {
+
+	case cdtype.Duration:
+		val, e := ck.Int()
+		c.testerr(e, group, key, "Duration value")
+
+		dur := cdtype.NewDuration(val)
+		e = dur.SetUnit(tag.Get("unit"))
+		c.testerr(e, group, key, "Duration unit")
+
+		e = tagInt(tag.Get("default"), dur.SetDefault)
+		c.testerr(e, group, key, "Duration default")
+
+		e = tagInt(tag.Get("min"), dur.SetMin)
+		c.testerr(e, group, key, "Duration min")
+
+		elem.Set(reflect.ValueOf(*dur))
+
 	case *cdtype.Shortkey:
 		val := ck.String()
 		sk := &cdtype.Shortkey{
 			ConfGroup: group,
 			ConfKey:   key,
-			Desc:      tag.Get("desc"),
 			Shortkey:  val,
 		}
-		tagInt(tag.Get("action"), func(id int) {
+		dk, _ := ParseKeyComment(ck.Comment)
+		if dk == nil {
+			c.adderr(group, key, "Shortkey ParseKeyComment: desc failed")
+		} else {
+			sk.Desc = dk.Text
+		}
+		e := tagInt(tag.Get("action"), func(id int) {
 			sk.ActionID = id
 		})
+		c.testerr(e, group, key, "Shortkey action")
+
 		elem.Set(reflect.ValueOf(sk))
 		c.shortkeys = append(c.shortkeys, sk)
 
@@ -434,23 +468,44 @@ func (c *Config) fieldFromConf(elem reflect.Value, group, key string, tag reflec
 			name = tag.Get("default")
 		}
 		tmpl, e := cdtype.NewTemplate(name, c.appdir)
-
-		if e == nil {
-			elem.Set(reflect.ValueOf(*tmpl))
-		} else {
+		if c.log.Err(e, "config load template", name) {
 			elem.Set(reflect.ValueOf(cdtype.Template{FilePath: name}))
+		} else {
+			elem.Set(reflect.ValueOf(*tmpl))
+		}
+
+	case cdtype.ThemeExtra:
+		sources := []string{"", "", ""} // system dir, local hint, distant hint.
+		dk, _ := ParseKeyComment(ck.Comment)
+		if dk != nil && len(dk.AuthorizedValues) > 2 {
+			sources = dk.AuthorizedValues
+		}
+		theme, e := cdtype.NewThemeExtra(c.log,
+			ck.String(), tag.Get("default"),
+			c.confdir, c.appdir,
+			sources[0], sources[1], sources[2],
+		)
+		if !c.testerr(e, group, key, "ThemeExtra path") {
+			elem.Set(reflect.ValueOf(*theme))
+			c.log.Debug("ThemeExtra", theme.Path())
 		}
 
 	default:
-		if elem.Kind().String() == "int" { // Int like types often used as ref types.
-			val, e := ck.Int()
-			c.testerr(e, group, key, "int like value")
-			elem.SetInt(int64(val))
-
-		} else {
-			c.adderr(group, key, "unknown type: %s", elem.Kind().String())
-		}
+		return false
 	}
+	return true
+}
+
+// tagInt makes the call only if there is a valid value and returns parsing errors.
+func tagInt(str string, call func(int)) error {
+	if str == "" {
+		return nil
+	}
+	val, e := strconv.Atoi(str)
+	if e == nil {
+		call(val)
+	}
+	return e
 }
 
 func (c *Config) testerr(e error, group, key, msg string, args ...interface{}) bool {
@@ -503,6 +558,9 @@ func keyset(todisk *ini.Key, uncast interface{}) error {
 	case string:
 		todisk.SetValue(v)
 
+	case []byte:
+		todisk.SetValue(string(v))
+
 	case bool,
 		int, int8, int16, int32, int64,
 		uint, uint8, uint16, uint32, uint64,
@@ -511,10 +569,39 @@ func keyset(todisk *ini.Key, uncast interface{}) error {
 		todisk.SetValue(fmt.Sprint(v))
 
 	default:
-		return fmt.Errorf("unsupported type '%#v'", v)
+		return fmt.Errorf("config.Set unknown type: %T", uncast)
 
 	}
 	return nil
+}
+
+// SetComment sets the comment for the key.
+//
+func (c *Config) SetComment(group, key, comment string) error {
+	sect, e := c.File.GetSection(group)
+	if e != nil {
+		return e
+	}
+	ck, e := sect.GetKey(key)
+	if e != nil {
+		return e
+	}
+	ck.Comment = comment
+	return nil
+}
+
+// GetComment gets the comment for the key.
+//
+func (c *Config) GetComment(group, key string) (string, error) {
+	sect, e := c.File.GetSection(group)
+	if e != nil {
+		return "", e
+	}
+	ck, e := sect.GetKey(key)
+	if e != nil {
+		return "", e
+	}
+	return ck.Comment, nil
 }
 
 //
@@ -672,3 +759,99 @@ func (o *value) Count() int { return len(o.ListString()) } // unsure.
 // func (c *Config) MarshalGroup(group string, v interface{}) error {
 // 	return c.Section(group).ReflectFrom(v)
 // }
+
+//
+//----------------------------------------------------------------[ CONF KEY ]--
+
+// Modifier to show a widget according to the display backend.
+const (
+	ParseFlagCairoOnly  = '*'
+	ParseFlagOpenGLOnly = '&'
+)
+
+// KeyBase defines a configuration entry options parsed from comment.
+//
+type KeyBase struct {
+	NbElements        int                  // number of values stored in the key.
+	AuthorizedValues  []string             //
+	Text              string               // label for the key.
+	Tooltip           string               // mouse over tooltip text.
+	IsAlignedVertical bool                 // orientation for the key widget box.
+	DisplayMode       cdglobal.DisplayMode // Dock display backend: all, cairo or opengl.
+}
+
+// ParseKeyComment parse comments for a key.
+//
+func ParseKeyComment(keyComment string) (*KeyBase, byte) {
+	comment := strings.TrimLeft(keyComment, "# \n") // remove #, spaces, and endline from start.
+	comment = strings.TrimRight(comment, "\n")      // remove endline from end.
+
+	// Drop invalid or too short comments.
+	if len(keyComment) < 2 || len(comment) == 0 || comment[0] == '[' {
+		// '[' : on gere le bug de la Glib, qui rajoute les nouvelles cles apres le commentaire du groupe suivant !
+		// log.DEV("LIBC BUG, DETECTED", comment) // often seem to be a [gtk-convert]
+		return nil, ' '
+	}
+
+	typ := comment[0]
+	comment = comment[1:]
+
+	kb := &KeyBase{}
+	comment = kb.parseBase(comment)
+
+	if kb.NbElements == 0 {
+		kb.NbElements = 1
+	}
+
+	comment = strings.TrimLeft(comment, "]1234567890") // Remove last bits of possible arguments.
+	comment = strings.TrimLeft(comment, " ")           // Remove separator.
+
+	// Special widget alignment with a trailing slash.
+	if strings.HasSuffix(comment, "/") {
+		comment = strings.TrimSuffix(comment, "/")
+		kb.IsAlignedVertical = true
+	}
+
+	// Get tooltip.
+	toolStart := strings.IndexByte(comment, '{')
+	toolEnd := strings.IndexByte(comment, '}')
+	if toolStart > 0 && toolEnd > 0 && toolStart < toolEnd {
+		kb.Tooltip = comment[toolStart+1 : toolEnd]
+		comment = comment[:toolStart-1]
+	}
+
+	kb.Text = strings.TrimRight(comment, "\n")
+
+	return kb, typ
+}
+
+func (kb *KeyBase) parseBase(comment string) string {
+	for i, c := range comment {
+		switch c {
+		case ' ', '-', '+':
+			// Space and display flags: do nothing.
+
+		case ParseFlagCairoOnly:
+			kb.DisplayMode = cdglobal.DisplayModeCairo
+
+		case ParseFlagOpenGLOnly:
+			kb.DisplayMode = cdglobal.DisplayModeOpenGL
+
+		default:
+			// Try to detect a value indicating the number of elements.
+			kb.NbElements, _ = strconv.Atoi(string(comment[i:]))
+
+			// Try to get authorized values between square brackets.
+			if c == '[' {
+				values := comment[i+1 : strings.Index(comment, "]")]
+				i += len(values) + 1
+
+				kb.AuthorizedValues = strings.Split(values, ";")
+			}
+
+			// End of arguments at the start .
+			return comment[i:]
+		}
+	}
+	return ""
+}

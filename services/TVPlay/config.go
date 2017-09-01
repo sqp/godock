@@ -30,13 +30,13 @@ type groupActions struct {
 	ActionClickMiddle string
 	ActionMouseWheel  string
 
-	ShortkeyMute         *cdtype.Shortkey `action:"1" desc:"Mute volume"`
-	ShortkeyVolumeUp     *cdtype.Shortkey `action:"2" desc:"Lower volume"`
-	ShortkeyVolumeDown   *cdtype.Shortkey `action:"3" desc:"Increase volume"`
-	ShortkeyPlayPause    *cdtype.Shortkey `action:"4" desc:"Play / Pause"`
-	ShortkeyStop         *cdtype.Shortkey `action:"5" desc:"Stop"`
-	ShortkeySeekBackward *cdtype.Shortkey `action:"6" desc:"Seek backward"`
-	ShortkeySeekForward  *cdtype.Shortkey `action:"7" desc:"Seek forward"`
+	ShortkeyMute         *cdtype.Shortkey `action:"1"`
+	ShortkeyVolumeUp     *cdtype.Shortkey `action:"2"`
+	ShortkeyVolumeDown   *cdtype.Shortkey `action:"3"`
+	ShortkeyPlayPause    *cdtype.Shortkey `action:"4"`
+	ShortkeyStop         *cdtype.Shortkey `action:"5"`
+	ShortkeySeekBackward *cdtype.Shortkey `action:"6"`
+	ShortkeySeekForward  *cdtype.Shortkey `action:"7"`
 }
 
 // Actions available in right click menu.

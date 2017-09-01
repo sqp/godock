@@ -48,6 +48,8 @@ type groupConfig struct {
 }
 
 type groupUpload struct {
+	UploadEnabled   bool
+	UploadConfirm   bool
 	DialogEnabled   bool
 	DialogDuration  int
 	UploadHistory   int

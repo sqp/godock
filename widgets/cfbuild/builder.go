@@ -29,6 +29,7 @@ package cfbuild
 import (
 	"github.com/gotk3/gotk3/gtk"
 
+	"github.com/sqp/godock/libs/cdglobal"     // Dock types.
 	"github.com/sqp/godock/libs/cdtype"       // Logger type.
 	"github.com/sqp/godock/libs/dock/confown" // New dock own settings.
 	"github.com/sqp/godock/libs/text/tran"    // Translate.
@@ -53,11 +54,6 @@ type builder struct {
 
 	pFrame     *gtk.Frame // frames only.
 	pFrameVBox *gtk.Box   // Container for widgets in a frame.
-
-	pKeyBox              *gtk.Box   // Box for the widget
-	pLabel               *gtk.Label // Text on left.
-	pWidgetBox           *gtk.Box   // Value widgets on the right.
-	pAdditionalItemsVBox *gtk.Box
 
 	NbControlled int // was iNbControlledWidgets
 
@@ -92,7 +88,6 @@ func (build *builder) Log() cdtype.Logger        { return build.log }
 func (build *builder) Storage() cftype.Storage   { return build.conf }
 func (build *builder) Source() cftype.Source     { return build.data }
 func (build *builder) BoxPage() *gtk.Box         { return build.pageBox }
-func (build *builder) Label() *gtk.Label         { return build.pLabel }
 func (build *builder) SetFrame(frame *gtk.Frame) { build.pFrame = frame }
 func (build *builder) SetFrameBox(box *gtk.Box)  { build.pFrameVBox = box }
 func (build *builder) SetNbControlled(nb int)    { build.NbControlled = nb }
@@ -135,10 +130,12 @@ func (build *builder) AddGroup(group string, keys ...*cftype.Key) {
 // AddKeys adds one or many keys to an existing group.
 //
 func (build *builder) AddKeys(group string, keys ...*cftype.Key) {
-	build.buildKeys[group] = append(build.buildKeys[group], keys...)
-
-	// Set keys defaults.
 	for _, key := range keys {
+		if key == nil {
+			build.Log().Debug("builder add nil key", "group:", group)
+			continue
+		}
+		build.buildKeys[group] = append(build.buildKeys[group], key)
 		key.SetBuilder(build)
 	}
 }
@@ -155,7 +152,7 @@ func (build *builder) KeyAction(group, name string, action func(*cftype.Key)) bo
 			return true
 		}
 	}
-	build.log.NewErrf("builder key action", "get key=%s  ::  %s", group, name)
+	build.log.Errorf("builder key action", "get key=%s  ::  %s", group, name)
 	return false
 }
 
@@ -239,45 +236,51 @@ func (build *builder) BuildPage(group string) cftype.GtkWidgetBase {
 // buildKey builds a Cairo-Dock configuration widget with the given keys.
 //
 func (build *builder) buildKey(key *cftype.Key) {
+	if key.DisplayMode != cdglobal.DisplayModeAll &&
+		key.DisplayMode != build.Source().DisplayMode() {
+
+		key.Log().Debug("DisplayMode key dropped", key.Group, key.Name)
+		return
+	}
+
 	makeWidget := key.MakeWidget()
 	if makeWidget == nil {
 		makeWidget = cfwidget.Maker(key)
 		if makeWidget == nil {
-			build.Log().NewErrf("no make widget call", "type=%s  [key=%s / %s]\n", key.Type, key.Group, key.Name)
+			key.Log().Errorf("no make widget call", "type=%s  [key=%s / %s]\n", key.Type, key.Group, key.Name)
 			return
 		}
 	}
 
-	// build.log.DEV(key.Name, string(key.Type), key.AuthorizedValues)
-
-	build.pKeyBox = nil
-	build.pLabel = nil
-	build.pWidgetBox = nil
-	build.pAdditionalItemsVBox = nil
+	key.Log().Debug(key.Group, "/", key.Name, key.Type, key.AuthorizedValues)
 
 	fullSize := key.IsType(cftype.KeyListThemeApplet, cftype.KeyListViews, cftype.KeyEmptyFull, cftype.KeyHandbook)
 
-	if !key.IsType(cftype.KeyFrame) && !key.IsType(cftype.KeyExpander) && !key.IsType(cftype.KeySeparator) {
+	if !key.IsType(cftype.KeyFrame, cftype.KeyExpander, cftype.KeySeparator) {
 		// Create Key box.
 		if key.IsType(cftype.KeyListThemeApplet, cftype.KeyListViews) {
-			build.pAdditionalItemsVBox = newgtk.Box(gtk.ORIENTATION_VERTICAL, 0)
-			build.pKeyBox = newgtk.Box(gtk.ORIENTATION_HORIZONTAL, cftype.MarginGUI)
-			build.PackWidget(build.pAdditionalItemsVBox, fullSize, fullSize, 0)
-			build.pAdditionalItemsVBox.PackStart(build.pKeyBox, false, false, 0)
+			keybox := newgtk.Box(gtk.ORIENTATION_HORIZONTAL, cftype.MarginGUI)
+			addvbox := newgtk.Box(gtk.ORIENTATION_VERTICAL, 0)
+			key.SetKeyBox(keybox)
+			key.SetAdditionalItemsVBox(addvbox)
+
+			// Pack the keybox as first item of the big box.
+			build.PackWidget(addvbox, fullSize, fullSize, 0)
+			addvbox.PackStart(keybox, false, false, 0)
 
 		} else {
 			if key.IsAlignedVertical {
-				build.log.Info("aligned /", strings.TrimSuffix(key.Name, "\n"))
-				build.pKeyBox = newgtk.Box(gtk.ORIENTATION_VERTICAL, cftype.MarginGUI)
+				key.Log().Info("IsAlignedVertical", key.Group, "/", key.Name)
+				key.SetKeyBox(newgtk.Box(gtk.ORIENTATION_VERTICAL, cftype.MarginGUI))
 			} else {
-				build.pKeyBox = newgtk.Box(gtk.ORIENTATION_HORIZONTAL, cftype.MarginGUI)
+				key.SetKeyBox(newgtk.Box(gtk.ORIENTATION_HORIZONTAL, cftype.MarginGUI))
 			}
 
-			build.PackWidget(build.pKeyBox, fullSize, fullSize, 0)
+			build.PackWidget(key.KeyBox(), fullSize, fullSize, 0)
 		}
 
 		if key.Tooltip != "" {
-			build.pKeyBox.SetTooltipText(build.Translate(key.Tooltip))
+			key.KeyBox().SetTooltipText(build.Translate(key.Tooltip))
 		}
 
 		// 	if (pControlWidgets != NULL)
@@ -316,20 +319,21 @@ func (build *builder) buildKey(key *cftype.Key) {
 
 		// Key description on the left.
 		if key.Text != "" { // and maybe need to test different from  "loading..." ?
-			build.pLabel = newgtk.Label("")
+			label := newgtk.Label("")
+			key.SetLabel(label)
 			text := strings.TrimRight(build.Translate(key.Text), ":") // dirty hack against ugly trailing colon.
 
-			build.pLabel.SetMarkup(text)
-			build.pLabel.SetHAlign(gtk.ALIGN_START)
-			// margin-left
+			label.SetMarkup(text)
+			label.SetHAlign(gtk.ALIGN_START)
 			// 		GtkWidget *pAlign = gtk_alignment_new (0., 0.5, 0., 0.);
-			build.pKeyBox.PackStart(build.pLabel, false, false, 0)
+			key.KeyBox().PackStart(key.Label(), false, false, 2)
 		}
 
-		// Key widgets on the right. In pWidgetBox, they will be stacked from left to right.
+		// Key widgets on the right. In WidgetBox, they will be stacked from left to right.
 		if !key.IsType(cftype.KeyTextLabel) {
-			build.pWidgetBox = newgtk.Box(gtk.ORIENTATION_HORIZONTAL, cftype.MarginGUI)
-			build.pKeyBox.PackEnd(build.pWidgetBox, fullSize, fullSize, 0)
+			box := newgtk.Box(gtk.ORIENTATION_HORIZONTAL, cftype.MarginGUI)
+			key.SetWidgetBox(box)
+			key.KeyBox().PackEnd(box, fullSize, fullSize, 0)
 		}
 	}
 
@@ -343,7 +347,7 @@ func (build *builder) buildKey(key *cftype.Key) {
 // Save updates the configuration file with user changes.
 //
 func (build *builder) Save() {
-	if confown.Settings.ToVirtual(build.conf.FilePath()) {
+	if confown.Current.ToVirtual(build.conf.FilePath()) {
 		cfprint.Updated(build)
 		return
 	}
@@ -357,7 +361,7 @@ func (build *builder) Save() {
 		return
 	}
 
-	tofile, e := confown.SaveFile(build.conf.FilePath(), str)
+	tofile, e := confown.SaveFile(build.Log(), build.conf.FilePath(), str)
 	if !build.Log().Err(e, "save config") && build.postSave != nil && tofile {
 		build.postSave()
 	}
@@ -383,25 +387,6 @@ func (build *builder) PackWidget(child gtk.IWidget, expand, fill bool, padding u
 	} else {
 		build.pageBox.PackStart(child, expand, fill, padding)
 	}
-}
-
-// PackSubWidget packs a widget in the current subwidget box.
-//
-// (was _pack_in_widget_box)
-func (build *builder) PackSubWidget(child gtk.IWidget) {
-	build.pWidgetBox.PackStart(child, false, false, 0)
-}
-
-// PackKeyWidget packs a key widget to the page with its getValue call
-//
-// (was _pack_subwidget).
-func (build *builder) PackKeyWidget(key *cftype.Key, getValue func() interface{}, setValue func(interface{}), childs ...gtk.IWidget) {
-	for _, w := range childs {
-		build.pWidgetBox.PackStart(w, key.IsAlignedVertical, key.IsAlignedVertical, 0)
-	}
-	// key.SetValue = setValue
-	key.SetWidSetValue(setValue)
-	key.SetWidGetValue(getValue)
 }
 
 //
@@ -446,5 +431,14 @@ func TweakKeyMakeWidget(group, name string, call func(*cftype.Key)) func(cftype.
 func TweakKeySetAlignedVertical(group, name string) func(cftype.Builder) {
 	return TweakKeyAction(group, name, func(key *cftype.Key) {
 		key.IsAlignedVertical = true
+	})
+}
+
+// TweakKeySetLabelSelectable creates a tweak callback to set the key label text selectable.
+// Only valid after build.
+//
+func TweakKeySetLabelSelectable(group, name string) func(cftype.Builder) {
+	return TweakKeyAction(group, name, func(key *cftype.Key) {
+		key.Label().SetSelectable(true)
 	})
 }

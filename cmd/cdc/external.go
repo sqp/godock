@@ -6,6 +6,7 @@ package main
 
 import (
 	"github.com/sqp/godock/libs/cdglobal"
+	"github.com/sqp/godock/libs/cdtype"
 	"github.com/sqp/godock/libs/packages"
 	"github.com/sqp/godock/libs/text/color"
 	"github.com/sqp/godock/libs/text/tablist"
@@ -22,7 +23,7 @@ var nl = []byte{'\n'}
 
 var cmdExternal = &Command{
 	UsageLine: "external [-d path] [-r] [appletname...]",
-	Short:     "manage external applets",
+	Short:     "external applets management",
 	Long: `
 External lists, installs or removes Cairo-Dock external applets.
 
@@ -34,9 +35,8 @@ The action depends if applet names are provided, and on the -r flag:
 Common flags:
   -d path      Use a custom config directory. Default: ~/.config/cairo-dock
 
-Install flags:
+Remove flag:
   -r           Remove applets instead of install.
-  -v           Verbose output for files extraction.
 
 List matching flags:
   -s           Only match applets found on the applet server.
@@ -66,7 +66,6 @@ func init() {
 var (
 	listUserDir = cmdExternal.Flag.String("d", "", "")
 	listRemove  = cmdExternal.Flag.Bool("r", false, "")
-	listVerbose = cmdExternal.Flag.Bool("v", false, "")
 
 	listServer = cmdExternal.Flag.Bool("s", false, "")
 	listLocal  = cmdExternal.Flag.Bool("l", false, "")
@@ -109,7 +108,7 @@ func installOrRemoveApplets(list []string, remove bool) {
 
 	// TODO: use active dock if available.
 
-	externalUserDir, e := packages.DirAppletsExternal(*listUserDir)
+	externalUserDir, e := cdglobal.DirAppletsExternal(*listUserDir)
 	exitIfFail(e, "get config dir") // Ensure we have the config dir.
 
 	var packs packages.AppletPackages
@@ -120,16 +119,12 @@ func installOrRemoveApplets(list []string, remove bool) {
 			e := pack.Uninstall(externalUserDir)
 			return testErr(e, "uninstall", "Applet removed", appname)
 		}
-		packs, e = packages.ListFromDir(logger, externalUserDir, packages.TypeUser, packages.SourceApplet)
+		packs, e = packages.ListFromDir(logger, externalUserDir, cdtype.PackTypeUser, packages.SourceApplet)
 
 	} else { // install.
-		options := ""
-		if *listVerbose {
-			options = "v" // Tar command verbose option.
-		}
 		action = func(appname string, pack *packages.AppletPackage) bool {
 			pack.SrvTag = cdglobal.AppletsDirName + "/" + cdglobal.AppletsServerTag
-			e := pack.Install(externalUserDir, options)
+			e := pack.Install(externalUserDir)
 			return testErr(e, "install", "Applet installed", appname)
 		}
 		packs, e = packages.ListDistant(logger, cdglobal.AppletsDirName+"/"+cdglobal.AppletsServerTag)
@@ -169,14 +164,14 @@ func listPackages() (list packages.AppletPackages, e error) {
 	}
 
 	// Get applets dir.
-	externalUserDir, e := packages.DirAppletsExternal(*listUserDir)
+	externalUserDir, e := cdglobal.DirAppletsExternal(*listUserDir)
 	if e != nil {
 		return nil, e
 	}
 
 	// List local only.
 	if *listLocal {
-		return packages.ListFromDir(logger, externalUserDir, packages.TypeUser, packages.SourceApplet)
+		return packages.ListFromDir(logger, externalUserDir, cdtype.PackTypeUser, packages.SourceApplet)
 	}
 
 	// List default (merged both).
@@ -201,16 +196,15 @@ func printConsole(list packages.AppletPackages) {
 
 	for _, pack := range list {
 		line := lf.AddLine()
-		if pack.Type == packages.TypeUser {
+		if pack.Type == cdtype.PackTypeUser {
 			line.Colored(0, color.FgGreen, " * ")
 		}
-		if pack.Type == packages.TypeInDev {
+		if pack.Type == cdtype.PackTypeInDev {
 			line.Colored(0, color.FgYellow, " * ")
 		}
 
 		line.Set(1, pack.DisplayedName)
-		cat, _ := packages.FormatCategory(pack.Category)
-		line.Set(2, cat)
+		line.Set(2, pack.Category.String())
 	}
 	lf.Print()
 }

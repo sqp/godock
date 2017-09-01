@@ -142,8 +142,8 @@ func OnMouseScroll(icon gldi.Icon, _ *gldi.Container, scrollUp bool) bool {
 	case icon == nil:
 
 	case icon.IsSeparator(): // Cycle between desktops.
-		log.Debug("SeparatorWheelChangeDesktop", confown.Settings.SeparatorWheelChangeDesktop)
-		switch confown.Settings.SeparatorWheelChangeDesktop {
+		log.Debug("SeparatorWheelChangeDesktop", confown.Current.SeparatorWheelChangeDesktop)
+		switch confown.Current.SeparatorWheelChangeDesktop {
 		case confown.SeparatorWheelChangeRange:
 			desktops.Cycle(scrollUp, false)
 

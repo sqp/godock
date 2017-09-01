@@ -72,7 +72,7 @@ func listActiverSet(btns []widgetActiver, vals []bool) {
 // Values are get and set as int.
 //
 func PackValuerAsInt(key *cftype.Key, w gtk.IWidget, valuer WidgetValuer, value int) {
-	key.PackKeyWidget(key,
+	key.PackKeyWidget(
 		func() interface{} { return int(valuer.GetValue()) },
 		func(uncast interface{}) { valuer.SetValue(float64(uncast.(int))) },
 		w)
@@ -341,7 +341,7 @@ func PackComboBoxWithListField(key *cftype.Key, withEntry, numbered bool, getLis
 	current, _ := key.Storage().String(key.Group, key.Name)
 	widget, _, getValue, setValue := NewComboBox(key, withEntry, numbered, current, list)
 
-	key.PackKeyWidget(key, getValue, setValue, widget)
+	key.PackKeyWidget(getValue, setValue, widget)
 	return widget
 }
 
@@ -372,7 +372,7 @@ func PackComboBoxWithIndexHandbooker(key *cftype.Key, index map[string]datatype.
 	iter := fillModelWithFields(key, model, fields, value, saved)
 	widget.SetActiveIter(iter) // Set iter after connect, to update with current value.
 
-	key.PackKeyWidget(key,
+	key.PackKeyWidget(
 		getValue,
 		func(uncast interface{}) { saved.SetActive(uncast.(string)) },
 		widget,
@@ -700,7 +700,7 @@ func onTreeviewRemoveText(_ *gtk.Button, data treeViewData) {
 
 type textGrabData struct {
 	entry *gtk.Entry
-	win   *gtk.Window
+	win   cftype.WinLike
 	cbID  glib.SignalHandle
 }
 

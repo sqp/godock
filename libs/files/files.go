@@ -2,36 +2,20 @@
 package files
 
 import (
-	"github.com/sqp/godock/libs/cdtype" // Logger type.
+	"github.com/sqp/godock/libs/cdglobal" // Dock types.
 
+	"archive/tar"
 	"bufio"
+	"compress/gzip"
 	"errors"
+	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
+	"time"
 )
-
-//
-//--------------------------------------------------------------[ FILE MUTEX ]--
-
-var access = sync.Mutex{}
-
-// AccessLock locks and prevents concurrent access to config files.
-// Could be improved, but it may be safer to use for now.
-//
-func AccessLock(log cdtype.Logger) {
-	log.Debug("files.Access", "Lock")
-	access.Lock()
-}
-
-// AccessUnlock releases the access to config files.
-//
-func AccessUnlock(log cdtype.Logger) {
-	log.Debug("files.Access", "Unlock")
-	access.Unlock()
-}
 
 //
 //--------------------------------------------------------------------[ COPY ]--
@@ -105,4 +89,79 @@ func Reader(filePath string) (r io.Reader, size int64, close func() error, e err
 		return nil, 0, nil, errors.New("empty file")
 	}
 	return rdr, stat.Size(), f.Close, nil
+}
+
+//
+//-------------------------------------------------------------------[ WRITE ]--
+
+// Save write a file to disk at given location.
+//
+func Save(path string, data []byte, mode os.FileMode) error {
+	return ioutil.WriteFile(path, data, mode)
+}
+
+// SetLastModif save download date file for a package.
+//
+func SetLastModif(path ...string) error {
+	lastmodif := filepath.Join(append(path, "last-modif")...)
+	content := time.Now().Format("20060102")
+	return Save(lastmodif, []byte(content), cdglobal.FileMode)
+}
+
+//
+//--------------------------------------------------------------[ UNCOMPRESS ]--
+
+// UnTarGz extracts a tar gz reader to disk at given location.
+//
+// thanks to github.com/verybluebot/tarinator-go.
+func UnTarGz(topath string, source io.ReadCloser) error {
+	defer source.Close()
+	var e error
+	source, e = gzip.NewReader(source)
+	if e != nil {
+		return e
+	}
+
+	tarBallReader := tar.NewReader(source)
+
+	for {
+		header, e := tarBallReader.Next()
+		if e != nil {
+			if e == io.EOF {
+				break
+			}
+			return e
+		}
+
+		filename := filepath.Join(topath, header.Name)
+
+		switch header.Typeflag {
+		case tar.TypeDir:
+			e = os.MkdirAll(filename, os.FileMode(header.Mode)) // or use 0755 if you prefer
+
+			if e != nil {
+				return e
+			}
+
+		case tar.TypeReg:
+			writer, e := os.Create(filename)
+
+			if e != nil {
+				return e
+			}
+
+			io.Copy(writer, tarBallReader)
+
+			e = os.Chmod(filename, os.FileMode(header.Mode))
+
+			if e != nil {
+				return e
+			}
+
+			writer.Close()
+		default:
+			return fmt.Errorf("Unable to untar type: %c in file %s", header.Typeflag, filename)
+		}
+	}
+	return nil
 }

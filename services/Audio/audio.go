@@ -254,8 +254,7 @@ func NewAppPulse(obj interface{}) (*AppPulse, error) {
 	for _, e := range pulse.Register(ap) {
 		log.Err(e, "register signal")
 	}
-
-	go pulse.Listen()
+	ap.icon.Log().GoTry(pulse.Listen)
 
 	return ap, nil
 }

@@ -3,12 +3,13 @@
 package main
 
 import (
-	"github.com/pkg/profile"
+	"github.com/pkg/profile" // Pprof file output.
 
-	"github.com/sqp/godock/libs/dock"
-	"github.com/sqp/godock/libs/dock/maindock"
-	"github.com/sqp/godock/libs/gldi"
-	"github.com/sqp/godock/libs/gldi/globals"
+	"github.com/sqp/godock/libs/dock"          // Dock main.
+	"github.com/sqp/godock/libs/dock/maindock" // Dock settings.
+	"github.com/sqp/godock/libs/gldi"          // Gldi access.
+	"github.com/sqp/godock/libs/gldi/globals"  // Global variables.
+	"github.com/sqp/godock/libs/net/websrv"    // Web server.
 	"github.com/sqp/godock/libs/text/versions" // Print API version.
 
 	"fmt"
@@ -39,9 +40,13 @@ Desktop:
 
 Paths override:
   -d path     Use a custom config directory. Default: ~/.config/cairo-dock
-  -S url      Address of a server with additional themes (overrides default).
   -M path     Ask the dock to load additionnal modules from this directory.
               (though it is unsafe for your dock to load unnofficial modules).
+  -S url      Address of a server with additional themes (overrides default).
+
+Web service:
+  -host       Adress to listen for the web server (def=localhost).
+  -port       Port for the web server (def=15610).
 
 Debug:
   -w time     Wait for N seconds before starting; this is useful if you notice
@@ -52,8 +57,9 @@ Debug:
   -F          Force to display some output messages with colors.
   -D          Debug mode for the go part of the code (including applets).
   -N          Don't start the internal Dbus service (used by remote command).
+  -mon        start web monitor:   http://localhost:15610/debug/charts
+                                   http://localhost:15610/debug/pprof
   -pf         pprof file output:   go tool pprof $(which cdc) /pathToFile
-  -pw         pprof web service:   http://localhost:port/debug/pprof
 
 Versions:
   -v          Print gldi version.
@@ -68,34 +74,38 @@ everybody at the moment. But it also needs to be tested now.
 	usageFlags = &cmdDefault.Long
 
 	// Dock flags are declared at init.
+	var (
+		// Display
 
-	userForceCairo := cmdDefault.Flag.Bool("c", false, "")
-	userForceOpenGL := cmdDefault.Flag.Bool("o", false, "")
-	userIndirectOpenGL := cmdDefault.Flag.Bool("O", false, "")
-	userAskBackend := cmdDefault.Flag.Bool("A", false, "")
-	userEnv := cmdDefault.Flag.String("e", "", "")
+		userForceCairo     = cmdDefault.Flag.Bool("c", false, "")
+		userForceOpenGL    = cmdDefault.Flag.Bool("o", false, "")
+		userIndirectOpenGL = cmdDefault.Flag.Bool("O", false, "")
+		userAskBackend     = cmdDefault.Flag.Bool("A", false, "")
+		userEnv            = cmdDefault.Flag.String("e", "", "")
+		userDir            = cmdDefault.Flag.String("d", "", "")
+		userThemeServer    = cmdDefault.Flag.String("S", "", "")
 
-	userDir := cmdDefault.Flag.String("d", "", "")
-	userThemeServer := cmdDefault.Flag.String("S", "", "")
+		// Maintenance
 
-	// maintenance
-	userExclude := cmdDefault.Flag.String("x", "", "")
-	userSafeMode := cmdDefault.Flag.Bool("f", false, "")
-	userMetacityWorkaround := cmdDefault.Flag.Bool("W", false, "")
-	userVerbosity := cmdDefault.Flag.String("l", "", "")
-	userForceColor := cmdDefault.Flag.Bool("F", false, "")
-	userLocked := cmdDefault.Flag.Bool("k", false, "")
-	userKeepAbove := cmdDefault.Flag.Bool("a", false, "")
-	userNoSticky := cmdDefault.Flag.Bool("s", false, "")
-	userModulesDir := cmdDefault.Flag.String("M", "", "")
+		userExclude            = cmdDefault.Flag.String("x", "", "")
+		userSafeMode           = cmdDefault.Flag.Bool("f", false, "")
+		userMetacityWorkaround = cmdDefault.Flag.Bool("W", false, "")
+		userVerbosity          = cmdDefault.Flag.String("l", "", "")
+		userForceColor         = cmdDefault.Flag.Bool("F", false, "")
+		userLocked             = cmdDefault.Flag.Bool("k", false, "")
+		userKeepAbove          = cmdDefault.Flag.Bool("a", false, "")
+		userNoSticky           = cmdDefault.Flag.Bool("s", false, "")
+		userModulesDir         = cmdDefault.Flag.String("M", "", "")
 
-	// New dock settings.
+		// New dock settings.
 
-	newDisableDBus := cmdDefault.Flag.Bool("N", false, "")
-	newDebug := cmdDefault.Flag.Bool("D", false, "")
+		newWebHost     = cmdDefault.Flag.String("host", websrv.DefaultHost, "")
+		newWebPort     = cmdDefault.Flag.Int("port", websrv.DefaultPort, "")
+		newWebMonitor  = cmdDefault.Flag.Bool("mon", false, "")
+		newDisableDBus = cmdDefault.Flag.Bool("N", false, "")
+		newDebug       = cmdDefault.Flag.Bool("D", false, "")
+	)
 
-	// pprof.
-	pprofWeb := cmdDefault.Flag.Bool("pw", false, "")
 	pprofFile = cmdDefault.Flag.Bool("pf", false, "")
 
 	// Local flags. Common with remote.
@@ -133,7 +143,9 @@ everybody at the moment. But it also needs to be tested now.
 			NoSticky:           *userNoSticky,
 			ModulesDir:         *userModulesDir,
 
-			HTTPPprof:   *pprofWeb,
+			WebHost:     *newWebHost,
+			WebPort:     *newWebPort,
+			WebMonitor:  *newWebMonitor,
 			DisableDBus: *newDisableDBus,
 			Debug:       *newDebug,
 		}

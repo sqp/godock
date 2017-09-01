@@ -104,14 +104,14 @@ func (cl *Client) Get(method string, answers []interface{}, args ...interface{})
 
 func parseShit(src, dest interface{}) error {
 	switch v := src.(type) {
-	case string:
+	case string, []byte, []string:
 		reflect.ValueOf(dest).Elem().Set(reflect.ValueOf(v))
 
 	case dbus.Variant:
 		tmp := v.Value()
 
 		if reflect.TypeOf(dest).Elem() != reflect.TypeOf(tmp) {
-			println("bad type may crash", reflect.TypeOf(v).String(), "to", reflect.TypeOf(dest).String())
+			fmt.Printf("bad type may crash %T to %T\n", v, dest)
 		}
 
 		reflect.ValueOf(dest).Elem().Set(reflect.ValueOf(tmp))
@@ -141,8 +141,7 @@ func parseShit(src, dest interface{}) error {
 		reflect.ValueOf(dest).Elem().Set(reflect.ValueOf(tmp))
 
 	default:
-		return fmt.Errorf("unknown dest type, %s to %s", reflect.TypeOf(v).String(), reflect.TypeOf(dest).String())
-		// println("bad type", reflect.TypeOf(v).String(), "to", reflect.TypeOf(dest).String())
+		return fmt.Errorf("unknown dest type, %T to %T", v, dest)
 	}
 	return nil
 }

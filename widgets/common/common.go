@@ -101,29 +101,4 @@ func PixbufNewFromFile(iconName string, size int) (pixbuf *gdk.Pixbuf, e error) 
 	// }
 
 	return PixbufAtSize(iconName, size, size)
-	// if pix, e := PixbufAtSize(iconName, iSize, iSize); !log.Err(e, "Load image pixbuf") {
-	// 	return pix
-	// }
-
-	// return nil, errors.New("PixbufNewFromFile: no match for " + iconName)
 }
-
-// Big formats the text with the big size.
-//
-func Big(text string) string { return "<big>" + text + "</big>" }
-
-// Small formats the text with the small size.
-//
-func Small(text string) string { return "<small>" + text + "</small>" }
-
-// Bold formats the text with the bold font.
-//
-func Bold(text string) string { return "<b>" + text + "</b>" }
-
-// Mono formats the text with the monospace font.
-//
-func Mono(text string) string { return "<tt>" + text + "</tt>" }
-
-// URI formats a link with its text.
-//
-func URI(uri, text string) string { return "<a href=\"" + uri + "\">" + text + "</a>" }

@@ -9,15 +9,14 @@ Implements backendgui.GuiInterface.
 package guibridge
 
 import (
-	"github.com/gotk3/gotk3/gtk"
+	"github.com/sqp/godock/libs/cdtype"        // Logger type.
+	"github.com/sqp/godock/libs/gldi"          //
+	"github.com/sqp/godock/libs/gldi/confdata" //
+	"github.com/sqp/godock/libs/gldi/globals"  // Dock globals.
 
-	"github.com/sqp/godock/libs/cdtype" // Logger type.
-	"github.com/sqp/godock/libs/gldi"
-	"github.com/sqp/godock/libs/gldi/confdata"
-	"github.com/sqp/godock/libs/gldi/globals"
-
-	"github.com/sqp/godock/widgets/cfbuild/datatype"
-	"github.com/sqp/godock/widgets/confgui"
+	"github.com/sqp/godock/widgets/cfbuild/cftype"   // Types for config file builder usage.
+	"github.com/sqp/godock/widgets/cfbuild/datatype" // Types for config file builder data source.
+	"github.com/sqp/godock/widgets/confgui"          // Set save button state.
 )
 
 //
@@ -225,7 +224,7 @@ func (gc *Bridge) ShowModuleInstanceGui(pModuleInstance *gldi.ModuleInstance, iS
 
 // Window returns the pointer to the parent window.
 //
-func (gc *Bridge) Window() *gtk.Window {
+func (gc *Bridge) Window() cftype.WinLike {
 	return gc.Widget.GetWindow()
 }
 

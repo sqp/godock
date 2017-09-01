@@ -23,7 +23,7 @@ and evolution of our applets:
 package poller
 
 import (
-	"github.com/sqp/godock/libs/cdtype"
+	"github.com/sqp/godock/libs/cdtype" // Logger type.
 
 	"time"
 )
@@ -47,14 +47,16 @@ type Poller struct {
 
 	name    string      // name to send at restart
 	restart chan string // restart channel to forward user requests.
+	log     cdtype.Logger
 }
 
 // New creates a simple poller.
 //
-func New(callCheck func()) *Poller {
+func New(callCheck func(), log cdtype.Logger) *Poller {
 	poller := &Poller{
 		callCheck: callCheck,
 		enabled:   true,
+		log:       log,
 		// restart:   make(chan bool),
 	}
 	return poller
@@ -152,7 +154,7 @@ func (poller *Poller) Restart() {
 		return
 	}
 	poller.plop = 0
-	go poller.Action()
+	poller.log.GoTry(poller.Action)
 
 	// poller.restart <- poller.name // send our restart event. This will send an event on the restart channel.
 }
@@ -200,7 +202,9 @@ func (poller *Poller) Plop() bool {
 		return false
 	}
 	poller.plop = 0
-	go poller.Action()
+
+	poller.log.GoTry(poller.Action)
+
 	return true
 }
 

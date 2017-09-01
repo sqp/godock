@@ -22,10 +22,8 @@ const (
 
 // URL for webpages to open.
 const (
-	URLWeatherComHour    = "http://www.weather.com/weather/hourbyhour/graph/%s"
-	URLWeatherComToday   = "http://www.weather.com/weather/today/%s"
-	URLWeatherComTomorow = "http://www.weather.com/weather/tomorrow/%s"
-	URLWeatherComDetail  = "http://www.weather.com/weather/wxdetail%d/%s"
+	URLWeatherComHour   = "http://www.weather.com/weather/hourbyhour/graph/%s"
+	URLWeatherComDetail = "http://www.weather.com/weather/tenday/%s"
 )
 
 // weatherCom downloads weather data from weather.com and implements Weather
@@ -47,18 +45,10 @@ func (w *weatherCom) Clear()                 { w.current = nil; w.forecast = nil
 // WebpageURL returns the webpage url to open to the user.
 //
 func (w *weatherCom) WebpageURL(numDay int) string {
-	switch {
-	case numDay == -1:
+	if numDay == 0 {
 		return fmt.Sprintf(URLWeatherComHour, w.LocationCode)
-
-	case numDay == 0:
-		return fmt.Sprintf(URLWeatherComToday, w.LocationCode)
-
-	case numDay == 1:
-		return fmt.Sprintf(URLWeatherComTomorow, w.LocationCode)
 	}
-
-	return fmt.Sprintf(URLWeatherComDetail, numDay, w.LocationCode) // ?dayNum=%d
+	return fmt.Sprintf(URLWeatherComDetail, w.LocationCode)
 }
 
 //

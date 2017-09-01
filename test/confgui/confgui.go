@@ -14,63 +14,60 @@ import (
 	"github.com/sqp/godock/widgets/confmenu"          // Window menu bar with switcher and buttons.
 	"github.com/sqp/godock/widgets/gtk/newgtk"        // Create widgets.
 	"github.com/sqp/godock/widgets/pageswitch"        // Switcher for config pages.
+
+	"os"
 )
 
-const (
-	winTitle  = "virtual config test (safe)"
-	winWidth  = 700
-	winHeight = 650
-)
+var appInfo = newgtk.AppInfo{
+	ID:            "org.cairodock.testconfgui",
+	Title:         "virtual config test (safe)",
+	Width:         700,
+	Height:        650,
+	Flags:         glib.APPLICATION_FLAGS_NONE, // See flags:
+	OnActivateWin: onActivateWin,               // Fill the window at creation.
+}
 
-func main() {
-	gtk.Init(nil)
-	win, e := gtk.WindowNew(gtk.WINDOW_TOPLEVEL)
-	if e != nil {
-		println(e.Error())
-		return
-	}
+func main() { os.Exit(appInfo.Run()) }
 
-	path, isTest := vdata.TestPathDefault()
+func onActivateWin(win *gtk.ApplicationWindow) {
+	logger := log.NewLog(log.Logs)
+	path, isTest := vdata.TestPathDefault(logger)
 	var saveCall func(cftype.Builder)
 	if isTest {
 		saveCall = cfprint.Updated
 	} else {
 		saveCall = func(build cftype.Builder) { cfprint.Default(build, true) }
 	}
-	source := vdata.New(log.NewLog(log.Logs), win, saveCall)
-	build := vdata.TestInit(source, path)
+
+	source := vdata.New(logger, win, saveCall)
+	build := vdata.TestInit(source, logger, path)
 	source.SetGrouper(build)
 
-	glib.IdleAdd(packWindow(win, source, build))
-	gtk.Main()
+	packWindow(win, source, build)
 }
 
-func packWindow(win *gtk.Window, source vdata.Sourcer, build cftype.Grouper) func() {
-	return func() {
-		win.SetDefaultSize(winWidth, winHeight)
-		win.SetTitle(winTitle)
-		win.SetIconFromFile(source.AppIcon())
-		win.Connect("destroy", gtk.MainQuit)
+func packWindow(win *gtk.ApplicationWindow, source vdata.Sourcer, build cftype.Grouper) {
+	win.SetIconFromFile(source.AppIcon())
 
-		// widgets.
-		box := newgtk.Box(gtk.ORIENTATION_VERTICAL, 0)
-		source.SetBox(box)
+	// widgets.
+	box := newgtk.Box(gtk.ORIENTATION_VERTICAL, 0)
+	source.SetBox(box)
 
-		menu := confmenu.New(source)
-		switcher := pageswitch.New()
-		w := build.BuildAll(switcher)
+	menu := confmenu.New(source)
+	switcher := pageswitch.New()
+	w := build.BuildAll(switcher)
 
-		btnAdd := btnaction.New(menu.Save)
-		btnAdd.SetTest()
+	btnAdd := btnaction.New(menu.Save)
+	btnAdd.SetTest()
 
-		btnHack := newgtk.ButtonWithLabel("Hack")
-		btnHack.Connect("clicked", func() { build.KeyWalk(vdata.TestValues) })
+	btnHack := newgtk.ButtonWithLabel("Hack")
+	btnHack.Connect("clicked", func() { build.KeyWalk(vdata.TestValues) })
 
-		menu.PackStart(switcher, false, false, 0)
-		menu.PackEnd(btnHack, false, false, 0)
-		win.Add(box)
-		box.PackStart(menu, false, false, 0)
-		box.PackStart(w, true, true, 0)
-		win.ShowAll()
-	}
+	menu.PackStart(switcher, false, false, 0)
+	menu.PackEnd(btnHack, false, false, 0)
+	win.Add(box)
+	box.PackStart(menu, false, false, 0)
+	box.PackStart(w, true, true, 0)
+
+	win.ShowAll()
 }

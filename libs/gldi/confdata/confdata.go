@@ -3,6 +3,7 @@ package confdata
 
 import (
 	"github.com/sqp/godock/libs/cdglobal" // Dock types.
+	"github.com/sqp/godock/libs/cdtype"
 	"github.com/sqp/godock/libs/gldi"
 	"github.com/sqp/godock/libs/gldi/desktopclass"   // XDG desktop class info.
 	"github.com/sqp/godock/libs/gldi/desktops"       // Desktop and screens info.
@@ -133,8 +134,8 @@ type AppletConf struct {
 // FormatCategory formats the applet category text.
 //
 func (v *AppletConf) FormatCategory() string {
-	txt, color := packages.FormatCategory(int(v.GetCategory()))
-	return "<span fgcolor='#" + color + "'>" + tran.Slate(txt) + "</span>"
+	cat := v.GetCategory()
+	return "<span fgcolor='#" + cat.Color() + "'>" + cat.Translated() + "</span>"
 }
 
 // IsInstalled returns whether the applet is installed or not.
@@ -152,7 +153,7 @@ func (v *AppletConf) IsActive() bool { return len(v.app.InstancesList()) > 0 }
 // CanAdd returns whether the applet can be activated (again).
 //
 func (v *AppletConf) CanAdd() bool {
-	return (v.IsMultiInstance() || !v.IsActive()) && v.GetCategory() != gldi.CategoryTheme // don't display the animations plug-ins
+	return (v.IsMultiInstance() || !v.IsActive()) && v.GetCategory() != cdtype.CategoryTheme // don't display the animations plug-ins
 }
 
 // Activate activates the applet and returns the path to the config file of the new instance.
@@ -209,6 +210,12 @@ func (v *AppletConf) FormatState() string {
 	return ""
 }
 
+// Dir gives the location of the package on disk.
+//
+func (v *AppletConf) Dir() string {
+	return v.GetShareDataDir()
+}
+
 // FormatSize does nothing. Only here for compatibility with datatype.Appleter
 //
 func (v *AppletConf) FormatSize() string {
@@ -257,7 +264,7 @@ func (v *AppletDownload) CanAdd() bool {
 // CanUninstall returns whether the applet can be uninstalled or not.
 //
 func (v *AppletDownload) CanUninstall() bool {
-	return v.Type != packages.TypeInDev && v.Type != packages.TypeLocal && !v.IsActive()
+	return v.Type != cdtype.PackTypeInDev && v.Type != cdtype.PackTypeLocal && !v.IsActive()
 }
 
 // Activate activates the applet.
@@ -295,8 +302,7 @@ func (v *AppletDownload) GetAuthor() string {
 // FormatCategory formats the applet category text.
 //
 func (v *AppletDownload) FormatCategory() string {
-	txt, color := packages.FormatCategory(int(v.Category))
-	return "<span fgcolor='#" + color + "'>" + tran.Slate(txt) + "</span>"
+	return "<span fgcolor='#" + v.Category.Color() + "'>" + v.Category.Translated() + "</span>"
 }
 
 // GetIconFilePath returns the location of the applet icon.
@@ -319,7 +325,7 @@ func (v *AppletDownload) Install(options string) error {
 	// Only way I found for now to interact with it and let it know it will have
 	// a new applet to handle. As a bonus, it also activate the applet, which
 	// will toggle the activated button with the UpdateModuleState signal.
-	url := packages.DistantURL + v.SrvTag + "/" + v.DisplayedName + "/" + v.DisplayedName + ".tar.gz"
+	url := cdglobal.DownloadServerURL + v.SrvTag + "/" + v.DisplayedName + "/" + v.DisplayedName + ".tar.gz"
 	gldi.EmitSignalDropData(globals.Maindock().Container(), url, nil, 0)
 
 	v.app = gldi.ModuleGet(v.DisplayedName)
@@ -367,7 +373,7 @@ func (v *dockTheme) Install(options string) error { return nil }
 func (v *dockTheme) Uninstall() error             { return nil }
 
 func (v *dockTheme) CanUninstall() bool {
-	return v.Type != packages.TypeInDev && v.Type != packages.TypeLocal
+	return v.Type != cdtype.PackTypeInDev && v.Type != cdtype.PackTypeLocal
 }
 
 //
@@ -424,11 +430,11 @@ func (Data) DirUserAppData(path ...string) (string, error) {
 
 // DisplayMode returns the display backend used.
 //
-func (Data) DisplayMode() datatype.DisplayMode {
+func (Data) DisplayMode() cdglobal.DisplayMode {
 	if gldi.GLBackendIsUsed() {
-		return datatype.DisplayModeOpenGL
+		return cdglobal.DisplayModeOpenGL
 	}
-	return datatype.DisplayModeCairo
+	return cdglobal.DisplayModeCairo
 }
 
 // ListKnownApplets builds the list of all user applets.
@@ -473,61 +479,9 @@ func (Data) ListIcons() *datatype.ListIcon {
 	list := datatype.NewListIcon()
 
 	// Add icons in docks.
-	taskbarSet := false
 	for _, dock := range gldi.GetAllAvailableDocks(nil, nil) {
 		// for _, dock := range gldi.ListDocksRoot() {
-
-		var found []datatype.Iconer
-		for _, icon := range dock.Icons() {
-			if dock.GetRefCount() == 0 { // Maindocks.
-
-				// Group taskbar icons and separators.
-				if icon.ConfigPath() == "" || icon.IsSeparatorAuto() {
-					// if icon.IsTaskbar() || icon.IsSeparatorAuto() {
-					if !taskbarSet {
-						taskbarSet = true
-						ic := datatype.NewIconSimple(
-							globals.ConfigFile(),
-							datatype.FieldTaskBar,
-							datatype.TitleTaskBar,
-							globals.DirShareData("icons/icon-taskbar.png"))
-
-						ic.Taskbar = true
-
-						found = append(found, ic)
-					}
-
-				} else {
-					found = append(found, &IconConf{icon})
-				}
-
-			} else { // Subdock.
-				parentName := icon.GetParentDockName()
-				list.Subdocks[parentName] = append(list.Subdocks[parentName], &IconConf{icon})
-			}
-		}
-
-		if len(found) > 0 {
-			var file, group string
-
-			if dock.IsMainDock() {
-				// Only maindocks after the first one have a config file.
-				// So the first maindock use a custom group.
-				group = datatype.KeyMainDock
-
-			} else {
-				// Other maindocks have a dedicated config file.
-				// So the group is empty to load all of them (auto find).
-				file = globals.CurrentThemePath(dock.GetDockName() + ".conf")
-			}
-			container := datatype.NewIconSimple(
-				file,
-				group,
-				dock.GetReadableName(),
-				"") // TODO: maybe get an icon for the maindock.
-
-			list.Add(container, found)
-		}
+		addIconsDock(list, dock)
 	}
 
 	// Add modules in desklets.
@@ -555,7 +509,7 @@ func (Data) ListIcons() *datatype.ListIcon {
 	for _, mod := range docklist.Module() {
 		cat := mod.VisitCard().GetCategory()
 
-		if cat != gldi.CategoryBehavior && cat != gldi.CategoryTheme && !mod.IsAutoLoaded() {
+		if cat != cdtype.CategoryBehavior && cat != cdtype.CategoryTheme && !mod.IsAutoLoaded() {
 			for _, mi := range mod.InstancesList() {
 
 				if mi.Icon() == nil || (mi.Dock() != nil && mi.Icon().GetContainer() == nil) {
@@ -581,6 +535,60 @@ func (Data) ListIcons() *datatype.ListIcon {
 	}
 
 	return list
+}
+
+func addIconsDock(list *datatype.ListIcon, dock *gldi.CairoDock) {
+	taskbarSet := false
+	var found []datatype.Iconer
+	for _, icon := range dock.Icons() {
+		if dock.GetRefCount() == 0 { // Maindocks.
+
+			// Group taskbar icons and separators.
+			if icon.ConfigPath() == "" || icon.IsSeparatorAuto() {
+				// if icon.IsTaskbar() || icon.IsSeparatorAuto() {
+				if !taskbarSet {
+					taskbarSet = true
+					ic := datatype.NewIconSimple(
+						globals.ConfigFile(),
+						datatype.FieldTaskBar,
+						datatype.TitleTaskBar,
+						globals.DirShareData("icons/icon-taskbar.png"))
+
+					ic.Taskbar = true
+
+					found = append(found, ic)
+				}
+
+			} else {
+				found = append(found, &IconConf{icon})
+			}
+
+		} else { // Subdock.
+			parentName := icon.GetParentDockName()
+			list.Subdocks[parentName] = append(list.Subdocks[parentName], &IconConf{icon})
+		}
+	}
+	if len(found) > 0 {
+		var file, group string
+
+		if dock.IsMainDock() {
+			// Only maindocks after the first one have a config file.
+			// So the first maindock use a custom group.
+			group = datatype.KeyMainDock
+
+		} else {
+			// Other maindocks have a dedicated config file.
+			// So the group is empty to load all of them (auto find).
+			file = globals.CurrentThemePath(dock.GetDockName() + ".conf")
+		}
+		container := datatype.NewIconSimple(
+			file,
+			group,
+			dock.GetReadableName(),
+			"") // TODO: maybe get an icon for the maindock.
+
+		list.Add(container, found)
+	}
 }
 
 // ListShortkeys returns the list of dock shortkeys.
@@ -796,7 +804,7 @@ func (d Data) ListDockThemeLoad() (map[string]datatype.Appleter, error) {
 //
 func (d Data) ListDockThemeSave() []datatype.Field {
 	dir := globals.DirDockData(cdglobal.ConfigDirDockThemes)
-	packs, e := packages.ListFromDir(d.Log, dir, packages.TypeUser, packages.SourceDockTheme)
+	packs, e := packages.ListFromDir(d.Log, dir, cdtype.PackTypeUser, packages.SourceDockTheme)
 	if e != nil {
 		println("ListDockThemeSave wrong dir:", dir) // TODO: use a logger.
 		return nil
@@ -947,8 +955,6 @@ func (Data) GrabWindowClass() (string, error) {
 	winFocusChan = make(chan cdglobal.Window, 10)
 	defer func() { close(winFocusChan); winFocusChan = nil }()
 	select {
-	case <-time.After(5 * time.Second): // Timeout.
-		return "", errors.New("timeout 5s")
 
 	case win := <-winFocusChan: // Get the first window selected, valid or not, to prevent confusion.
 		if win == nil {
@@ -959,9 +965,11 @@ func (Data) GrabWindowClass() (string, error) {
 			win = win.GetTransientWin()
 		}
 		return win.Class(), nil
+
+	case <-time.After(5 * time.Second): // Timeout.
 	}
 
-	return "", errors.New("unknown case")
+	return "", errors.New("timeout 5s")
 }
 
 func onChangeFocus(win cdglobal.Window) bool {

@@ -86,11 +86,11 @@ func service(args []string) {
 
 	// defer allapps.OnStop()
 	if gtkStart != nil && allapps.GtkNeeded() {
-		go func() {
+		logger.GoTry(func() {
 			loader.StartLoop()
 			logger.Info("cdc stopped")
 			gtkStop()
-		}()
+		})
 		gtkStart()
 
 	} else {

@@ -83,7 +83,7 @@ func onResult(t *testing.T) func(uptoshare.Links) {
 		assert.True(t, ok, "links[link] missing")
 		assert.NotEmpty(t, link, "links[link]")
 
-		log.Info("links", links)
+		fmt.Println("links", links)
 	}
 }
 
@@ -97,18 +97,18 @@ func TestUpload(t *testing.T) {
 
 	for _, site := range testUploadText {
 		up.SiteText(site)
-		up.Upload(textToUpload)
+		up.UploadGuess(textToUpload)
 	}
 
 	for _, site := range testUploadImage {
 		up.SiteImage(site)
-		up.Upload(imageToUpload)
+		up.UploadGuess(imageToUpload)
 	}
 
 	up.FileForAll = true
 	for _, site := range testUploadFile {
 		up.SiteFile(site)
-		up.Upload(imageToUpload)
+		up.UploadGuess(imageToUpload)
 	}
 }
 

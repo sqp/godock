@@ -5,16 +5,17 @@ import "github.com/sqp/godock/libs/cdtype"
 type AppTest struct{ cdtype.AppBase }
 
 func (app *AppTest) ExampleAppIcon_popupDialogListFixed() {
+	values := []string{"entry 1", "entry two", "or more"}
 	app.PopupDialog(cdtype.DialogData{
 		Message:   "Please choose:",
 		UseMarkup: true,
 		Widget: cdtype.DialogWidgetList{
-			Values:       []string{"entry 1", "entry two", "or more"},
-			InitialValue: int32(2),
+			Values:       values,
+			InitialValue: 2, // select "or more".
 		},
 		Buttons: "ok;cancel",
 		Callback: cdtype.DialogCallbackValidInt(func(id int) {
-			app.Log().Info("ID", id)
+			app.Log().Info("ID", id, "for string", values[id])
 			// ... do something with your validated value ...
 		}),
 	})
@@ -26,7 +27,7 @@ func (app *AppTest) ExampleAppIcon_popupDialogListEditable() {
 		UseMarkup: true,
 		Widget: cdtype.DialogWidgetList{
 			Values:       []string{"one", "two", "three"},
-			InitialValue: "four",
+			InitialValue: "four", // a custom entry not in the list.
 		},
 		Buttons: "ok;cancel",
 		Callback: cdtype.DialogCallbackValidString(func(str string) {

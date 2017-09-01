@@ -295,8 +295,12 @@ func (build *BuilderGodock) Build() error {
 	cmd.Dir = path
 	e := cmd.Run()
 	if e != nil {
+		e = Current.IncreaseCounter(false)
+		build.log.Err(e, "build IncreaseCounter")
 		return e
 	}
+	e = Current.IncreaseCounter(true)
+	build.log.Err(e, "build IncreaseCounter")
 	return nil
 }
 

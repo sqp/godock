@@ -1,20 +1,4 @@
 /*
-Copyright : (C) 2012-2016 by SQP
-E-mail    : sqp@glx-dock.org
-
-This program is free software; you can redistribute it and/or
-modify it under the terms of the GNU General Public License
-as published by the Free Software Foundation; either version 3
-of the License, or (at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-GNU General Public License for more details.
-http://www.gnu.org/licenses/licenses.html#GPL
-*/
-
-/*
 Package Update is an applet for Cairo-Dock to build and update the dock and applets.
 
 Play with cairo-dock sources:
@@ -29,8 +13,9 @@ import (
 	"github.com/sqp/godock/libs/clipboard"         // Get clipboard content.
 	"github.com/sqp/godock/libs/packages/build"    // Sources builder.
 	"github.com/sqp/godock/libs/packages/versions" // Versions checker.
+	"github.com/sqp/godock/libs/text/gtktext"      // Format text GTK.
 	"github.com/sqp/godock/libs/text/linesplit"    // Parse command output.
-	"github.com/sqp/godock/libs/text/strhelp"      // string help.
+	"github.com/sqp/godock/libs/text/strhelp"      // String helpers.
 
 	"errors"
 	"fmt"
@@ -82,7 +67,7 @@ func NewApplet(base cdtype.AppBase, events *cdtype.Events) cdtype.AppInstance {
 	poller.SetPreCheck(func() { app.SetEmblem(app.FileLocation("img", app.conf.VersionEmblemWork), EmblemVersion) })
 	poller.SetPostCheck(func() {
 		for _, v := range app.version.Sources() {
-			v.Log = strhelp.EscapeGtk(v.Log) // Escape <>&
+			v.Log = gtktext.Escape(v.Log) // Escape <>&
 		}
 	})
 
@@ -180,7 +165,8 @@ func (app *Applet) BuildTarget() error {
 	// app.Animate("busy", 200)
 	app.Log().Info("Build", app.target.Label())
 	e := app.target.Build()
-	return app.Log().GetErr(e, "Build")
+	app.Log().Err(e, "Build")
+	return e
 }
 
 // GrepTarget searches the directory for the given string.
@@ -228,7 +214,7 @@ func (app *Applet) GrepTarget(search string) {
 	fmt.Println(out)
 }
 
-// OpenFile opens a file to an editor.
+// OpenFile opens a file in the configured editor.
 // If the path is relative, the target sources folder will be used.
 //
 func (app *Applet) OpenFile(file string) {
@@ -237,6 +223,12 @@ func (app *Applet) OpenFile(file string) {
 	}
 	cmd := strhelp.First(app.conf.CmdOpenSource, cdglobal.CmdOpen)
 	app.Log().ExecAsync(cmd, file)
+}
+
+// Versions returns current sources versions checked.
+//
+func (app *Applet) Versions() []*versions.Repo {
+	return app.version.Sources()
 }
 
 //

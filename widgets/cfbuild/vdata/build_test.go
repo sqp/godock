@@ -17,7 +17,8 @@ import (
 func TestConfig(t *testing.T) {
 	gtk.Init(nil)
 
-	build := vdata.TestInit(vdata.New(log.NewLog(log.Logs), nil, nil), vdata.PathTestConf())
+	logger := log.NewLog(log.Logs)
+	build := vdata.TestInit(vdata.New(logger, nil, nil), logger, vdata.PathTestConf())
 	if build == nil {
 		return
 	}

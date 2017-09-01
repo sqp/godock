@@ -61,9 +61,9 @@ type groupActions struct {
 	ActionClickLeft   string
 	ActionClickMiddle string
 
-	ShortkeyOpenClient *cdtype.Shortkey `action:"1" desc:"Open mail client"`
-	ShortkeyShowMails  *cdtype.Shortkey `action:"2" desc:"Show last mails dialog"`
-	ShortkeyCheck      *cdtype.Shortkey `action:"3" desc:"Check now"`
+	ShortkeyOpenClient *cdtype.Shortkey `action:"1"`
+	ShortkeyShowMails  *cdtype.Shortkey `action:"2"`
+	ShortkeyCheck      *cdtype.Shortkey `action:"3"`
 
 	MailClientAction int
 	MailClientName   string

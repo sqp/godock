@@ -3,7 +3,7 @@
 package main
 
 import (
-	"github.com/sqp/godock/libs/log"
+	"github.com/sqp/godock/libs/log" // Display info in terminal.
 
 	"bytes"
 	"flag"
@@ -39,10 +39,17 @@ var (
 	cmdDefault *Command
 
 	// Common logger for all services and actions.
-	logger = &log.Log{}
+	logger = log.NewLog(log.Logs)
 )
 
 func main() {
+
+	// TODO LOAD BEFORE
+	// if confown.Current.CrashDisplayColored {
+	// defer pkgbuild.Current.IncreaseUptime()
+	defer logger.Recover()
+	// }
+
 	// Get the command. Exit if fail.
 	cmd, args := parseArgsDefault(os.Args, cmdDefault)
 

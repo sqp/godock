@@ -219,7 +219,7 @@ func NewColRight(size int, title string) ColInfo {
 type Liner interface {
 	Sprint() string
 	Set(row int, text string) *Line
-	Colored(row int, newcolor, text string)
+	Colored(row int, newcolor, text string) *Line
 }
 
 //
@@ -274,7 +274,7 @@ func (line *Line) Set(row int, text string) *Line {
 
 // Colored set colored text content for given row.
 //
-func (line Line) Colored(row int, newcolor, text string) {
+func (line *Line) Colored(row int, newcolor, text string) *Line {
 	origsize := len(text)
 	line.SetColSize(row, origsize) // Size of text without formating.
 	if newcolor == "" {
@@ -283,6 +283,7 @@ func (line Line) Colored(row int, newcolor, text string) {
 		line.content[row] = color.Colored(text, newcolor)
 		line.colorDelta[row] += len(line.content[row]) - origsize
 	}
+	return line
 }
 
 func (line *Line) dash(row int) (out string) {

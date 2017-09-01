@@ -34,12 +34,23 @@ const (
 // ListInterface is the interface to the applets list.
 //
 type ListInterface interface {
+	ListInterfaceBase
+	Selected() datatype.Appleter
+	Delete(string)
+}
+
+// ListInterfaceBase is the interface to the applets list.
+//
+type ListInterfaceBase interface {
 	gtk.IWidget
 	Load(map[string]datatype.Appleter)
-	Selected() datatype.Appleter
-	UpdateModuleState(string, bool)
-	Delete(string)
 	Clear()
+}
+
+// UpdateModuleStater defines a widget able to update module state.
+//
+type UpdateModuleStater interface {
+	UpdateModuleState(string, bool)
 }
 
 // GUIControl is the interface to the main GUI and data source.
@@ -211,7 +222,8 @@ func (widget *ConfApplet) Selected() datatype.Appleter {
 func (widget *ConfApplet) UpdateModuleState(name string, active bool) {
 	switch widget.mode {
 	case ListCanAdd:
-		widget.applets.UpdateModuleState(name, active)
+		us := widget.applets.(UpdateModuleStater)
+		us.UpdateModuleState(name, active)
 
 	case ListExternal:
 		sel := widget.applets.Selected()

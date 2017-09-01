@@ -30,6 +30,7 @@ _cdctags="gtk" # dock or gtk
 
 prepare() {
   GOPATH="$srcdir" go get -d -u -tags "$_applets $_cdctags" $_srcpath/cmd/cdc
+  cd "$srcdir/src/$_srcpath" && GOPATH="$srcdir" make patch
 }
 
 build() {

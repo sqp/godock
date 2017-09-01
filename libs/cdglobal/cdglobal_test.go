@@ -35,7 +35,6 @@ func TestConfigDir(t *testing.T) {
 		assert.Equal(t, v.in, v.out, v.msg)
 	}
 
-	assert.True(t, strings.HasSuffix(AppBuildPathFull("test"), "/godock/test"), "AppBuildPathFull")
-	os.Setenv("GOPATH", "")
-	assert.Equal(t, AppBuildPathFull(""), "", "AppBuildPathFull")
+	assert.True(t, strings.HasSuffix(AppBuildPathFull("test"), "/godock/test"), "AppBuildPathFull(\"test\")")
+	assert.True(t, strings.HasSuffix(AppBuildPathFull(""), "github.com/sqp/godock"), "AppBuildPathFull(\"\")")
 }

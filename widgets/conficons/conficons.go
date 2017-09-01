@@ -5,6 +5,7 @@ import (
 	"github.com/gotk3/gotk3/gtk"
 
 	"github.com/sqp/godock/libs/cdtype"
+	"github.com/sqp/godock/libs/text/gtktext" // Format text GTK.
 
 	"github.com/sqp/godock/widgets/cfbuild"
 	"github.com/sqp/godock/widgets/cfbuild/cftype"
@@ -290,7 +291,7 @@ func (widget *List) addBoxItem(icon datatype.Iconer, indent int, bold bool) *gtk
 
 	box.Set("margin-start", 15*indent)
 	if bold {
-		name = common.Bold(name)
+		name = gtktext.Bold(name)
 	}
 	if img != "" {
 		if pix, e := common.ImageNewFromFile(img, iconSize); !widget.log.Err(e, "Load icon") {

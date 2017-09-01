@@ -1,8 +1,6 @@
 package cdapplet
 
-import (
-	"github.com/sqp/godock/libs/cdtype"
-)
+import "github.com/sqp/godock/libs/cdtype"
 
 //
 //------------------------------------------------------------------[ EVENTS ]--
@@ -17,7 +15,7 @@ func (cda *CDApplet) OnEvent(event string, data ...interface{}) (exit bool) {
 	case "on_stop_module":
 		cda.log.Debug("Received from dock", event)
 		if cda.events.End != nil {
-			cda.events.End()
+			cda.events.End() // no async
 		}
 		return true
 
@@ -27,14 +25,14 @@ func (cda *CDApplet) OnEvent(event string, data ...interface{}) (exit bool) {
 		}
 	case "on_click":
 		if cda.events.OnClick != nil {
-			go cda.events.OnClick()
+			cda.log.GoTry(cda.events.OnClick)
 		}
 		if cda.events.OnClickMod != nil {
-			go cda.events.OnClickMod(data[0].(int))
+			cda.log.GoTry(func() { cda.events.OnClickMod(data[0].(int)) })
 		}
 	case "on_middle_click":
 		if cda.events.OnMiddleClick != nil {
-			go cda.events.OnMiddleClick()
+			cda.log.GoTry(func() { cda.events.OnMiddleClick() })
 		}
 	case "on_build_menu":
 		if cda.events.OnBuildMenu != nil {
@@ -42,11 +40,11 @@ func (cda *CDApplet) OnEvent(event string, data ...interface{}) (exit bool) {
 		}
 	case "on_scroll":
 		if cda.events.OnScroll != nil {
-			go cda.events.OnScroll(data[0].(bool))
+			cda.log.GoTry(func() { cda.events.OnScroll(data[0].(bool)) })
 		}
 	case "on_drop_data":
 		if cda.events.OnDropData != nil {
-			go cda.events.OnDropData(data[0].(string))
+			cda.log.GoTry(func() { cda.events.OnDropData(data[0].(string)) })
 		}
 	case "on_shortkey":
 		key := data[0].(string)
@@ -59,29 +57,29 @@ func (cda *CDApplet) OnEvent(event string, data ...interface{}) (exit bool) {
 		}
 	case "on_change_focus":
 		if cda.events.OnChangeFocus != nil {
-			go cda.events.OnChangeFocus(data[0].(bool))
+			cda.log.GoTry(func() { cda.events.OnChangeFocus(data[0].(bool)) })
 		}
 
 	// SubEvents. (icon name is moved back to first arg as it made more sense in that order)
 
 	case "on_click_sub_icon":
 		if cda.events.OnSubClick != nil {
-			go cda.events.OnSubClick(data[1].(string))
+			cda.log.GoTry(func() { cda.events.OnSubClick(data[1].(string)) })
 		}
 		if cda.events.OnSubClickMod != nil {
-			go cda.events.OnSubClickMod(data[1].(string), data[0].(int))
+			cda.log.GoTry(func() { cda.events.OnSubClickMod(data[1].(string), data[0].(int)) })
 		}
 	case "on_middle_click_sub_icon":
 		if cda.events.OnSubMiddleClick != nil {
-			go cda.events.OnSubMiddleClick(data[0].(string))
+			cda.log.GoTry(func() { cda.events.OnSubMiddleClick(data[0].(string)) })
 		}
 	case "on_scroll_sub_icon":
 		if cda.events.OnSubScroll != nil {
-			go cda.events.OnSubScroll(data[1].(string), data[0].(bool))
+			cda.log.GoTry(func() { cda.events.OnSubScroll(data[1].(string), data[0].(bool)) })
 		}
 	case "on_drop_data_sub_icon":
 		if cda.events.OnSubDropData != nil {
-			go cda.events.OnSubDropData(data[1].(string), data[0].(string))
+			cda.log.GoTry(func() { cda.events.OnSubDropData(data[1].(string), data[0].(string)) })
 		}
 	case "on_build_menu_sub_icon":
 		if cda.events.OnSubBuildMenu != nil {

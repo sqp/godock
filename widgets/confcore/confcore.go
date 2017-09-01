@@ -8,6 +8,7 @@ import (
 	"github.com/sqp/godock/libs/dock/confown" // New dock own settings.
 	"github.com/sqp/godock/libs/text/tran"    // Translate.
 
+	"github.com/sqp/godock/widgets/appinfo"
 	"github.com/sqp/godock/widgets/cfbuild"
 	"github.com/sqp/godock/widgets/cfbuild/cftype"
 	"github.com/sqp/godock/widgets/cfbuild/datatype"
@@ -22,6 +23,7 @@ import (
 	"github.com/sqp/godock/widgets/gtk/newgtk"
 	"github.com/sqp/godock/widgets/helpfile"
 	"github.com/sqp/godock/widgets/pageswitch"
+	"github.com/sqp/godock/widgets/report"
 	"github.com/sqp/godock/widgets/welcome"
 
 	"errors"
@@ -31,13 +33,14 @@ import (
 const iconSize = 24
 const panedPosition = 200
 
-// Cutom config core tabs.
+// Custom config tabs displayed with the core page.
 const (
-	TabDownload  = "Download"  // Key for the tab download.
-	TabShortkeys = "Shortkeys" // Key for the tab shortkeys.
-	TabThemes    = "Themes"    // Key for the tab themes.
-	TabHelp      = "Help"      // Key for the tab help.
-	TabDev       = "Dev"       // Key for the tab developer.
+	TabDownload  = "Download"  // Key for the download tab.
+	TabShortkeys = "Shortkeys" // ...
+	TabThemes    = "Themes"
+	TabHelp      = "Help"
+	TabReport    = "Report"
+	TabDev       = "Dev"
 )
 
 //
@@ -58,115 +61,117 @@ type Item struct {
 var coreItems = []*Item{
 	{
 		Key:      "Position",
-		Title:    "Position",
+		Title:    tran.Slate("Position"),
 		Icon:     "icons/icon-position.svg",
-		Tooltip:  "Set the position of the main dock.",
-		Managers: []string{"Docks"}},
-
-	{
+		Tooltip:  tran.Slate("Set the position of the main dock."),
+		Managers: []string{"Docks"},
+	}, {
 		Key:      "Accessibility",
-		Title:    "Visibility",
+		Title:    tran.Slate("Visibility"),
 		Icon:     "icons/icon-visibility.svg",
-		Tooltip:  "Do you like your dock to be always visible,\n or on the contrary unobtrusive?\nConfigure the way you access your docks and sub-docks!",
-		Managers: []string{"Docks"}},
-
-	{
+		Tooltip:  tran.Slate("Do you like your dock to be always visible,\n or on the contrary unobtrusive?\nConfigure the way you access your docks and sub-docks!"),
+		Managers: []string{"Docks"},
+	}, {
 		Key:      "TaskBar",
-		Title:    "TaskBar",
+		Title:    tran.Slate("TaskBar"),
 		Icon:     "icons/icon-taskbar.png",
-		Tooltip:  "Display and interact with currently open windows.",
-		Managers: []string{"Taskbar"}},
-
-	{
+		Tooltip:  tran.Slate("Display and interact with currently open windows."),
+		Managers: []string{"Taskbar"},
+	}, {
 		Key:      "Style",
-		Title:    "Style",
+		Title:    tran.Slate("Style"),
 		Icon:     "icons/icon-style.svg",
-		Tooltip:  "Configure the global style.",
-		Managers: []string{"Style"}},
-
-	{
+		Tooltip:  tran.Slate("Configure the global style."),
+		Managers: []string{"Style"},
+	}, {
 		Key:      "Background",
-		Title:    "Background",
+		Title:    tran.Slate("Background"),
 		Icon:     "icons/icon-background.svg",
-		Tooltip:  "Configure docks appearance.",
-		Managers: []string{"Backends", "Docks"}}, // -> "dock rendering"
+		Tooltip:  tran.Slate("Configure docks appearance."),
+		Managers: []string{"Backends", "Docks"}, // -> "dock rendering"
 
-	{
+	}, {
 		Key:      "Views",
-		Title:    "Views",
+		Title:    tran.Slate("Views"),
 		Icon:     "icons/icon-views.svg",
-		Tooltip:  "Configure docks appearance.",  // same as background (were grouped).
-		Managers: []string{"Backends", "Docks"}}, // -> "dock rendering"
+		Tooltip:  tran.Slate("Configure docks appearance."), // same as background (were grouped).
+		Managers: []string{"Backends", "Docks"},             // -> "dock rendering"
 
-	{
+	}, {
 		Key:      "Dialogs",
-		Title:    "Dialog boxes and Menus",
+		Title:    tran.Slate("Dialog boxes and Menus"),
 		Icon:     "icons/icon-dialogs.svg",
-		Tooltip:  "Configure text bubble appearance.",
-		Managers: []string{"Dialogs"}}, // -> "dialog rendering"
+		Tooltip:  tran.Slate("Configure text bubble appearance."),
+		Managers: []string{"Dialogs"}, // -> "dialog rendering"
 
-	{
+	}, {
 		Key:      "Desklets",
-		Title:    "Desklets",
+		Title:    tran.Slate("Desklets"),
 		Icon:     "icons/icon-desklets.svg",
-		Tooltip:  "Applets can be displayed on your desktop as widgets.",
-		Managers: []string{"Desklets"}}, // -> "desklet rendering"
+		Tooltip:  tran.Slate("Applets can be displayed on your desktop as widgets."),
+		Managers: []string{"Desklets"}, // -> "desklet rendering"
 
-	{
+	}, {
 		Key:      "Icons",
-		Title:    "Icons",
+		Title:    tran.Slate("Icons"),
 		Icon:     "icons/icon-icons.svg",
-		Tooltip:  "All about icons:\n size, reflection, icon theme,...",
-		Managers: []string{"Icons", "Indicators"}}, // indicators needed here too ?
+		Tooltip:  tran.Slate("All about icons:\n size, reflection, icon theme,..."),
+		Managers: []string{"Icons", "Indicators"}, // indicators needed here too ?
 
-	{
+	}, {
 		Key:      "Labels",
-		Title:    "Captions",
+		Title:    tran.Slate("Captions"),
 		Icon:     "icons/icon-labels.svg",
-		Tooltip:  "Define icon caption and quick-info style.",
-		Managers: []string{"Icons"}},
-
-	{
+		Tooltip:  tran.Slate("Define icon caption and quick-info style."),
+		Managers: []string{"Icons"},
+	}, {
 		Key:     TabThemes,
-		Title:   TabThemes,
+		Title:   tran.Slate("Themes"),
 		Icon:    "icons/icon-appearance.svg", // icon-controler.svg
-		Tooltip: "Try new themes and save your theme."},
-
-	{
+		Tooltip: tran.Slate("Try new themes and save your theme."),
+	}, {
 		Key:     TabShortkeys,
-		Title:   TabShortkeys,
+		Title:   tran.Slate("Shortkeys"),
 		Icon:    "icons/icon-shortkeys.svg",
-		Tooltip: "Define all the keyboard shortcuts currently available."},
-
-	{
+		Tooltip: tran.Slate("Define all the keyboard shortcuts currently available."),
+	}, {
 		Key:      "System",
-		Title:    "System",
+		Title:    tran.Slate("System"),
 		Icon:     "icons/icon-system.svg",
-		Tooltip:  "All of the parameters you will never want to tweak.",
-		Managers: []string{"Backends", "Containers", "Connection", "Docks"}},
-
-	{
+		Tooltip:  tran.Slate("All of the parameters you will never want to tweak."),
+		Managers: []string{"Backends", "Containers", "Connection", "Docks"},
+	}, {
 		Key:     TabDownload,
-		Title:   TabDownload,
-		Icon:    "cairo-dock.svg",
-		Tooltip: "Download additional applets."},
-
-	{
-		Key:   confown.GuiGroup, // custom page for the config own settings.
-		Title: confown.GuiGroup,
-		Icon:  "cairo-dock.svg"},
-
-	{
-		Key:     "Help",
-		Title:   "Help",
-		Icon:    "plug-ins/Help/icon.svg",
-		Tooltip: "Try new themes and save your theme."},
-
-	{
+		Title:   tran.Slate("Download"),
+		Icon:    "icons/retach-desklet.svg",
+		Tooltip: tran.Slate("Download additional applets."),
+		// "Third-party applets provide integration with many programs, like Pidgin"
+	}, {
+		Key:     confown.GuiGroup, // custom page for the config own settings.
+		Title:   tran.Slate("New Settings"),
+		Icon:    "icons/icon-movment.png",
+		Tooltip: tran.Slate("New config options, things improved since the original dock."),
+	}, {
+		Key:     TabReport,
+		Title:   tran.Slate("Report"),
+		Icon:    "plug-ins/System-monitor/icon.png",
+		Tooltip: tran.Slate("Program and system informations for reports and monitoring."),
+	}, {
 		Key:     TabDev,
-		Title:   TabDev,
+		Title:   tran.Slate("Dev"),
+		Icon:    "icons/icon-controler.svg",
+		Tooltip: tran.Slate("Developer tools."),
+	}, {
+		Key:     "appInfo",
+		Title:   tran.Slate("Edit applet info"),
+		Icon:    "cairo-dock.svg",
+		Tooltip: tran.Slate("Edit applet registration informations like version or description."),
+	}, {
+		Key:     "Help",
+		Title:   tran.Slate("Help"),
 		Icon:    "plug-ins/Help/icon.svg",
-		Tooltip: "Developer tools."},
+		Tooltip: tran.Slate("There are no problems, only solutions (and a lot of useful hints!)"),
+	},
 
 	// + icon effects*
 	// _add_sub_group_to_group_button (pGroupDescription, "Indicators", "icon-indicators.svg", _("Indicators"));
@@ -192,7 +197,6 @@ type grabber interface {
 
 type saver interface {
 	configWidget
-	cfbuild.KeyFiler
 	Save()
 }
 
@@ -345,6 +349,10 @@ func (widget *ConfCore) onSelect(item *Item, e error) {
 
 	// Custom widgets.
 
+	case "appInfo":
+		w = appinfo.NewLoaded(widget.data, widget.log, widget.switcher)
+		widget.btn.SetSave()
+
 	case TabShortkeys:
 		w = confshortkeys.New(widget.data, widget.log, widget.btn)
 		widget.btn.SetGrab()
@@ -366,6 +374,10 @@ func (widget *ConfCore) onSelect(item *Item, e error) {
 		w, _ = helpfile.New(widget.data, widget.log, widget.switcher)
 		widget.btn.SetNone()
 
+	case TabReport:
+		w = report.New(widget.data, widget.log, widget.switcher)
+		widget.btn.SetNone()
+
 	case TabDev:
 		w = devpage.New(widget.data, widget.log, widget.switcher)
 		widget.btn.SetNone()
@@ -376,7 +388,7 @@ func (widget *ConfCore) onSelect(item *Item, e error) {
 		w = widget.fromFile(item,
 			confown.PathFile(),
 			"", // no default.
-			func() { confown.Settings.Load() }, // reload own conf if saved.
+			func() { confown.Current.Load() }, // reload own conf if saved.
 		)
 
 		// Default file path.
@@ -386,7 +398,7 @@ func (widget *ConfCore) onSelect(item *Item, e error) {
 			widget.data.MainConfigFile(),
 			widget.data.MainConfigDefault(),
 			func() {
-				tokf, ok := interface{}(w).(saver)
+				tokf, ok := interface{}(w).(cfbuild.KeyFiler)
 				if !ok {
 					widget.log.NewErr("bad config widget", "update confcore")
 					return
@@ -525,7 +537,7 @@ func (widget *List) Load(shareData string) {
 
 		args := gtk.Cols{
 			rowKey:     item.Key,
-			rowName:    tran.Slate(item.Title),
+			rowName:    item.Title,
 			rowTooltip: item.Tooltip,
 		}
 		widget.model.SetCols(iter, args)

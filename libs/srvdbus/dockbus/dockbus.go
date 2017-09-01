@@ -61,14 +61,14 @@ func DockReboot() error { return Action((*Client).Reboot) }
 //
 func DockQuit() error { return Action((*Client).Quit) }
 
-// DockShow sets the dock visibility: 0 = HIDE, 1 = SHOW, 2 = TOGGLE.
+// DockShow sets the dock visibility: 0 = hide, 1 = show, 2 = toggle.
 // If you have several docks, it will show/hide all of them.
 //
-func DockShow(mode int32) error { return Action(dockShow(mode)) }
+func DockShow(mode int) error { return Action(dockShow(mode)) }
 
-// DeskletShow TODO: need to complete this part.
+// DeskletShow sets the desklet visibility: 0 = hide, 1 = show, 2 = toggle.
 //
-func DeskletShow(mode int32) error { return Action(deskletShow(mode)) }
+func DeskletShow(mode int) error { return Action(deskletShow(mode)) }
 
 // IconReload reloads an icon settings from disk.
 //
@@ -154,7 +154,7 @@ type CDIcon struct {
 
 	Name     string
 	Xid      uint32
-	Position int32
+	Position int
 	Type     string // Applet, Launcher, Stack-icon, Separator
 	// TODO compare
 	// Type          PackageType // type of package : installed, user, distant...
@@ -276,7 +276,7 @@ func (icon *CDIcon) getProp(key string, value interface{}) {
 	case "Xid":
 		icon.Xid = value.(uint32)
 	case "position":
-		icon.Position = value.(int32)
+		icon.Position = int(value.(int32))
 	case "type":
 		icon.Type = value.(string)
 	case "quick-info":
@@ -459,7 +459,7 @@ func appletProp(pack *packages.AppletPackage, key string, value interface{}) err
 	case "category":
 		cat, ok := value.(uint32)
 		if ok {
-			pack.Category = int(cat)
+			pack.Category = cdtype.CategoryType(cat)
 		}
 
 	case "preview":
@@ -532,12 +532,12 @@ func dockRemove(arg string) func(*Client) error {
 	return func(cl *Client) error { return cl.Call("Remove", arg) }
 }
 
-func dockShow(mode int32) func(*Client) error {
-	return func(cl *Client) error { return cl.Call("ShowDock", mode) }
+func dockShow(mode int) func(*Client) error {
+	return func(cl *Client) error { return cl.Call("ShowDock", int32(mode)) }
 }
 
-func deskletShow(mode int32) func(*Client) error {
-	return func(cl *Client) error { return cl.Call("ShowDeslet", mode) }
+func deskletShow(mode int) func(*Client) error {
+	return func(cl *Client) error { return cl.Call("ShowDeslet", int32(mode)) }
 }
 
 func iconReload(arg string) func(*Client) error {

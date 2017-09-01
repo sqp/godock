@@ -1,7 +1,8 @@
 package GoGmail
 
 import (
-	"github.com/sqp/godock/libs/net/download"
+	"github.com/sqp/godock/libs/net/download" // Network pull.
+	"github.com/sqp/godock/libs/text/gtktext" // Format text GTK.
 
 	"encoding/base64"
 	"errors"
@@ -113,6 +114,15 @@ func (feed *Feed) Check() {
 	// Get new data.
 	source := download.Header{"Authorization": "Basic " + feed.login}
 	e := source.XML(feedGmail, feed)
+
+	// Escape texts for GTK.
+	feed.Title = gtktext.Escape(feed.Title)
+	feed.Tagline = gtktext.Escape(feed.Tagline)
+	for _, mail := range feed.Mail {
+		mail.AuthorName = gtktext.Escape(mail.AuthorName)
+		mail.Title = gtktext.Escape(mail.Title)
+		mail.Summary = gtktext.Escape(mail.Summary)
+	}
 
 	feed.callResult(feed.Count()-count, count == 0, e)
 }

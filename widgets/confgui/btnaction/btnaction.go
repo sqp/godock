@@ -19,6 +19,7 @@ type Tune interface {
 	SetGrab()   // show the action button with grab text.
 	SetCancel() // show the action button with cancel text.
 	SetTest()   // show the action button with test text.
+	SetDelete() // show the action button with delete text.
 
 	// Display displays (or hides) the button as configured.
 	// This will reapply the last known state.
@@ -68,6 +69,7 @@ func (o *btnAction) setShow(label string) {
 func (o *btnAction) SetSave()   { o.setShow(tran.Slate("Save")) }
 func (o *btnAction) SetApply()  { o.setShow(tran.Slate("Apply")) }
 func (o *btnAction) SetAdd()    { o.setShow(tran.Slate("Add")) }
-func (o *btnAction) SetGrab()   { o.setShow(tran.Slate("Grab")) }
 func (o *btnAction) SetCancel() { o.setShow(tran.Slate("Cancel")) }
+func (o *btnAction) SetDelete() { o.setShow(tran.Slate("Delete")) }
+func (o *btnAction) SetGrab()   { o.setShow(tran.Slate("Grab")) }
 func (o *btnAction) SetTest()   { o.setShow(tran.Slate("Test")) }

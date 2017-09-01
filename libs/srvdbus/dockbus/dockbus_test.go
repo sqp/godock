@@ -51,26 +51,26 @@ func TestDockbus(t *testing.T) {
 	assert.NotEmpty(t, icons, "ListIcons")
 
 	if show {
-		log.Info("AppletInstances clock")
+		logger.Info("AppletInstances clock")
 		fmt.Println(instances)
 
-		log.Info("DockProperties", "found", len(props))
+		logger.Info("DockProperties", "found", len(props))
 		if len(props) > 0 {
 			fmt.Println("first:", props[0])
 		}
 
-		log.Info("ListKnownApplets", "found", len(applets))
+		logger.Info("ListKnownApplets", "found", len(applets))
 		for _, app := range applets {
 			fmt.Println("first:", app)
 			break
 		}
 
-		log.Info("ListIcons: found", len(icons))
+		logger.Info("ListIcons: found", len(icons))
 		if len(icons) > 0 {
 			fmt.Println("first:", icons[0])
 		}
 
-		log.Info("InfoApplet clock")
+		logger.Info("InfoApplet clock")
 		fmt.Println(info)
 	}
 

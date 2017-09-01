@@ -133,6 +133,6 @@ func (o *Actions) BuildMenu(menu cdtype.Menuer, actionIds []int) {
 
 // CallbackMenu provides a fill menu callback with the given actions list.
 //
-func (o *Actions) CallbackMenu(actionIds []int) func(menu cdtype.Menuer) {
+func (o *Actions) CallbackMenu(actionIds ...int) func(menu cdtype.Menuer) {
 	return func(menu cdtype.Menuer) { o.BuildMenu(menu, actionIds) }
 }

@@ -127,25 +127,29 @@ func NewDialog(icon gldi.Icon, container *gldi.Container, dialog cdtype.DialogDa
 	}
 	attr.pContainer = (*C.GldiContainer)(unsafe.Pointer(container.Ptr))
 
+	var clear func()
 	if dialog.Icon != "" {
 		// w,h :=
 		// 		cairo_dock_get_icon_extent (pIcon, &w, &h);
 		// 		cImageFilePath = cairo_dock_search_icon_s_path (g_value_get_string (v), MAX (w, h));
-		attr.cImageFilePath = gchar(dialog.Icon)
+		attr.cImageFilePath, clear = gchar(dialog.Icon)
 	} else {
-		attr.cImageFilePath = gchar("same icon")
+		attr.cImageFilePath, clear = gchar("same icon")
 	}
+	defer clear()
 
 	if dialog.Message != "" {
-		attr.cText = gchar(dialog.Message)
+		var clear func()
+		attr.cText, clear = gchar(dialog.Message)
+		defer clear()
 	}
 
 	if dialog.Buttons != "" {
-		cstr := gchar(dialog.Buttons)
-		csep := gchar(";")
+		cstr, freestr := gchar(dialog.Buttons)
+		csep, freesep := gchar(";")
 		clist := C.g_strsplit(cstr, csep, -1) // NULL-terminated
-		C.free(unsafe.Pointer((*C.char)(cstr)))
-		C.free(unsafe.Pointer((*C.char)(csep)))
+		freestr()
+		freesep()
 		defer C.g_strfreev(clist)
 		attr.cButtonsImage = C.constListString(clist)
 
@@ -341,29 +345,15 @@ func dialogWidgetList(data cdtype.DialogWidgetList) (*gtk.Widget, func() interfa
 		}
 
 	} else {
-		getValue = func() interface{} { return int32(widget.GetActive()) }
+		getValue = func() interface{} { return widget.GetActive() }
 
-		val, ok := data.InitialValue.(int32)
-		if ok {
-			widget.SetActive(int(val))
-		}
+		val, _ := data.InitialValue.(int)
+		widget.SetActive(val)
 	}
 
 	widget.GrabFocus()
 	return &widget.Widget, getValue
 }
-
-//
-
-// answer := &listForward{onAnswer}
-
-// 	uncast := (*listForward)(data)
-
-// 	call := (uncast.p).(func(int, *gtk.Widget))
-// 	if call != nil {
-// 		call(int(clickedButton), w)
-// 	}
-// }
 
 //
 //-------------------------------------------------------------[ C CALLBACKS ]--
@@ -389,9 +379,10 @@ func cbool(b bool) C.gboolean {
 	return C.gboolean(0)
 }
 
-func gchar(str string) *C.gchar {
+func gchar(str string) (*C.gchar, func()) {
 	if str == "" {
-		return nil
+		return nil, func() {}
 	}
-	return (*C.gchar)(C.CString(str))
+	cstr := (*C.gchar)(C.CString(str))
+	return cstr, func() { C.free(unsafe.Pointer((*C.char)(cstr))) }
 }

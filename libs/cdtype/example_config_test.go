@@ -80,19 +80,25 @@ type groupConfiguration struct {
 	LocalId LocalId
 
 	// With a Duration, we can provide a default, set the unit and a min value.
-	UpdateInterval cdtype.Duration `default:"60"`
+	UpdateInterval cdtype.Duration `default:"5"` // this one is in second.
+	//
+	// Another duration value with a default every hour and 10 minutes minimum.
+	OtherInterval cdtype.Duration `default:"60" min:"10" unit:"minute"`
 
-	// The template is loaded from appletDir/cdtype.TemplateDir or absolute.
+	// The template is loaded from appletDir/cdtype.TemplateDir
+	// or an absolute path.
+	// The .tmpl ext is optional in config, it will be matched with or without.
 	DialogTemplate cdtype.Template `default:"myfile"`
 
-	// The shortkey definition is filled, but the desc tag is still needed for
-	//global shortcut config.
-	//   (also when in external applet mode, desc is not forwarded to the "all
-	//   shortkeys page". Known dock TODO).
+	// Shortkey: The callback can be set directly with the tag action.
+	// This action number must match your applet defined actions numbers.
+	// Otherwise, set Call or CallE on your config shortkey at Init.
 	//
+	//   (Note when in external applet mode (known dock TODO):
+	//      shortkey desc is not forwarded to the "all shortkeys page".
 	//
-	ShortkeyOpenThing cdtype.Shortkey `action:"1" desc:"Open that thing"`
-	ShortkeyEditThing cdtype.Shortkey `action:"2" desc:"Edit that thing"`
+	ShortkeyOpenThing cdtype.Shortkey `action:"1"`
+	ShortkeyEditThing cdtype.Shortkey `action:"2"`
 }
 
 //

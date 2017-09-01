@@ -5,11 +5,12 @@ import (
 	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
 
-	"github.com/sqp/godock/libs/cdtype"
-	"github.com/sqp/godock/libs/text/tran"
+	"github.com/sqp/godock/libs/cdtype"       // Logger type.
+	"github.com/sqp/godock/libs/text/gtktext" // Format text GTK.
+	"github.com/sqp/godock/libs/text/tran"    // Translate.
 
 	"github.com/sqp/godock/widgets/common"
-	"github.com/sqp/godock/widgets/gtk/buildhelp"
+	"github.com/sqp/godock/widgets/gtk/buildhelp" // Widget builder.
 
 	"fmt"
 )
@@ -90,17 +91,17 @@ func New(log cdtype.Logger) *Preview {
 // Load loads an applet or theme in the preview. Handbooker and Appleter can be used.
 //
 func (widget *Preview) Load(pack Previewer) {
-	widget.title.SetMarkup(common.Big(common.Bold(pack.GetTitle())))
+	widget.title.SetMarkup(gtktext.Big(gtktext.Bold(pack.GetTitle())))
 	author := pack.GetAuthor()
 	if author != "" {
 		author = fmt.Sprintf(tran.Slate("by %s"), author)
 	}
-	widget.author.SetMarkup(common.Small(common.Mono(author)))
+	widget.author.SetMarkup(gtktext.Small(gtktext.Mono(author)))
 
 	apl, ok := pack.(Appleter)
 	if ok {
 		widget.stateText.SetMarkup(apl.FormatState())
-		widget.size.SetMarkup(common.Small(apl.FormatSize()))
+		widget.size.SetMarkup(gtktext.Small(apl.FormatSize()))
 
 		if icon := apl.IconState(); icon != "" {
 			if pixbuf, e := common.PixbufAtSize(icon, 24, 24); !widget.log.Err(e, "Load image pixbuf") {
@@ -117,10 +118,11 @@ func (widget *Preview) Load(pack Previewer) {
 	// Async calls for description and image. They can have to be downloaded and be slow at it.
 
 	chDesc := make(chan (string))
-	go func() { // Go routines to get data.
+	widget.log.GoTry(func() { // Go routines to get data.
 		chDesc <- pack.GetDescription()
-	}()
-	go func() {
+	})
+
+	widget.log.GoTry(func() {
 		imageLocation := pack.GetPreviewFilePath()
 		// imageLocation, isTemp := pack.GetPreview(widget.TmpFile) // reuse the same tmp location if needed.
 
@@ -129,7 +131,7 @@ func (widget *Preview) Load(pack Previewer) {
 			widget.description.SetMarkup(desc)
 			widget.setImage(imageLocation)
 		})
-	}()
+	})
 
 }
 

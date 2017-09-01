@@ -1,17 +1,19 @@
 {{/* current weather */}}
 {{define "Current"}}<big><b>{{.WeatherDescription}}</b></big>		{{.TxtUpdateTime}} - {{.Observatory}}
-<tt>{{.Fields "tempReal" "tempFelt" "wind" "humidity" "pressure" "sun"}}</tt>{{end}}
+
+<tt>{{.Fields "tempReal" "tempFelt" "wind" "humidity" "pressure" "sunrise" "sunset"}}</tt>{{end}}
 
 {{/* forecast weather */}}
 {{define "Forecast"}}<big><b>{{.DayName}}</b> {{.MonthDay}} - <b>{{.WeatherDescription}}</b></big>
 
-<tt>{{.Fields "tempDay" "precipitation" "wind" "humidity" "sun"}}</tt>{{end}}
+<tt>{{.Fields "tempDay" "precipitation" "wind" "humidity" "sunrise" "sunset"}}</tt>{{end}}
 
 {{/* items definition. format tags not allowed (breaks indent) */}}
 {{/* common */}}
 {{define "wind"}}{{.WindSpeed}} {{.UnitSpeed}} ({{.WindDirection}}){{end}}
 {{define "humidity"}}{{.Humidity}}%{{end}}
-{{define "sun"}}{{.TxtSunrise}} - {{.TxtSunset}}{{end}}
+{{define "sunrise"}}{{.TxtSunrise}}{{end}}
+{{define "sunset"}}{{.TxtSunset}}{{end}}
 
 {{/* Current */}}
 {{define "tempReal"}}{{.TempReal}}{{.UnitTemp}}{{end}}

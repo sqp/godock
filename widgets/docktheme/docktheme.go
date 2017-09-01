@@ -49,7 +49,7 @@ func New(data cftype.Source, log cdtype.Logger, switcher *pageswitch.Switcher) (
 	keyLoad := func(key *cftype.Key) {
 		w := confapplets.NewLoaded(data, log, nil, confapplets.ListThemes)
 		getValue := func() interface{} { return w.Selected().GetName() }
-		key.PackKeyWidget(key, getValue, nil, w)
+		key.PackKeyWidget(getValue, nil, w)
 	}
 
 	keySave := func(key *cftype.Key) {

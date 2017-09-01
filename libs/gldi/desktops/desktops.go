@@ -60,12 +60,6 @@ func HeightAll() int {
 	return int(C.g_desktopGeometry.Xscreen.height)
 }
 
-// HeightScreen returns the height of a desktop screen.
-//
-func HeightScreen(screenNb int) int {
-	return int(C.screen_height_i(C.int(screenNb)))
-}
-
 // NbDesktops returns the number of desktops.
 //
 func NbDesktops() int {
@@ -113,8 +107,30 @@ func WidthAll() int {
 	return int(C.g_desktopGeometry.Xscreen.width)
 }
 
-// WidthScreen returns the width of a desktop screen.
+// Screens returns the list of desktop screens.
 //
-func WidthScreen(screenNb int) int {
-	return int(C.screen_width_i(C.int(screenNb)))
+func Screens() []Screen {
+	list := make([]Screen, NbScreens())
+	for i := 0; i < len(list); i++ {
+		list[i] = Screen{ID: i}
+	}
+	return list
+}
+
+// Screen defines a desktop screen.
+//
+type Screen struct {
+	ID int
+}
+
+// Height returns the height of a desktop screen.
+//
+func (s Screen) Height() int {
+	return int(C.screen_height_i(C.int(s.ID)))
+}
+
+// Width returns the width of a desktop screen.
+//
+func (s Screen) Width() int {
+	return int(C.screen_width_i(C.int(s.ID)))
 }

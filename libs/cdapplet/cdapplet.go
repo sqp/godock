@@ -165,7 +165,10 @@ func (cda *CDApplet) SetDefaults(def cdtype.Defaults) {
 	for key, cmd := range def.Commands {
 		cda.Command().Add(key, cmd)
 	}
-	cda.Window().SetAppliClass(cda.Command().FindMonitor())
+	if def.AppliClass == "" {
+		def.AppliClass = cda.Command().FindMonitor()
+	}
+	cda.Window().SetAppliClass(def.AppliClass)
 
 	if cda.Poller().Exists() {
 		cda.Poller().SetInterval(def.PollerInterval)
@@ -182,7 +185,7 @@ func (cda *CDApplet) SetDefaults(def cdtype.Defaults) {
 func (cda *CDApplet) Poller() cdtype.AppPoller {
 	if cda.poller == nil {
 		return poller.NewNil(func(call func()) cdtype.AppPoller {
-			cda.poller = poller.New(call)
+			cda.poller = poller.New(call, cda.log)
 			return cda.poller
 		})
 	}
@@ -269,7 +272,7 @@ func (ac *appCmd) FindMonitor() string {
 			return cmd.Name // Else use program name.
 		}
 	}
-	return "none" // None found, reset it.
+	return "" // None found, reset it.
 }
 
 func (ac *appCmd) Clear() {
@@ -293,7 +296,7 @@ func (cda *CDApplet) LoadConfig(loadConf bool) (cdtype.Defaults, error) {
 	}
 
 	// Try to load config.
-	def, toActions, liste, e := config.Load(cda.log, cda.confFile, cda.FileLocation(), cda.confPtr, config.GetBoth)
+	def, toActions, liste, e := config.Load(cda.log, cda.confFile, cda.rootDataDir, cda.shareDataDir, cda.confPtr, config.GetBoth)
 
 	if cda.Log().Err(e, "LoadConfig") {
 		return def, e

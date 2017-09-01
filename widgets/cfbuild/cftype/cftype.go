@@ -5,6 +5,7 @@ import (
 	"github.com/gotk3/gotk3/gtk"
 
 	"github.com/sqp/godock/libs/cdtype" // Logger type.
+	"github.com/sqp/godock/libs/config" // Config parser.
 	"github.com/sqp/godock/libs/helper/cast"
 	"github.com/sqp/godock/libs/ternary"
 
@@ -39,6 +40,7 @@ const (
 //----------------------------------------------------------------[ KEY TYPE ]--
 
 // Modifier to show a widget according to the display backend.
+// Unused here, kept for reference. See libs/config.
 const (
 	FlagCairoOnly  = '*'
 	FlagOpenGLOnly = '&'
@@ -229,6 +231,10 @@ type Grouper interface {
 	// BuildGroups builds a dock configuration widget with the given groups.
 	//
 	BuildGroups(switcher *pageswitch.Switcher, groups []string, tweaks ...func(Builder)) Grouper
+
+	// BuildApply applies a list of custom updates to the builder and its keys.
+	//
+	BuildApply(...func(Builder)) Grouper
 }
 
 // Builder builds a Cairo-Dock configuration page.
@@ -319,19 +325,7 @@ type Builder interface {
 	//
 	PackWidget(child gtk.IWidget, expand, fill bool, padding uint)
 
-	// PackSubWidget packs a widget in the current subwidget box.
-	//
-	PackSubWidget(child gtk.IWidget)
-	// (was _pack_in_widget_box)
-
-	// PackKeyWidget sets get/set value calls for the widget and can pack widgets.
-	//
-	PackKeyWidget(key *Key, getValue func() interface{}, setValue func(interface{}), child ...gtk.IWidget)
-	// (was _pack_subwidget).
-
 	//------------------------------------------------------[ BOX MANAGEMENT ]--
-	//
-	Label() *gtk.Label
 
 	BoxPage() *gtk.Box
 
@@ -385,7 +379,17 @@ type Storage interface {
 //
 type Source interface {
 	datatype.Source
-	GetWindow() *gtk.Window
+	GetWindow() WinLike
+}
+
+// WinLike defines actions available on the window.
+//
+type WinLike interface {
+	Connect(string, interface{}, ...interface{}) (glib.SignalHandle, error)
+	HandlerDisconnect(glib.SignalHandle)
+	HasFocus() bool
+	Present()
+	Destroy()
 }
 
 // GtkWidgetBase extends the gtk.IWidget interface with widgets methods.
@@ -394,6 +398,20 @@ type GtkWidgetBase interface {
 	gtk.IWidget
 	ShowAll()
 	Destroy()
+}
+
+//
+//----------------------------------------------------------------[ LIST KEY ]--
+
+// ListKey defines a list of builder key.
+//
+type ListKey []*Key
+
+// Add appends keys to the list.
+//
+func (lk *ListKey) Add(keys ...*Key) *ListKey {
+	*lk = append(*lk, keys...)
+	return lk
 }
 
 //
@@ -406,22 +424,23 @@ type keyDataModel interface {
 // Key defines a configuration entry.
 //
 type Key struct {
-	Builder // extend the builder for widget building needs.
+	Builder        // extend the builder for widget building needs.
+	config.KeyBase // Key options parsed from comment.
 
-	Type              KeyType  // Type of key, for the value type, build method and options.
-	Group             string   // Group for the key. Match the config group and switcher page.
-	Name              string   // Name for the key. Match the config name.
-	NbElements        int      // number of values stored in the key.
-	AuthorizedValues  []string //
-	Text              string   // label for the key.
-	Tooltip           string   // mouse over tooltip text.
-	IsAlignedVertical bool     // orientation for the key widget box.
-	IsDefault         bool     // true when a default text has been set (must be ignored). Match "ignore-value" in the C version.
+	Type      KeyType // Type of key, for the value type, build method and options.
+	Group     string  // Group for the key. Match the config group and switcher page.
+	Name      string  // Name for the key. Match the config name.
+	IsDefault bool    // true when a default text has been set (must be ignored). Match "ignore-value" in the C version.
 
 	dataModel   keyDataModel       // act on the gtk data model.
 	widgetValue func() interface{} // get values from the widget.
 	widsetValue func(interface{})  // set values to the widget.
 	makeWidget  func(*Key)         // Custom widget builder, overriding the default for key type.
+
+	keyBox              *gtk.Box   // Box for the widget
+	widgetBox           *gtk.Box   // Box for the useful subwidgets.
+	label               *gtk.Label // Text on left.
+	additionalItemsVBox *gtk.Box   // Extra custom widgets.
 }
 
 // IsType returns whether the key type is one of the provided types.
@@ -471,6 +490,58 @@ func (key *Key) SetWidGetValue(getValue func() interface{}) {
 func (key *Key) SetWidSetValue(setValue func(interface{})) {
 	key.widsetValue = setValue
 }
+
+//
+//-----------------------------------------------------------------[ PACKING ]--
+
+// PackSubWidget packs a widget in the current subwidget box. (was _pack_in_widget_box)
+//
+func (key *Key) PackSubWidget(child gtk.IWidget) {
+	key.WidgetBox().PackStart(child, false, false, 0)
+}
+
+// PackKeyWidget packs a key widget to the page with its getValue call (was _pack_subwidget).
+//
+func (key *Key) PackKeyWidget(getValue func() interface{}, setValue func(interface{}), childs ...gtk.IWidget) {
+	for _, w := range childs {
+		key.WidgetBox().PackStart(w, key.IsAlignedVertical, key.IsAlignedVertical, 0)
+	}
+	// key.SetValue = setValue
+	key.SetWidSetValue(setValue)
+	key.SetWidGetValue(getValue)
+}
+
+// SetKeyBox sets the main widget box for the key.
+//
+func (key *Key) SetKeyBox(box *gtk.Box) { key.keyBox = box }
+
+// SetWidgetBox sets the sub widget box for the key.
+//
+func (key *Key) SetWidgetBox(box *gtk.Box) { key.widgetBox = box }
+
+// SetAdditionalItemsVBox sets the box for extra custom widgets.
+//
+func (key *Key) SetAdditionalItemsVBox(box *gtk.Box) { key.additionalItemsVBox = box }
+
+// SetLabel sets the widget label for the key.
+//
+func (key *Key) SetLabel(label *gtk.Label) { key.label = label }
+
+// KeyBox gets the main widget box for the key.
+//
+func (key *Key) KeyBox() *gtk.Box { return key.keyBox }
+
+// WidgetBox gets the sub widget box for the key.
+//
+func (key *Key) WidgetBox() *gtk.Box { return key.widgetBox }
+
+// AdditionalItemsVBox gets the box for extra custom widgets.
+//
+func (key *Key) AdditionalItemsVBox() *gtk.Box { return key.additionalItemsVBox }
+
+// Label gets the widget label for the key.
+//
+func (key *Key) Label() *gtk.Label { return key.label }
 
 //
 //------------------------------------------------------------------[ VALUES ]--

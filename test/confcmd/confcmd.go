@@ -12,7 +12,8 @@ import (
 )
 
 func main() {
-	path, isTest := vdata.TestPathDefault()
+	logger := log.NewLog(log.Logs)
+	path, isTest := vdata.TestPathDefault(logger)
 
 	// path := cdglobal.ConfigDirDock("") + "/current_theme/cairo-dock.conf"
 
@@ -20,8 +21,8 @@ func main() {
 
 	gtk.Init(nil)
 
-	source := vdata.New(log.NewLog(log.Logs), nil, nil)
-	build := vdata.TestInit(source, path)
+	source := vdata.New(logger, nil, nil)
+	build := vdata.TestInit(source, logger, path)
 	if build == nil {
 		return
 	}

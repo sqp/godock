@@ -27,7 +27,7 @@ func (app *Applet) setBuildTarget() {
 	}
 
 	// Delayed display of emblem. 5ms seemed to be enough but 500 should do the job.
-	go func() { time.Sleep(500 * time.Millisecond); app.showTarget() }()
+	app.Log().GoTry(func() { time.Sleep(500 * time.Millisecond); app.showTarget() })
 }
 
 // showTarget shows build target informations on the icon (label and emblem).
@@ -57,7 +57,10 @@ func (app *Applet) restartTarget() {
 
 	case build.TypeGodock:
 		build.CloseGui()
-		go app.Log().Err(dlogbus.Action((*dlogbus.Client).Restart), "restart") // No need to wait an answer, it blocks.
+		app.Log().GoTry(func() { // No need to wait an answer, it blocks.
+			e := dlogbus.Action((*dlogbus.Client).Restart)
+			app.Log().Err(e, "restart")
+		})
 
 	default:
 		func() {

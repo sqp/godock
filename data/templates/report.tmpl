@@ -1,0 +1,66 @@
+{{ define "report_todo" }}<tt><b>==[ TODO ]===========================</b>
+  * proc and memory usage + tests.
+  * Window manager and desktop environment.
+  * Screens number + size. (get values for double DPI monitors)
+  * Import monitoring graphs (default: 5 min delay?)
+  * Shortkey to open page (need win+pause)
+</tt>{{ end }}
+
+{{ define "report_system" }}<tt><big><b>Version    {{ .Version }}</b></big>
+
+gldi            {{ .gldi }}
+GTK             {{ .GTK }}
+
+<b>==[ Active ]=========================</b>
+OpenGL          {{ .OpenGL }}
+
+<b>==[ Process ]========================</b>
+Uptime          {{ .ProcessUptime | fmtTime }}
+Max threads     {{ .GOMAXPROCS }}
+Go routines     {{ .NumGoroutine }}
+Avg c calls /s  {{ .AvgCgoCall }}
+Nb Threads      {{ .Process.NumThreads }}
+Opened Files    {{ .Process.OpenFiles | len }}
+Connections     {{ .Process.Connections | len }}
+Total memory    {{ .TotalRAM | fmtBytes }}
+
+<b>==[ Build ]==========================</b>
+Compiler        {{ .Compiler }}
+OS              {{ .OS }}
+BuildMode       {{ .BuildMode }}
+{{- if .Date }}
+Date            {{ .Date }}
+CommitID        {{ .CommitID}}
+Files Edited    {{ .FilesEdited }}  (unstaged, staged, untracked)
+{{- end }}
+
+<b>==[ System ]=========================</b>
+Uptime            {{ .SystemUptime | fmtTime }}
+OS                {{ .Host.OS }}
+Kernel            {{ .Host.KernelVersion }}
+Platform          {{ .Host.Platform }}
+Platform Family   {{ .Host.PlatformFamily }}
+{{- with .Host.PlatformVersion }}Platform Version  {{ . }}{{- end }}
+{{- if .Host.VirtualizationRole }}
+Virtualization    {{ .Host.VirtualizationRole }}{{- with .Host.VirtualizationSystem }} ({{ . }}){{ end }}
+{{- end }}
+
+<b>==[ Hardware ]=======================</b>
+CPU Model            {{ .CPU.ModelName }}
+Cores                {{ .NumCPU }} x {{ .CPU.Mhz }} Mhz
+Total memory         {{ .Mem.Total | fmtBytes }}
+Video card           {{ .Video.Renderer }}
+OpenGL Vendor        {{ .Video.Vendor }}
+OpenGL Core Profile  {{ .Video.CoreProfileOpenGL }}
+OpenGL Version       {{ .Video.VersionOpenGL }}
+Screens              {{ .Screens | len }} x {{ range .Screens }}{{ .Width }}x{{ .Height }}{{ end }}
+Desktops             {{ .NbDesktops }} x {{ .DesktopWidth }}x{{ .DesktopHeight }}
+{{- if ne .ViewportX 1 }}Viewports            Horizontal: {{ .ViewportX }}{{ end }}
+{{- if ne .ViewportY 1 }}Viewports            Vertical: {{ .ViewportY }}{{ end }}
+</tt>{{ end }}
+
+{{ define "report_counters" }}<tt><b>==[ Today ]==========================</b>
+Crashs             {{ .Crash }}
+Builds successful  {{ .OK }}
+Builds failed      {{ .Fail }}
+</tt>{{ end }}

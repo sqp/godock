@@ -305,66 +305,65 @@ func IconsGetAnyWithoutDialog() Icon {
 // GetAppliIcon returns the icon managing the window.
 //
 func GetAppliIcon(win cdglobal.Window) Icon {
-	c := C.cairo_dock_get_appli_icon(win.ToNative())
+	c := C.cairo_dock_get_appli_icon((*C.GldiWindowActor)(win.ToNative()))
 	return NewIconFromNative(unsafe.Pointer(c))
 }
 
-func (o *dockIcon) ToNative() unsafe.Pointer      { return unsafe.Pointer(o.Ptr) }
-func (o *dockIcon) ClassIsInhibited() bool        { return C.cairo_dock_class_is_inhibited(o.Ptr.cClass) > 0 }
-func (o *dockIcon) DeinhibiteClass()              { C.cairo_dock_deinhibite_class(o.Ptr.cClass, o.Ptr) }
-func (o *dockIcon) DesktopPresentClass() bool     { return C.gldi_desktop_present_class(o.Ptr.cClass) > 0 }
-func (o *dockIcon) DrawX() float64                { return float64(o.Ptr.fDrawX) }
-func (o *dockIcon) DrawY() float64                { return float64(o.Ptr.fDrawY) }
-func (o *dockIcon) GetCommand() string            { return C.GoString((*C.char)(o.Ptr.cCommand)) }
-func (o *dockIcon) GetDesktopFileName() string    { return C.GoString((*C.char)(o.Ptr.cDesktopFileName)) }
-func (o *dockIcon) GetFileName() string           { return C.GoString((*C.char)(o.Ptr.cFileName)) }
-func (o *dockIcon) GetIgnoreQuickList() bool      { return gobool(o.Ptr.bIgnoreQuicklist) }
-func (o *dockIcon) GetInitialName() string        { return C.GoString((*C.char)(o.Ptr.cInitialName)) }
-func (o *dockIcon) GetName() string               { return C.GoString((*C.char)(o.Ptr.cName)) }
-func (o *dockIcon) GetParentDockName() string     { return C.GoString((*C.char)(o.Ptr.cParentDockName)) }
-func (o *dockIcon) GetSubDock() *CairoDock        { return NewDockFromNative(unsafe.Pointer(o.Ptr.pSubDock)) }
-func (o *dockIcon) HasClass() bool                { return o.Ptr.cClass != nil }
-func (o *dockIcon) Height() float64               { return float64(o.Ptr.fHeight) }
-func (o *dockIcon) InsertRemoveFactor() float64   { return float64(o.Ptr.fInsertRemoveFactor) }
-func (o *dockIcon) IsApplet() bool                { return o.Ptr != nil && o.Ptr.pModuleInstance != nil }
-func (o *dockIcon) IsAppli() bool                 { return o.Ptr != nil && o.Ptr.pAppli != nil }              // CAIRO_DOCK_IS_APPLI
-func (o *dockIcon) IsClassIcon() bool             { return ObjectIsManagerChild(o, &C.myClassIconObjectMgr) } // GLDI_OBJECT_IS_CLASS_ICON / CAIRO_DOCK_ICON_TYPE_IS_CLASS_CONTAINER
-func (o *dockIcon) IsDemandingAttention() bool    { return gobool(o.Ptr.bIsDemandingAttention) }
-func (o *dockIcon) IsLauncher() bool              { return gobool(C.IconIsLauncher(o.Ptr)) }
-func (o *dockIcon) IsPointed() bool               { return gobool(o.Ptr.bPointed) }
-func (o *dockIcon) IsSeparator() bool             { return gobool(C.IconIsSeparator(o.Ptr)) }
-func (o *dockIcon) IsSeparatorAuto() bool         { return gobool(C.IconIsSeparatorAuto(o.Ptr)) }
-func (o *dockIcon) IsStackIcon() bool             { return gobool(C.IconIsStackIcon(o.Ptr)) } // CAIRO_DOCK_ICON_TYPE_IS_CONTAINER
-func (o *dockIcon) IsTaskbar() bool               { return o.IsAppli() && !o.IsLauncher() && !o.IsApplet() }
-func (o *dockIcon) Order() float64                { return float64(o.Ptr.fOrder) }
-func (o *dockIcon) Redraw()                       { C.cairo_dock_redraw_icon(o.Ptr) }
-func (o *dockIcon) RemoveDialogs()                { C.gldi_dialogs_remove_on_icon(o.Ptr) }
-func (o *dockIcon) RemoveFromDock()               { C.cairo_dock_trigger_icon_removal_from_dock(o.Ptr) }
-func (o *dockIcon) RequestedDisplayHeight() int   { return int(o.Ptr.iRequestedDisplayHeight) }
-func (o *dockIcon) RequestedDisplayWidth() int    { return int(o.Ptr.iRequestedDisplayWidth) }
-func (o *dockIcon) RequestedHeight() int          { return int(o.Ptr.iRequestedHeight) }
-func (o *dockIcon) RequestedWidth() int           { return int(o.Ptr.iRequestedWidth) }
-func (o *dockIcon) Scale() float64                { return float64(o.Ptr.fScale) }
-func (o *dockIcon) SetAlpha(f float64)            { o.Ptr.fAlpha = C.gdouble(f) }
-func (o *dockIcon) SetDrawX(f float64)            { o.Ptr.fDrawX = C.gdouble(f) }
-func (o *dockIcon) SetDrawY(f float64)            { o.Ptr.fDrawY = C.gdouble(f) }
-func (o *dockIcon) SetHeight(val float64)         { o.Ptr.fHeight = C.gdouble(val) }
-func (o *dockIcon) SetHeightFactor(f float64)     { o.Ptr.fHeightFactor = C.gdouble(f) }
-func (o *dockIcon) SetOrientation(f float64)      { o.Ptr.fOrientation = C.gdouble(f) }
-func (o *dockIcon) SetPointed(val bool)           { o.Ptr.bPointed = cbool(val) }
-func (o *dockIcon) SetScale(val float64)          { o.Ptr.fScale = C.gdouble(val) }
-func (o *dockIcon) SetWidth(val float64)          { o.Ptr.fWidth = C.gdouble(val) }
-func (o *dockIcon) SetWidthFactor(f float64)      { o.Ptr.fWidthFactor = C.gdouble(f) }
-func (o *dockIcon) SetX(f float64)                { o.Ptr.fX = C.gdouble(f) }
-func (o *dockIcon) SetXAtRest(f float64)          { o.Ptr.fXAtRest = C.gdouble(f) }
-func (o *dockIcon) SetY(f float64)                { o.Ptr.fY = C.gdouble(f) }
-func (o *dockIcon) ShowSubdock(parent *CairoDock) { C.cairo_dock_show_subdock(o.Ptr, parent.ToNative()) }
-func (o *dockIcon) StopAttention()                { C.gldi_icon_stop_attention(o.Ptr) }
-func (o *dockIcon) Width() float64                { return float64(o.Ptr.fWidth) }
-func (o *dockIcon) Window() cdglobal.Window       { return window.NewFromNative(unsafe.Pointer(o.Ptr.pAppli)) }
-func (o *dockIcon) X() float64                    { return float64(o.Ptr.fX) }
-func (o *dockIcon) XAtRest() float64              { return float64(o.Ptr.fXAtRest) }
-func (o *dockIcon) Y() float64                    { return float64(o.Ptr.fY) }
+func (o *dockIcon) ToNative() unsafe.Pointer    { return unsafe.Pointer(o.Ptr) }
+func (o *dockIcon) ClassIsInhibited() bool      { return C.cairo_dock_class_is_inhibited(o.Ptr.cClass) > 0 }
+func (o *dockIcon) DeinhibiteClass()            { C.cairo_dock_deinhibite_class(o.Ptr.cClass, o.Ptr) }
+func (o *dockIcon) DesktopPresentClass() bool   { return C.gldi_desktop_present_class(o.Ptr.cClass) > 0 }
+func (o *dockIcon) DrawX() float64              { return float64(o.Ptr.fDrawX) }
+func (o *dockIcon) DrawY() float64              { return float64(o.Ptr.fDrawY) }
+func (o *dockIcon) GetCommand() string          { return C.GoString((*C.char)(o.Ptr.cCommand)) }
+func (o *dockIcon) GetDesktopFileName() string  { return C.GoString((*C.char)(o.Ptr.cDesktopFileName)) }
+func (o *dockIcon) GetFileName() string         { return C.GoString((*C.char)(o.Ptr.cFileName)) }
+func (o *dockIcon) GetIgnoreQuickList() bool    { return gobool(o.Ptr.bIgnoreQuicklist) }
+func (o *dockIcon) GetInitialName() string      { return C.GoString((*C.char)(o.Ptr.cInitialName)) }
+func (o *dockIcon) GetName() string             { return C.GoString((*C.char)(o.Ptr.cName)) }
+func (o *dockIcon) GetParentDockName() string   { return C.GoString((*C.char)(o.Ptr.cParentDockName)) }
+func (o *dockIcon) GetSubDock() *CairoDock      { return NewDockFromNative(unsafe.Pointer(o.Ptr.pSubDock)) }
+func (o *dockIcon) HasClass() bool              { return o.Ptr.cClass != nil }
+func (o *dockIcon) Height() float64             { return float64(o.Ptr.fHeight) }
+func (o *dockIcon) InsertRemoveFactor() float64 { return float64(o.Ptr.fInsertRemoveFactor) }
+func (o *dockIcon) IsApplet() bool              { return o.Ptr != nil && o.Ptr.pModuleInstance != nil }
+func (o *dockIcon) IsAppli() bool               { return o.Ptr != nil && o.Ptr.pAppli != nil }              // CAIRO_DOCK_IS_APPLI
+func (o *dockIcon) IsClassIcon() bool           { return ObjectIsManagerChild(o, &C.myClassIconObjectMgr) } // GLDI_OBJECT_IS_CLASS_ICON / CAIRO_DOCK_ICON_TYPE_IS_CLASS_CONTAINER
+func (o *dockIcon) IsDemandingAttention() bool  { return gobool(o.Ptr.bIsDemandingAttention) }
+func (o *dockIcon) IsLauncher() bool            { return gobool(C.IconIsLauncher(o.Ptr)) }
+func (o *dockIcon) IsPointed() bool             { return gobool(o.Ptr.bPointed) }
+func (o *dockIcon) IsSeparator() bool           { return gobool(C.IconIsSeparator(o.Ptr)) }
+func (o *dockIcon) IsSeparatorAuto() bool       { return gobool(C.IconIsSeparatorAuto(o.Ptr)) }
+func (o *dockIcon) IsStackIcon() bool           { return gobool(C.IconIsStackIcon(o.Ptr)) } // CAIRO_DOCK_ICON_TYPE_IS_CONTAINER
+func (o *dockIcon) IsTaskbar() bool             { return o.IsAppli() && !o.IsLauncher() && !o.IsApplet() }
+func (o *dockIcon) Order() float64              { return float64(o.Ptr.fOrder) }
+func (o *dockIcon) Redraw()                     { C.cairo_dock_redraw_icon(o.Ptr) }
+func (o *dockIcon) RemoveDialogs()              { C.gldi_dialogs_remove_on_icon(o.Ptr) }
+func (o *dockIcon) RemoveFromDock()             { C.cairo_dock_trigger_icon_removal_from_dock(o.Ptr) }
+func (o *dockIcon) RequestedDisplayHeight() int { return int(o.Ptr.iRequestedDisplayHeight) }
+func (o *dockIcon) RequestedDisplayWidth() int  { return int(o.Ptr.iRequestedDisplayWidth) }
+func (o *dockIcon) RequestedHeight() int        { return int(o.Ptr.iRequestedHeight) }
+func (o *dockIcon) RequestedWidth() int         { return int(o.Ptr.iRequestedWidth) }
+func (o *dockIcon) Scale() float64              { return float64(o.Ptr.fScale) }
+func (o *dockIcon) SetAlpha(f float64)          { o.Ptr.fAlpha = C.gdouble(f) }
+func (o *dockIcon) SetDrawX(f float64)          { o.Ptr.fDrawX = C.gdouble(f) }
+func (o *dockIcon) SetDrawY(f float64)          { o.Ptr.fDrawY = C.gdouble(f) }
+func (o *dockIcon) SetHeight(val float64)       { o.Ptr.fHeight = C.gdouble(val) }
+func (o *dockIcon) SetHeightFactor(f float64)   { o.Ptr.fHeightFactor = C.gdouble(f) }
+func (o *dockIcon) SetOrientation(f float64)    { o.Ptr.fOrientation = C.gdouble(f) }
+func (o *dockIcon) SetPointed(val bool)         { o.Ptr.bPointed = cbool(val) }
+func (o *dockIcon) SetScale(val float64)        { o.Ptr.fScale = C.gdouble(val) }
+func (o *dockIcon) SetWidth(val float64)        { o.Ptr.fWidth = C.gdouble(val) }
+func (o *dockIcon) SetWidthFactor(f float64)    { o.Ptr.fWidthFactor = C.gdouble(f) }
+func (o *dockIcon) SetX(f float64)              { o.Ptr.fX = C.gdouble(f) }
+func (o *dockIcon) SetXAtRest(f float64)        { o.Ptr.fXAtRest = C.gdouble(f) }
+func (o *dockIcon) SetY(f float64)              { o.Ptr.fY = C.gdouble(f) }
+func (o *dockIcon) StopAttention()              { C.gldi_icon_stop_attention(o.Ptr) }
+func (o *dockIcon) Width() float64              { return float64(o.Ptr.fWidth) }
+func (o *dockIcon) Window() cdglobal.Window     { return window.NewFromNative(unsafe.Pointer(o.Ptr.pAppli)) }
+func (o *dockIcon) X() float64                  { return float64(o.Ptr.fX) }
+func (o *dockIcon) XAtRest() float64            { return float64(o.Ptr.fXAtRest) }
+func (o *dockIcon) Y() float64                  { return float64(o.Ptr.fY) }
 
 func (o *dockIcon) AddOverlayFromImage(iconPath string, position cdtype.EmblemPosition) {
 	var cstr *C.gchar
@@ -456,7 +455,7 @@ func (o *dockIcon) GetInhibitor(b bool) Icon {
 }
 
 func (o *dockIcon) GetPrevNextClassMateIcon(next bool) Icon {
-	c := C.cairo_dock_get_prev_next_classmate_icon(o.ToNative(), cbool(next))
+	c := C.cairo_dock_get_prev_next_classmate_icon((*C.Icon)(o.ToNative()), cbool(next))
 	return NewIconFromNative(unsafe.Pointer(c))
 }
 
@@ -535,7 +534,7 @@ func (o *dockIcon) ModuleInstance() *ModuleInstance {
 }
 
 func (o *dockIcon) MoveAfterIcon(container *CairoDock, target Icon) {
-	C.cairo_dock_move_icon_after_icon(container.Ptr, o.Ptr, target.ToNative())
+	C.cairo_dock_move_icon_after_icon(container.Ptr, o.Ptr, (*C.Icon)(target.ToNative()))
 }
 
 func (o *dockIcon) RemoveIconsFromSubdock(dest *CairoDock) {
@@ -602,6 +601,10 @@ func (o *dockIcon) SetQuickInfo(str string) {
 		defer C.free(unsafe.Pointer((*C.char)(cstr)))
 	}
 	C.gldi_icon_set_quick_info(o.Ptr, cstr)
+}
+
+func (o *dockIcon) ShowSubdock(parent *CairoDock) {
+	C.cairo_dock_show_subdock(o.Ptr, (*C.CairoDock)(parent.ToNative()))
 }
 
 // TODO: may have to move.

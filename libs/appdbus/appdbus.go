@@ -67,13 +67,16 @@ func StandAlone(callnew cdtype.NewAppletFunc) {
 	}
 
 	app.Log().Debug("Applet started")
-	versions.TestPrint(app.Log().GetDebug())
 	defer app.Log().Debug("Applet stopped")
+
+	versions.SetName("Applets API")
+	if app.Log().GetDebug() {
+		versions.Print()
+	}
 
 	var waiter <-chan time.Time
 	poller := app.Poller()
 	if poller != nil {
-		poller.Restart() // Check poller directly on start.
 		waiter = poller.Wait()
 	}
 
@@ -108,6 +111,7 @@ type CDDbus struct {
 	onEvent    func(string, ...interface{}) bool // Callback to dock.OnEvent to forward.
 	dialogCall func(int, interface{})            // Dialog callback action.
 	menu       *Menu                             // Opened menu titles and callbacks.
+	appliClass string                            // Monitored application class.
 }
 
 // New creates a new applet instance with args from command line.
@@ -142,22 +146,6 @@ func (cda *CDDbus) testErr(e error, method string) { cda.log.Err(e, method) }
 //
 func (cda *CDDbus) SetOnEvent(onEvent func(string, ...interface{}) bool) {
 	cda.onEvent = onEvent
-}
-
-// SubIcon returns the subicon object matching the given key.
-//
-func (cda *CDDbus) SubIcon(key string) cdtype.IconBase {
-	return cda.icons[key]
-}
-
-// RemoveSubIcons removes all subicons from the applet. (To be called in init).
-//
-func (cda *CDDbus) RemoveSubIcons() error {
-	e := cda.dbusSub.Call("RemoveSubIcon", "any")
-	if e == nil {
-		cda.icons = make(map[string]*SubIcon)
-	}
-	return e
 }
 
 //
@@ -227,6 +215,11 @@ func (cda *CDDbus) OnSignal(s *dbus.Signal) (exit bool) {
 		case "on_answer_dialog": // Callback is already provided.
 			if cda.dialogCall != nil && len(s.Body) > 1 {
 				value := s.Body[1].(dbus.Variant).Value()
+				switch v := value.(type) {
+				case int32:
+					value = int(v) // switch int32 to int.
+				}
+
 				cda.dialogCall(int(s.Body[0].(int32)), value)
 			}
 			return false
@@ -358,10 +351,10 @@ func (cda *CDDbus) PopupDialog(data cdtype.DialogData) error {
 
 		// Recast interface to real type so it won't crash in ToMapVariant.
 		switch v := dw.InitialValue.(type) {
-		case int32, string:
+		case string:
 			widget["initial-value"] = v
-			// case int:
-			// 	widget["initial-value"] = int32(v)
+		case int:
+			widget["initial-value"] = int32(v)
 		}
 
 	default:
@@ -441,15 +434,24 @@ func (o *dataRend) GraphPlainCircle(nb int) error { return o.Graph(nb, cdtype.Re
 
 // Window gives access to actions on the controlled window.
 //
-func (cda *CDDbus) Window() cdtype.IconWindow { return &winAction{icon: cda} }
+func (cda *CDDbus) Window() cdtype.IconWindow {
+	return &winAction{
+		icon:       cda,
+		appliClass: &cda.appliClass}
+}
 
 // winAction implements cdtype.IconWindow
 //
 type winAction struct {
-	icon *CDDbus
+	icon       *CDDbus
+	appliClass *string
 }
 
 func (o *winAction) SetAppliClass(applicationClass string) error {
+	if *o.appliClass == "" && applicationClass == "" { // Don't set empty class unless trying to update.
+		return nil
+	}
+	*o.appliClass = applicationClass
 	return o.icon.dbusIcon.Call("ControlAppli", applicationClass)
 }
 
@@ -588,6 +590,12 @@ func (o *iconProps) ContainerType() cdtype.ContainerType         { return o.cont
 //
 //--------------------------------------------------------[ SUBICONS ACTIONS ]--
 
+// SubIcon returns the subicon object matching the given key.
+//
+func (cda *CDDbus) SubIcon(key string) cdtype.IconBase {
+	return cda.icons[key]
+}
+
 // AddSubIcon adds subicons by pack of 3 strings : label, icon, id.
 //
 func (cda *CDDbus) AddSubIcon(fields ...string) error {
@@ -608,6 +616,16 @@ func (cda *CDDbus) RemoveSubIcon(id string) error {
 	e := cda.dbusSub.Call("RemoveSubIcon", id)
 	if e == nil {
 		delete(cda.icons, id)
+	}
+	return e
+}
+
+// RemoveSubIcons removes all subicons from the applet. (To be called in init).
+//
+func (cda *CDDbus) RemoveSubIcons() error {
+	e := cda.dbusSub.Call("RemoveSubIcon", "any")
+	if e == nil {
+		cda.icons = make(map[string]*SubIcon)
 	}
 	return e
 }
@@ -678,7 +696,7 @@ type Menu struct {
 //
 func (menu *Menu) AddEntry(label, iconPath string, call interface{}, userData ...interface{}) cdtype.MenuWidgeter {
 	return menu.addOne(call, map[string]interface{}{
-		"type":  cdtype.MenuEntry,
+		"type":  int32(cdtype.MenuEntry),
 		"label": label,
 		"icon":  iconPath,
 		"menu":  menu.MenuID,
@@ -690,7 +708,7 @@ func (menu *Menu) AddEntry(label, iconPath string, call interface{}, userData ..
 //
 func (menu *Menu) AddSeparator() {
 	menu.addOne(nil, map[string]interface{}{
-		"type": cdtype.MenuSeparator,
+		"type": int32(cdtype.MenuSeparator),
 		"menu": menu.MenuID,
 		"id":   int32(len(menu.actions)),
 	})
@@ -702,7 +720,7 @@ func (menu *Menu) AddSeparator() {
 //
 func (menu *Menu) AddSubMenu(label, iconPath string) cdtype.Menuer {
 	menu.addOne(nil, map[string]interface{}{
-		"type":  cdtype.MenuSubMenu,
+		"type":  int32(cdtype.MenuSubMenu),
 		"label": label,
 		"icon":  iconPath,
 		"menu":  menu.MenuID, //      int32(0),
@@ -719,7 +737,7 @@ func (menu *Menu) AddSubMenu(label, iconPath string) cdtype.Menuer {
 //
 func (menu *Menu) AddCheckEntry(label string, active bool, call interface{}, userData ...interface{}) cdtype.MenuWidgeter {
 	return menu.addOne(call, map[string]interface{}{
-		"type":  cdtype.MenuCheckBox,
+		"type":  int32(cdtype.MenuCheckBox),
 		"label": label,
 		"menu":  menu.MenuID,
 		"state": active,
@@ -731,7 +749,7 @@ func (menu *Menu) AddCheckEntry(label string, active bool, call interface{}, use
 //
 func (menu *Menu) AddRadioEntry(label string, active bool, group int, call interface{}, userData ...interface{}) cdtype.MenuWidgeter {
 	return menu.addOne(call, map[string]interface{}{
-		"type":  cdtype.MenuRadioButton,
+		"type":  int32(cdtype.MenuRadioButton),
 		"label": label,
 		"menu":  menu.MenuID,
 		"state": active,

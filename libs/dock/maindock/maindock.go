@@ -75,7 +75,9 @@ type DockSettings struct {
 
 	// --- New Dock settings ---
 	//
-	HTTPPprof   bool
+	WebHost     string
+	WebPort     int
+	WebMonitor  bool
 	DisableDBus bool
 	Debug       bool
 
@@ -123,18 +125,15 @@ func (settings *DockSettings) Init() {
 
 	//\___________________ initialize libgldi.
 
-	var rendering gldi.RenderingMethod
+	rendering := gldi.RenderingDefault
 	switch {
 	case settings.ForceOpenGL:
 		rendering = gldi.RenderingOpenGL
 
 	case settings.ForceCairo:
 		rendering = gldi.RenderingCairo
-
-	default:
-		rendering = gldi.RenderingDefault
 	}
-	gldi.Init(int(rendering))
+	gldi.Init(rendering)
 
 	//\___________________ set custom user options.
 
@@ -150,25 +149,30 @@ func (settings *DockSettings) Init() {
 		gldi.DisableContainersOpacity()
 	}
 
-	env := DesktopEnvironment(settings.Env)
-	if env != gldi.DeskEnvUnknown {
-		gldi.FMForceDeskEnv(env)
+	if settings.Env != "" {
+		env := cdglobal.DesktEnvFromString(settings.Env)
+		if env == cdglobal.DeskEnvUnknown {
+			log.NewWarn(settings.Env, "Unknown desktop environment (valid options: gnome, kde, xfce)")
+		} else {
+			gldi.FMForceDeskEnv(env)
+		}
 	}
 
 	if settings.IndirectOpenGL {
 		gldi.GLBackendForceIndirectRendering()
 	}
 
-	if settings.ThemeServer == "" {
-		settings.ThemeServer = cdglobal.DownloadServerURL
+	if settings.ThemeServer != "" { // Custom theme server.
+		cdglobal.DownloadServerURL = settings.ThemeServer
 	}
+
 	gldi.SetPaths(confdir, // will later be available as DirDockData  (g_cCairoDockDataDir)
 		cdglobal.ConfigDirExtras,
 		cdglobal.ConfigDirDockThemes,
 		cdglobal.ConfigDirCurrentTheme,
 		cdglobal.CairoDockShareThemesDir,
 		cdglobal.DockThemeServerTag,
-		settings.ThemeServer)
+		cdglobal.DownloadServerURL)
 
 	about.Img = globals.DirShareData(cdglobal.ConfigDirDockImages, cdglobal.FileCairoDockLogo)
 
@@ -297,25 +301,6 @@ func Clean() {
 
 //
 //---------------------------------------------------------[ CONFIG SETTINGS ]--
-
-// DesktopEnvironment converts the desktop environment backend type from the string.
-//
-func DesktopEnvironment(envstr string) gldi.DeskEnvironment {
-	env := gldi.DeskEnvUnknown
-	switch envstr {
-	case "gnome":
-		env = gldi.DeskEnvGnome
-	case "kde":
-		env = gldi.DeskEnvKDE
-	case "xfce":
-		env = gldi.DeskEnvXFCE
-	default:
-		if envstr != "" {
-			log.NewWarn(envstr, "Unknown desktop environment (valid options: gnome, kde, xfce)")
-		}
-	}
-	return env
-}
 
 func firstLaunchSetup() {
 	log.Info("firstLaunchScript", globals.DirShareData("scripts", "initial-setup.sh"))

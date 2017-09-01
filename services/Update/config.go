@@ -80,12 +80,12 @@ type groupActions struct {
 	DevClickMiddle    string // dev action.
 	DevMouseWheel     string // dev action.
 
-	ShortkeyShowDiff       *cdtype.Shortkey `action:"1"  desc:"Show diff"`
-	ShortkeyShowVersions   *cdtype.Shortkey `action:"2"  desc:"Show versions"`
-	ShortkeyGrepTarget     *cdtype.Shortkey `action:"4"  desc:"Grep target"`
-	ShortkeyNextTarget     *cdtype.Shortkey `action:"5"  desc:"Next target"`
-	ShortkeyOpenFileTarget *cdtype.Shortkey `action:"6"  desc:"Open file target"`
-	ShortkeyBuildTarget    *cdtype.Shortkey `action:"10" desc:"Build target"`
+	ShortkeyShowDiff       *cdtype.Shortkey `action:"1"`
+	ShortkeyShowVersions   *cdtype.Shortkey `action:"2"`
+	ShortkeyGrepTarget     *cdtype.Shortkey `action:"4"`
+	ShortkeyNextTarget     *cdtype.Shortkey `action:"5"`
+	ShortkeyOpenFileTarget *cdtype.Shortkey `action:"6"`
+	ShortkeyBuildTarget    *cdtype.Shortkey `action:"10"`
 }
 
 //
